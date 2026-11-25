@@ -603,6 +603,7 @@ TEST_F(SeasonBattleTest, BossTrialV2FocusSplashAndParryExposedAndV1DeadTargetNoE
     aoeSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
     aoeSkill.set_mana_percent(0.01);
     aoeSkill.add_effect(89010);
+    mem->SetSkillDamage(8901, 200);
     auto& aoeDmg = mem->AddBuff(89010);
     aoeDmg.Clear();
     aoeDmg.set_id(89010);
@@ -814,6 +815,7 @@ TEST_F(SeasonBattleTest, BossTrialV2HardStanceDynamicSwitchMomentumAndDispelBrea
     magicSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
     magicSkill.set_mana_percent(0.01);
     magicSkill.add_effect(89030);
+    mem->SetSkillDamage(8903, 250);
     auto& magicDmg = mem->AddBuff(89030);
     magicDmg.Clear();
     magicDmg.set_id(89030);
@@ -860,7 +862,7 @@ TEST_F(SeasonBattleTest, BossTrialV2HardStanceDynamicSwitchMomentumAndDispelBrea
     // R1：护势展开物防阵 + 困难切阵叠 1 层蓄势。
     eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
     const auto r1 = eng.ResolveCurrentRound();
-    EXPECT_EQ(r1.state().boss_stance_type(), combatdamage::kPhysicalDamage);
+    EXPECT_EQ(r1.state().boss_stance_type(), turnbattle::kBossStancePhysical);
     EXPECT_EQ(r1.state().boss_momentum_stacks(), 1u);
 
     // R2：物理普攻打在物防阵上 -> 触发轻反制蓄势（但在 R2 重劈发动时消耗清零）；先验事件中有蓄势叠加。
@@ -889,7 +891,7 @@ TEST_F(SeasonBattleTest, BossTrialV2HardStanceDynamicSwitchMomentumAndDispelBrea
     // R4 让法防阵落地，R5 驱散护卫触发崩势（清护势与蓄势，且首领挂破绽 +35%）。
     eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
     const auto r4 = eng.ResolveCurrentRound();
-    EXPECT_EQ(r4.state().boss_stance_type(), combatdamage::kMagicDamage);
+    EXPECT_EQ(r4.state().boss_stance_type(), turnbattle::kBossStanceMagic);
     eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, guardId, 8904));
     const auto r5 = eng.ResolveCurrentRound();
     EXPECT_EQ(r5.state().boss_stance_type(), 0u);
@@ -918,6 +920,7 @@ TEST_F(SeasonBattleTest, BossTrialV2HardDualGuardEliteFormationAndDualCleavePart
     addMon(109, 2200, false);
     addMon(110, 2000, false);
 
+    mem->AddBattleReward(0, "").set_exp_gain(100);
     auto& d112 = mem->AddDungeon(112);
     d112.Clear();
     d112.set_id(112);
@@ -925,9 +928,8 @@ TEST_F(SeasonBattleTest, BossTrialV2HardDualGuardEliteFormationAndDualCleavePart
     d112.set_boss_trial_kind(turnbattle::kBossTrialKindBreakDualGuard);
     d112.set_difficulty(2);
     d112.set_round_limit(15);
-    d112.add_monster(101);
-    d112.add_monster(102);
-    d112.add_monster(103);
+    mem->SetDungeonMonsters(112, {101, 102, 103});
+    mem->SetDungeonMonstersPerPlayer(112, 3);
 
     // 单人双卫同阵：3 怪，两位护卫压缩至 75% 血（3000）。
     {
@@ -992,8 +994,8 @@ TEST_F(SeasonBattleTest, BossTrialV2HardDualGuardEliteFormationAndDualCleavePart
     d101.set_boss_trial_kind(turnbattle::kBossTrialKindBreakRejuv);
     d101.set_difficulty(1);
     d101.set_round_limit(12);
-    d101.add_monster(101);
-    d101.add_monster(102);
+    mem->SetDungeonMonsters(101, {101, 102});
+    mem->SetDungeonMonstersPerPlayer(101, 2);
     auto req4p = MakeBossTrialRequest(5107, 101, 4, 200);
     TurnBattleEngine eng4p(mem);
     ASSERT_TRUE(eng4p.Initialize(req4p));

@@ -51,8 +51,10 @@ type Deps struct {
 	ListingIDs idsegment.Source
 	// Now 是时间源,生产为 time.Now;单测注入固定时钟验证公示 / 寄售边界与 server_now_ms。
 	Now         func() time.Time
-	Commerce    *commerce.Engine
-	Mall        *commerce.Mall
+	Commerce        *commerce.Engine
+	Credits         *commerce.SellerCreditService
+	ReferencePrices commerce.ReferencePriceReader
+	Mall            *commerce.Mall
 	Rmb         *commerce.RmbConsignments
 	RmbIdentity RmbIdentityResolver
 	// ManualOps 是转人工合同的人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract);nil = 入口关闭。
@@ -80,8 +82,10 @@ func NewDeps(svcCtx *svc.ServiceContext) Deps {
 		Zones:       svcCtx.MergedZones,
 		ListingIDs:  ids,
 		Now:         time.Now,
-		Commerce:    svcCtx.Commerce,
-		Mall:        svcCtx.Mall,
+		Commerce:        svcCtx.Commerce,
+		Credits:         svcCtx.Credits,
+		ReferencePrices: &commerce.SQLReferencePriceReader{DB: svcCtx.DB},
+		Mall:            svcCtx.Mall,
 		Rmb:         svcCtx.Rmb,
 		RmbIdentity: svcCtx.RmbIdentity,
 	}

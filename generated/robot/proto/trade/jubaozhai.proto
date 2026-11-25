@@ -193,4 +193,9 @@ service ClientPlayerJubaozhai {
   rpc ListSellerIncomes (ListSellerIncomesRequest) returns (ListSellerIncomesResponse);
   rpc CreateWithdrawal (CreateWithdrawalRequest) returns (WithdrawalResponse);
   rpc GetWithdrawal (GetWithdrawalRequest) returns (WithdrawalResponse);
+  // 卖家店铺信用档案、官方托管成交评价、近 7 日真实成交 p50 与当面交易防骗额度查询。
+  rpc GetSellerCredit (GetSellerCreditRequest) returns (SellerCreditResponse);
+  rpc SubmitSellerReview (SubmitSellerReviewRequest) returns (SubmitSellerReviewResponse);
+  rpc GetMarketReferencePrice (GetMarketReferencePriceRequest) returns (GetMarketReferencePriceResponse);
+  rpc GetPlayerTradeQuota (GetPlayerTradeQuotaRequest) returns (GetPlayerTradeQuotaResponse);
 }

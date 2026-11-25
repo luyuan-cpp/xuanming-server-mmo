@@ -137,6 +137,24 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
         // ::trade::WithdrawalResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::SellerCreditView
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::GetSellerCreditRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::SellerCreditResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::SubmitSellerReviewRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::SubmitSellerReviewResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::GetMarketReferencePriceRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::GetMarketReferencePriceResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::GetPlayerTradeQuotaRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
+        // ::trade::GetPlayerTradeQuotaResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2fcommerce_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -618,6 +636,443 @@ const ::_pbi::ClassData* TradeAssetSelection_ItemsEntry_DoNotUse_get_class_data(
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class SubmitSellerReviewRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SubmitSellerReviewRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_._has_bits_);
+};
+
+constexpr SubmitSellerReviewRequest::ParseTableT_ SubmitSellerReviewRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::SubmitSellerReviewRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string order_id = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_.order_id_)}},
+      // .trade.SellerReviewRating rating = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SubmitSellerReviewRequest, _impl_.rating_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_.rating_)}},
+      // string comment = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_.comment_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string order_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .trade.SellerReviewRating rating = 2;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_.rating_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string comment = 3;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_.comment_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\37\10\0\7\0\0\0\0"
+      "trade.SubmitSellerReviewRequest"
+      "order_id"
+      "comment"
+    }},
+  };
+}
+
+
+inline constexpr SubmitSellerReviewRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        order_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        comment_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        rating_{static_cast< ::trade::SellerReviewRating >(0)} {}
+
+template <typename>
+constexpr SubmitSellerReviewRequest::SubmitSellerReviewRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SubmitSellerReviewRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SubmitSellerReviewRequest(arena);
+}
+constexpr auto SubmitSellerReviewRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SubmitSellerReviewRequest), alignof(SubmitSellerReviewRequest));
+}
+constexpr auto SubmitSellerReviewRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SubmitSellerReviewRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SubmitSellerReviewRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SubmitSellerReviewRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SubmitSellerReviewRequest>(), &SubmitSellerReviewRequest::ByteSizeLong,
+              &SubmitSellerReviewRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[57],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SubmitSellerReviewRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SubmitSellerReviewRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SubmitSellerReviewRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SubmitSellerReviewRequest::InternalGenerateClassData_(
+            _default, &SubmitSellerReviewRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SubmitSellerReviewRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SubmitSellerReviewRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SubmitSellerReviewRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SubmitSellerReviewRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SubmitSellerReviewRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SubmitSellerReviewRequestGlobalsTypeInternal SubmitSellerReviewRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SubmitSellerReviewRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SubmitSellerReviewRequest_globals_.GetClassData();
+#else
+  return SubmitSellerReviewRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SellerCreditView::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SellerCreditView>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_._has_bits_);
+};
+
+constexpr SellerCreditView::ParseTableT_ SellerCreditView::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_._has_bits_),
+      0, // no _extensions_
+      17, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294836224,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      17,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::SellerCreditView>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 seller_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.seller_player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.seller_player_id_)}},
+      // uint64 owner_revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.owner_revision_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.owner_revision_)}},
+      // bool ownership_changed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SellerCreditView, _impl_.ownership_changed_), 9>(),
+       {24, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.ownership_changed_)}},
+      // uint64 ownership_changed_at_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.ownership_changed_at_ms_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.ownership_changed_at_ms_)}},
+      // uint64 epoch_started_at_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.epoch_started_at_ms_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.epoch_started_at_ms_)}},
+      // uint64 completed_orders = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.completed_orders_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.completed_orders_)}},
+      // uint64 positive_reviews = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.positive_reviews_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.positive_reviews_)}},
+      // uint64 neutral_reviews = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.neutral_reviews_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.neutral_reviews_)}},
+      // uint64 negative_reviews = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.negative_reviews_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.negative_reviews_)}},
+      // uint64 violation_count = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.violation_count_), 12>(),
+       {80, 12, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.violation_count_)}},
+      // bool env_credit_cleared = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SellerCreditView, _impl_.env_credit_cleared_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.env_credit_cleared_)}},
+      // uint64 env_reset_count = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.env_reset_count_), 13>(),
+       {96, 13, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.env_reset_count_)}},
+      // uint64 last_env_changed_at_ms = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditView, _impl_.last_env_changed_at_ms_), 14>(),
+       {104, 14, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.last_env_changed_at_ms_)}},
+      // uint32 credit_score = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SellerCreditView, _impl_.credit_score_), 11>(),
+       {112, 11, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.credit_score_)}},
+      // uint32 star_rating_tenths = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SellerCreditView, _impl_.star_rating_tenths_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.star_rating_tenths_)}},
+      // uint32 positive_rate_bps = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 16, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.positive_rate_bps_)}},
+      // string risk_tier = 17;
+      {::_pbi::TcParser::FastUS2,
+       {394, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.risk_tier_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 seller_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.seller_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 owner_revision = 2;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.owner_revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool ownership_changed = 3;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.ownership_changed_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 ownership_changed_at_ms = 4;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.ownership_changed_at_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 epoch_started_at_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.epoch_started_at_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 completed_orders = 6;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.completed_orders_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 positive_reviews = 7;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.positive_reviews_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 neutral_reviews = 8;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.neutral_reviews_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 negative_reviews = 9;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.negative_reviews_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 violation_count = 10;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.violation_count_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool env_credit_cleared = 11;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.env_credit_cleared_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 env_reset_count = 12;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.env_reset_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 last_env_changed_at_ms = 13;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.last_env_changed_at_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 credit_score = 14;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.credit_score_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 star_rating_tenths = 15;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.star_rating_tenths_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 positive_rate_bps = 16;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.positive_rate_bps_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string risk_tier = 17;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.risk_tier_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\26\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\11\0\0\0\0\0\0"
+      "trade.SellerCreditView"
+      "risk_tier"
+    }},
+  };
+}
+
+
+inline constexpr SellerCreditView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        risk_tier_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        seller_player_id_{::uint64_t{0u}},
+        owner_revision_{::uint64_t{0u}},
+        ownership_changed_at_ms_{::uint64_t{0u}},
+        epoch_started_at_ms_{::uint64_t{0u}},
+        completed_orders_{::uint64_t{0u}},
+        positive_reviews_{::uint64_t{0u}},
+        neutral_reviews_{::uint64_t{0u}},
+        negative_reviews_{::uint64_t{0u}},
+        ownership_changed_{false},
+        env_credit_cleared_{false},
+        credit_score_{0u},
+        violation_count_{::uint64_t{0u}},
+        env_reset_count_{::uint64_t{0u}},
+        last_env_changed_at_ms_{::uint64_t{0u}},
+        star_rating_tenths_{0u},
+        positive_rate_bps_{0u} {}
+
+template <typename>
+constexpr SellerCreditView::SellerCreditView(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SellerCreditView::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SellerCreditView(arena);
+}
+constexpr auto SellerCreditView::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SellerCreditView), alignof(SellerCreditView));
+}
+constexpr auto SellerCreditView::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SellerCreditView::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SellerCreditView>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SellerCreditView::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SellerCreditView>(), &SellerCreditView::ByteSizeLong,
+              &SellerCreditView::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[54],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SellerCreditViewGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SellerCreditViewGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SellerCreditView_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SellerCreditView::InternalGenerateClassData_(
+            _default, &SellerCreditView_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SellerCreditView>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SellerCreditViewGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SellerCreditView _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SellerCreditView>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SellerCreditViewGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SellerCreditViewGlobalsTypeInternal SellerCreditView_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SellerCreditView_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SellerCreditView_globals_.GetClassData();
+#else
+  return SellerCreditView_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RmbWithdrawalView::_Internal {
  public:
   using HasBits = decltype(::std::declval<RmbWithdrawalView>()._impl_._has_bits_);
@@ -816,11 +1271,11 @@ constexpr RmbSellerIncome::ParseTableT_ RmbSellerIncome::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -836,52 +1291,71 @@ constexpr RmbSellerIncome::ParseTableT_ RmbSellerIncome::InternalGenerateParseTa
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.order_id_)}},
       // uint64 gross_fen = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.gross_fen_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.gross_fen_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.gross_fen_)}},
       // uint64 fee_fen = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.fee_fen_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.fee_fen_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.fee_fen_)}},
       // uint64 net_fen = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.net_fen_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.net_fen_), 4>(),
+       {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.net_fen_)}},
       // uint64 reserved_fen = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.reserved_fen_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.reserved_fen_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.reserved_fen_)}},
       // uint64 paid_fen = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.paid_fen_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.paid_fen_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.paid_fen_)}},
       // uint64 available_ms = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.available_ms_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.available_ms_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.available_ms_)}},
+      // uint64 dispute_frozen_fen = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RmbSellerIncome, _impl_.dispute_frozen_fen_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.dispute_frozen_fen_)}},
+      // string dispute_case_id = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.dispute_case_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // string order_id = 1;
       {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.order_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 gross_fen = 2;
-      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.gross_fen_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.gross_fen_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 fee_fen = 3;
-      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.fee_fen_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.fee_fen_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 net_fen = 4;
-      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.net_fen_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.net_fen_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 reserved_fen = 5;
-      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.reserved_fen_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.reserved_fen_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 paid_fen = 6;
-      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.paid_fen_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.paid_fen_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 available_ms = 7;
-      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.available_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.available_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 dispute_frozen_fen = 8;
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.dispute_frozen_fen_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string dispute_case_id = 9;
+      {PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.dispute_case_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\25\10\0\0\0\0\0\0"
+      "\25\10\0\0\0\0\0\0\0\17\0\0\0\0\0\0"
       "trade.RmbSellerIncome"
       "order_id"
+      "dispute_case_id"
     }},
   };
 }
@@ -894,12 +1368,16 @@ inline constexpr RmbSellerIncome::Impl_::Impl_(
         order_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        dispute_case_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         gross_fen_{::uint64_t{0u}},
         fee_fen_{::uint64_t{0u}},
         net_fen_{::uint64_t{0u}},
         reserved_fen_{::uint64_t{0u}},
         paid_fen_{::uint64_t{0u}},
-        available_ms_{::uint64_t{0u}} {}
+        available_ms_{::uint64_t{0u}},
+        dispute_frozen_fen_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr RmbSellerIncome::RmbSellerIncome(::_pbi::ConstantInitialized,
@@ -1005,11 +1483,11 @@ constexpr RmbConsignmentView::ParseTableT_ RmbConsignmentView::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      14,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1072,7 +1550,10 @@ constexpr RmbConsignmentView::ParseTableT_ RmbConsignmentView::InternalGenerateP
       {::_pbi::TcParser::FastUS1,
        {106, 4, 0,
         PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.order_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool designated_only = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RmbConsignmentView, _impl_.designated_only_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.designated_only_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -1103,6 +1584,8 @@ constexpr RmbConsignmentView::ParseTableT_ RmbConsignmentView::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.phase_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string order_id = 13;
       {PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.order_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool designated_only = 14;
+      {PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.designated_only_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1144,7 +1627,8 @@ inline constexpr RmbConsignmentView::Impl_::Impl_(
         price_fen_{::uint64_t{0u}},
         cooling_ms_{::uint64_t{0u}},
         notice_end_ms_{::uint64_t{0u}},
-        sale_end_ms_{::uint64_t{0u}} {}
+        sale_end_ms_{::uint64_t{0u}},
+        designated_only_{false} {}
 
 template <typename>
 constexpr RmbConsignmentView::RmbConsignmentView(::_pbi::ConstantInitialized,
@@ -3167,6 +3651,147 @@ const ::_pbi::ClassData* GetWithdrawalRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetSellerCreditRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetSellerCreditRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetSellerCreditRequest, _impl_._has_bits_);
+};
+
+constexpr GetSellerCreditRequest::ParseTableT_ GetSellerCreditRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetSellerCreditRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::GetSellerCreditRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 seller_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetSellerCreditRequest, _impl_.seller_player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetSellerCreditRequest, _impl_.seller_player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 seller_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GetSellerCreditRequest, _impl_.seller_player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetSellerCreditRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        seller_player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GetSellerCreditRequest::GetSellerCreditRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetSellerCreditRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetSellerCreditRequest(arena);
+}
+constexpr auto GetSellerCreditRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetSellerCreditRequest), alignof(GetSellerCreditRequest));
+}
+constexpr auto GetSellerCreditRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetSellerCreditRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetSellerCreditRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetSellerCreditRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetSellerCreditRequest>(), &GetSellerCreditRequest::ByteSizeLong,
+              &GetSellerCreditRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetSellerCreditRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[55],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetSellerCreditRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetSellerCreditRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetSellerCreditRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetSellerCreditRequest::InternalGenerateClassData_(
+            _default, &GetSellerCreditRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetSellerCreditRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetSellerCreditRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetSellerCreditRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetSellerCreditRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetSellerCreditRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetSellerCreditRequestGlobalsTypeInternal GetSellerCreditRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetSellerCreditRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetSellerCreditRequest_globals_.GetClassData();
+#else
+  return GetSellerCreditRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetRmbConsignmentRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetRmbConsignmentRequest>()._impl_._has_bits_);
@@ -3304,6 +3929,295 @@ const ::_pbi::ClassData* GetRmbConsignmentRequest_get_class_data() {
   return GetRmbConsignmentRequest_globals_.GetClassData();
 #else
   return GetRmbConsignmentRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPlayerTradeQuotaRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPlayerTradeQuotaRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaRequest, _impl_._has_bits_);
+};
+
+constexpr GetPlayerTradeQuotaRequest::ParseTableT_ GetPlayerTradeQuotaRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::GetPlayerTradeQuotaRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 currency_type = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetPlayerTradeQuotaRequest, _impl_.currency_type_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaRequest, _impl_.currency_type_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 currency_type = 1;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaRequest, _impl_.currency_type_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetPlayerTradeQuotaRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        currency_type_{0u} {}
+
+template <typename>
+constexpr GetPlayerTradeQuotaRequest::GetPlayerTradeQuotaRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPlayerTradeQuotaRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPlayerTradeQuotaRequest(arena);
+}
+constexpr auto GetPlayerTradeQuotaRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetPlayerTradeQuotaRequest), alignof(GetPlayerTradeQuotaRequest));
+}
+constexpr auto GetPlayerTradeQuotaRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPlayerTradeQuotaRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPlayerTradeQuotaRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPlayerTradeQuotaRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPlayerTradeQuotaRequest>(), &GetPlayerTradeQuotaRequest::ByteSizeLong,
+              &GetPlayerTradeQuotaRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[61],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPlayerTradeQuotaRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPlayerTradeQuotaRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPlayerTradeQuotaRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPlayerTradeQuotaRequest::InternalGenerateClassData_(
+            _default, &GetPlayerTradeQuotaRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerTradeQuotaRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPlayerTradeQuotaRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPlayerTradeQuotaRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerTradeQuotaRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPlayerTradeQuotaRequestGlobalsTypeInternal GetPlayerTradeQuotaRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPlayerTradeQuotaRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPlayerTradeQuotaRequest_globals_.GetClassData();
+#else
+  return GetPlayerTradeQuotaRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetMarketReferencePriceRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetMarketReferencePriceRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_._has_bits_);
+};
+
+constexpr GetMarketReferencePriceRequest::ParseTableT_ GetMarketReferencePriceRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::GetMarketReferencePriceRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 currency_type = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMarketReferencePriceRequest, _impl_.currency_type_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_.currency_type_)}},
+      // uint32 item_config_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMarketReferencePriceRequest, _impl_.item_config_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_.item_config_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 item_config_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 currency_type = 2;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_.currency_type_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetMarketReferencePriceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        item_config_id_{0u},
+        currency_type_{0u} {}
+
+template <typename>
+constexpr GetMarketReferencePriceRequest::GetMarketReferencePriceRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetMarketReferencePriceRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetMarketReferencePriceRequest(arena);
+}
+constexpr auto GetMarketReferencePriceRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetMarketReferencePriceRequest), alignof(GetMarketReferencePriceRequest));
+}
+constexpr auto GetMarketReferencePriceRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetMarketReferencePriceRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetMarketReferencePriceRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetMarketReferencePriceRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetMarketReferencePriceRequest>(), &GetMarketReferencePriceRequest::ByteSizeLong,
+              &GetMarketReferencePriceRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[59],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetMarketReferencePriceRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetMarketReferencePriceRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetMarketReferencePriceRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetMarketReferencePriceRequest::InternalGenerateClassData_(
+            _default, &GetMarketReferencePriceRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetMarketReferencePriceRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetMarketReferencePriceRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetMarketReferencePriceRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetMarketReferencePriceRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetMarketReferencePriceRequestGlobalsTypeInternal GetMarketReferencePriceRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetMarketReferencePriceRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetMarketReferencePriceRequest_globals_.GetClassData();
+#else
+  return GetMarketReferencePriceRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4228,11 +5142,11 @@ constexpr CommerceOrderView::ParseTableT_ CommerceOrderView::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      13,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4280,18 +5194,21 @@ constexpr CommerceOrderView::ParseTableT_ CommerceOrderView::InternalGeneratePar
        {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.version_)}},
       // bool seller_confirmed = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommerceOrderView, _impl_.seller_confirmed_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommerceOrderView, _impl_.seller_confirmed_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.seller_confirmed_)}},
       // bool buyer_confirmed = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommerceOrderView, _impl_.buyer_confirmed_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommerceOrderView, _impl_.buyer_confirmed_), 12>(),
+       {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.buyer_confirmed_)}},
       // string related_id = 12;
       {::_pbi::TcParser::FastUS1,
        {98, 2, 0,
         PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.related_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 designated_buyer_player_id = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommerceOrderView, _impl_.designated_buyer_player_id_), 10>(),
+       {104, 10, 0,
+        PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.designated_buyer_player_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -4316,11 +5233,13 @@ constexpr CommerceOrderView::ParseTableT_ CommerceOrderView::InternalGeneratePar
       // uint64 version = 9;
       {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.version_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool seller_confirmed = 10;
-      {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.seller_confirmed_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.seller_confirmed_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool buyer_confirmed = 11;
-      {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.buyer_confirmed_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.buyer_confirmed_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string related_id = 12;
       {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.related_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 designated_buyer_player_id = 13;
+      {PROTOBUF_FIELD_OFFSET(CommerceOrderView, _impl_.designated_buyer_player_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -4354,6 +5273,7 @@ inline constexpr CommerceOrderView::Impl_::Impl_(
         amount_{::uint64_t{0u}},
         created_ms_{::uint64_t{0u}},
         version_{::uint64_t{0u}},
+        designated_buyer_player_id_{::uint64_t{0u}},
         seller_confirmed_{false},
         buyer_confirmed_{false} {}
 
@@ -6207,6 +7127,356 @@ const ::_pbi::ClassData* TradeAssetSelection_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class SubmitSellerReviewResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SubmitSellerReviewResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_._has_bits_);
+};
+
+constexpr SubmitSellerReviewResponse::ParseTableT_ SubmitSellerReviewResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::SubmitSellerReviewResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.error_message_)}},
+      // bool counted_for_score = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SubmitSellerReviewResponse, _impl_.counted_for_score_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.counted_for_score_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SubmitSellerReviewResponse, _impl_.replayed_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.replayed_)}},
+      // .trade.SellerCreditView profile = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 1, 1,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.profile_)}},
+      // uint64 server_now_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SubmitSellerReviewResponse, _impl_.server_now_ms_), 2>(),
+       {40, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.server_now_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool counted_for_score = 2;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.counted_for_score_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .trade.SellerCreditView profile = 4;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.profile_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 server_now_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.server_now_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::SellerCreditView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::SellerCreditView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SubmitSellerReviewResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        profile_{nullptr},
+        server_now_ms_{::uint64_t{0u}},
+        counted_for_score_{false},
+        replayed_{false} {}
+
+template <typename>
+constexpr SubmitSellerReviewResponse::SubmitSellerReviewResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SubmitSellerReviewResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SubmitSellerReviewResponse(arena);
+}
+constexpr auto SubmitSellerReviewResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SubmitSellerReviewResponse), alignof(SubmitSellerReviewResponse));
+}
+constexpr auto SubmitSellerReviewResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SubmitSellerReviewResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SubmitSellerReviewResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SubmitSellerReviewResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SubmitSellerReviewResponse>(), &SubmitSellerReviewResponse::ByteSizeLong,
+              &SubmitSellerReviewResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[58],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SubmitSellerReviewResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SubmitSellerReviewResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SubmitSellerReviewResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SubmitSellerReviewResponse::InternalGenerateClassData_(
+            _default, &SubmitSellerReviewResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SubmitSellerReviewResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SubmitSellerReviewResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SubmitSellerReviewResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SubmitSellerReviewResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SubmitSellerReviewResponseGlobalsTypeInternal SubmitSellerReviewResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SubmitSellerReviewResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SubmitSellerReviewResponse_globals_.GetClassData();
+#else
+  return SubmitSellerReviewResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SellerCreditResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SellerCreditResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_._has_bits_);
+};
+
+constexpr SellerCreditResponse::ParseTableT_ SellerCreditResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::SellerCreditResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.error_message_)}},
+      // .trade.SellerCreditView profile = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.profile_)}},
+      // uint64 server_now_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SellerCreditResponse, _impl_.server_now_ms_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.server_now_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .trade.SellerCreditView profile = 2;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.profile_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 server_now_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.server_now_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::SellerCreditView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::SellerCreditView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SellerCreditResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        profile_{nullptr},
+        server_now_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr SellerCreditResponse::SellerCreditResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SellerCreditResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SellerCreditResponse(arena);
+}
+constexpr auto SellerCreditResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SellerCreditResponse), alignof(SellerCreditResponse));
+}
+constexpr auto SellerCreditResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SellerCreditResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SellerCreditResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SellerCreditResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SellerCreditResponse>(), &SellerCreditResponse::ByteSizeLong,
+              &SellerCreditResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[56],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SellerCreditResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SellerCreditResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SellerCreditResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SellerCreditResponse::InternalGenerateClassData_(
+            _default, &SellerCreditResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SellerCreditResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SellerCreditResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SellerCreditResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SellerCreditResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SellerCreditResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SellerCreditResponseGlobalsTypeInternal SellerCreditResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SellerCreditResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SellerCreditResponse_globals_.GetClassData();
+#else
+  return SellerCreditResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RmbConsignmentResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<RmbConsignmentResponse>()._impl_._has_bits_);
@@ -7589,6 +8859,434 @@ const ::_pbi::ClassData* ListCommerceOrdersResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPlayerTradeQuotaResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPlayerTradeQuotaResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_._has_bits_);
+};
+
+constexpr GetPlayerTradeQuotaResponse::ParseTableT_ GetPlayerTradeQuotaResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      11, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294965248,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      11,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::GetPlayerTradeQuotaResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.error_message_)}},
+      // string mode = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.mode_)}},
+      // uint32 currency_type = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.currency_type_), 6>(),
+       {24, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.currency_type_)}},
+      // uint64 daily_currency_limit = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.daily_currency_limit_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.daily_currency_limit_)}},
+      // uint64 daily_currency_used = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.daily_currency_used_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.daily_currency_used_)}},
+      // uint64 daily_currency_remaining = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.daily_currency_remaining_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.daily_currency_remaining_)}},
+      // repeated uint32 consumable_item_ids = 7;
+      {::_pbi::TcParser::FastV32P1,
+       {58, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.consumable_item_ids_)}},
+      // uint64 min_friend_duration_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.min_friend_duration_ms_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.min_friend_duration_ms_)}},
+      // uint32 max_reference_deviation_pct = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.max_reference_deviation_pct_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.max_reference_deviation_pct_)}},
+      // uint64 cooling_lock_duration_ms = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.cooling_lock_duration_ms_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.cooling_lock_duration_ms_)}},
+      // uint64 server_now_ms = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerTradeQuotaResponse, _impl_.server_now_ms_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.server_now_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string mode = 2;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.mode_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 currency_type = 3;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.currency_type_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 daily_currency_limit = 4;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.daily_currency_limit_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 daily_currency_used = 5;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.daily_currency_used_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 daily_currency_remaining = 6;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.daily_currency_remaining_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated uint32 consumable_item_ids = 7;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.consumable_item_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint64 min_friend_duration_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.min_friend_duration_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 max_reference_deviation_pct = 9;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.max_reference_deviation_pct_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 cooling_lock_duration_ms = 10;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.cooling_lock_duration_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 server_now_ms = 11;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.server_now_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+      "\41\0\4\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "trade.GetPlayerTradeQuotaResponse"
+      "mode"
+    }},
+  };
+}
+
+
+inline constexpr GetPlayerTradeQuotaResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        consumable_item_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::GetPlayerTradeQuotaResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.consumable_item_ids_)>()
+         }
+        ,
+        _consumable_item_ids_cached_byte_size_{0},
+        mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        error_message_{nullptr},
+        daily_currency_limit_{::uint64_t{0u}},
+        daily_currency_used_{::uint64_t{0u}},
+        daily_currency_remaining_{::uint64_t{0u}},
+        currency_type_{0u},
+        max_reference_deviation_pct_{0u},
+        min_friend_duration_ms_{::uint64_t{0u}},
+        cooling_lock_duration_ms_{::uint64_t{0u}},
+        server_now_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GetPlayerTradeQuotaResponse::GetPlayerTradeQuotaResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPlayerTradeQuotaResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPlayerTradeQuotaResponse(arena);
+}
+constexpr auto GetPlayerTradeQuotaResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetPlayerTradeQuotaResponse), alignof(GetPlayerTradeQuotaResponse));
+}
+constexpr auto GetPlayerTradeQuotaResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPlayerTradeQuotaResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPlayerTradeQuotaResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPlayerTradeQuotaResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPlayerTradeQuotaResponse>(), &GetPlayerTradeQuotaResponse::ByteSizeLong,
+              &GetPlayerTradeQuotaResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[62],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPlayerTradeQuotaResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPlayerTradeQuotaResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPlayerTradeQuotaResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPlayerTradeQuotaResponse::InternalGenerateClassData_(
+            _default, &GetPlayerTradeQuotaResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerTradeQuotaResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPlayerTradeQuotaResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPlayerTradeQuotaResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerTradeQuotaResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPlayerTradeQuotaResponseGlobalsTypeInternal GetPlayerTradeQuotaResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPlayerTradeQuotaResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPlayerTradeQuotaResponse_globals_.GetClassData();
+#else
+  return GetPlayerTradeQuotaResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetMarketReferencePriceResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetMarketReferencePriceResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_._has_bits_);
+};
+
+constexpr GetMarketReferencePriceResponse::ParseTableT_ GetMarketReferencePriceResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      8, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967040,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      8,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::GetMarketReferencePriceResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 server_now_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetMarketReferencePriceResponse, _impl_.server_now_ms_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.server_now_ms_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.error_message_)}},
+      // uint32 item_config_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMarketReferencePriceResponse, _impl_.item_config_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.item_config_id_)}},
+      // uint32 currency_type = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMarketReferencePriceResponse, _impl_.currency_type_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.currency_type_)}},
+      // uint64 median_unit_price = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetMarketReferencePriceResponse, _impl_.median_unit_price_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.median_unit_price_)}},
+      // uint32 sample_count = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMarketReferencePriceResponse, _impl_.sample_count_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.sample_count_)}},
+      // bool insufficient_sample = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetMarketReferencePriceResponse, _impl_.insufficient_sample_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.insufficient_sample_)}},
+      // uint32 window_days = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMarketReferencePriceResponse, _impl_.window_days_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.window_days_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 item_config_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.item_config_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 currency_type = 3;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.currency_type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 median_unit_price = 4;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.median_unit_price_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 sample_count = 5;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.sample_count_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool insufficient_sample = 6;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.insufficient_sample_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 window_days = 7;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.window_days_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 server_now_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.server_now_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetMarketReferencePriceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        item_config_id_{0u},
+        currency_type_{0u},
+        median_unit_price_{::uint64_t{0u}},
+        sample_count_{0u},
+        insufficient_sample_{false},
+        server_now_ms_{::uint64_t{0u}},
+        window_days_{0u} {}
+
+template <typename>
+constexpr GetMarketReferencePriceResponse::GetMarketReferencePriceResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetMarketReferencePriceResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetMarketReferencePriceResponse(arena);
+}
+constexpr auto GetMarketReferencePriceResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetMarketReferencePriceResponse), alignof(GetMarketReferencePriceResponse));
+}
+constexpr auto GetMarketReferencePriceResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetMarketReferencePriceResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetMarketReferencePriceResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetMarketReferencePriceResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetMarketReferencePriceResponse>(), &GetMarketReferencePriceResponse::ByteSizeLong,
+              &GetMarketReferencePriceResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[60],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2fcommerce_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetMarketReferencePriceResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetMarketReferencePriceResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetMarketReferencePriceResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetMarketReferencePriceResponse::InternalGenerateClassData_(
+            _default, &GetMarketReferencePriceResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetMarketReferencePriceResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetMarketReferencePriceResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetMarketReferencePriceResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetMarketReferencePriceResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetMarketReferencePriceResponseGlobalsTypeInternal GetMarketReferencePriceResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetMarketReferencePriceResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetMarketReferencePriceResponse_globals_.GetClassData();
+#else
+  return GetMarketReferencePriceResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetMarketDepthResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetMarketDepthResponse>()._impl_._has_bits_);
@@ -7954,11 +9652,11 @@ constexpr CreateRmbConsignmentRequest::ParseTableT_ CreateRmbConsignmentRequest:
     {
       PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -7989,7 +9687,10 @@ constexpr CreateRmbConsignmentRequest::ParseTableT_ CreateRmbConsignmentRequest:
       {::_pbi::TcParser::FastUS1,
        {42, 1, 0,
         PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.title_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 designated_buyer_player_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateRmbConsignmentRequest, _impl_.designated_buyer_player_id_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.designated_buyer_player_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -8004,6 +9705,8 @@ constexpr CreateRmbConsignmentRequest::ParseTableT_ CreateRmbConsignmentRequest:
       {PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.price_fen_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string title = 5;
       {PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.title_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 designated_buyer_player_id = 6;
+      {PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.designated_buyer_player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -8034,7 +9737,8 @@ inline constexpr CreateRmbConsignmentRequest::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         assets_{nullptr},
         character_player_id_{::uint64_t{0u}},
-        price_fen_{::uint64_t{0u}} {}
+        price_fen_{::uint64_t{0u}},
+        designated_buyer_player_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr CreateRmbConsignmentRequest::CreateRmbConsignmentRequest(::_pbi::ConstantInitialized,
@@ -8318,11 +10022,11 @@ constexpr CreateConsignmentRequest::ParseTableT_ CreateConsignmentRequest::Inter
     {
       PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -8342,8 +10046,8 @@ constexpr CreateConsignmentRequest::ParseTableT_ CreateConsignmentRequest::Inter
        {18, 1, 0,
         PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.assets_)}},
       // uint32 currency_type = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateConsignmentRequest, _impl_.currency_type_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateConsignmentRequest, _impl_.currency_type_), 5>(),
+       {24, 5, 0,
         PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.currency_type_)}},
       // uint64 price = 4;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateConsignmentRequest, _impl_.price_), 2>(),
@@ -8353,7 +10057,10 @@ constexpr CreateConsignmentRequest::ParseTableT_ CreateConsignmentRequest::Inter
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateConsignmentRequest, _impl_.duration_ms_), 3>(),
        {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.duration_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 designated_buyer_player_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateConsignmentRequest, _impl_.designated_buyer_player_id_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.designated_buyer_player_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -8363,11 +10070,13 @@ constexpr CreateConsignmentRequest::ParseTableT_ CreateConsignmentRequest::Inter
       // .trade.TradeAssetSelection assets = 2;
       {PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.assets_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 currency_type = 3;
-      {PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.currency_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.currency_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 price = 4;
       {PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.price_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 duration_ms = 5;
       {PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.duration_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 designated_buyer_player_id = 6;
+      {PROTOBUF_FIELD_OFFSET(CreateConsignmentRequest, _impl_.designated_buyer_player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -8395,6 +10104,7 @@ inline constexpr CreateConsignmentRequest::Impl_::Impl_(
         assets_{nullptr},
         price_{::uint64_t{0u}},
         duration_ms_{::uint64_t{0u}},
+        designated_buyer_player_id_{::uint64_t{0u}},
         currency_type_{0u} {}
 
 template <typename>
@@ -9317,7 +11027,7 @@ const ::_pbi::ClassData* BrowseCommerceOffersResponse_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace trade
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2ftrade_2fcommerce_2eproto[3];
+    file_level_enum_descriptors_proto_2ftrade_2fcommerce_2eproto[4];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2ftrade_2fcommerce_2eproto = nullptr;
 const ::uint32_t
@@ -9345,7 +11055,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_._has_bits_),
-        15, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.order_id_),
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.state_),
@@ -9358,6 +11068,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.seller_confirmed_),
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.buyer_confirmed_),
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.related_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderView, _impl_.designated_buyer_player_id_),
         0,
         3,
         4,
@@ -9367,9 +11078,10 @@ const ::uint32_t
         1,
         8,
         9,
-        10,
         11,
+        12,
         2,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::CommerceOrderResponse, _impl_._has_bits_),
         12, // hasbit index offset
@@ -9521,17 +11233,19 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_.assets_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_.currency_type_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_.price_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_.duration_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::CreateConsignmentRequest, _impl_.designated_buyer_player_id_),
         0,
         1,
-        4,
+        5,
         2,
         3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::BuyConsignmentRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -9728,17 +11442,19 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_.assets_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_.character_player_id_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_.price_fen_),
         PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_.title_),
+        PROTOBUF_FIELD_OFFSET(::trade::CreateRmbConsignmentRequest, _impl_.designated_buyer_player_id_),
         0,
         2,
         3,
         4,
         1,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::GetRmbConsignmentRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -9765,7 +11481,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_._has_bits_),
-        16, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.listing_id_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.seller_player_id_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.market_zone_),
@@ -9779,6 +11495,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.state_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.phase_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.order_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentView, _impl_.designated_only_),
         5,
         6,
         7,
@@ -9792,6 +11509,7 @@ const ::uint32_t
         2,
         3,
         4,
+        13,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::RmbConsignmentResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -9821,7 +11539,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_._has_bits_),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.order_id_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.gross_fen_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.fee_fen_),
@@ -9829,13 +11547,17 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.reserved_fen_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.paid_fen_),
         PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.available_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.dispute_frozen_fen_),
+        PROTOBUF_FIELD_OFFSET(::trade::RmbSellerIncome, _impl_.dispute_case_id_),
         0,
-        1,
         2,
         3,
         4,
         5,
         6,
+        7,
+        8,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::ListSellerIncomesResponse, _impl_._has_bits_),
         7, // hasbit index offset
@@ -9879,6 +11601,135 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::WithdrawalResponse, _impl_.withdrawal_),
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_._has_bits_),
+        20, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.seller_player_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.owner_revision_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.ownership_changed_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.ownership_changed_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.epoch_started_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.completed_orders_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.positive_reviews_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.neutral_reviews_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.negative_reviews_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.violation_count_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.env_credit_cleared_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.env_reset_count_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.last_env_changed_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.credit_score_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.star_rating_tenths_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.positive_rate_bps_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditView, _impl_.risk_tier_),
+        1,
+        2,
+        9,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        12,
+        10,
+        13,
+        14,
+        11,
+        15,
+        16,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::GetSellerCreditRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::GetSellerCreditRequest, _impl_.seller_player_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditResponse, _impl_.profile_),
+        PROTOBUF_FIELD_OFFSET(::trade::SellerCreditResponse, _impl_.server_now_ms_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewRequest, _impl_.order_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewRequest, _impl_.rating_),
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewRequest, _impl_.comment_),
+        0,
+        2,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewResponse, _impl_.counted_for_score_),
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewResponse, _impl_.profile_),
+        PROTOBUF_FIELD_OFFSET(::trade::SubmitSellerReviewResponse, _impl_.server_now_ms_),
+        0,
+        3,
+        4,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceRequest, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceRequest, _impl_.currency_type_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_._has_bits_),
+        11, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.currency_type_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.median_unit_price_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.sample_count_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.insufficient_sample_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.window_days_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetMarketReferencePriceResponse, _impl_.server_now_ms_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaRequest, _impl_.currency_type_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_._has_bits_),
+        14, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.mode_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.currency_type_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.daily_currency_limit_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.daily_currency_used_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.daily_currency_remaining_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.consumable_item_ids_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.min_friend_duration_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.max_reference_deviation_pct_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.cooling_lock_duration_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.server_now_ms_),
+        2,
+        1,
+        6,
+        3,
+        4,
+        5,
+        0,
+        8,
+        7,
+        9,
+        10,
 };
 
 static const ::_pbi::MigrationSchema
@@ -9886,57 +11737,66 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::trade::TradeAssetSelection_ItemsEntry_DoNotUse)},
         {7, sizeof(::trade::TradeAssetSelection)},
         {20, sizeof(::trade::CommerceOrderView)},
-        {47, sizeof(::trade::CommerceOrderResponse)},
-        {68, sizeof(::trade::GetCommerceOrderRequest)},
-        {73, sizeof(::trade::CancelCommerceOrderRequest)},
-        {78, sizeof(::trade::ListCommerceOrdersRequest)},
-        {85, sizeof(::trade::ListCommerceOrdersResponse)},
-        {96, sizeof(::trade::TradeOfferInstance)},
-        {109, sizeof(::trade::CommerceOfferView)},
-        {122, sizeof(::trade::BrowseCommerceOffersRequest)},
-        {131, sizeof(::trade::BrowseCommerceOffersResponse)},
-        {142, sizeof(::trade::OfficialSkuView)},
-        {155, sizeof(::trade::ListOfficialSkusRequest)},
-        {162, sizeof(::trade::ListOfficialSkusResponse)},
-        {171, sizeof(::trade::CreateOfficialOrderRequest)},
-        {180, sizeof(::trade::CreatePlayerTradeRequest)},
-        {191, sizeof(::trade::ConfirmPlayerTradeRequest)},
-        {196, sizeof(::trade::CreateConsignmentRequest)},
-        {209, sizeof(::trade::BuyConsignmentRequest)},
-        {216, sizeof(::trade::CancelConsignmentRequest)},
-        {221, sizeof(::trade::PlaceMarketOrderRequest)},
-        {238, sizeof(::trade::CancelMarketOrderRequest)},
-        {243, sizeof(::trade::MarketOrderView)},
-        {266, sizeof(::trade::MarketOrderResponse)},
-        {273, sizeof(::trade::ListMarketOrdersRequest)},
-        {280, sizeof(::trade::ListMarketOrdersResponse)},
-        {289, sizeof(::trade::GetMarketDepthRequest)},
-        {298, sizeof(::trade::MarketDepthLevel)},
-        {305, sizeof(::trade::GetMarketDepthResponse)},
-        {316, sizeof(::trade::TradeMarketView)},
-        {327, sizeof(::trade::ListTradeMarketsRequest)},
-        {328, sizeof(::trade::ListTradeMarketsResponse)},
-        {335, sizeof(::trade::CreateAuctionLotRequest)},
-        {350, sizeof(::trade::PlaceAuctionBidRequest)},
-        {359, sizeof(::trade::GetAuctionLotRequest)},
-        {364, sizeof(::trade::CancelAuctionLotRequest)},
-        {369, sizeof(::trade::AuctionLotView)},
-        {394, sizeof(::trade::AuctionLotResponse)},
-        {403, sizeof(::trade::CreateRmbConsignmentRequest)},
-        {416, sizeof(::trade::GetRmbConsignmentRequest)},
-        {421, sizeof(::trade::ListRmbConsignmentsRequest)},
-        {428, sizeof(::trade::BuyRmbConsignmentRequest)},
-        {435, sizeof(::trade::CancelRmbConsignmentRequest)},
-        {440, sizeof(::trade::RmbConsignmentView)},
-        {469, sizeof(::trade::RmbConsignmentResponse)},
-        {478, sizeof(::trade::ListRmbConsignmentsResponse)},
-        {489, sizeof(::trade::ListSellerIncomesRequest)},
-        {496, sizeof(::trade::RmbSellerIncome)},
-        {513, sizeof(::trade::ListSellerIncomesResponse)},
-        {524, sizeof(::trade::CreateWithdrawalRequest)},
-        {531, sizeof(::trade::GetWithdrawalRequest)},
-        {536, sizeof(::trade::RmbWithdrawalView)},
-        {549, sizeof(::trade::WithdrawalResponse)},
+        {49, sizeof(::trade::CommerceOrderResponse)},
+        {70, sizeof(::trade::GetCommerceOrderRequest)},
+        {75, sizeof(::trade::CancelCommerceOrderRequest)},
+        {80, sizeof(::trade::ListCommerceOrdersRequest)},
+        {87, sizeof(::trade::ListCommerceOrdersResponse)},
+        {98, sizeof(::trade::TradeOfferInstance)},
+        {111, sizeof(::trade::CommerceOfferView)},
+        {124, sizeof(::trade::BrowseCommerceOffersRequest)},
+        {133, sizeof(::trade::BrowseCommerceOffersResponse)},
+        {144, sizeof(::trade::OfficialSkuView)},
+        {157, sizeof(::trade::ListOfficialSkusRequest)},
+        {164, sizeof(::trade::ListOfficialSkusResponse)},
+        {173, sizeof(::trade::CreateOfficialOrderRequest)},
+        {182, sizeof(::trade::CreatePlayerTradeRequest)},
+        {193, sizeof(::trade::ConfirmPlayerTradeRequest)},
+        {198, sizeof(::trade::CreateConsignmentRequest)},
+        {213, sizeof(::trade::BuyConsignmentRequest)},
+        {220, sizeof(::trade::CancelConsignmentRequest)},
+        {225, sizeof(::trade::PlaceMarketOrderRequest)},
+        {242, sizeof(::trade::CancelMarketOrderRequest)},
+        {247, sizeof(::trade::MarketOrderView)},
+        {270, sizeof(::trade::MarketOrderResponse)},
+        {277, sizeof(::trade::ListMarketOrdersRequest)},
+        {284, sizeof(::trade::ListMarketOrdersResponse)},
+        {293, sizeof(::trade::GetMarketDepthRequest)},
+        {302, sizeof(::trade::MarketDepthLevel)},
+        {309, sizeof(::trade::GetMarketDepthResponse)},
+        {320, sizeof(::trade::TradeMarketView)},
+        {331, sizeof(::trade::ListTradeMarketsRequest)},
+        {332, sizeof(::trade::ListTradeMarketsResponse)},
+        {339, sizeof(::trade::CreateAuctionLotRequest)},
+        {354, sizeof(::trade::PlaceAuctionBidRequest)},
+        {363, sizeof(::trade::GetAuctionLotRequest)},
+        {368, sizeof(::trade::CancelAuctionLotRequest)},
+        {373, sizeof(::trade::AuctionLotView)},
+        {398, sizeof(::trade::AuctionLotResponse)},
+        {407, sizeof(::trade::CreateRmbConsignmentRequest)},
+        {422, sizeof(::trade::GetRmbConsignmentRequest)},
+        {427, sizeof(::trade::ListRmbConsignmentsRequest)},
+        {434, sizeof(::trade::BuyRmbConsignmentRequest)},
+        {441, sizeof(::trade::CancelRmbConsignmentRequest)},
+        {446, sizeof(::trade::RmbConsignmentView)},
+        {477, sizeof(::trade::RmbConsignmentResponse)},
+        {486, sizeof(::trade::ListRmbConsignmentsResponse)},
+        {497, sizeof(::trade::ListSellerIncomesRequest)},
+        {504, sizeof(::trade::RmbSellerIncome)},
+        {525, sizeof(::trade::ListSellerIncomesResponse)},
+        {536, sizeof(::trade::CreateWithdrawalRequest)},
+        {543, sizeof(::trade::GetWithdrawalRequest)},
+        {548, sizeof(::trade::RmbWithdrawalView)},
+        {561, sizeof(::trade::WithdrawalResponse)},
+        {568, sizeof(::trade::SellerCreditView)},
+        {605, sizeof(::trade::GetSellerCreditRequest)},
+        {610, sizeof(::trade::SellerCreditResponse)},
+        {619, sizeof(::trade::SubmitSellerReviewRequest)},
+        {628, sizeof(::trade::SubmitSellerReviewResponse)},
+        {641, sizeof(::trade::GetMarketReferencePriceRequest)},
+        {648, sizeof(::trade::GetMarketReferencePriceResponse)},
+        {667, sizeof(::trade::GetPlayerTradeQuotaRequest)},
+        {672, sizeof(::trade::GetPlayerTradeQuotaResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -9994,6 +11854,15 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::trade::GetWithdrawalRequest_globals_,
         &::trade::RmbWithdrawalView_globals_,
         &::trade::WithdrawalResponse_globals_,
+        &::trade::SellerCreditView_globals_,
+        &::trade::GetSellerCreditRequest_globals_,
+        &::trade::SellerCreditResponse_globals_,
+        &::trade::SubmitSellerReviewRequest_globals_,
+        &::trade::SubmitSellerReviewResponse_globals_,
+        &::trade::GetMarketReferencePriceRequest_globals_,
+        &::trade::GetMarketReferencePriceResponse_globals_,
+        &::trade::GetPlayerTradeQuotaRequest_globals_,
+        &::trade::GetPlayerTradeQuotaResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -10003,7 +11872,7 @@ const char descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto[] ABSL_ATT
     "etSelection.ItemsEntry\022\022\n\nitem_uuids\030\002 \003"
     "(\004\022\016\n\006pet_id\030\003 \001(\004\022\025\n\rcurrency_type\030\004 \001("
     "\r\022\027\n\017currency_amount\030\005 \001(\004\032,\n\nItemsEntry"
-    "\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\270\002\n\021Com"
+    "\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\334\002\n\021Com"
     "merceOrderView\022\020\n\010order_id\030\001 \001(\t\022&\n\004kind"
     "\030\002 \001(\0162\030.trade.CommerceOrderKind\022(\n\005stat"
     "e\030\003 \001(\0162\031.trade.CommerceOrderState\022\030\n\020se"
@@ -10011,181 +11880,232 @@ const char descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto[] ABSL_ATT
     "\005 \001(\004\022\016\n\006amount\030\006 \001(\004\022\020\n\010currency\030\007 \001(\t\022"
     "\022\n\ncreated_ms\030\010 \001(\004\022\017\n\007version\030\t \001(\004\022\030\n\020"
     "seller_confirmed\030\n \001(\010\022\027\n\017buyer_confirme"
-    "d\030\013 \001(\010\022\022\n\nrelated_id\030\014 \001(\t\"\264\003\n\025Commerce"
-    "OrderResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022\'\n\005order\030\002 \001(\0132\030.trade.Com"
-    "merceOrderView\022\025\n\rserver_now_ms\030\003 \001(\004\0221\n"
-    "\rseller_assets\030\004 \001(\0132\032.trade.TradeAssetS"
-    "election\0220\n\014buyer_assets\030\005 \001(\0132\032.trade.T"
-    "radeAssetSelection\0228\n\025seller_item_instan"
-    "ces\030\006 \003(\0132\031.trade.TradeOfferInstance\0227\n\024"
-    "buyer_item_instances\030\007 \003(\0132\031.trade.Trade"
-    "OfferInstance\022-\n\nseller_pet\030\010 \001(\0132\031.trad"
-    "e.TradeOfferInstance\022,\n\tbuyer_pet\030\t \001(\0132"
-    "\031.trade.TradeOfferInstance\"+\n\027GetCommerc"
-    "eOrderRequest\022\020\n\010order_id\030\001 \001(\t\".\n\032Cance"
-    "lCommerceOrderRequest\022\020\n\010order_id\030\001 \001(\t\""
-    ":\n\031ListCommerceOrdersRequest\022\016\n\006cursor\030\001"
-    " \001(\t\022\r\n\005limit\030\002 \001(\r\"\232\001\n\032ListCommerceOrde"
-    "rsResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022(\n\006orders\030\002 \003(\0132\030.trade.Comme"
-    "rceOrderView\022\023\n\013next_cursor\030\003 \001(\t\022\025\n\rser"
-    "ver_now_ms\030\004 \001(\004\"h\n\022TradeOfferInstance\022\023"
-    "\n\013instance_id\030\001 \001(\004\022\021\n\tconfig_id\030\002 \001(\r\022\r"
-    "\n\005count\030\003 \001(\r\022\014\n\004name\030\004 \001(\t\022\r\n\005level\030\005 \001"
-    "(\r\"\353\001\n\021CommerceOfferView\022\'\n\005order\030\001 \001(\0132"
-    "\030.trade.CommerceOrderView\022*\n\006assets\030\002 \001("
-    "\0132\032.trade.TradeAssetSelection\0221\n\016item_in"
-    "stances\030\003 \003(\0132\031.trade.TradeOfferInstance"
-    "\022&\n\003pet\030\004 \001(\0132\031.trade.TradeOfferInstance"
-    "\022&\n\007auction\030\005 \001(\0132\025.trade.AuctionLotView"
-    "\"d\n\033BrowseCommerceOffersRequest\022&\n\004kind\030"
-    "\001 \001(\0162\030.trade.CommerceOrderKind\022\016\n\006curso"
-    "r\030\002 \001(\t\022\r\n\005limit\030\003 \001(\r\"\234\001\n\034BrowseCommerc"
-    "eOffersResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022(\n\006offers\030\002 \003(\0132\030.trade."
-    "CommerceOfferView\022\023\n\013next_cursor\030\003 \001(\t\022\025"
-    "\n\rserver_now_ms\030\004 \001(\004\"j\n\017OfficialSkuView"
-    "\022\016\n\006sku_id\030\001 \001(\004\022\r\n\005title\030\002 \001(\t\022\023\n\013price"
-    "_minor\030\003 \001(\004\022\020\n\010currency\030\004 \001(\t\022\021\n\tavaila"
-    "ble\030\005 \001(\004\">\n\027ListOfficialSkusRequest\022\024\n\014"
-    "after_sku_id\030\001 \001(\004\022\r\n\005limit\030\002 \001(\r\"}\n\030Lis"
-    "tOfficialSkusResponse\022&\n\rerror_message\030\001"
-    " \001(\0132\017.TipInfoMessage\022$\n\004skus\030\002 \003(\0132\026.tr"
-    "ade.OfficialSkuView\022\023\n\013next_sku_id\030\003 \001(\004"
-    "\"Y\n\032CreateOfficialOrderRequest\022\031\n\021client"
-    "_request_id\030\001 \001(\t\022\016\n\006sku_id\030\002 \001(\004\022\020\n\010qua"
-    "ntity\030\003 \001(\r\"\263\001\n\030CreatePlayerTradeRequest"
-    "\022\031\n\021client_request_id\030\001 \001(\t\022\027\n\017buyer_pla"
-    "yer_id\030\002 \001(\004\0221\n\rseller_assets\030\003 \001(\0132\032.tr"
-    "ade.TradeAssetSelection\0220\n\014buyer_assets\030"
-    "\004 \001(\0132\032.trade.TradeAssetSelection\"-\n\031Con"
-    "firmPlayerTradeRequest\022\020\n\010order_id\030\001 \001(\t"
-    "\"\234\001\n\030CreateConsignmentRequest\022\031\n\021client_"
-    "request_id\030\001 \001(\t\022*\n\006assets\030\002 \001(\0132\032.trade"
-    ".TradeAssetSelection\022\025\n\rcurrency_type\030\003 "
-    "\001(\r\022\r\n\005price\030\004 \001(\004\022\023\n\013duration_ms\030\005 \001(\004\""
-    "F\n\025BuyConsignmentRequest\022\022\n\nlisting_id\030\001"
-    " \001(\t\022\031\n\021client_request_id\030\002 \001(\t\".\n\030Cance"
-    "lConsignmentRequest\022\022\n\nlisting_id\030\001 \001(\t\""
-    "\302\001\n\027PlaceMarketOrderRequest\022\031\n\021client_re"
-    "quest_id\030\001 \001(\t\022\021\n\tmarket_id\030\002 \001(\r\022\026\n\016ite"
-    "m_config_id\030\003 \001(\r\022$\n\004side\030\004 \001(\0162\026.trade."
-    "MarketOrderSide\022\020\n\010quantity\030\005 \001(\r\022\022\n\nuni"
-    "t_price\030\006 \001(\004\022\025\n\rcurrency_type\030\007 \001(\r\"3\n\030"
-    "CancelMarketOrderRequest\022\027\n\017market_order"
-    "_id\030\001 \001(\t\"\364\001\n\017MarketOrderView\022\027\n\017market_"
-    "order_id\030\001 \001(\t\022\021\n\tmarket_id\030\002 \001(\r\022\026\n\016ite"
-    "m_config_id\030\003 \001(\r\022$\n\004side\030\004 \001(\0162\026.trade."
-    "MarketOrderSide\022\020\n\010quantity\030\005 \001(\r\022\027\n\017fil"
-    "led_quantity\030\006 \001(\r\022\022\n\nunit_price\030\007 \001(\004\022\025"
-    "\n\rcurrency_type\030\010 \001(\r\022\r\n\005state\030\t \001(\t\022\022\n\n"
-    "created_ms\030\n \001(\004\"d\n\023MarketOrderResponse\022"
-    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
-    "%\n\005order\030\002 \001(\0132\026.trade.MarketOrderView\"8"
-    "\n\027ListMarketOrdersRequest\022\016\n\006cursor\030\001 \001("
-    "\t\022\r\n\005limit\030\002 \001(\r\"\177\n\030ListMarketOrdersResp"
-    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022&\n\006orders\030\002 \003(\0132\026.trade.MarketOrder"
-    "View\022\023\n\013next_cursor\030\003 \001(\t\"Q\n\025GetMarketDe"
-    "pthRequest\022\021\n\tmarket_id\030\001 \001(\r\022\026\n\016item_co"
-    "nfig_id\030\002 \001(\r\022\r\n\005limit\030\003 \001(\r\"8\n\020MarketDe"
-    "pthLevel\022\022\n\nunit_price\030\001 \001(\004\022\020\n\010quantity"
-    "\030\002 \001(\004\"\245\001\n\026GetMarketDepthResponse\022&\n\rerr"
-    "or_message\030\001 \001(\0132\017.TipInfoMessage\022%\n\004ask"
-    "s\030\002 \003(\0132\027.trade.MarketDepthLevel\022%\n\004bids"
-    "\030\003 \003(\0132\027.trade.MarketDepthLevel\022\025\n\rserve"
-    "r_now_ms\030\004 \001(\004\"b\n\017TradeMarketView\022\021\n\tmar"
-    "ket_id\030\001 \001(\r\022\026\n\016item_config_id\030\002 \001(\r\022\r\n\005"
-    "title\030\003 \001(\t\022\025\n\rcurrency_type\030\004 \001(\r\"\031\n\027Li"
-    "stTradeMarketsRequest\"k\n\030ListTradeMarket"
-    "sResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
-    "foMessage\022\'\n\007markets\030\002 \003(\0132\026.trade.Trade"
-    "MarketView\"\276\001\n\027CreateAuctionLotRequest\022\031"
-    "\n\021client_request_id\030\001 \001(\t\022*\n\006assets\030\002 \001("
-    "\0132\032.trade.TradeAssetSelection\022\025\n\rcurrenc"
-    "y_type\030\003 \001(\r\022\025\n\ropening_price\030\004 \001(\004\022\031\n\021m"
-    "inimum_increment\030\005 \001(\004\022\023\n\013duration_ms\030\006 "
-    "\001(\004\"S\n\026PlaceAuctionBidRequest\022\016\n\006lot_id\030"
-    "\001 \001(\t\022\031\n\021client_request_id\030\002 \001(\t\022\016\n\006amou"
-    "nt\030\003 \001(\004\"&\n\024GetAuctionLotRequest\022\016\n\006lot_"
-    "id\030\001 \001(\t\")\n\027CancelAuctionLotRequest\022\016\n\006l"
-    "ot_id\030\001 \001(\t\"\362\001\n\016AuctionLotView\022\016\n\006lot_id"
-    "\030\001 \001(\t\022\030\n\020seller_player_id\030\002 \001(\004\022\025\n\rcurr"
-    "ency_type\030\003 \001(\r\022\025\n\ropening_price\030\004 \001(\004\022\031"
-    "\n\021minimum_increment\030\005 \001(\004\022\023\n\013highest_bid"
-    "\030\006 \001(\004\022\026\n\016highest_bidder\030\007 \001(\004\022\016\n\006end_ms"
-    "\030\010 \001(\004\022\r\n\005state\030\t \001(\t\022\017\n\007version\030\n \001(\004\022\020"
-    "\n\010order_id\030\013 \001(\t\"w\n\022AuctionLotResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\""
-    "\n\003lot\030\002 \001(\0132\025.trade.AuctionLotView\022\025\n\rse"
-    "rver_now_ms\030\003 \001(\004\"\243\001\n\033CreateRmbConsignme"
-    "ntRequest\022\031\n\021client_request_id\030\001 \001(\t\022*\n\006"
-    "assets\030\002 \001(\0132\032.trade.TradeAssetSelection"
-    "\022\033\n\023character_player_id\030\003 \001(\004\022\021\n\tprice_f"
-    "en\030\004 \001(\004\022\r\n\005title\030\005 \001(\t\".\n\030GetRmbConsign"
-    "mentRequest\022\022\n\nlisting_id\030\001 \001(\004\";\n\032ListR"
-    "mbConsignmentsRequest\022\016\n\006cursor\030\001 \001(\t\022\r\n"
-    "\005limit\030\002 \001(\r\"I\n\030BuyRmbConsignmentRequest"
-    "\022\022\n\nlisting_id\030\001 \001(\004\022\031\n\021client_request_i"
-    "d\030\002 \001(\t\"1\n\033CancelRmbConsignmentRequest\022\022"
-    "\n\nlisting_id\030\001 \001(\004\"\216\002\n\022RmbConsignmentVie"
-    "w\022\022\n\nlisting_id\030\001 \001(\004\022\030\n\020seller_player_i"
-    "d\030\002 \001(\004\022\023\n\013market_zone\030\003 \001(\r\022\022\n\nasset_ki"
-    "nd\030\004 \001(\t\022\r\n\005title\030\005 \001(\t\022\021\n\tprice_fen\030\006 \001"
-    "(\004\022\017\n\007fee_bps\030\007 \001(\r\022\022\n\ncooling_ms\030\010 \001(\004\022"
-    "\025\n\rnotice_end_ms\030\t \001(\004\022\023\n\013sale_end_ms\030\n "
-    "\001(\004\022\r\n\005state\030\013 \001(\t\022\r\n\005phase\030\014 \001(\t\022\020\n\010ord"
-    "er_id\030\r \001(\t\"\203\001\n\026RmbConsignmentResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022*"
-    "\n\007listing\030\002 \001(\0132\031.trade.RmbConsignmentVi"
-    "ew\022\025\n\rserver_now_ms\030\003 \001(\004\"\236\001\n\033ListRmbCon"
-    "signmentsResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022+\n\010listings\030\002 \003(\0132\031.tr"
-    "ade.RmbConsignmentView\022\023\n\013next_cursor\030\003 "
-    "\001(\t\022\025\n\rserver_now_ms\030\004 \001(\004\"9\n\030ListSeller"
-    "IncomesRequest\022\016\n\006cursor\030\001 \001(\t\022\r\n\005limit\030"
-    "\002 \001(\r\"\226\001\n\017RmbSellerIncome\022\020\n\010order_id\030\001 "
-    "\001(\t\022\021\n\tgross_fen\030\002 \001(\004\022\017\n\007fee_fen\030\003 \001(\004\022"
-    "\017\n\007net_fen\030\004 \001(\004\022\024\n\014reserved_fen\030\005 \001(\004\022\020"
-    "\n\010paid_fen\030\006 \001(\004\022\024\n\014available_ms\030\007 \001(\004\"\230"
-    "\001\n\031ListSellerIncomesResponse\022&\n\rerror_me"
-    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\'\n\007incomes\030"
-    "\002 \003(\0132\026.trade.RmbSellerIncome\022\023\n\013next_cu"
-    "rsor\030\003 \001(\t\022\025\n\rserver_now_ms\030\004 \001(\004\"H\n\027Cre"
-    "ateWithdrawalRequest\022\031\n\021client_request_i"
-    "d\030\001 \001(\t\022\022\n\namount_fen\030\002 \001(\004\"-\n\024GetWithdr"
-    "awalRequest\022\025\n\rwithdrawal_id\030\001 \001(\t\"v\n\021Rm"
-    "bWithdrawalView\022\025\n\rwithdrawal_id\030\001 \001(\t\022\022"
-    "\n\namount_fen\030\002 \001(\004\022\r\n\005state\030\003 \001(\t\022\017\n\007cha"
-    "nnel\030\004 \001(\t\022\026\n\016transaction_id\030\005 \001(\t\"j\n\022Wi"
-    "thdrawalResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022,\n\nwithdrawal\030\002 \001(\0132\030.t"
-    "rade.RmbWithdrawalView*\231\002\n\021CommerceOrder"
-    "Kind\022#\n\037COMMERCE_ORDER_KIND_UNSPECIFIED\020"
-    "\000\022 \n\034COMMERCE_ORDER_KIND_OFFICIAL\020\001\022$\n C"
-    "OMMERCE_ORDER_KIND_PLAYER_TRADE\020\002\022#\n\037COM"
-    "MERCE_ORDER_KIND_CONSIGNMENT\020\003\022$\n COMMER"
-    "CE_ORDER_KIND_MARKET_MATCH\020\004\022#\n\037COMMERCE"
-    "_ORDER_KIND_AUCTION_LOT\020\005\022\'\n#COMMERCE_OR"
-    "DER_KIND_RMB_CONSIGNMENT\020\006*\244\004\n\022CommerceO"
-    "rderState\022$\n COMMERCE_ORDER_STATE_UNSPEC"
-    "IFIED\020\000\022-\n)COMMERCE_ORDER_STATE_WAITING_"
-    "CONFIRMATION\020\001\022)\n%COMMERCE_ORDER_STATE_A"
-    "WAITING_PAYMENT\020\002\022\"\n\036COMMERCE_ORDER_STAT"
-    "E_ESCROWING\020\003\022#\n\037COMMERCE_ORDER_STATE_DE"
-    "LIVERING\020\004\022\"\n\036COMMERCE_ORDER_STATE_DELIV"
-    "ERED\020\005\022\'\n#COMMERCE_ORDER_STATE_CANCEL_PE"
-    "NDING\020\006\022\"\n\036COMMERCE_ORDER_STATE_CANCELLE"
-    "D\020\007\022\'\n#COMMERCE_ORDER_STATE_REFUND_PENDI"
-    "NG\020\010\022!\n\035COMMERCE_ORDER_STATE_REFUNDED\020\t\022"
-    "\037\n\033COMMERCE_ORDER_STATE_MANUAL\020\n\022 \n\034COMM"
-    "ERCE_ORDER_STATE_SETTLED\020\013\022\"\n\036COMMERCE_O"
-    "RDER_STATE_REVERSING\020\014\022!\n\035COMMERCE_ORDER"
-    "_STATE_REVERSED\020\r*k\n\017MarketOrderSide\022!\n\035"
-    "MARKET_ORDER_SIDE_UNSPECIFIED\020\000\022\031\n\025MARKE"
-    "T_ORDER_SIDE_BUY\020\001\022\032\n\026MARKET_ORDER_SIDE_"
-    "SELL\020\002B\007Z\005tradeb\006proto3"
+    "d\030\013 \001(\010\022\022\n\nrelated_id\030\014 \001(\t\022\"\n\032designate"
+    "d_buyer_player_id\030\r \001(\004\"\264\003\n\025CommerceOrde"
+    "rResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
+    "foMessage\022\'\n\005order\030\002 \001(\0132\030.trade.Commerc"
+    "eOrderView\022\025\n\rserver_now_ms\030\003 \001(\004\0221\n\rsel"
+    "ler_assets\030\004 \001(\0132\032.trade.TradeAssetSelec"
+    "tion\0220\n\014buyer_assets\030\005 \001(\0132\032.trade.Trade"
+    "AssetSelection\0228\n\025seller_item_instances\030"
+    "\006 \003(\0132\031.trade.TradeOfferInstance\0227\n\024buye"
+    "r_item_instances\030\007 \003(\0132\031.trade.TradeOffe"
+    "rInstance\022-\n\nseller_pet\030\010 \001(\0132\031.trade.Tr"
+    "adeOfferInstance\022,\n\tbuyer_pet\030\t \001(\0132\031.tr"
+    "ade.TradeOfferInstance\"+\n\027GetCommerceOrd"
+    "erRequest\022\020\n\010order_id\030\001 \001(\t\".\n\032CancelCom"
+    "merceOrderRequest\022\020\n\010order_id\030\001 \001(\t\":\n\031L"
+    "istCommerceOrdersRequest\022\016\n\006cursor\030\001 \001(\t"
+    "\022\r\n\005limit\030\002 \001(\r\"\232\001\n\032ListCommerceOrdersRe"
+    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
+    "essage\022(\n\006orders\030\002 \003(\0132\030.trade.CommerceO"
+    "rderView\022\023\n\013next_cursor\030\003 \001(\t\022\025\n\rserver_"
+    "now_ms\030\004 \001(\004\"h\n\022TradeOfferInstance\022\023\n\013in"
+    "stance_id\030\001 \001(\004\022\021\n\tconfig_id\030\002 \001(\r\022\r\n\005co"
+    "unt\030\003 \001(\r\022\014\n\004name\030\004 \001(\t\022\r\n\005level\030\005 \001(\r\"\353"
+    "\001\n\021CommerceOfferView\022\'\n\005order\030\001 \001(\0132\030.tr"
+    "ade.CommerceOrderView\022*\n\006assets\030\002 \001(\0132\032."
+    "trade.TradeAssetSelection\0221\n\016item_instan"
+    "ces\030\003 \003(\0132\031.trade.TradeOfferInstance\022&\n\003"
+    "pet\030\004 \001(\0132\031.trade.TradeOfferInstance\022&\n\007"
+    "auction\030\005 \001(\0132\025.trade.AuctionLotView\"d\n\033"
+    "BrowseCommerceOffersRequest\022&\n\004kind\030\001 \001("
+    "\0162\030.trade.CommerceOrderKind\022\016\n\006cursor\030\002 "
+    "\001(\t\022\r\n\005limit\030\003 \001(\r\"\234\001\n\034BrowseCommerceOff"
+    "ersResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
+    "InfoMessage\022(\n\006offers\030\002 \003(\0132\030.trade.Comm"
+    "erceOfferView\022\023\n\013next_cursor\030\003 \001(\t\022\025\n\rse"
+    "rver_now_ms\030\004 \001(\004\"j\n\017OfficialSkuView\022\016\n\006"
+    "sku_id\030\001 \001(\004\022\r\n\005title\030\002 \001(\t\022\023\n\013price_min"
+    "or\030\003 \001(\004\022\020\n\010currency\030\004 \001(\t\022\021\n\tavailable\030"
+    "\005 \001(\004\">\n\027ListOfficialSkusRequest\022\024\n\014afte"
+    "r_sku_id\030\001 \001(\004\022\r\n\005limit\030\002 \001(\r\"}\n\030ListOff"
+    "icialSkusResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022$\n\004skus\030\002 \003(\0132\026.trade."
+    "OfficialSkuView\022\023\n\013next_sku_id\030\003 \001(\004\"Y\n\032"
+    "CreateOfficialOrderRequest\022\031\n\021client_req"
+    "uest_id\030\001 \001(\t\022\016\n\006sku_id\030\002 \001(\004\022\020\n\010quantit"
+    "y\030\003 \001(\r\"\263\001\n\030CreatePlayerTradeRequest\022\031\n\021"
+    "client_request_id\030\001 \001(\t\022\027\n\017buyer_player_"
+    "id\030\002 \001(\004\0221\n\rseller_assets\030\003 \001(\0132\032.trade."
+    "TradeAssetSelection\0220\n\014buyer_assets\030\004 \001("
+    "\0132\032.trade.TradeAssetSelection\"-\n\031Confirm"
+    "PlayerTradeRequest\022\020\n\010order_id\030\001 \001(\t\"\300\001\n"
+    "\030CreateConsignmentRequest\022\031\n\021client_requ"
+    "est_id\030\001 \001(\t\022*\n\006assets\030\002 \001(\0132\032.trade.Tra"
+    "deAssetSelection\022\025\n\rcurrency_type\030\003 \001(\r\022"
+    "\r\n\005price\030\004 \001(\004\022\023\n\013duration_ms\030\005 \001(\004\022\"\n\032d"
+    "esignated_buyer_player_id\030\006 \001(\004\"F\n\025BuyCo"
+    "nsignmentRequest\022\022\n\nlisting_id\030\001 \001(\t\022\031\n\021"
+    "client_request_id\030\002 \001(\t\".\n\030CancelConsign"
+    "mentRequest\022\022\n\nlisting_id\030\001 \001(\t\"\302\001\n\027Plac"
+    "eMarketOrderRequest\022\031\n\021client_request_id"
+    "\030\001 \001(\t\022\021\n\tmarket_id\030\002 \001(\r\022\026\n\016item_config"
+    "_id\030\003 \001(\r\022$\n\004side\030\004 \001(\0162\026.trade.MarketOr"
+    "derSide\022\020\n\010quantity\030\005 \001(\r\022\022\n\nunit_price\030"
+    "\006 \001(\004\022\025\n\rcurrency_type\030\007 \001(\r\"3\n\030CancelMa"
+    "rketOrderRequest\022\027\n\017market_order_id\030\001 \001("
+    "\t\"\364\001\n\017MarketOrderView\022\027\n\017market_order_id"
+    "\030\001 \001(\t\022\021\n\tmarket_id\030\002 \001(\r\022\026\n\016item_config"
+    "_id\030\003 \001(\r\022$\n\004side\030\004 \001(\0162\026.trade.MarketOr"
+    "derSide\022\020\n\010quantity\030\005 \001(\r\022\027\n\017filled_quan"
+    "tity\030\006 \001(\r\022\022\n\nunit_price\030\007 \001(\004\022\025\n\rcurren"
+    "cy_type\030\010 \001(\r\022\r\n\005state\030\t \001(\t\022\022\n\ncreated_"
+    "ms\030\n \001(\004\"d\n\023MarketOrderResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022%\n\005order"
+    "\030\002 \001(\0132\026.trade.MarketOrderView\"8\n\027ListMa"
+    "rketOrdersRequest\022\016\n\006cursor\030\001 \001(\t\022\r\n\005lim"
+    "it\030\002 \001(\r\"\177\n\030ListMarketOrdersResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022&\n\006"
+    "orders\030\002 \003(\0132\026.trade.MarketOrderView\022\023\n\013"
+    "next_cursor\030\003 \001(\t\"Q\n\025GetMarketDepthReque"
+    "st\022\021\n\tmarket_id\030\001 \001(\r\022\026\n\016item_config_id\030"
+    "\002 \001(\r\022\r\n\005limit\030\003 \001(\r\"8\n\020MarketDepthLevel"
+    "\022\022\n\nunit_price\030\001 \001(\004\022\020\n\010quantity\030\002 \001(\004\"\245"
+    "\001\n\026GetMarketDepthResponse\022&\n\rerror_messa"
+    "ge\030\001 \001(\0132\017.TipInfoMessage\022%\n\004asks\030\002 \003(\0132"
+    "\027.trade.MarketDepthLevel\022%\n\004bids\030\003 \003(\0132\027"
+    ".trade.MarketDepthLevel\022\025\n\rserver_now_ms"
+    "\030\004 \001(\004\"b\n\017TradeMarketView\022\021\n\tmarket_id\030\001"
+    " \001(\r\022\026\n\016item_config_id\030\002 \001(\r\022\r\n\005title\030\003 "
+    "\001(\t\022\025\n\rcurrency_type\030\004 \001(\r\"\031\n\027ListTradeM"
+    "arketsRequest\"k\n\030ListTradeMarketsRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\022\'\n\007markets\030\002 \003(\0132\026.trade.TradeMarketVi"
+    "ew\"\276\001\n\027CreateAuctionLotRequest\022\031\n\021client"
+    "_request_id\030\001 \001(\t\022*\n\006assets\030\002 \001(\0132\032.trad"
+    "e.TradeAssetSelection\022\025\n\rcurrency_type\030\003"
+    " \001(\r\022\025\n\ropening_price\030\004 \001(\004\022\031\n\021minimum_i"
+    "ncrement\030\005 \001(\004\022\023\n\013duration_ms\030\006 \001(\004\"S\n\026P"
+    "laceAuctionBidRequest\022\016\n\006lot_id\030\001 \001(\t\022\031\n"
+    "\021client_request_id\030\002 \001(\t\022\016\n\006amount\030\003 \001(\004"
+    "\"&\n\024GetAuctionLotRequest\022\016\n\006lot_id\030\001 \001(\t"
+    "\")\n\027CancelAuctionLotRequest\022\016\n\006lot_id\030\001 "
+    "\001(\t\"\362\001\n\016AuctionLotView\022\016\n\006lot_id\030\001 \001(\t\022\030"
+    "\n\020seller_player_id\030\002 \001(\004\022\025\n\rcurrency_typ"
+    "e\030\003 \001(\r\022\025\n\ropening_price\030\004 \001(\004\022\031\n\021minimu"
+    "m_increment\030\005 \001(\004\022\023\n\013highest_bid\030\006 \001(\004\022\026"
+    "\n\016highest_bidder\030\007 \001(\004\022\016\n\006end_ms\030\010 \001(\004\022\r"
+    "\n\005state\030\t \001(\t\022\017\n\007version\030\n \001(\004\022\020\n\010order_"
+    "id\030\013 \001(\t\"w\n\022AuctionLotResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022\"\n\003lot\030\002 "
+    "\001(\0132\025.trade.AuctionLotView\022\025\n\rserver_now"
+    "_ms\030\003 \001(\004\"\307\001\n\033CreateRmbConsignmentReques"
+    "t\022\031\n\021client_request_id\030\001 \001(\t\022*\n\006assets\030\002"
+    " \001(\0132\032.trade.TradeAssetSelection\022\033\n\023char"
+    "acter_player_id\030\003 \001(\004\022\021\n\tprice_fen\030\004 \001(\004"
+    "\022\r\n\005title\030\005 \001(\t\022\"\n\032designated_buyer_play"
+    "er_id\030\006 \001(\004\".\n\030GetRmbConsignmentRequest\022"
+    "\022\n\nlisting_id\030\001 \001(\004\";\n\032ListRmbConsignmen"
+    "tsRequest\022\016\n\006cursor\030\001 \001(\t\022\r\n\005limit\030\002 \001(\r"
+    "\"I\n\030BuyRmbConsignmentRequest\022\022\n\nlisting_"
+    "id\030\001 \001(\004\022\031\n\021client_request_id\030\002 \001(\t\"1\n\033C"
+    "ancelRmbConsignmentRequest\022\022\n\nlisting_id"
+    "\030\001 \001(\004\"\247\002\n\022RmbConsignmentView\022\022\n\nlisting"
+    "_id\030\001 \001(\004\022\030\n\020seller_player_id\030\002 \001(\004\022\023\n\013m"
+    "arket_zone\030\003 \001(\r\022\022\n\nasset_kind\030\004 \001(\t\022\r\n\005"
+    "title\030\005 \001(\t\022\021\n\tprice_fen\030\006 \001(\004\022\017\n\007fee_bp"
+    "s\030\007 \001(\r\022\022\n\ncooling_ms\030\010 \001(\004\022\025\n\rnotice_en"
+    "d_ms\030\t \001(\004\022\023\n\013sale_end_ms\030\n \001(\004\022\r\n\005state"
+    "\030\013 \001(\t\022\r\n\005phase\030\014 \001(\t\022\020\n\010order_id\030\r \001(\t\022"
+    "\027\n\017designated_only\030\016 \001(\010\"\203\001\n\026RmbConsignm"
+    "entResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
+    "InfoMessage\022*\n\007listing\030\002 \001(\0132\031.trade.Rmb"
+    "ConsignmentView\022\025\n\rserver_now_ms\030\003 \001(\004\"\236"
+    "\001\n\033ListRmbConsignmentsResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022+\n\010listin"
+    "gs\030\002 \003(\0132\031.trade.RmbConsignmentView\022\023\n\013n"
+    "ext_cursor\030\003 \001(\t\022\025\n\rserver_now_ms\030\004 \001(\004\""
+    "9\n\030ListSellerIncomesRequest\022\016\n\006cursor\030\001 "
+    "\001(\t\022\r\n\005limit\030\002 \001(\r\"\313\001\n\017RmbSellerIncome\022\020"
+    "\n\010order_id\030\001 \001(\t\022\021\n\tgross_fen\030\002 \001(\004\022\017\n\007f"
+    "ee_fen\030\003 \001(\004\022\017\n\007net_fen\030\004 \001(\004\022\024\n\014reserve"
+    "d_fen\030\005 \001(\004\022\020\n\010paid_fen\030\006 \001(\004\022\024\n\014availab"
+    "le_ms\030\007 \001(\004\022\032\n\022dispute_frozen_fen\030\010 \001(\004\022"
+    "\027\n\017dispute_case_id\030\t \001(\t\"\230\001\n\031ListSellerI"
+    "ncomesResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\022\'\n\007incomes\030\002 \003(\0132\026.trade."
+    "RmbSellerIncome\022\023\n\013next_cursor\030\003 \001(\t\022\025\n\r"
+    "server_now_ms\030\004 \001(\004\"H\n\027CreateWithdrawalR"
+    "equest\022\031\n\021client_request_id\030\001 \001(\t\022\022\n\namo"
+    "unt_fen\030\002 \001(\004\"-\n\024GetWithdrawalRequest\022\025\n"
+    "\rwithdrawal_id\030\001 \001(\t\"v\n\021RmbWithdrawalVie"
+    "w\022\025\n\rwithdrawal_id\030\001 \001(\t\022\022\n\namount_fen\030\002"
+    " \001(\004\022\r\n\005state\030\003 \001(\t\022\017\n\007channel\030\004 \001(\t\022\026\n\016"
+    "transaction_id\030\005 \001(\t\"j\n\022WithdrawalRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022,\n\nwithdrawal\030\002 \001(\0132\030.trade.RmbWithdr"
+    "awalView\"\322\003\n\020SellerCreditView\022\030\n\020seller_"
+    "player_id\030\001 \001(\004\022\026\n\016owner_revision\030\002 \001(\004\022"
+    "\031\n\021ownership_changed\030\003 \001(\010\022\037\n\027ownership_"
+    "changed_at_ms\030\004 \001(\004\022\033\n\023epoch_started_at_"
+    "ms\030\005 \001(\004\022\030\n\020completed_orders\030\006 \001(\004\022\030\n\020po"
+    "sitive_reviews\030\007 \001(\004\022\027\n\017neutral_reviews\030"
+    "\010 \001(\004\022\030\n\020negative_reviews\030\t \001(\004\022\027\n\017viola"
+    "tion_count\030\n \001(\004\022\032\n\022env_credit_cleared\030\013"
+    " \001(\010\022\027\n\017env_reset_count\030\014 \001(\004\022\036\n\026last_en"
+    "v_changed_at_ms\030\r \001(\004\022\024\n\014credit_score\030\016 "
+    "\001(\r\022\032\n\022star_rating_tenths\030\017 \001(\r\022\031\n\021posit"
+    "ive_rate_bps\030\020 \001(\r\022\021\n\trisk_tier\030\021 \001(\t\"2\n"
+    "\026GetSellerCreditRequest\022\030\n\020seller_player"
+    "_id\030\001 \001(\004\"\177\n\024SellerCreditResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022(\n\007pro"
+    "file\030\002 \001(\0132\027.trade.SellerCreditView\022\025\n\rs"
+    "erver_now_ms\030\003 \001(\004\"i\n\031SubmitSellerReview"
+    "Request\022\020\n\010order_id\030\001 \001(\t\022)\n\006rating\030\002 \001("
+    "\0162\031.trade.SellerReviewRating\022\017\n\007comment\030"
+    "\003 \001(\t\"\262\001\n\032SubmitSellerReviewResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021"
+    "counted_for_score\030\002 \001(\010\022\020\n\010replayed\030\003 \001("
+    "\010\022(\n\007profile\030\004 \001(\0132\027.trade.SellerCreditV"
+    "iew\022\025\n\rserver_now_ms\030\005 \001(\004\"O\n\036GetMarketR"
+    "eferencePriceRequest\022\026\n\016item_config_id\030\001"
+    " \001(\r\022\025\n\rcurrency_type\030\002 \001(\r\"\362\001\n\037GetMarke"
+    "tReferencePriceResponse\022&\n\rerror_message"
+    "\030\001 \001(\0132\017.TipInfoMessage\022\026\n\016item_config_i"
+    "d\030\002 \001(\r\022\025\n\rcurrency_type\030\003 \001(\r\022\031\n\021median"
+    "_unit_price\030\004 \001(\004\022\024\n\014sample_count\030\005 \001(\r\022"
+    "\033\n\023insufficient_sample\030\006 \001(\010\022\023\n\013window_d"
+    "ays\030\007 \001(\r\022\025\n\rserver_now_ms\030\010 \001(\004\"3\n\032GetP"
+    "layerTradeQuotaRequest\022\025\n\rcurrency_type\030"
+    "\001 \001(\r\"\342\002\n\033GetPlayerTradeQuotaResponse\022&\n"
+    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\014\n"
+    "\004mode\030\002 \001(\t\022\025\n\rcurrency_type\030\003 \001(\r\022\034\n\024da"
+    "ily_currency_limit\030\004 \001(\004\022\033\n\023daily_curren"
+    "cy_used\030\005 \001(\004\022 \n\030daily_currency_remainin"
+    "g\030\006 \001(\004\022\033\n\023consumable_item_ids\030\007 \003(\r\022\036\n\026"
+    "min_friend_duration_ms\030\010 \001(\004\022#\n\033max_refe"
+    "rence_deviation_pct\030\t \001(\r\022 \n\030cooling_loc"
+    "k_duration_ms\030\n \001(\004\022\025\n\rserver_now_ms\030\013 \001"
+    "(\004*\231\002\n\021CommerceOrderKind\022#\n\037COMMERCE_ORD"
+    "ER_KIND_UNSPECIFIED\020\000\022 \n\034COMMERCE_ORDER_"
+    "KIND_OFFICIAL\020\001\022$\n COMMERCE_ORDER_KIND_P"
+    "LAYER_TRADE\020\002\022#\n\037COMMERCE_ORDER_KIND_CON"
+    "SIGNMENT\020\003\022$\n COMMERCE_ORDER_KIND_MARKET"
+    "_MATCH\020\004\022#\n\037COMMERCE_ORDER_KIND_AUCTION_"
+    "LOT\020\005\022\'\n#COMMERCE_ORDER_KIND_RMB_CONSIGN"
+    "MENT\020\006*\244\004\n\022CommerceOrderState\022$\n COMMERC"
+    "E_ORDER_STATE_UNSPECIFIED\020\000\022-\n)COMMERCE_"
+    "ORDER_STATE_WAITING_CONFIRMATION\020\001\022)\n%CO"
+    "MMERCE_ORDER_STATE_AWAITING_PAYMENT\020\002\022\"\n"
+    "\036COMMERCE_ORDER_STATE_ESCROWING\020\003\022#\n\037COM"
+    "MERCE_ORDER_STATE_DELIVERING\020\004\022\"\n\036COMMER"
+    "CE_ORDER_STATE_DELIVERED\020\005\022\'\n#COMMERCE_O"
+    "RDER_STATE_CANCEL_PENDING\020\006\022\"\n\036COMMERCE_"
+    "ORDER_STATE_CANCELLED\020\007\022\'\n#COMMERCE_ORDE"
+    "R_STATE_REFUND_PENDING\020\010\022!\n\035COMMERCE_ORD"
+    "ER_STATE_REFUNDED\020\t\022\037\n\033COMMERCE_ORDER_ST"
+    "ATE_MANUAL\020\n\022 \n\034COMMERCE_ORDER_STATE_SET"
+    "TLED\020\013\022\"\n\036COMMERCE_ORDER_STATE_REVERSING"
+    "\020\014\022!\n\035COMMERCE_ORDER_STATE_REVERSED\020\r*k\n"
+    "\017MarketOrderSide\022!\n\035MARKET_ORDER_SIDE_UN"
+    "SPECIFIED\020\000\022\031\n\025MARKET_ORDER_SIDE_BUY\020\001\022\032"
+    "\n\026MARKET_ORDER_SIDE_SELL\020\002*\242\001\n\022SellerRev"
+    "iewRating\022$\n SELLER_REVIEW_RATING_UNSPEC"
+    "IFIED\020\000\022!\n\035SELLER_REVIEW_RATING_POSITIVE"
+    "\020\001\022 \n\034SELLER_REVIEW_RATING_NEUTRAL\020\002\022!\n\035"
+    "SELLER_REVIEW_RATING_NEGATIVE\020\003B\007Z\005trade"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2fcommerce_2eproto_deps[1] = {
@@ -10195,13 +12115,13 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2fcommerce_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2fcommerce_2eproto = {
     false,
     false,
-    7543,
+    9568,
     descriptor_table_protodef_proto_2ftrade_2fcommerce_2eproto,
     "proto/trade/commerce.proto",
     &descriptor_table_proto_2ftrade_2fcommerce_2eproto_once,
     descriptor_table_proto_2ftrade_2fcommerce_2eproto_deps,
     1,
-    54,
+    63,
     schemas,
     file_message_globals,
     TableStruct_proto_2ftrade_2fcommerce_2eproto::offsets,
@@ -10230,6 +12150,13 @@ MarketOrderSide_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t MarketOrderSide_internal_data_[] = {
     196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+SellerReviewRating_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2fcommerce_2eproto);
+  return file_level_enum_descriptors_proto_2ftrade_2fcommerce_2eproto[3];
+}
+PROTOBUF_CONSTINIT const uint32_t SellerReviewRating_internal_data_[] = {
+    262144u, 0u, };
 // ===================================================================
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -10757,7 +12684,7 @@ PROTOBUF_NOINLINE void CommerceOrderView::Clear() {
         reinterpret_cast<char*>(&_impl_.amount_) -
         reinterpret_cast<char*>(&_impl_.kind_)) + sizeof(_impl_.amount_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     ::memset(&_impl_.created_ms_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.buyer_confirmed_) -
         reinterpret_cast<char*>(&_impl_.created_ms_)) + sizeof(_impl_.buyer_confirmed_));
@@ -10869,7 +12796,7 @@ PROTOBUF_NOINLINE void CommerceOrderView::Clear() {
   }
 
   // bool seller_confirmed = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_seller_confirmed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -10878,7 +12805,7 @@ PROTOBUF_NOINLINE void CommerceOrderView::Clear() {
   }
 
   // bool buyer_confirmed = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_buyer_confirmed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -10893,6 +12820,15 @@ PROTOBUF_NOINLINE void CommerceOrderView::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.CommerceOrderView.related_id");
       target = stream->WriteStringMaybeAliased(12, _s, target);
+    }
+  }
+
+  // uint64 designated_buyer_player_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_designated_buyer_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_designated_buyer_player_id(), target);
     }
   }
 
@@ -10979,7 +12915,7 @@ PROTOBUF_NOINLINE void CommerceOrderView::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // uint64 created_ms = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_created_ms() != 0) {
@@ -10994,14 +12930,21 @@ PROTOBUF_NOINLINE void CommerceOrderView::Clear() {
             this_._internal_version());
       }
     }
-    // bool seller_confirmed = 10;
+    // uint64 designated_buyer_player_id = 13;
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_designated_buyer_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_designated_buyer_player_id());
+      }
+    }
+    // bool seller_confirmed = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_seller_confirmed() != 0) {
         total_size += 2;
       }
     }
     // bool buyer_confirmed = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_buyer_confirmed() != 0) {
         total_size += 2;
       }
@@ -11078,7 +13021,7 @@ void CommerceOrderView::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_created_ms() != 0) {
         _this->_impl_.created_ms_ = from._impl_.created_ms_;
@@ -11090,11 +13033,16 @@ void CommerceOrderView::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_designated_buyer_player_id() != 0) {
+        _this->_impl_.designated_buyer_player_id_ = from._impl_.designated_buyer_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_seller_confirmed() != 0) {
         _this->_impl_.seller_confirmed_ = from._impl_.seller_confirmed_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_buyer_confirmed() != 0) {
         _this->_impl_.buyer_confirmed_ = from._impl_.buyer_confirmed_;
       }
@@ -15692,7 +17640,7 @@ PROTOBUF_NOINLINE void CreateConsignmentRequest::Clear() {
       _impl_.assets_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.price_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.currency_type_) -
         reinterpret_cast<char*>(&_impl_.price_)) + sizeof(_impl_.currency_type_));
@@ -15738,7 +17686,7 @@ PROTOBUF_NOINLINE void CreateConsignmentRequest::Clear() {
   }
 
   // uint32 currency_type = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_currency_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -15761,6 +17709,15 @@ PROTOBUF_NOINLINE void CreateConsignmentRequest::Clear() {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           5, this_._internal_duration_ms(), target);
+    }
+  }
+
+  // uint64 designated_buyer_player_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_designated_buyer_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_designated_buyer_player_id(), target);
     }
   }
 
@@ -15789,7 +17746,7 @@ PROTOBUF_NOINLINE void CreateConsignmentRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string client_request_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_client_request_id().empty()) {
@@ -15816,8 +17773,15 @@ PROTOBUF_NOINLINE void CreateConsignmentRequest::Clear() {
             this_._internal_duration_ms());
       }
     }
-    // uint32 currency_type = 3;
+    // uint64 designated_buyer_player_id = 6;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_designated_buyer_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_designated_buyer_player_id());
+      }
+    }
+    // uint32 currency_type = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_currency_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_currency_type());
@@ -15842,7 +17806,7 @@ void CreateConsignmentRequest::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_client_request_id().empty()) {
         _this->_internal_set_client_request_id(from._internal_client_request_id());
@@ -15871,6 +17835,11 @@ void CreateConsignmentRequest::MergeImpl(::google::protobuf::MessageLite& to_msg
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_designated_buyer_player_id() != 0) {
+        _this->_impl_.designated_buyer_player_id_ = from._impl_.designated_buyer_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_currency_type() != 0) {
         _this->_impl_.currency_type_ = from._impl_.currency_type_;
       }
@@ -21519,9 +23488,9 @@ CreateRmbConsignmentRequest::CreateRmbConsignmentRequest(
                offsetof(Impl_, character_player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, character_player_id_),
-           offsetof(Impl_, price_fen_) -
+           offsetof(Impl_, designated_buyer_player_id_) -
                offsetof(Impl_, character_player_id_) +
-               sizeof(Impl_::price_fen_));
+               sizeof(Impl_::designated_buyer_player_id_));
 
   // @@protoc_insertion_point(copy_constructor:trade.CreateRmbConsignmentRequest)
 }
@@ -21537,9 +23506,9 @@ inline void CreateRmbConsignmentRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLA
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, assets_),
            0,
-           offsetof(Impl_, price_fen_) -
+           offsetof(Impl_, designated_buyer_player_id_) -
                offsetof(Impl_, assets_) +
-               sizeof(Impl_::price_fen_));
+               sizeof(Impl_::designated_buyer_player_id_));
 }
 CreateRmbConsignmentRequest::~CreateRmbConsignmentRequest() {
   // @@protoc_insertion_point(destructor:trade.CreateRmbConsignmentRequest)
@@ -21604,10 +23573,10 @@ PROTOBUF_NOINLINE void CreateRmbConsignmentRequest::Clear() {
       _impl_.assets_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
     ::memset(&_impl_.character_player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.price_fen_) -
-        reinterpret_cast<char*>(&_impl_.character_player_id_)) + sizeof(_impl_.price_fen_));
+        reinterpret_cast<char*>(&_impl_.designated_buyer_player_id_) -
+        reinterpret_cast<char*>(&_impl_.character_player_id_)) + sizeof(_impl_.designated_buyer_player_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -21677,6 +23646,15 @@ PROTOBUF_NOINLINE void CreateRmbConsignmentRequest::Clear() {
     }
   }
 
+  // uint64 designated_buyer_player_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_designated_buyer_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_designated_buyer_player_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -21702,7 +23680,7 @@ PROTOBUF_NOINLINE void CreateRmbConsignmentRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string client_request_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_client_request_id().empty()) {
@@ -21736,6 +23714,13 @@ PROTOBUF_NOINLINE void CreateRmbConsignmentRequest::Clear() {
             this_._internal_price_fen());
       }
     }
+    // uint64 designated_buyer_player_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_designated_buyer_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_designated_buyer_player_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -21755,7 +23740,7 @@ void CreateRmbConsignmentRequest::MergeImpl(::google::protobuf::MessageLite& to_
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_client_request_id().empty()) {
         _this->_internal_set_client_request_id(from._internal_client_request_id());
@@ -21792,6 +23777,11 @@ void CreateRmbConsignmentRequest::MergeImpl(::google::protobuf::MessageLite& to_
         _this->_impl_.price_fen_ = from._impl_.price_fen_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_designated_buyer_player_id() != 0) {
+        _this->_impl_.designated_buyer_player_id_ = from._impl_.designated_buyer_player_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -21815,8 +23805,8 @@ void CreateRmbConsignmentRequest::InternalSwap(CreateRmbConsignmentRequest* PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.client_request_id_, &other->_impl_.client_request_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.title_, &other->_impl_.title_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.price_fen_)
-      + sizeof(CreateRmbConsignmentRequest::_impl_.price_fen_)
+      PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.designated_buyer_player_id_)
+      + sizeof(CreateRmbConsignmentRequest::_impl_.designated_buyer_player_id_)
       - PROTOBUF_FIELD_OFFSET(CreateRmbConsignmentRequest, _impl_.assets_)>(
           reinterpret_cast<char*>(&_impl_.assets_),
           reinterpret_cast<char*>(&other->_impl_.assets_));
@@ -22728,9 +24718,9 @@ RmbConsignmentView::RmbConsignmentView(
                offsetof(Impl_, listing_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, listing_id_),
-           offsetof(Impl_, sale_end_ms_) -
+           offsetof(Impl_, designated_only_) -
                offsetof(Impl_, listing_id_) +
-               sizeof(Impl_::sale_end_ms_));
+               sizeof(Impl_::designated_only_));
 
   // @@protoc_insertion_point(copy_constructor:trade.RmbConsignmentView)
 }
@@ -22749,9 +24739,9 @@ inline void RmbConsignmentView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, listing_id_),
            0,
-           offsetof(Impl_, sale_end_ms_) -
+           offsetof(Impl_, designated_only_) -
                offsetof(Impl_, listing_id_) +
-               sizeof(Impl_::sale_end_ms_));
+               sizeof(Impl_::designated_only_));
 }
 RmbConsignmentView::~RmbConsignmentView() {
   // @@protoc_insertion_point(destructor:trade.RmbConsignmentView)
@@ -22828,10 +24818,10 @@ PROTOBUF_NOINLINE void RmbConsignmentView::Clear() {
         reinterpret_cast<char*>(&_impl_.market_zone_) -
         reinterpret_cast<char*>(&_impl_.listing_id_)) + sizeof(_impl_.market_zone_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     ::memset(&_impl_.fee_bps_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.sale_end_ms_) -
-        reinterpret_cast<char*>(&_impl_.fee_bps_)) + sizeof(_impl_.sale_end_ms_));
+        reinterpret_cast<char*>(&_impl_.designated_only_) -
+        reinterpret_cast<char*>(&_impl_.fee_bps_)) + sizeof(_impl_.designated_only_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -22978,6 +24968,15 @@ PROTOBUF_NOINLINE void RmbConsignmentView::Clear() {
     }
   }
 
+  // bool designated_only = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_designated_only() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_designated_only(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -23061,7 +25060,7 @@ PROTOBUF_NOINLINE void RmbConsignmentView::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 fee_bps = 7;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_fee_bps() != 0) {
@@ -23095,6 +25094,12 @@ PROTOBUF_NOINLINE void RmbConsignmentView::Clear() {
       if (this_._internal_sale_end_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_sale_end_ms());
+      }
+    }
+    // bool designated_only = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_designated_only() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -23177,7 +25182,7 @@ void RmbConsignmentView::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_fee_bps() != 0) {
         _this->_impl_.fee_bps_ = from._impl_.fee_bps_;
@@ -23201,6 +25206,11 @@ void RmbConsignmentView::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_sale_end_ms() != 0) {
         _this->_impl_.sale_end_ms_ = from._impl_.sale_end_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_designated_only() != 0) {
+        _this->_impl_.designated_only_ = from._impl_.designated_only_;
       }
     }
   }
@@ -23229,8 +25239,8 @@ void RmbConsignmentView::InternalSwap(RmbConsignmentView* PROTOBUF_RESTRICT PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.phase_, &other->_impl_.phase_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.order_id_, &other->_impl_.order_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.sale_end_ms_)
-      + sizeof(RmbConsignmentView::_impl_.sale_end_ms_)
+      PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.designated_only_)
+      + sizeof(RmbConsignmentView::_impl_.designated_only_)
       - PROTOBUF_FIELD_OFFSET(RmbConsignmentView, _impl_.listing_id_)>(
           reinterpret_cast<char*>(&_impl_.listing_id_),
           reinterpret_cast<char*>(&other->_impl_.listing_id_));
@@ -24110,7 +26120,8 @@ PROTOBUF_NDEBUG_INLINE RmbSellerIncome::Impl_::Impl_(
     [[maybe_unused]] const ::trade::RmbSellerIncome& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        order_id_(arena, from.order_id_) {}
+        order_id_(arena, from.order_id_),
+        dispute_case_id_(arena, from.dispute_case_id_) {}
 
 RmbSellerIncome::RmbSellerIncome(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -24130,9 +26141,9 @@ RmbSellerIncome::RmbSellerIncome(
                offsetof(Impl_, gross_fen_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, gross_fen_),
-           offsetof(Impl_, available_ms_) -
+           offsetof(Impl_, dispute_frozen_fen_) -
                offsetof(Impl_, gross_fen_) +
-               sizeof(Impl_::available_ms_));
+               sizeof(Impl_::dispute_frozen_fen_));
 
   // @@protoc_insertion_point(copy_constructor:trade.RmbSellerIncome)
 }
@@ -24140,16 +26151,17 @@ PROTOBUF_NDEBUG_INLINE RmbSellerIncome::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        order_id_(arena) {}
+        order_id_(arena),
+        dispute_case_id_(arena) {}
 
 inline void RmbSellerIncome::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, gross_fen_),
            0,
-           offsetof(Impl_, available_ms_) -
+           offsetof(Impl_, dispute_frozen_fen_) -
                offsetof(Impl_, gross_fen_) +
-               sizeof(Impl_::available_ms_));
+               sizeof(Impl_::dispute_frozen_fen_));
 }
 RmbSellerIncome::~RmbSellerIncome() {
   // @@protoc_insertion_point(destructor:trade.RmbSellerIncome)
@@ -24163,6 +26175,7 @@ inline void RmbSellerIncome::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.order_id_.Destroy();
+  this_._impl_.dispute_case_id_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -24200,14 +26213,20 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.order_id_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.order_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.dispute_case_id_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.gross_fen_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.available_ms_) -
         reinterpret_cast<char*>(&_impl_.gross_fen_)) + sizeof(_impl_.available_ms_));
   }
+  _impl_.dispute_frozen_fen_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -24242,7 +26261,7 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   }
 
   // uint64 gross_fen = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_gross_fen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24251,7 +26270,7 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   }
 
   // uint64 fee_fen = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_fee_fen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24260,7 +26279,7 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   }
 
   // uint64 net_fen = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_net_fen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24269,7 +26288,7 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   }
 
   // uint64 reserved_fen = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_reserved_fen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24278,7 +26297,7 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   }
 
   // uint64 paid_fen = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_paid_fen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -24287,11 +26306,30 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
   }
 
   // uint64 available_ms = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_available_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           7, this_._internal_available_ms(), target);
+    }
+  }
+
+  // uint64 dispute_frozen_fen = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_dispute_frozen_fen() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_dispute_frozen_fen(), target);
+    }
+  }
+
+  // string dispute_case_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_dispute_case_id().empty()) {
+      const ::std::string& _s = this_._internal_dispute_case_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.RmbSellerIncome.dispute_case_id");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
     }
   }
 
@@ -24320,7 +26358,7 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string order_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_order_id().empty()) {
@@ -24328,46 +26366,62 @@ PROTOBUF_NOINLINE void RmbSellerIncome::Clear() {
                                         this_._internal_order_id());
       }
     }
-    // uint64 gross_fen = 2;
+    // string dispute_case_id = 9;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_dispute_case_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_dispute_case_id());
+      }
+    }
+    // uint64 gross_fen = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_gross_fen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_gross_fen());
       }
     }
     // uint64 fee_fen = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_fee_fen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_fee_fen());
       }
     }
     // uint64 net_fen = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_net_fen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_net_fen());
       }
     }
     // uint64 reserved_fen = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_reserved_fen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_reserved_fen());
       }
     }
     // uint64 paid_fen = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_paid_fen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_paid_fen());
       }
     }
     // uint64 available_ms = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_available_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_available_ms());
+      }
+    }
+  }
+   {
+    // uint64 dispute_frozen_fen = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_dispute_frozen_fen() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_dispute_frozen_fen());
       }
     }
   }
@@ -24388,7 +26442,7 @@ void RmbSellerIncome::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_order_id().empty()) {
         _this->_internal_set_order_id(from._internal_order_id());
@@ -24399,34 +26453,48 @@ void RmbSellerIncome::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_dispute_case_id().empty()) {
+        _this->_internal_set_dispute_case_id(from._internal_dispute_case_id());
+      } else {
+        if (_this->_impl_.dispute_case_id_.IsDefault()) {
+          _this->_internal_set_dispute_case_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_gross_fen() != 0) {
         _this->_impl_.gross_fen_ = from._impl_.gross_fen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_fee_fen() != 0) {
         _this->_impl_.fee_fen_ = from._impl_.fee_fen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_net_fen() != 0) {
         _this->_impl_.net_fen_ = from._impl_.net_fen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_reserved_fen() != 0) {
         _this->_impl_.reserved_fen_ = from._impl_.reserved_fen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_paid_fen() != 0) {
         _this->_impl_.paid_fen_ = from._impl_.paid_fen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_available_ms() != 0) {
         _this->_impl_.available_ms_ = from._impl_.available_ms_;
       }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_dispute_frozen_fen() != 0) {
+      _this->_impl_.dispute_frozen_fen_ = from._impl_.dispute_frozen_fen_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -24449,9 +26517,10 @@ void RmbSellerIncome::InternalSwap(RmbSellerIncome* PROTOBUF_RESTRICT PROTOBUF_N
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.order_id_, &other->_impl_.order_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.dispute_case_id_, &other->_impl_.dispute_case_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.available_ms_)
-      + sizeof(RmbSellerIncome::_impl_.available_ms_)
+      PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.dispute_frozen_fen_)
+      + sizeof(RmbSellerIncome::_impl_.dispute_frozen_fen_)
       - PROTOBUF_FIELD_OFFSET(RmbSellerIncome, _impl_.gross_fen_)>(
           reinterpret_cast<char*>(&_impl_.gross_fen_),
           reinterpret_cast<char*>(&other->_impl_.gross_fen_));
@@ -25846,6 +27915,2971 @@ void WithdrawalResponse::InternalSwap(WithdrawalResponse* PROTOBUF_RESTRICT PROT
 }
 
 ::google::protobuf::Metadata WithdrawalResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SellerCreditView::SellerCreditView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SellerCreditView_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.SellerCreditView)
+}
+PROTOBUF_NDEBUG_INLINE SellerCreditView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::SellerCreditView& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        risk_tier_(arena, from.risk_tier_) {}
+
+SellerCreditView::SellerCreditView(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SellerCreditView& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SellerCreditView_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SellerCreditView* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, seller_player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, seller_player_id_),
+           offsetof(Impl_, positive_rate_bps_) -
+               offsetof(Impl_, seller_player_id_) +
+               sizeof(Impl_::positive_rate_bps_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.SellerCreditView)
+}
+PROTOBUF_NDEBUG_INLINE SellerCreditView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        risk_tier_(arena) {}
+
+inline void SellerCreditView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, seller_player_id_),
+           0,
+           offsetof(Impl_, positive_rate_bps_) -
+               offsetof(Impl_, seller_player_id_) +
+               sizeof(Impl_::positive_rate_bps_));
+}
+SellerCreditView::~SellerCreditView() {
+  // @@protoc_insertion_point(destructor:trade.SellerCreditView)
+  SharedDtor(*this);
+}
+inline void SellerCreditView::SharedDtor(MessageLite& self) {
+  SellerCreditView& this_ = static_cast<SellerCreditView&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.risk_tier_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SellerCreditView_class_data_ =
+        SellerCreditView::InternalGenerateClassData_(SellerCreditView_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SellerCreditView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SellerCreditView_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SellerCreditView_class_data_.tc_table);
+  return SellerCreditView_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SellerCreditView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SellerCreditView_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SellerCreditView_globals_));
+  return SellerCreditView_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SellerCreditView::ParseTableT_
+    SellerCreditView::_table_ =
+        SellerCreditView::InternalGenerateParseTable_(SellerCreditView_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SellerCreditView::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.SellerCreditView)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.risk_tier_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.seller_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.neutral_reviews_) -
+        reinterpret_cast<char*>(&_impl_.seller_player_id_)) + sizeof(_impl_.neutral_reviews_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.negative_reviews_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.star_rating_tenths_) -
+        reinterpret_cast<char*>(&_impl_.negative_reviews_)) + sizeof(_impl_.star_rating_tenths_));
+  }
+  _impl_.positive_rate_bps_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SellerCreditView::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SellerCreditView& this_ = static_cast<const SellerCreditView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SellerCreditView::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SellerCreditView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.SellerCreditView)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 seller_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_seller_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_seller_player_id(), target);
+    }
+  }
+
+  // uint64 owner_revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_owner_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_owner_revision(), target);
+    }
+  }
+
+  // bool ownership_changed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_ownership_changed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_ownership_changed(), target);
+    }
+  }
+
+  // uint64 ownership_changed_at_ms = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_ownership_changed_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_ownership_changed_at_ms(), target);
+    }
+  }
+
+  // uint64 epoch_started_at_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_epoch_started_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_epoch_started_at_ms(), target);
+    }
+  }
+
+  // uint64 completed_orders = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_completed_orders() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_completed_orders(), target);
+    }
+  }
+
+  // uint64 positive_reviews = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_positive_reviews() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_positive_reviews(), target);
+    }
+  }
+
+  // uint64 neutral_reviews = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_neutral_reviews() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_neutral_reviews(), target);
+    }
+  }
+
+  // uint64 negative_reviews = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_negative_reviews() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_negative_reviews(), target);
+    }
+  }
+
+  // uint64 violation_count = 10;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_violation_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_violation_count(), target);
+    }
+  }
+
+  // bool env_credit_cleared = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_env_credit_cleared() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          11, this_._internal_env_credit_cleared(), target);
+    }
+  }
+
+  // uint64 env_reset_count = 12;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_env_reset_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          12, this_._internal_env_reset_count(), target);
+    }
+  }
+
+  // uint64 last_env_changed_at_ms = 13;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_last_env_changed_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_last_env_changed_at_ms(), target);
+    }
+  }
+
+  // uint32 credit_score = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_credit_score() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_credit_score(), target);
+    }
+  }
+
+  // uint32 star_rating_tenths = 15;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_star_rating_tenths() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_star_rating_tenths(), target);
+    }
+  }
+
+  // uint32 positive_rate_bps = 16;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_positive_rate_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_positive_rate_bps(), target);
+    }
+  }
+
+  // string risk_tier = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_risk_tier().empty()) {
+      const ::std::string& _s = this_._internal_risk_tier();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.SellerCreditView.risk_tier");
+      target = stream->WriteStringMaybeAliased(17, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.SellerCreditView)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SellerCreditView::ByteSizeLong(const MessageLite& base) {
+  const SellerCreditView& this_ = static_cast<const SellerCreditView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SellerCreditView::ByteSizeLong() const {
+  const SellerCreditView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.SellerCreditView)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string risk_tier = 17;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_risk_tier().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_risk_tier());
+      }
+    }
+    // uint64 seller_player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_seller_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seller_player_id());
+      }
+    }
+    // uint64 owner_revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_owner_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_owner_revision());
+      }
+    }
+    // uint64 ownership_changed_at_ms = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_ownership_changed_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_ownership_changed_at_ms());
+      }
+    }
+    // uint64 epoch_started_at_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_epoch_started_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_epoch_started_at_ms());
+      }
+    }
+    // uint64 completed_orders = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_completed_orders() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_completed_orders());
+      }
+    }
+    // uint64 positive_reviews = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_positive_reviews() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_positive_reviews());
+      }
+    }
+    // uint64 neutral_reviews = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_neutral_reviews() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_neutral_reviews());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint64 negative_reviews = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_negative_reviews() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_negative_reviews());
+      }
+    }
+    // bool ownership_changed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_ownership_changed() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool env_credit_cleared = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_env_credit_cleared() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 credit_score = 14;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_credit_score() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_credit_score());
+      }
+    }
+    // uint64 violation_count = 10;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_violation_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_violation_count());
+      }
+    }
+    // uint64 env_reset_count = 12;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_env_reset_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_env_reset_count());
+      }
+    }
+    // uint64 last_env_changed_at_ms = 13;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_last_env_changed_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_last_env_changed_at_ms());
+      }
+    }
+    // uint32 star_rating_tenths = 15;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_star_rating_tenths() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_star_rating_tenths());
+      }
+    }
+  }
+   {
+    // uint32 positive_rate_bps = 16;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_positive_rate_bps() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_positive_rate_bps());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SellerCreditView::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SellerCreditView*>(&to_msg);
+  auto& from = static_cast<const SellerCreditView&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.SellerCreditView)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_risk_tier().empty()) {
+        _this->_internal_set_risk_tier(from._internal_risk_tier());
+      } else {
+        if (_this->_impl_.risk_tier_.IsDefault()) {
+          _this->_internal_set_risk_tier("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_seller_player_id() != 0) {
+        _this->_impl_.seller_player_id_ = from._impl_.seller_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_owner_revision() != 0) {
+        _this->_impl_.owner_revision_ = from._impl_.owner_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_ownership_changed_at_ms() != 0) {
+        _this->_impl_.ownership_changed_at_ms_ = from._impl_.ownership_changed_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_epoch_started_at_ms() != 0) {
+        _this->_impl_.epoch_started_at_ms_ = from._impl_.epoch_started_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_completed_orders() != 0) {
+        _this->_impl_.completed_orders_ = from._impl_.completed_orders_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_positive_reviews() != 0) {
+        _this->_impl_.positive_reviews_ = from._impl_.positive_reviews_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_neutral_reviews() != 0) {
+        _this->_impl_.neutral_reviews_ = from._impl_.neutral_reviews_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_negative_reviews() != 0) {
+        _this->_impl_.negative_reviews_ = from._impl_.negative_reviews_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_ownership_changed() != 0) {
+        _this->_impl_.ownership_changed_ = from._impl_.ownership_changed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_env_credit_cleared() != 0) {
+        _this->_impl_.env_credit_cleared_ = from._impl_.env_credit_cleared_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_credit_score() != 0) {
+        _this->_impl_.credit_score_ = from._impl_.credit_score_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_violation_count() != 0) {
+        _this->_impl_.violation_count_ = from._impl_.violation_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_env_reset_count() != 0) {
+        _this->_impl_.env_reset_count_ = from._impl_.env_reset_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_last_env_changed_at_ms() != 0) {
+        _this->_impl_.last_env_changed_at_ms_ = from._impl_.last_env_changed_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_star_rating_tenths() != 0) {
+        _this->_impl_.star_rating_tenths_ = from._impl_.star_rating_tenths_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_positive_rate_bps() != 0) {
+      _this->_impl_.positive_rate_bps_ = from._impl_.positive_rate_bps_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SellerCreditView::CopyFrom(const SellerCreditView& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.SellerCreditView)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SellerCreditView::InternalSwap(SellerCreditView* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.risk_tier_, &other->_impl_.risk_tier_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.positive_rate_bps_)
+      + sizeof(SellerCreditView::_impl_.positive_rate_bps_)
+      - PROTOBUF_FIELD_OFFSET(SellerCreditView, _impl_.seller_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.seller_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.seller_player_id_));
+}
+
+::google::protobuf::Metadata SellerCreditView::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetSellerCreditRequest::GetSellerCreditRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetSellerCreditRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.GetSellerCreditRequest)
+}
+GetSellerCreditRequest::GetSellerCreditRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetSellerCreditRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetSellerCreditRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GetSellerCreditRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetSellerCreditRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.seller_player_id_ = {};
+}
+GetSellerCreditRequest::~GetSellerCreditRequest() {
+  // @@protoc_insertion_point(destructor:trade.GetSellerCreditRequest)
+  SharedDtor(*this);
+}
+inline void GetSellerCreditRequest::SharedDtor(MessageLite& self) {
+  GetSellerCreditRequest& this_ = static_cast<GetSellerCreditRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetSellerCreditRequest_class_data_ =
+        GetSellerCreditRequest::InternalGenerateClassData_(GetSellerCreditRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetSellerCreditRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetSellerCreditRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetSellerCreditRequest_class_data_.tc_table);
+  return GetSellerCreditRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetSellerCreditRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetSellerCreditRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetSellerCreditRequest_globals_));
+  return GetSellerCreditRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetSellerCreditRequest::ParseTableT_
+    GetSellerCreditRequest::_table_ =
+        GetSellerCreditRequest::InternalGenerateParseTable_(GetSellerCreditRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetSellerCreditRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.GetSellerCreditRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.seller_player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetSellerCreditRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetSellerCreditRequest& this_ = static_cast<const GetSellerCreditRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetSellerCreditRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetSellerCreditRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.GetSellerCreditRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 seller_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_seller_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_seller_player_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.GetSellerCreditRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetSellerCreditRequest::ByteSizeLong(const MessageLite& base) {
+  const GetSellerCreditRequest& this_ = static_cast<const GetSellerCreditRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetSellerCreditRequest::ByteSizeLong() const {
+  const GetSellerCreditRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.GetSellerCreditRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint64 seller_player_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_seller_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seller_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetSellerCreditRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetSellerCreditRequest*>(&to_msg);
+  auto& from = static_cast<const GetSellerCreditRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.GetSellerCreditRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_seller_player_id() != 0) {
+      _this->_impl_.seller_player_id_ = from._impl_.seller_player_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetSellerCreditRequest::CopyFrom(const GetSellerCreditRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.GetSellerCreditRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetSellerCreditRequest::InternalSwap(GetSellerCreditRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.seller_player_id_, other->_impl_.seller_player_id_);
+}
+
+::google::protobuf::Metadata GetSellerCreditRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SellerCreditResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+SellerCreditResponse::SellerCreditResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SellerCreditResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.SellerCreditResponse)
+}
+PROTOBUF_NDEBUG_INLINE SellerCreditResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::SellerCreditResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+SellerCreditResponse::SellerCreditResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SellerCreditResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SellerCreditResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SellerCreditResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.profile_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.profile_)
+                : nullptr;
+  _impl_.server_now_ms_ = from._impl_.server_now_ms_;
+
+  // @@protoc_insertion_point(copy_constructor:trade.SellerCreditResponse)
+}
+PROTOBUF_NDEBUG_INLINE SellerCreditResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SellerCreditResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, server_now_ms_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::server_now_ms_));
+}
+SellerCreditResponse::~SellerCreditResponse() {
+  // @@protoc_insertion_point(destructor:trade.SellerCreditResponse)
+  SharedDtor(*this);
+}
+inline void SellerCreditResponse::SharedDtor(MessageLite& self) {
+  SellerCreditResponse& this_ = static_cast<SellerCreditResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.profile_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SellerCreditResponse_class_data_ =
+        SellerCreditResponse::InternalGenerateClassData_(SellerCreditResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SellerCreditResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SellerCreditResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SellerCreditResponse_class_data_.tc_table);
+  return SellerCreditResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SellerCreditResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SellerCreditResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SellerCreditResponse_globals_));
+  return SellerCreditResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SellerCreditResponse::ParseTableT_
+    SellerCreditResponse::_table_ =
+        SellerCreditResponse::InternalGenerateParseTable_(SellerCreditResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SellerCreditResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.SellerCreditResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.profile_ != nullptr);
+      _impl_.profile_->Clear();
+    }
+  }
+  _impl_.server_now_ms_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SellerCreditResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SellerCreditResponse& this_ = static_cast<const SellerCreditResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SellerCreditResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SellerCreditResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.SellerCreditResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .trade.SellerCreditView profile = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.profile_, this_._impl_.profile_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 server_now_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_server_now_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_server_now_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.SellerCreditResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SellerCreditResponse::ByteSizeLong(const MessageLite& base) {
+  const SellerCreditResponse& this_ = static_cast<const SellerCreditResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SellerCreditResponse::ByteSizeLong() const {
+  const SellerCreditResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.SellerCreditResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .trade.SellerCreditView profile = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.profile_);
+    }
+    // uint64 server_now_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_server_now_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_server_now_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SellerCreditResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SellerCreditResponse*>(&to_msg);
+  auto& from = static_cast<const SellerCreditResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.SellerCreditResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.profile_ != nullptr);
+      if (_this->_impl_.profile_ == nullptr) {
+        _this->_impl_.profile_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.profile_);
+      } else {
+        _this->_impl_.profile_->MergeFrom(*from._impl_.profile_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_server_now_ms() != 0) {
+        _this->_impl_.server_now_ms_ = from._impl_.server_now_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SellerCreditResponse::CopyFrom(const SellerCreditResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.SellerCreditResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SellerCreditResponse::InternalSwap(SellerCreditResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.server_now_ms_)
+      + sizeof(SellerCreditResponse::_impl_.server_now_ms_)
+      - PROTOBUF_FIELD_OFFSET(SellerCreditResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata SellerCreditResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SubmitSellerReviewRequest::SubmitSellerReviewRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubmitSellerReviewRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.SubmitSellerReviewRequest)
+}
+PROTOBUF_NDEBUG_INLINE SubmitSellerReviewRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::SubmitSellerReviewRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        order_id_(arena, from.order_id_),
+        comment_(arena, from.comment_) {}
+
+SubmitSellerReviewRequest::SubmitSellerReviewRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SubmitSellerReviewRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubmitSellerReviewRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SubmitSellerReviewRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.rating_ = from._impl_.rating_;
+
+  // @@protoc_insertion_point(copy_constructor:trade.SubmitSellerReviewRequest)
+}
+PROTOBUF_NDEBUG_INLINE SubmitSellerReviewRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        order_id_(arena),
+        comment_(arena) {}
+
+inline void SubmitSellerReviewRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.rating_ = {};
+}
+SubmitSellerReviewRequest::~SubmitSellerReviewRequest() {
+  // @@protoc_insertion_point(destructor:trade.SubmitSellerReviewRequest)
+  SharedDtor(*this);
+}
+inline void SubmitSellerReviewRequest::SharedDtor(MessageLite& self) {
+  SubmitSellerReviewRequest& this_ = static_cast<SubmitSellerReviewRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.order_id_.Destroy();
+  this_._impl_.comment_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SubmitSellerReviewRequest_class_data_ =
+        SubmitSellerReviewRequest::InternalGenerateClassData_(SubmitSellerReviewRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubmitSellerReviewRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubmitSellerReviewRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SubmitSellerReviewRequest_class_data_.tc_table);
+  return SubmitSellerReviewRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubmitSellerReviewRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubmitSellerReviewRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SubmitSellerReviewRequest_globals_));
+  return SubmitSellerReviewRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SubmitSellerReviewRequest::ParseTableT_
+    SubmitSellerReviewRequest::_table_ =
+        SubmitSellerReviewRequest::InternalGenerateParseTable_(SubmitSellerReviewRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SubmitSellerReviewRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.SubmitSellerReviewRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.order_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.comment_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.rating_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SubmitSellerReviewRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SubmitSellerReviewRequest& this_ = static_cast<const SubmitSellerReviewRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SubmitSellerReviewRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SubmitSellerReviewRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.SubmitSellerReviewRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string order_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_order_id().empty()) {
+      const ::std::string& _s = this_._internal_order_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.SubmitSellerReviewRequest.order_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .trade.SellerReviewRating rating = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_rating() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_rating(), target);
+    }
+  }
+
+  // string comment = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_comment().empty()) {
+      const ::std::string& _s = this_._internal_comment();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.SubmitSellerReviewRequest.comment");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.SubmitSellerReviewRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SubmitSellerReviewRequest::ByteSizeLong(const MessageLite& base) {
+  const SubmitSellerReviewRequest& this_ = static_cast<const SubmitSellerReviewRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SubmitSellerReviewRequest::ByteSizeLong() const {
+  const SubmitSellerReviewRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.SubmitSellerReviewRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string order_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_order_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_order_id());
+      }
+    }
+    // string comment = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_comment().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_comment());
+      }
+    }
+    // .trade.SellerReviewRating rating = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_rating() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_rating());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SubmitSellerReviewRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SubmitSellerReviewRequest*>(&to_msg);
+  auto& from = static_cast<const SubmitSellerReviewRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.SubmitSellerReviewRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_order_id().empty()) {
+        _this->_internal_set_order_id(from._internal_order_id());
+      } else {
+        if (_this->_impl_.order_id_.IsDefault()) {
+          _this->_internal_set_order_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_comment().empty()) {
+        _this->_internal_set_comment(from._internal_comment());
+      } else {
+        if (_this->_impl_.comment_.IsDefault()) {
+          _this->_internal_set_comment("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_rating() != 0) {
+        _this->_impl_.rating_ = from._impl_.rating_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SubmitSellerReviewRequest::CopyFrom(const SubmitSellerReviewRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.SubmitSellerReviewRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SubmitSellerReviewRequest::InternalSwap(SubmitSellerReviewRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.order_id_, &other->_impl_.order_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.comment_, &other->_impl_.comment_, arena);
+  swap(_impl_.rating_, other->_impl_.rating_);
+}
+
+::google::protobuf::Metadata SubmitSellerReviewRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SubmitSellerReviewResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+SubmitSellerReviewResponse::SubmitSellerReviewResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubmitSellerReviewResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.SubmitSellerReviewResponse)
+}
+PROTOBUF_NDEBUG_INLINE SubmitSellerReviewResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::SubmitSellerReviewResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+SubmitSellerReviewResponse::SubmitSellerReviewResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SubmitSellerReviewResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubmitSellerReviewResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SubmitSellerReviewResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.profile_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.profile_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, server_now_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, server_now_ms_),
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, server_now_ms_) +
+               sizeof(Impl_::replayed_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.SubmitSellerReviewResponse)
+}
+PROTOBUF_NDEBUG_INLINE SubmitSellerReviewResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SubmitSellerReviewResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::replayed_));
+}
+SubmitSellerReviewResponse::~SubmitSellerReviewResponse() {
+  // @@protoc_insertion_point(destructor:trade.SubmitSellerReviewResponse)
+  SharedDtor(*this);
+}
+inline void SubmitSellerReviewResponse::SharedDtor(MessageLite& self) {
+  SubmitSellerReviewResponse& this_ = static_cast<SubmitSellerReviewResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.profile_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SubmitSellerReviewResponse_class_data_ =
+        SubmitSellerReviewResponse::InternalGenerateClassData_(SubmitSellerReviewResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubmitSellerReviewResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubmitSellerReviewResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SubmitSellerReviewResponse_class_data_.tc_table);
+  return SubmitSellerReviewResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubmitSellerReviewResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubmitSellerReviewResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SubmitSellerReviewResponse_globals_));
+  return SubmitSellerReviewResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SubmitSellerReviewResponse::ParseTableT_
+    SubmitSellerReviewResponse::_table_ =
+        SubmitSellerReviewResponse::InternalGenerateParseTable_(SubmitSellerReviewResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SubmitSellerReviewResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.SubmitSellerReviewResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.profile_ != nullptr);
+      _impl_.profile_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+    ::memset(&_impl_.server_now_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.replayed_) -
+        reinterpret_cast<char*>(&_impl_.server_now_ms_)) + sizeof(_impl_.replayed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SubmitSellerReviewResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SubmitSellerReviewResponse& this_ = static_cast<const SubmitSellerReviewResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SubmitSellerReviewResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SubmitSellerReviewResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.SubmitSellerReviewResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool counted_for_score = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_counted_for_score() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_counted_for_score(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // .trade.SellerCreditView profile = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.profile_, this_._impl_.profile_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 server_now_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_server_now_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_server_now_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.SubmitSellerReviewResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SubmitSellerReviewResponse::ByteSizeLong(const MessageLite& base) {
+  const SubmitSellerReviewResponse& this_ = static_cast<const SubmitSellerReviewResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SubmitSellerReviewResponse::ByteSizeLong() const {
+  const SubmitSellerReviewResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.SubmitSellerReviewResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .trade.SellerCreditView profile = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.profile_);
+    }
+    // uint64 server_now_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_server_now_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_server_now_ms());
+      }
+    }
+    // bool counted_for_score = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_counted_for_score() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SubmitSellerReviewResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SubmitSellerReviewResponse*>(&to_msg);
+  auto& from = static_cast<const SubmitSellerReviewResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.SubmitSellerReviewResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.profile_ != nullptr);
+      if (_this->_impl_.profile_ == nullptr) {
+        _this->_impl_.profile_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.profile_);
+      } else {
+        _this->_impl_.profile_->MergeFrom(*from._impl_.profile_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_server_now_ms() != 0) {
+        _this->_impl_.server_now_ms_ = from._impl_.server_now_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_counted_for_score() != 0) {
+        _this->_impl_.counted_for_score_ = from._impl_.counted_for_score_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SubmitSellerReviewResponse::CopyFrom(const SubmitSellerReviewResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.SubmitSellerReviewResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SubmitSellerReviewResponse::InternalSwap(SubmitSellerReviewResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.replayed_)
+      + sizeof(SubmitSellerReviewResponse::_impl_.replayed_)
+      - PROTOBUF_FIELD_OFFSET(SubmitSellerReviewResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata SubmitSellerReviewResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetMarketReferencePriceRequest::GetMarketReferencePriceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetMarketReferencePriceRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.GetMarketReferencePriceRequest)
+}
+GetMarketReferencePriceRequest::GetMarketReferencePriceRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetMarketReferencePriceRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetMarketReferencePriceRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GetMarketReferencePriceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetMarketReferencePriceRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, item_config_id_),
+           0,
+           offsetof(Impl_, currency_type_) -
+               offsetof(Impl_, item_config_id_) +
+               sizeof(Impl_::currency_type_));
+}
+GetMarketReferencePriceRequest::~GetMarketReferencePriceRequest() {
+  // @@protoc_insertion_point(destructor:trade.GetMarketReferencePriceRequest)
+  SharedDtor(*this);
+}
+inline void GetMarketReferencePriceRequest::SharedDtor(MessageLite& self) {
+  GetMarketReferencePriceRequest& this_ = static_cast<GetMarketReferencePriceRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetMarketReferencePriceRequest_class_data_ =
+        GetMarketReferencePriceRequest::InternalGenerateClassData_(GetMarketReferencePriceRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetMarketReferencePriceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetMarketReferencePriceRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetMarketReferencePriceRequest_class_data_.tc_table);
+  return GetMarketReferencePriceRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetMarketReferencePriceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetMarketReferencePriceRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetMarketReferencePriceRequest_globals_));
+  return GetMarketReferencePriceRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetMarketReferencePriceRequest::ParseTableT_
+    GetMarketReferencePriceRequest::_table_ =
+        GetMarketReferencePriceRequest::InternalGenerateParseTable_(GetMarketReferencePriceRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetMarketReferencePriceRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.GetMarketReferencePriceRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.item_config_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.currency_type_) -
+        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.currency_type_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetMarketReferencePriceRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetMarketReferencePriceRequest& this_ = static_cast<const GetMarketReferencePriceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetMarketReferencePriceRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetMarketReferencePriceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.GetMarketReferencePriceRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 item_config_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint32 currency_type = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_currency_type(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.GetMarketReferencePriceRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetMarketReferencePriceRequest::ByteSizeLong(const MessageLite& base) {
+  const GetMarketReferencePriceRequest& this_ = static_cast<const GetMarketReferencePriceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetMarketReferencePriceRequest::ByteSizeLong() const {
+  const GetMarketReferencePriceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.GetMarketReferencePriceRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint32 item_config_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint32 currency_type = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_currency_type());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetMarketReferencePriceRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetMarketReferencePriceRequest*>(&to_msg);
+  auto& from = static_cast<const GetMarketReferencePriceRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.GetMarketReferencePriceRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_currency_type() != 0) {
+        _this->_impl_.currency_type_ = from._impl_.currency_type_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetMarketReferencePriceRequest::CopyFrom(const GetMarketReferencePriceRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.GetMarketReferencePriceRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetMarketReferencePriceRequest::InternalSwap(GetMarketReferencePriceRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_.currency_type_)
+      + sizeof(GetMarketReferencePriceRequest::_impl_.currency_type_)
+      - PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceRequest, _impl_.item_config_id_)>(
+          reinterpret_cast<char*>(&_impl_.item_config_id_),
+          reinterpret_cast<char*>(&other->_impl_.item_config_id_));
+}
+
+::google::protobuf::Metadata GetMarketReferencePriceRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetMarketReferencePriceResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+GetMarketReferencePriceResponse::GetMarketReferencePriceResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetMarketReferencePriceResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.GetMarketReferencePriceResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetMarketReferencePriceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::GetMarketReferencePriceResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+GetMarketReferencePriceResponse::GetMarketReferencePriceResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetMarketReferencePriceResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetMarketReferencePriceResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetMarketReferencePriceResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, item_config_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, item_config_id_),
+           offsetof(Impl_, window_days_) -
+               offsetof(Impl_, item_config_id_) +
+               sizeof(Impl_::window_days_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.GetMarketReferencePriceResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetMarketReferencePriceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetMarketReferencePriceResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, window_days_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::window_days_));
+}
+GetMarketReferencePriceResponse::~GetMarketReferencePriceResponse() {
+  // @@protoc_insertion_point(destructor:trade.GetMarketReferencePriceResponse)
+  SharedDtor(*this);
+}
+inline void GetMarketReferencePriceResponse::SharedDtor(MessageLite& self) {
+  GetMarketReferencePriceResponse& this_ = static_cast<GetMarketReferencePriceResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetMarketReferencePriceResponse_class_data_ =
+        GetMarketReferencePriceResponse::InternalGenerateClassData_(GetMarketReferencePriceResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetMarketReferencePriceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetMarketReferencePriceResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetMarketReferencePriceResponse_class_data_.tc_table);
+  return GetMarketReferencePriceResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetMarketReferencePriceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetMarketReferencePriceResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetMarketReferencePriceResponse_globals_));
+  return GetMarketReferencePriceResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetMarketReferencePriceResponse::ParseTableT_
+    GetMarketReferencePriceResponse::_table_ =
+        GetMarketReferencePriceResponse::InternalGenerateParseTable_(GetMarketReferencePriceResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetMarketReferencePriceResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.GetMarketReferencePriceResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.item_config_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.window_days_) -
+        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.window_days_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetMarketReferencePriceResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetMarketReferencePriceResponse& this_ = static_cast<const GetMarketReferencePriceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetMarketReferencePriceResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetMarketReferencePriceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.GetMarketReferencePriceResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint32 item_config_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint32 currency_type = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_currency_type(), target);
+    }
+  }
+
+  // uint64 median_unit_price = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_median_unit_price() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_median_unit_price(), target);
+    }
+  }
+
+  // uint32 sample_count = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_sample_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_sample_count(), target);
+    }
+  }
+
+  // bool insufficient_sample = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_insufficient_sample() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_insufficient_sample(), target);
+    }
+  }
+
+  // uint32 window_days = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_window_days() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_window_days(), target);
+    }
+  }
+
+  // uint64 server_now_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_server_now_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_server_now_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.GetMarketReferencePriceResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetMarketReferencePriceResponse::ByteSizeLong(const MessageLite& base) {
+  const GetMarketReferencePriceResponse& this_ = static_cast<const GetMarketReferencePriceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetMarketReferencePriceResponse::ByteSizeLong() const {
+  const GetMarketReferencePriceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.GetMarketReferencePriceResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint32 item_config_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint32 currency_type = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_currency_type());
+      }
+    }
+    // uint64 median_unit_price = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_median_unit_price() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_median_unit_price());
+      }
+    }
+    // uint32 sample_count = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_sample_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_sample_count());
+      }
+    }
+    // bool insufficient_sample = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_insufficient_sample() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 server_now_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_server_now_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_server_now_ms());
+      }
+    }
+    // uint32 window_days = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_window_days() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_window_days());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetMarketReferencePriceResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetMarketReferencePriceResponse*>(&to_msg);
+  auto& from = static_cast<const GetMarketReferencePriceResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.GetMarketReferencePriceResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_currency_type() != 0) {
+        _this->_impl_.currency_type_ = from._impl_.currency_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_median_unit_price() != 0) {
+        _this->_impl_.median_unit_price_ = from._impl_.median_unit_price_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_sample_count() != 0) {
+        _this->_impl_.sample_count_ = from._impl_.sample_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_insufficient_sample() != 0) {
+        _this->_impl_.insufficient_sample_ = from._impl_.insufficient_sample_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_server_now_ms() != 0) {
+        _this->_impl_.server_now_ms_ = from._impl_.server_now_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_window_days() != 0) {
+        _this->_impl_.window_days_ = from._impl_.window_days_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetMarketReferencePriceResponse::CopyFrom(const GetMarketReferencePriceResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.GetMarketReferencePriceResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetMarketReferencePriceResponse::InternalSwap(GetMarketReferencePriceResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.window_days_)
+      + sizeof(GetMarketReferencePriceResponse::_impl_.window_days_)
+      - PROTOBUF_FIELD_OFFSET(GetMarketReferencePriceResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetMarketReferencePriceResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetPlayerTradeQuotaRequest::GetPlayerTradeQuotaRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerTradeQuotaRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.GetPlayerTradeQuotaRequest)
+}
+GetPlayerTradeQuotaRequest::GetPlayerTradeQuotaRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerTradeQuotaRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerTradeQuotaRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerTradeQuotaRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetPlayerTradeQuotaRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.currency_type_ = {};
+}
+GetPlayerTradeQuotaRequest::~GetPlayerTradeQuotaRequest() {
+  // @@protoc_insertion_point(destructor:trade.GetPlayerTradeQuotaRequest)
+  SharedDtor(*this);
+}
+inline void GetPlayerTradeQuotaRequest::SharedDtor(MessageLite& self) {
+  GetPlayerTradeQuotaRequest& this_ = static_cast<GetPlayerTradeQuotaRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPlayerTradeQuotaRequest_class_data_ =
+        GetPlayerTradeQuotaRequest::InternalGenerateClassData_(GetPlayerTradeQuotaRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerTradeQuotaRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerTradeQuotaRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPlayerTradeQuotaRequest_class_data_.tc_table);
+  return GetPlayerTradeQuotaRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerTradeQuotaRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerTradeQuotaRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPlayerTradeQuotaRequest_globals_));
+  return GetPlayerTradeQuotaRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPlayerTradeQuotaRequest::ParseTableT_
+    GetPlayerTradeQuotaRequest::_table_ =
+        GetPlayerTradeQuotaRequest::InternalGenerateParseTable_(GetPlayerTradeQuotaRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPlayerTradeQuotaRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.GetPlayerTradeQuotaRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.currency_type_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPlayerTradeQuotaRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPlayerTradeQuotaRequest& this_ = static_cast<const GetPlayerTradeQuotaRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPlayerTradeQuotaRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPlayerTradeQuotaRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.GetPlayerTradeQuotaRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 currency_type = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_currency_type(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.GetPlayerTradeQuotaRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPlayerTradeQuotaRequest::ByteSizeLong(const MessageLite& base) {
+  const GetPlayerTradeQuotaRequest& this_ = static_cast<const GetPlayerTradeQuotaRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPlayerTradeQuotaRequest::ByteSizeLong() const {
+  const GetPlayerTradeQuotaRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.GetPlayerTradeQuotaRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 currency_type = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_currency_type());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPlayerTradeQuotaRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPlayerTradeQuotaRequest*>(&to_msg);
+  auto& from = static_cast<const GetPlayerTradeQuotaRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.GetPlayerTradeQuotaRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_currency_type() != 0) {
+      _this->_impl_.currency_type_ = from._impl_.currency_type_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPlayerTradeQuotaRequest::CopyFrom(const GetPlayerTradeQuotaRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.GetPlayerTradeQuotaRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPlayerTradeQuotaRequest::InternalSwap(GetPlayerTradeQuotaRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.currency_type_, other->_impl_.currency_type_);
+}
+
+::google::protobuf::Metadata GetPlayerTradeQuotaRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetPlayerTradeQuotaResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+GetPlayerTradeQuotaResponse::GetPlayerTradeQuotaResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerTradeQuotaResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.GetPlayerTradeQuotaResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerTradeQuotaResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::GetPlayerTradeQuotaResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        consumable_item_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::trade::GetPlayerTradeQuotaResponse,
+              PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.consumable_item_ids_)>()
+          , from.consumable_item_ids_
+        }
+        ,
+        _consumable_item_ids_cached_byte_size_{0},
+        mode_(arena, from.mode_) {}
+
+GetPlayerTradeQuotaResponse::GetPlayerTradeQuotaResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPlayerTradeQuotaResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerTradeQuotaResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetPlayerTradeQuotaResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, daily_currency_limit_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, daily_currency_limit_),
+           offsetof(Impl_, server_now_ms_) -
+               offsetof(Impl_, daily_currency_limit_) +
+               sizeof(Impl_::server_now_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.GetPlayerTradeQuotaResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerTradeQuotaResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        consumable_item_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::trade::GetPlayerTradeQuotaResponse,
+            PROTOBUF_FIELD_OFFSET(::trade::GetPlayerTradeQuotaResponse, _impl_.consumable_item_ids_)>()
+         }
+        ,
+        _consumable_item_ids_cached_byte_size_{0},
+        mode_(arena) {}
+
+inline void GetPlayerTradeQuotaResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, server_now_ms_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::server_now_ms_));
+}
+GetPlayerTradeQuotaResponse::~GetPlayerTradeQuotaResponse() {
+  // @@protoc_insertion_point(destructor:trade.GetPlayerTradeQuotaResponse)
+  SharedDtor(*this);
+}
+inline void GetPlayerTradeQuotaResponse::SharedDtor(MessageLite& self) {
+  GetPlayerTradeQuotaResponse& this_ = static_cast<GetPlayerTradeQuotaResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.mode_.Destroy();
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPlayerTradeQuotaResponse_class_data_ =
+        GetPlayerTradeQuotaResponse::InternalGenerateClassData_(GetPlayerTradeQuotaResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerTradeQuotaResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerTradeQuotaResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPlayerTradeQuotaResponse_class_data_.tc_table);
+  return GetPlayerTradeQuotaResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerTradeQuotaResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerTradeQuotaResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPlayerTradeQuotaResponse_globals_));
+  return GetPlayerTradeQuotaResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPlayerTradeQuotaResponse::ParseTableT_
+    GetPlayerTradeQuotaResponse::_table_ =
+        GetPlayerTradeQuotaResponse::InternalGenerateParseTable_(GetPlayerTradeQuotaResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPlayerTradeQuotaResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.GetPlayerTradeQuotaResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.consumable_item_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.mode_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.daily_currency_limit_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.max_reference_deviation_pct_) -
+        reinterpret_cast<char*>(&_impl_.daily_currency_limit_)) + sizeof(_impl_.max_reference_deviation_pct_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.min_friend_duration_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.server_now_ms_) -
+        reinterpret_cast<char*>(&_impl_.min_friend_duration_ms_)) + sizeof(_impl_.server_now_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPlayerTradeQuotaResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPlayerTradeQuotaResponse& this_ = static_cast<const GetPlayerTradeQuotaResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPlayerTradeQuotaResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPlayerTradeQuotaResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.GetPlayerTradeQuotaResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string mode = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_mode().empty()) {
+      const ::std::string& _s = this_._internal_mode();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.GetPlayerTradeQuotaResponse.mode");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 currency_type = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_currency_type(), target);
+    }
+  }
+
+  // uint64 daily_currency_limit = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_daily_currency_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_daily_currency_limit(), target);
+    }
+  }
+
+  // uint64 daily_currency_used = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_daily_currency_used() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_daily_currency_used(), target);
+    }
+  }
+
+  // uint64 daily_currency_remaining = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_daily_currency_remaining() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_daily_currency_remaining(), target);
+    }
+  }
+
+  // repeated uint32 consumable_item_ids = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._consumable_item_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            7, this_._internal_consumable_item_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // uint64 min_friend_duration_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_min_friend_duration_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_min_friend_duration_ms(), target);
+    }
+  }
+
+  // uint32 max_reference_deviation_pct = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_max_reference_deviation_pct() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_max_reference_deviation_pct(), target);
+    }
+  }
+
+  // uint64 cooling_lock_duration_ms = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_cooling_lock_duration_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_cooling_lock_duration_ms(), target);
+    }
+  }
+
+  // uint64 server_now_ms = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_server_now_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_server_now_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.GetPlayerTradeQuotaResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPlayerTradeQuotaResponse::ByteSizeLong(const MessageLite& base) {
+  const GetPlayerTradeQuotaResponse& this_ = static_cast<const GetPlayerTradeQuotaResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPlayerTradeQuotaResponse::ByteSizeLong() const {
+  const GetPlayerTradeQuotaResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.GetPlayerTradeQuotaResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated uint32 consumable_item_ids = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_consumable_item_ids(), 1,
+              this_._impl_._consumable_item_ids_cached_byte_size_);
+    }
+    // string mode = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_mode().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_mode());
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint64 daily_currency_limit = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_daily_currency_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_daily_currency_limit());
+      }
+    }
+    // uint64 daily_currency_used = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_daily_currency_used() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_daily_currency_used());
+      }
+    }
+    // uint64 daily_currency_remaining = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_daily_currency_remaining() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_daily_currency_remaining());
+      }
+    }
+    // uint32 currency_type = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_currency_type());
+      }
+    }
+    // uint32 max_reference_deviation_pct = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_max_reference_deviation_pct() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_reference_deviation_pct());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // uint64 min_friend_duration_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_min_friend_duration_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_min_friend_duration_ms());
+      }
+    }
+    // uint64 cooling_lock_duration_ms = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_cooling_lock_duration_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_cooling_lock_duration_ms());
+      }
+    }
+    // uint64 server_now_ms = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_server_now_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_server_now_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPlayerTradeQuotaResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPlayerTradeQuotaResponse*>(&to_msg);
+  auto& from = static_cast<const GetPlayerTradeQuotaResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.GetPlayerTradeQuotaResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_consumable_item_ids()->MergeFrom(from._internal_consumable_item_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_mode().empty()) {
+        _this->_internal_set_mode(from._internal_mode());
+      } else {
+        if (_this->_impl_.mode_.IsDefault()) {
+          _this->_internal_set_mode("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_daily_currency_limit() != 0) {
+        _this->_impl_.daily_currency_limit_ = from._impl_.daily_currency_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_daily_currency_used() != 0) {
+        _this->_impl_.daily_currency_used_ = from._impl_.daily_currency_used_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_daily_currency_remaining() != 0) {
+        _this->_impl_.daily_currency_remaining_ = from._impl_.daily_currency_remaining_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_currency_type() != 0) {
+        _this->_impl_.currency_type_ = from._impl_.currency_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_max_reference_deviation_pct() != 0) {
+        _this->_impl_.max_reference_deviation_pct_ = from._impl_.max_reference_deviation_pct_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_min_friend_duration_ms() != 0) {
+        _this->_impl_.min_friend_duration_ms_ = from._impl_.min_friend_duration_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_cooling_lock_duration_ms() != 0) {
+        _this->_impl_.cooling_lock_duration_ms_ = from._impl_.cooling_lock_duration_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_server_now_ms() != 0) {
+        _this->_impl_.server_now_ms_ = from._impl_.server_now_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPlayerTradeQuotaResponse::CopyFrom(const GetPlayerTradeQuotaResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.GetPlayerTradeQuotaResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPlayerTradeQuotaResponse::InternalSwap(GetPlayerTradeQuotaResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.consumable_item_ids_.InternalSwap(&other->_impl_.consumable_item_ids_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.mode_, &other->_impl_.mode_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.server_now_ms_)
+      + sizeof(GetPlayerTradeQuotaResponse::_impl_.server_now_ms_)
+      - PROTOBUF_FIELD_OFFSET(GetPlayerTradeQuotaResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetPlayerTradeQuotaResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

@@ -244,6 +244,8 @@ message TradeCommerceWorkflow {
   // 补发腿 official_regrant_<修订号>(从没发过的作废合同走原发放腿 official_credit)。
   uint32 payment_revision = 25;
   bool payment_revoked = 26;
+  // 官方指定买家定向寄售单的目标角色 ID（0 = 公开单，非 0 时仅允许该角色购买）。
+  uint64 designated_buyer_player_id = 27;
 }
 
 // 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);
@@ -313,6 +315,8 @@ message TradeRmbConsignmentWorkflow {
   RmbConsignmentView registered_listing = 15;
   bytes delivery_digest = 16;
   uint64 buyer_owner_revision = 17;
+  // 官方指定买家定向单的权威目标账号（由服务端按 designated_buyer_player_id 查目录写入，绝不信客户端填账号串）。
+  string designated_buyer_account = 18;
 }
 
 message TradeCommerceLeg {
@@ -360,4 +364,98 @@ enum TradeAssetOpRefKind {
   TRADE_ASSET_OP_REF_KIND_UNSPECIFIED = 0;
   TRADE_ASSET_OP_REF_KIND_LISTING = 1;
   TRADE_ASSET_OP_REF_KIND_ORDER = 2;
+}
+
+// ---------------------------------------------------------------------------
+// 卖家店铺信用评分系统（docs/design/equipment-economy-charter.md §2.3.1）
+// 归属 mmorpg_trade 独占库；以 (seller_player_id, owner_revision) 物理隔离每任持有者信用。
+// ---------------------------------------------------------------------------
+
+message TradeSellerCreditRecord {
+  option(OptionTableName) = "trade_seller_credit";
+  option(OptionPrimaryKey) = "seller_player_id,owner_revision";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 seller_player_id = 1;
+  uint64 owner_revision = 2;
+  string owner_account = 3;
+  bool ownership_changed = 4;
+  uint64 ownership_changed_at_ms = 5;
+  uint64 epoch_started_at_ms = 6;
+  uint64 completed_orders = 7;
+  uint64 positive_reviews = 8;
+  uint64 neutral_reviews = 9;
+  uint64 negative_reviews = 10;
+  uint64 violation_count = 11;
+  bool env_credit_cleared = 12;
+  uint64 env_reset_count = 13;
+  uint64 last_env_changed_at_ms = 14;
+  string last_ip = 15;             // 仅服务端风控比对，禁止下发给其他玩家或进指标标签
+  string last_device_id = 16;      // 仅服务端风控比对，禁止下发给其他玩家或进指标标签
+  string known_devices_json = 17;  // 本持有周期内已登记常用设备指纹 JSON 数组（最多 8 台）
+  uint32 credit_score = 18;
+  uint32 star_rating_tenths = 19;
+  uint32 positive_rate_bps = 20;
+  string risk_tier = 21;
+  uint64 updated_ms = 22;
+}
+
+message TradeSellerCompletedOrderRecord {
+  option(OptionTableName) = "trade_seller_completed_order";
+  option(OptionPrimaryKey) = "record_id";
+  option(OptionUniqueKey) = "order_id";
+  option(OptionIndex) = "seller_player_id,owner_revision";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 record_id = 1;
+  string order_id = 2;
+  uint64 seller_player_id = 3;
+  uint64 owner_revision = 4;
+  uint64 created_ms = 5;
+}
+
+message TradeSellerReviewRecord {
+  option(OptionTableName) = "trade_seller_review";
+  option(OptionPrimaryKey) = "review_id";
+  option(OptionUniqueKey) = "order_id";
+  option(OptionIndex) = "seller_player_id,seller_owner_revision,created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 review_id = 1;
+  string order_id = 2;
+  uint64 seller_player_id = 3;
+  uint64 seller_owner_revision = 4;
+  uint64 buyer_player_id = 5;
+  string buyer_account = 6;
+  string buyer_ip = 7;
+  string buyer_device_id = 8;
+  uint32 rating = 9;            // 1=好评 2=中评 3=差评
+  bool counted_for_score = 10;
+  string comment = 11;
+  uint64 created_ms = 12;
+}
+
+message TradeSellerViolationRecord {
+  option(OptionTableName) = "trade_seller_violation";
+  option(OptionPrimaryKey) = "violation_id";
+  option(OptionUniqueKey) = "case_id";
+  option(OptionIndex) = "seller_player_id,seller_owner_revision";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 violation_id = 1;
+  string case_id = 2;
+  string order_id = 3;
+  uint64 seller_player_id = 4;
+  uint64 seller_owner_revision = 5;
+  string seller_account = 6;
+  string reason = 7;
+  uint64 recorded_ms = 8;
 }

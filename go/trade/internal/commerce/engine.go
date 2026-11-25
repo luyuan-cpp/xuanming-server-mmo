@@ -333,7 +333,10 @@ func (e *Engine) CreateConsignment(ctx context.Context, me uint64, in *tradepb.C
 	if !validPrice(in.Price, in.CurrencyType, e.Policy) || in.DurationMs < 60000 || in.DurationMs > 30*24*3600000 {
 		return nil, ErrInvalid
 	}
-	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 3, Status: Escrowing, SellerPlayerId: me, UnitPrice: in.Price, CurrencyType: in.CurrencyType, ExpiresMs: e.now() + in.DurationMs}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.Assets, Stage: "escrow"})
+	if in.GetDesignatedBuyerPlayerId() == me {
+		return nil, ErrSelf
+	}
+	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 3, Status: Escrowing, SellerPlayerId: me, UnitPrice: in.Price, CurrencyType: in.CurrencyType, ExpiresMs: e.now() + in.DurationMs}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.Assets, Stage: "escrow", DesignatedBuyerPlayerId: in.GetDesignatedBuyerPlayerId()})
 }
 func (e *Engine) CreateLot(ctx context.Context, me uint64, in *tradepb.CreateAuctionLotRequest) (*tradepb.TradeCommerceRecord, error) {
 	if err := e.Policy.Selection(in.GetAssets()); err != nil {
@@ -440,6 +443,9 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 			}
 			if me == r.SellerPlayerId {
 				return ErrSelf
+			}
+			if w.DesignatedBuyerPlayerId != 0 && w.DesignatedBuyerPlayerId != me {
+				return ErrConflict
 			}
 			if w.QuantityReserved >= 32 {
 				return ErrConflict
@@ -986,7 +992,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 		parentsToWake = filledParentsToWake(lockedRecord, r)
 		bidToWake = finishedLotBid(lockedRecord, r, w)
 		if lockedRecord.Status != Settled && r.Status == Settled {
-			if fact, ok := settledTradeFact(r, w, e.now()); ok {
+			if fact, ok := SettledTradeFact(r, w, e.now()); ok {
 				settledCreditFact = &fact
 			}
 		}
@@ -1017,10 +1023,10 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 	return err
 }
 
-// settledTradeFact 从已结案（Settled）的官方托管合同抽取卖家信用成交事实。
+// SettledTradeFact 从已结案（Settled）的官方托管合同抽取卖家信用成交事实。
 // 仅统计官方托管真实成交（固定价寄售 kind=3、集市撮合子单 kind=4/side=0、拍卖 kind=5、非角色人民币寄售 kind=6）；
 // 刻意排除游戏内当面交易（kind=2，防熟人互刷店分）与角色过户（kind=6 且 CharacterPlayerId!=0，由过户清空信用链路单独处理）。
-func settledTradeFact(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, settledAtMs uint64) (CompletedTradeFact, bool) {
+func SettledTradeFact(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, settledAtMs uint64) (CompletedTradeFact, bool) {
 	if r == nil || w == nil || r.Status != Settled || r.SellerPlayerId == 0 {
 		return CompletedTradeFact{}, false
 	}

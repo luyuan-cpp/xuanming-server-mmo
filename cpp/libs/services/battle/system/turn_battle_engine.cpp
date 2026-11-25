@@ -3107,8 +3107,9 @@ void TurnBattleEngine::ExecuteFlee(BattleActorState& actor, TurnResultS2C& resul
 
     if (success) {
         actor.set_fled(true);
-        // 玩家成功逃跑时，本人与名下出战宝宝一并离场。
-        if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+        // 首领试炼与瑞兽迎春离场时，玩家本人与名下出战宝宝一并离场（常规 PVE 保持单单位逃跑旧不变量）。
+        if ((IsBossTrialKind(bossTrialKind) || IsFestivalBeastBattle()) &&
+            actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
             for (auto& other : actors) {
                 if (other.actor_type() == BATTLE_ACTOR_TYPE_PET &&
                     other.owner_player_id() == actor.actor_id() && !other.fled()) {
@@ -3898,12 +3899,12 @@ void TurnBattleEngine::ProcessBossTrialRoundEnd(TurnResultS2C& result) {
 
 uint32_t TurnBattleEngine::ChooseDynamicStanceType(uint32_t currentRound) const {
     if (currentRound <= 1u) {
-        return combatdamage::kPhysicalDamage;
+        return kBossStancePhysical;
     }
     if (battleDifficulty < 2u) {
         return (((currentRound - 1u) / 3u) % 2u == 0u)
-            ? combatdamage::kPhysicalDamage
-            : combatdamage::kMagicDamage;
+            ? kBossStancePhysical
+            : kBossStanceMagic;
     }
     // 困难·护势进阶 / 双卫同阵「顺势应变」：统计前 2 个完整回合玩家方物理/法术直接伤害总量，针对高侧开阵；平票确定性反切。
     uint64_t physTotal = 0;
@@ -3915,14 +3916,14 @@ uint32_t TurnBattleEngine::ChooseDynamicStanceType(uint32_t currentRound) const 
         }
     }
     if (physTotal > magicTotal) {
-        return combatdamage::kPhysicalDamage;
+        return kBossStancePhysical;
     }
     if (magicTotal > physTotal) {
-        return combatdamage::kMagicDamage;
+        return kBossStanceMagic;
     }
-    return lastChosenStanceType == combatdamage::kPhysicalDamage
-        ? combatdamage::kMagicDamage
-        : combatdamage::kPhysicalDamage;
+    return lastChosenStanceType == kBossStancePhysical
+        ? kBossStanceMagic
+        : kBossStancePhysical;
 }
 
 uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState& source, BattleActorState& target,
@@ -3935,6 +3936,9 @@ uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState&
     if (damage == 0) {
         return 0;
     }
+    const uint32_t dmgStancePolarity = damageType == combatdamage::kPhysicalDamage
+        ? kBossStancePhysical
+        : (damageType == combatdamage::kMagicDamage ? kBossStanceMagic : kBossStanceNone);
     // 1. 物法易势 5V5：与当前易势同类型的直接主伤害 ×1.15（常规减伤/防御后、护盾吸收前，整数向下取整一次）。
     if (isDirectPrimary && activePolarity != 0 && activePolarity == damageType) {
         damage = (damage * kPolarityDamageNum) / kPolarityDamageDen;
@@ -3949,7 +3953,7 @@ uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState&
     }
     // 3. 破阵·护势联防阵（单卫与双卫同阵）：庇护全体存活敌方，同时对同系直伤触发轻反制叠「蓄势」（毒火不触发）。
     if (isDirectPrimary && IsBossStanceTrialKind(bossTrialKind) && target.team_index() == 1 &&
-        bossStanceType != 0 && bossStanceRemainRounds > 0 && bossStanceType == damageType) {
+        bossStanceType != kBossStanceNone && bossStanceRemainRounds > 0 && bossStanceType == dmgStancePolarity) {
         const uint64_t keepPct = (bossTrialKind == kBossTrialKindBreakDualGuard)
             ? 65ULL
             : (battleDifficulty >= 2u ? 60ULL : 65ULL);
@@ -4275,7 +4279,7 @@ void TurnBattleEngine::RefreshEncounterTelegraphs() {
             // 护势护卫：R1/4/7/10/13 当回合展开联防阵；困难单卫/双卫按前2回合物法直伤动态「顺势应变」。
             if (roundIndex % 3u == 1u && !hasEntryFor(stanceGuard->actor_id(), roundIndex)) {
                 const uint32_t chosenType = ChooseDynamicStanceType(roundIndex);
-                const bool isPhysical = chosenType == combatdamage::kPhysicalDamage;
+                const bool isPhysical = chosenType == kBossStancePhysical;
                 BattleTelegraphEntry entry;
                 entry.set_source_actor_id(stanceGuard->actor_id());
                 entry.set_target_actor_id(boss->actor_id());
@@ -4616,8 +4620,8 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
             }
             BeginEventGroup();
             bossStanceType = entry.intent_kind() == kTelegraphKindGuardStancePhys
-                ? combatdamage::kPhysicalDamage
-                : combatdamage::kMagicDamage;
+                ? kBossStancePhysical
+                : kBossStanceMagic;
             bossStanceRemainRounds = 3u;
             lastChosenStanceType = bossStanceType;
             auto* stanceEv = AppendEvent(result, BATTLE_EVENT_BUFF_ADD, source->actor_id(), boss->actor_id());
@@ -4630,7 +4634,7 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
                                       boss->actor_id(), bossMomentumStacks);
             }
             recordResolved(entry, kTelegraphStatusExecuted,
-                           bossStanceType == combatdamage::kPhysicalDamage ? "物防联防阵已展开" : "法防联防阵已展开");
+                           bossStanceType == kBossStancePhysical ? "物防联防阵已展开" : "法防联防阵已展开");
             break;
         }
         case kTelegraphKindGuardShield: {

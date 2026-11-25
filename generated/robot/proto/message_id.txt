@@ -477,3 +477,5 @@
 476=SceneActivityClientPlayerGetFestivalBeastDetail
 477=SceneActivityClientPlayerStartFestivalBeastChallenge
 478=SceneActivityClientPlayerClaimFestivalBeastReward
+479=BattleClientPlayerSurrenderBattle
+480=BattleClientPlayerNotifySurrenderVote

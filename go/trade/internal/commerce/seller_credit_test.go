@@ -392,13 +392,13 @@ func TestSettledTradeFactExtractsOfficialEscrowAndIgnoresFaceToFaceOrSelf(t *tes
 	idBuyer := &tradepb.TradeRoleIdentity{Account: "acct-buyer", OwnerRevision: 1}
 
 	// 1) 游戏内当面交易（kind=2）绝不计入卖家店铺信用成交（防熟人免税互刷店分）
-	_, ok := settledTradeFact(
+	_, ok := SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 11, Kind: 2, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 202},
 		&tradepb.TradeCommerceWorkflow{SellerIdentity: idSeller, BuyerIdentity: idBuyer}, now)
 	require.False(t, ok)
 
 	// 2) 官方托管固定价寄售（kind=3）提取完整成交事实
-	factConsign, ok := settledTradeFact(
+	factConsign, ok := SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 12, Kind: 3, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 202, UnitPrice: 8800},
 		&tradepb.TradeCommerceWorkflow{SellerIdentity: idSeller, BuyerIdentity: idBuyer}, now)
 	require.True(t, ok)
@@ -407,19 +407,19 @@ func TestSettledTradeFactExtractsOfficialEscrowAndIgnoresFaceToFaceOrSelf(t *tes
 	require.EqualValues(t, 2, factConsign.SellerOwnerRevision)
 
 	// 3) 市场撮合母单（kind=4, side!=0）不计，仅子单（side==0）计入
-	_, ok = settledTradeFact(
+	_, ok = SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 13, Kind: 4, Side: 2, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 202, UnitPrice: 100, Quantity: 5},
 		&tradepb.TradeCommerceWorkflow{SellerIdentity: idSeller, BuyerIdentity: idBuyer}, now)
 	require.False(t, ok)
 
-	factFill, ok := settledTradeFact(
+	factFill, ok := SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 14, Kind: 4, Side: 0, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 202, UnitPrice: 100, Quantity: 5},
 		&tradepb.TradeCommerceWorkflow{SellerIdentity: idSeller, BuyerIdentity: idBuyer}, now)
 	require.True(t, ok)
 	require.EqualValues(t, 500, factFill.AmountMinor)
 
 	// 4) 拍卖成交（kind=5）取最高出价者与成交价
-	factLot, ok := settledTradeFact(
+	factLot, ok := SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 15, Kind: 5, Status: Settled, SellerPlayerId: 101},
 		&tradepb.TradeCommerceWorkflow{SellerIdentity: idSeller, BuyerIdentity: idBuyer, HighestBidder: 303, HighestBid: 12000}, now)
 	require.True(t, ok)
@@ -427,7 +427,7 @@ func TestSettledTradeFactExtractsOfficialEscrowAndIgnoresFaceToFaceOrSelf(t *tes
 	require.EqualValues(t, 12000, factLot.AmountMinor)
 
 	// 5) 人民币非角色寄售（kind=6, CharacterPlayerId==0）计入且优先复用 MallOrderId；角色过户（CharacterPlayerId!=0）走清空链路不计入
-	factRmbItem, ok := settledTradeFact(
+	factRmbItem, ok := SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 16, Kind: 6, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 202},
 		&tradepb.TradeCommerceWorkflow{Rmb: &tradepb.TradeRmbConsignmentWorkflow{
 			SellerAccount: "acct-seller", SellerOwnerRevision: 2, BuyerAccount: "acct-buyer",
@@ -437,7 +437,7 @@ func TestSettledTradeFactExtractsOfficialEscrowAndIgnoresFaceToFaceOrSelf(t *tes
 	require.Equal(t, "00112233-4455-6677-8899-aabbccddeeff", factRmbItem.OrderID)
 	require.EqualValues(t, 3500, factRmbItem.AmountMinor)
 
-	_, ok = settledTradeFact(
+	_, ok = SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 17, Kind: 6, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 202},
 		&tradepb.TradeCommerceWorkflow{Rmb: &tradepb.TradeRmbConsignmentWorkflow{
 			SellerAccount: "acct-seller", SellerOwnerRevision: 2, BuyerAccount: "acct-buyer",
@@ -446,7 +446,7 @@ func TestSettledTradeFactExtractsOfficialEscrowAndIgnoresFaceToFaceOrSelf(t *tes
 	require.False(t, ok)
 
 	// 6) 同账号自成交被过滤
-	_, ok = settledTradeFact(
+	_, ok = SettledTradeFact(
 		&tradepb.TradeCommerceRecord{CommerceId: 18, Kind: 3, Status: Settled, SellerPlayerId: 101, BuyerPlayerId: 102, UnitPrice: 500},
 		&tradepb.TradeCommerceWorkflow{SellerIdentity: idSeller, BuyerIdentity: &tradepb.TradeRoleIdentity{Account: "acct-seller", OwnerRevision: 1}}, now)
 	require.False(t, ok)

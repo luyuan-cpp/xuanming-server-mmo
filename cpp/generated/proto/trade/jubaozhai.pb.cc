@@ -2079,7 +2079,7 @@ const char descriptor_table_protodef_proto_2ftrade_2fjubaozhai_2eproto[] ABSL_AT
     "ED\020\003\022\027\n\023LISTING_PHASE_ENDED\020\004*[\n\013MarketS"
     "cope\022\034\n\030MARKET_SCOPE_UNSPECIFIED\020\000\022\025\n\021MA"
     "RKET_SCOPE_ZONE\020\001\022\027\n\023MARKET_SCOPE_GLOBAL"
-    "\020\0022\360\026\n\025ClientPlayerJubaozhai\022M\n\016BrowseLi"
+    "\020\0022\342\031\n\025ClientPlayerJubaozhai\022M\n\016BrowseLi"
     "stings\022\034.trade.BrowseListingsRequest\032\035.t"
     "rade.BrowseListingsResponse\022S\n\020GetListin"
     "gDetail\022\036.trade.GetListingDetailRequest\032"
@@ -2152,7 +2152,17 @@ const char descriptor_table_protodef_proto_2ftrade_2fjubaozhai_2eproto[] ABSL_AT
     "de.CreateWithdrawalRequest\032\031.trade.Withd"
     "rawalResponse\022G\n\rGetWithdrawal\022\033.trade.G"
     "etWithdrawalRequest\032\031.trade.WithdrawalRe"
-    "sponse\032\005\210\250\303\001\001B\016Z\005trade\200\001\000\230\324a\021b\006proto3"
+    "sponse\022M\n\017GetSellerCredit\022\035.trade.GetSel"
+    "lerCreditRequest\032\033.trade.SellerCreditRes"
+    "ponse\022Y\n\022SubmitSellerReview\022 .trade.Subm"
+    "itSellerReviewRequest\032!.trade.SubmitSell"
+    "erReviewResponse\022h\n\027GetMarketReferencePr"
+    "ice\022%.trade.GetMarketReferencePriceReque"
+    "st\032&.trade.GetMarketReferencePriceRespon"
+    "se\022\\\n\023GetPlayerTradeQuota\022!.trade.GetPla"
+    "yerTradeQuotaRequest\032\".trade.GetPlayerTr"
+    "adeQuotaResponse\032\005\210\250\303\001\001B\016Z\005trade\200\001\000\230\324a\021b"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2fjubaozhai_2eproto_deps[3] = {
@@ -2164,7 +2174,7 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2fjubaozhai_2eproto_once
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2fjubaozhai_2eproto = {
     false,
     false,
-    5557,
+    5927,
     descriptor_table_protodef_proto_2ftrade_2fjubaozhai_2eproto,
     "proto/trade/jubaozhai.proto",
     &descriptor_table_proto_2ftrade_2fjubaozhai_2eproto_once,

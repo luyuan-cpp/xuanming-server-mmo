@@ -1158,8 +1158,10 @@ type TradeCommerceWorkflow struct {
 	// 补发腿 official_regrant_<修订号>(从没发过的作废合同走原发放腿 official_credit)。
 	PaymentRevision uint32 `protobuf:"varint,25,opt,name=payment_revision,json=paymentRevision,proto3" json:"payment_revision,omitempty"`
 	PaymentRevoked  bool   `protobuf:"varint,26,opt,name=payment_revoked,json=paymentRevoked,proto3" json:"payment_revoked,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 官方指定买家定向寄售单的目标角色 ID（0 = 公开单，非 0 时仅允许该角色购买）。
+	DesignatedBuyerPlayerId uint64 `protobuf:"varint,27,opt,name=designated_buyer_player_id,json=designatedBuyerPlayerId,proto3" json:"designated_buyer_player_id,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *TradeCommerceWorkflow) Reset() {
@@ -1372,6 +1374,13 @@ func (x *TradeCommerceWorkflow) GetPaymentRevoked() bool {
 		return x.PaymentRevoked
 	}
 	return false
+}
+
+func (x *TradeCommerceWorkflow) GetDesignatedBuyerPlayerId() uint64 {
+	if x != nil {
+		return x.DesignatedBuyerPlayerId
+	}
+	return 0
 }
 
 // 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);
@@ -1749,8 +1758,10 @@ type TradeRmbConsignmentWorkflow struct {
 	RegisteredListing   *RmbConsignmentView    `protobuf:"bytes,15,opt,name=registered_listing,json=registeredListing,proto3" json:"registered_listing,omitempty"`
 	DeliveryDigest      []byte                 `protobuf:"bytes,16,opt,name=delivery_digest,json=deliveryDigest,proto3" json:"delivery_digest,omitempty"`
 	BuyerOwnerRevision  uint64                 `protobuf:"varint,17,opt,name=buyer_owner_revision,json=buyerOwnerRevision,proto3" json:"buyer_owner_revision,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 官方指定买家定向单的权威目标账号（由服务端按 designated_buyer_player_id 查目录写入，绝不信客户端填账号串）。
+	DesignatedBuyerAccount string `protobuf:"bytes,18,opt,name=designated_buyer_account,json=designatedBuyerAccount,proto3" json:"designated_buyer_account,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *TradeRmbConsignmentWorkflow) Reset() {
@@ -1902,6 +1913,13 @@ func (x *TradeRmbConsignmentWorkflow) GetBuyerOwnerRevision() uint64 {
 	return 0
 }
 
+func (x *TradeRmbConsignmentWorkflow) GetDesignatedBuyerAccount() string {
+	if x != nil {
+		return x.DesignatedBuyerAccount
+	}
+	return ""
+}
+
 type TradeCommerceLeg struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Role     string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
@@ -2010,6 +2028,526 @@ func (x *TradeCommerceLeg) GetSupersededBy() string {
 func (x *TradeCommerceLeg) GetEscrowOwnerId() uint64 {
 	if x != nil {
 		return x.EscrowOwnerId
+	}
+	return 0
+}
+
+type TradeSellerCreditRecord struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	SellerPlayerId       uint64                 `protobuf:"varint,1,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	OwnerRevision        uint64                 `protobuf:"varint,2,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	OwnerAccount         string                 `protobuf:"bytes,3,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnershipChanged     bool                   `protobuf:"varint,4,opt,name=ownership_changed,json=ownershipChanged,proto3" json:"ownership_changed,omitempty"`
+	OwnershipChangedAtMs uint64                 `protobuf:"varint,5,opt,name=ownership_changed_at_ms,json=ownershipChangedAtMs,proto3" json:"ownership_changed_at_ms,omitempty"`
+	EpochStartedAtMs     uint64                 `protobuf:"varint,6,opt,name=epoch_started_at_ms,json=epochStartedAtMs,proto3" json:"epoch_started_at_ms,omitempty"`
+	CompletedOrders      uint64                 `protobuf:"varint,7,opt,name=completed_orders,json=completedOrders,proto3" json:"completed_orders,omitempty"`
+	PositiveReviews      uint64                 `protobuf:"varint,8,opt,name=positive_reviews,json=positiveReviews,proto3" json:"positive_reviews,omitempty"`
+	NeutralReviews       uint64                 `protobuf:"varint,9,opt,name=neutral_reviews,json=neutralReviews,proto3" json:"neutral_reviews,omitempty"`
+	NegativeReviews      uint64                 `protobuf:"varint,10,opt,name=negative_reviews,json=negativeReviews,proto3" json:"negative_reviews,omitempty"`
+	ViolationCount       uint64                 `protobuf:"varint,11,opt,name=violation_count,json=violationCount,proto3" json:"violation_count,omitempty"`
+	EnvCreditCleared     bool                   `protobuf:"varint,12,opt,name=env_credit_cleared,json=envCreditCleared,proto3" json:"env_credit_cleared,omitempty"`
+	EnvResetCount        uint64                 `protobuf:"varint,13,opt,name=env_reset_count,json=envResetCount,proto3" json:"env_reset_count,omitempty"`
+	LastEnvChangedAtMs   uint64                 `protobuf:"varint,14,opt,name=last_env_changed_at_ms,json=lastEnvChangedAtMs,proto3" json:"last_env_changed_at_ms,omitempty"`
+	LastIp               string                 `protobuf:"bytes,15,opt,name=last_ip,json=lastIp,proto3" json:"last_ip,omitempty"`                                 // 仅服务端风控比对，禁止下发给其他玩家或进指标标签
+	LastDeviceId         string                 `protobuf:"bytes,16,opt,name=last_device_id,json=lastDeviceId,proto3" json:"last_device_id,omitempty"`             // 仅服务端风控比对，禁止下发给其他玩家或进指标标签
+	KnownDevicesJson     string                 `protobuf:"bytes,17,opt,name=known_devices_json,json=knownDevicesJson,proto3" json:"known_devices_json,omitempty"` // 本持有周期内已登记常用设备指纹 JSON 数组（最多 8 台）
+	CreditScore          uint32                 `protobuf:"varint,18,opt,name=credit_score,json=creditScore,proto3" json:"credit_score,omitempty"`
+	StarRatingTenths     uint32                 `protobuf:"varint,19,opt,name=star_rating_tenths,json=starRatingTenths,proto3" json:"star_rating_tenths,omitempty"`
+	PositiveRateBps      uint32                 `protobuf:"varint,20,opt,name=positive_rate_bps,json=positiveRateBps,proto3" json:"positive_rate_bps,omitempty"`
+	RiskTier             string                 `protobuf:"bytes,21,opt,name=risk_tier,json=riskTier,proto3" json:"risk_tier,omitempty"`
+	UpdatedMs            uint64                 `protobuf:"varint,22,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *TradeSellerCreditRecord) Reset() {
+	*x = TradeSellerCreditRecord{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeSellerCreditRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeSellerCreditRecord) ProtoMessage() {}
+
+func (x *TradeSellerCreditRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeSellerCreditRecord.ProtoReflect.Descriptor instead.
+func (*TradeSellerCreditRecord) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *TradeSellerCreditRecord) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *TradeSellerCreditRecord) GetOwnershipChanged() bool {
+	if x != nil {
+		return x.OwnershipChanged
+	}
+	return false
+}
+
+func (x *TradeSellerCreditRecord) GetOwnershipChangedAtMs() uint64 {
+	if x != nil {
+		return x.OwnershipChangedAtMs
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetEpochStartedAtMs() uint64 {
+	if x != nil {
+		return x.EpochStartedAtMs
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetCompletedOrders() uint64 {
+	if x != nil {
+		return x.CompletedOrders
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetPositiveReviews() uint64 {
+	if x != nil {
+		return x.PositiveReviews
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetNeutralReviews() uint64 {
+	if x != nil {
+		return x.NeutralReviews
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetNegativeReviews() uint64 {
+	if x != nil {
+		return x.NegativeReviews
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetViolationCount() uint64 {
+	if x != nil {
+		return x.ViolationCount
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetEnvCreditCleared() bool {
+	if x != nil {
+		return x.EnvCreditCleared
+	}
+	return false
+}
+
+func (x *TradeSellerCreditRecord) GetEnvResetCount() uint64 {
+	if x != nil {
+		return x.EnvResetCount
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetLastEnvChangedAtMs() uint64 {
+	if x != nil {
+		return x.LastEnvChangedAtMs
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetLastIp() string {
+	if x != nil {
+		return x.LastIp
+	}
+	return ""
+}
+
+func (x *TradeSellerCreditRecord) GetLastDeviceId() string {
+	if x != nil {
+		return x.LastDeviceId
+	}
+	return ""
+}
+
+func (x *TradeSellerCreditRecord) GetKnownDevicesJson() string {
+	if x != nil {
+		return x.KnownDevicesJson
+	}
+	return ""
+}
+
+func (x *TradeSellerCreditRecord) GetCreditScore() uint32 {
+	if x != nil {
+		return x.CreditScore
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetStarRatingTenths() uint32 {
+	if x != nil {
+		return x.StarRatingTenths
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetPositiveRateBps() uint32 {
+	if x != nil {
+		return x.PositiveRateBps
+	}
+	return 0
+}
+
+func (x *TradeSellerCreditRecord) GetRiskTier() string {
+	if x != nil {
+		return x.RiskTier
+	}
+	return ""
+}
+
+func (x *TradeSellerCreditRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+type TradeSellerCompletedOrderRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	RecordId       uint64                 `protobuf:"varint,1,opt,name=record_id,json=recordId,proto3" json:"record_id,omitempty"`
+	OrderId        string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	SellerPlayerId uint64                 `protobuf:"varint,3,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	OwnerRevision  uint64                 `protobuf:"varint,4,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	CreatedMs      uint64                 `protobuf:"varint,5,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TradeSellerCompletedOrderRecord) Reset() {
+	*x = TradeSellerCompletedOrderRecord{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeSellerCompletedOrderRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeSellerCompletedOrderRecord) ProtoMessage() {}
+
+func (x *TradeSellerCompletedOrderRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeSellerCompletedOrderRecord.ProtoReflect.Descriptor instead.
+func (*TradeSellerCompletedOrderRecord) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TradeSellerCompletedOrderRecord) GetRecordId() uint64 {
+	if x != nil {
+		return x.RecordId
+	}
+	return 0
+}
+
+func (x *TradeSellerCompletedOrderRecord) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *TradeSellerCompletedOrderRecord) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *TradeSellerCompletedOrderRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *TradeSellerCompletedOrderRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+type TradeSellerReviewRecord struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	ReviewId            uint64                 `protobuf:"varint,1,opt,name=review_id,json=reviewId,proto3" json:"review_id,omitempty"`
+	OrderId             string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	SellerPlayerId      uint64                 `protobuf:"varint,3,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	SellerOwnerRevision uint64                 `protobuf:"varint,4,opt,name=seller_owner_revision,json=sellerOwnerRevision,proto3" json:"seller_owner_revision,omitempty"`
+	BuyerPlayerId       uint64                 `protobuf:"varint,5,opt,name=buyer_player_id,json=buyerPlayerId,proto3" json:"buyer_player_id,omitempty"`
+	BuyerAccount        string                 `protobuf:"bytes,6,opt,name=buyer_account,json=buyerAccount,proto3" json:"buyer_account,omitempty"`
+	BuyerIp             string                 `protobuf:"bytes,7,opt,name=buyer_ip,json=buyerIp,proto3" json:"buyer_ip,omitempty"`
+	BuyerDeviceId       string                 `protobuf:"bytes,8,opt,name=buyer_device_id,json=buyerDeviceId,proto3" json:"buyer_device_id,omitempty"`
+	Rating              uint32                 `protobuf:"varint,9,opt,name=rating,proto3" json:"rating,omitempty"` // 1=好评 2=中评 3=差评
+	CountedForScore     bool                   `protobuf:"varint,10,opt,name=counted_for_score,json=countedForScore,proto3" json:"counted_for_score,omitempty"`
+	Comment             string                 `protobuf:"bytes,11,opt,name=comment,proto3" json:"comment,omitempty"`
+	CreatedMs           uint64                 `protobuf:"varint,12,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *TradeSellerReviewRecord) Reset() {
+	*x = TradeSellerReviewRecord{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeSellerReviewRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeSellerReviewRecord) ProtoMessage() {}
+
+func (x *TradeSellerReviewRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeSellerReviewRecord.ProtoReflect.Descriptor instead.
+func (*TradeSellerReviewRecord) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *TradeSellerReviewRecord) GetReviewId() uint64 {
+	if x != nil {
+		return x.ReviewId
+	}
+	return 0
+}
+
+func (x *TradeSellerReviewRecord) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *TradeSellerReviewRecord) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *TradeSellerReviewRecord) GetSellerOwnerRevision() uint64 {
+	if x != nil {
+		return x.SellerOwnerRevision
+	}
+	return 0
+}
+
+func (x *TradeSellerReviewRecord) GetBuyerPlayerId() uint64 {
+	if x != nil {
+		return x.BuyerPlayerId
+	}
+	return 0
+}
+
+func (x *TradeSellerReviewRecord) GetBuyerAccount() string {
+	if x != nil {
+		return x.BuyerAccount
+	}
+	return ""
+}
+
+func (x *TradeSellerReviewRecord) GetBuyerIp() string {
+	if x != nil {
+		return x.BuyerIp
+	}
+	return ""
+}
+
+func (x *TradeSellerReviewRecord) GetBuyerDeviceId() string {
+	if x != nil {
+		return x.BuyerDeviceId
+	}
+	return ""
+}
+
+func (x *TradeSellerReviewRecord) GetRating() uint32 {
+	if x != nil {
+		return x.Rating
+	}
+	return 0
+}
+
+func (x *TradeSellerReviewRecord) GetCountedForScore() bool {
+	if x != nil {
+		return x.CountedForScore
+	}
+	return false
+}
+
+func (x *TradeSellerReviewRecord) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+func (x *TradeSellerReviewRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+type TradeSellerViolationRecord struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	ViolationId         uint64                 `protobuf:"varint,1,opt,name=violation_id,json=violationId,proto3" json:"violation_id,omitempty"`
+	CaseId              string                 `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
+	OrderId             string                 `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	SellerPlayerId      uint64                 `protobuf:"varint,4,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	SellerOwnerRevision uint64                 `protobuf:"varint,5,opt,name=seller_owner_revision,json=sellerOwnerRevision,proto3" json:"seller_owner_revision,omitempty"`
+	SellerAccount       string                 `protobuf:"bytes,6,opt,name=seller_account,json=sellerAccount,proto3" json:"seller_account,omitempty"`
+	Reason              string                 `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`
+	RecordedMs          uint64                 `protobuf:"varint,8,opt,name=recorded_ms,json=recordedMs,proto3" json:"recorded_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *TradeSellerViolationRecord) Reset() {
+	*x = TradeSellerViolationRecord{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeSellerViolationRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeSellerViolationRecord) ProtoMessage() {}
+
+func (x *TradeSellerViolationRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeSellerViolationRecord.ProtoReflect.Descriptor instead.
+func (*TradeSellerViolationRecord) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *TradeSellerViolationRecord) GetViolationId() uint64 {
+	if x != nil {
+		return x.ViolationId
+	}
+	return 0
+}
+
+func (x *TradeSellerViolationRecord) GetCaseId() string {
+	if x != nil {
+		return x.CaseId
+	}
+	return ""
+}
+
+func (x *TradeSellerViolationRecord) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *TradeSellerViolationRecord) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *TradeSellerViolationRecord) GetSellerOwnerRevision() uint64 {
+	if x != nil {
+		return x.SellerOwnerRevision
+	}
+	return 0
+}
+
+func (x *TradeSellerViolationRecord) GetSellerAccount() string {
+	if x != nil {
+		return x.SellerAccount
+	}
+	return ""
+}
+
+func (x *TradeSellerViolationRecord) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *TradeSellerViolationRecord) GetRecordedMs() uint64 {
+	if x != nil {
+		return x.RecordedMs
 	}
 	return 0
 }
@@ -2126,7 +2664,8 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x0fcounterparty_id\x18\x15 \x01(\x04R\x0ecounterpartyId\x12\x17\n" +
 	"\aon_book\x18\x16 \x01(\bR\x06onBook:\x9b\x02\x8a\x92\xf4\x01\x0etrade_commerce\x92\x92\xf4\x01\vcommerce_idڒ\xf4\x01\xd3\x01status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status\xe2\x92\xf4\x01\vrequest_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"]\n" +
 	"\x18TradeCommerceGuardRecord\x12\x19\n" +
-	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xc8\t\n" +
+	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\x85\n" +
+	"\n" +
 	"\x15TradeCommerceWorkflow\x12?\n" +
 	"\rseller_assets\x18\x01 \x01(\v2\x1a.trade.TradeAssetSelectionR\fsellerAssets\x12=\n" +
 	"\fbuyer_assets\x18\x02 \x01(\v2\x1a.trade.TradeAssetSelectionR\vbuyerAssets\x12)\n" +
@@ -2157,7 +2696,8 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"quarantine\x12G\n" +
 	"\x0emanual_actions\x18\x18 \x03(\v2 .trade.TradeCommerceManualActionR\rmanualActions\x12)\n" +
 	"\x10payment_revision\x18\x19 \x01(\rR\x0fpaymentRevision\x12'\n" +
-	"\x0fpayment_revoked\x18\x1a \x01(\bR\x0epaymentRevoked\"\x8c\x01\n" +
+	"\x0fpayment_revoked\x18\x1a \x01(\bR\x0epaymentRevoked\x12;\n" +
+	"\x1adesignated_buyer_player_id\x18\x1b \x01(\x04R\x17designatedBuyerPlayerId\"\x8c\x01\n" +
 	"\x17TradeCommerceQuarantine\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\rR\x06status\x12\x16\n" +
@@ -2190,7 +2730,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\amissing\x18\x02 \x01(\v2\f.AssetBundleR\amissing\"T\n" +
 	"\x11TradeRoleIdentity\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12%\n" +
-	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\"\xd0\x05\n" +
+	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\"\x8a\x06\n" +
 	"\x1bTradeRmbConsignmentWorkflow\x12%\n" +
 	"\x0eseller_account\x18\x01 \x01(\tR\rsellerAccount\x122\n" +
 	"\x15seller_owner_revision\x18\x02 \x01(\x04R\x13sellerOwnerRevision\x12.\n" +
@@ -2211,7 +2751,8 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x0e \x01(\tR\x0fclientRequestId\x12H\n" +
 	"\x12registered_listing\x18\x0f \x01(\v2\x19.trade.RmbConsignmentViewR\x11registeredListing\x12'\n" +
 	"\x0fdelivery_digest\x18\x10 \x01(\fR\x0edeliveryDigest\x120\n" +
-	"\x14buyer_owner_revision\x18\x11 \x01(\x04R\x12buyerOwnerRevision\"\xa9\x02\n" +
+	"\x14buyer_owner_revision\x18\x11 \x01(\x04R\x12buyerOwnerRevision\x128\n" +
+	"\x18designated_buyer_account\x18\x12 \x01(\tR\x16designatedBuyerAccount\"\xa9\x02\n" +
 	"\x10TradeCommerceLeg\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -2221,7 +2762,64 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\bsnapshot\x18\x06 \x01(\v2\x0e.AssetSnapshotR\bsnapshot\x12\x18\n" +
 	"\aoutcome\x18\a \x01(\rR\aoutcome\x12#\n" +
 	"\rsuperseded_by\x18\b \x01(\tR\fsupersededBy\x12&\n" +
-	"\x0fescrow_owner_id\x18\t \x01(\x04R\rescrowOwnerId*\xfb\x01\n" +
+	"\x0fescrow_owner_id\x18\t \x01(\x04R\rescrowOwnerId\"\xf2\a\n" +
+	"\x17TradeSellerCreditRecord\x12(\n" +
+	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x12%\n" +
+	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\x12#\n" +
+	"\rowner_account\x18\x03 \x01(\tR\fownerAccount\x12+\n" +
+	"\x11ownership_changed\x18\x04 \x01(\bR\x10ownershipChanged\x125\n" +
+	"\x17ownership_changed_at_ms\x18\x05 \x01(\x04R\x14ownershipChangedAtMs\x12-\n" +
+	"\x13epoch_started_at_ms\x18\x06 \x01(\x04R\x10epochStartedAtMs\x12)\n" +
+	"\x10completed_orders\x18\a \x01(\x04R\x0fcompletedOrders\x12)\n" +
+	"\x10positive_reviews\x18\b \x01(\x04R\x0fpositiveReviews\x12'\n" +
+	"\x0fneutral_reviews\x18\t \x01(\x04R\x0eneutralReviews\x12)\n" +
+	"\x10negative_reviews\x18\n" +
+	" \x01(\x04R\x0fnegativeReviews\x12'\n" +
+	"\x0fviolation_count\x18\v \x01(\x04R\x0eviolationCount\x12,\n" +
+	"\x12env_credit_cleared\x18\f \x01(\bR\x10envCreditCleared\x12&\n" +
+	"\x0fenv_reset_count\x18\r \x01(\x04R\renvResetCount\x122\n" +
+	"\x16last_env_changed_at_ms\x18\x0e \x01(\x04R\x12lastEnvChangedAtMs\x12\x17\n" +
+	"\alast_ip\x18\x0f \x01(\tR\x06lastIp\x12$\n" +
+	"\x0elast_device_id\x18\x10 \x01(\tR\flastDeviceId\x12,\n" +
+	"\x12known_devices_json\x18\x11 \x01(\tR\x10knownDevicesJson\x12!\n" +
+	"\fcredit_score\x18\x12 \x01(\rR\vcreditScore\x12,\n" +
+	"\x12star_rating_tenths\x18\x13 \x01(\rR\x10starRatingTenths\x12*\n" +
+	"\x11positive_rate_bps\x18\x14 \x01(\rR\x0fpositiveRateBps\x12\x1b\n" +
+	"\trisk_tier\x18\x15 \x01(\tR\briskTier\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x16 \x01(\x04R\tupdatedMs:K\x8a\x92\xf4\x01\x13trade_seller_credit\x92\x92\xf4\x01\x1fseller_player_id,owner_revision\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xba\x02\n" +
+	"\x1fTradeSellerCompletedOrderRecord\x12\x1b\n" +
+	"\trecord_id\x18\x01 \x01(\x04R\brecordId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\x12(\n" +
+	"\x10seller_player_id\x18\x03 \x01(\x04R\x0esellerPlayerId\x12%\n" +
+	"\x0eowner_revision\x18\x04 \x01(\x04R\rownerRevision\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x05 \x01(\x04R\tcreatedMs:o\x8a\x92\xf4\x01\x1ctrade_seller_completed_order\x92\x92\xf4\x01\trecord_idڒ\xf4\x01\x1fseller_player_id,owner_revision\xe2\x92\xf4\x01\border_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb6\x04\n" +
+	"\x17TradeSellerReviewRecord\x12\x1b\n" +
+	"\treview_id\x18\x01 \x01(\x04R\breviewId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\x12(\n" +
+	"\x10seller_player_id\x18\x03 \x01(\x04R\x0esellerPlayerId\x122\n" +
+	"\x15seller_owner_revision\x18\x04 \x01(\x04R\x13sellerOwnerRevision\x12&\n" +
+	"\x0fbuyer_player_id\x18\x05 \x01(\x04R\rbuyerPlayerId\x12#\n" +
+	"\rbuyer_account\x18\x06 \x01(\tR\fbuyerAccount\x12\x19\n" +
+	"\bbuyer_ip\x18\a \x01(\tR\abuyerIp\x12&\n" +
+	"\x0fbuyer_device_id\x18\b \x01(\tR\rbuyerDeviceId\x12\x16\n" +
+	"\x06rating\x18\t \x01(\rR\x06rating\x12*\n" +
+	"\x11counted_for_score\x18\n" +
+	" \x01(\bR\x0fcountedForScore\x12\x18\n" +
+	"\acomment\x18\v \x01(\tR\acomment\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\f \x01(\x04R\tcreatedMs:x\x8a\x92\xf4\x01\x13trade_seller_review\x92\x92\xf4\x01\treview_idڒ\xf4\x011seller_player_id,seller_owner_revision,created_ms\xe2\x92\xf4\x01\border_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa5\x03\n" +
+	"\x1aTradeSellerViolationRecord\x12!\n" +
+	"\fviolation_id\x18\x01 \x01(\x04R\vviolationId\x12\x17\n" +
+	"\acase_id\x18\x02 \x01(\tR\x06caseId\x12\x19\n" +
+	"\border_id\x18\x03 \x01(\tR\aorderId\x12(\n" +
+	"\x10seller_player_id\x18\x04 \x01(\x04R\x0esellerPlayerId\x122\n" +
+	"\x15seller_owner_revision\x18\x05 \x01(\x04R\x13sellerOwnerRevision\x12%\n" +
+	"\x0eseller_account\x18\x06 \x01(\tR\rsellerAccount\x12\x16\n" +
+	"\x06reason\x18\a \x01(\tR\x06reason\x12\x1f\n" +
+	"\vrecorded_ms\x18\b \x01(\x04R\n" +
+	"recordedMs:r\x8a\x92\xf4\x01\x16trade_seller_violation\x92\x92\xf4\x01\fviolation_idڒ\xf4\x01&seller_player_id,seller_owner_revision\xe2\x92\xf4\x01\acase_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xfb\x01\n" +
 	"\rListingStatus\x12\x1e\n" +
 	"\x1aLISTING_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18LISTING_STATUS_ESCROWING\x10\x01\x12\x19\n" +
@@ -2262,41 +2860,45 @@ func file_proto_trade_trade_table_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_trade_trade_table_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_proto_trade_trade_table_proto_goTypes = []any{
-	(ListingStatus)(0),                  // 0: trade.ListingStatus
-	(TradeAssetOpKind)(0),               // 1: trade.TradeAssetOpKind
-	(TradeAssetOpStatus)(0),             // 2: trade.TradeAssetOpStatus
-	(TradeAssetOpRefKind)(0),            // 3: trade.TradeAssetOpRefKind
-	(*TradeListingRecord)(nil),          // 4: trade.TradeListingRecord
-	(*TradeFavoriteRecord)(nil),         // 5: trade.TradeFavoriteRecord
-	(*TradePlayerOpSeqRecord)(nil),      // 6: trade.TradePlayerOpSeqRecord
-	(*TradeAssetOpRecord)(nil),          // 7: trade.TradeAssetOpRecord
-	(*TradeCommerceRecord)(nil),         // 8: trade.TradeCommerceRecord
-	(*TradeCommerceGuardRecord)(nil),    // 9: trade.TradeCommerceGuardRecord
-	(*TradeCommerceWorkflow)(nil),       // 10: trade.TradeCommerceWorkflow
-	(*TradeCommerceQuarantine)(nil),     // 11: trade.TradeCommerceQuarantine
-	(*TradeCommerceManualAction)(nil),   // 12: trade.TradeCommerceManualAction
-	(*TradeCommercePartialPart)(nil),    // 13: trade.TradeCommercePartialPart
-	(*TradeRoleIdentity)(nil),           // 14: trade.TradeRoleIdentity
-	(*TradeRmbConsignmentWorkflow)(nil), // 15: trade.TradeRmbConsignmentWorkflow
-	(*TradeCommerceLeg)(nil),            // 16: trade.TradeCommerceLeg
-	(ListingCategory)(0),                // 17: trade.ListingCategory
-	(*TradeAssetSelection)(nil),         // 18: trade.TradeAssetSelection
-	(*asset.AssetBundle)(nil),           // 19: AssetBundle
-	(*RmbConsignmentView)(nil),          // 20: trade.RmbConsignmentView
-	(*asset.AssetSnapshot)(nil),         // 21: AssetSnapshot
+	(ListingStatus)(0),                      // 0: trade.ListingStatus
+	(TradeAssetOpKind)(0),                   // 1: trade.TradeAssetOpKind
+	(TradeAssetOpStatus)(0),                 // 2: trade.TradeAssetOpStatus
+	(TradeAssetOpRefKind)(0),                // 3: trade.TradeAssetOpRefKind
+	(*TradeListingRecord)(nil),              // 4: trade.TradeListingRecord
+	(*TradeFavoriteRecord)(nil),             // 5: trade.TradeFavoriteRecord
+	(*TradePlayerOpSeqRecord)(nil),          // 6: trade.TradePlayerOpSeqRecord
+	(*TradeAssetOpRecord)(nil),              // 7: trade.TradeAssetOpRecord
+	(*TradeCommerceRecord)(nil),             // 8: trade.TradeCommerceRecord
+	(*TradeCommerceGuardRecord)(nil),        // 9: trade.TradeCommerceGuardRecord
+	(*TradeCommerceWorkflow)(nil),           // 10: trade.TradeCommerceWorkflow
+	(*TradeCommerceQuarantine)(nil),         // 11: trade.TradeCommerceQuarantine
+	(*TradeCommerceManualAction)(nil),       // 12: trade.TradeCommerceManualAction
+	(*TradeCommercePartialPart)(nil),        // 13: trade.TradeCommercePartialPart
+	(*TradeRoleIdentity)(nil),               // 14: trade.TradeRoleIdentity
+	(*TradeRmbConsignmentWorkflow)(nil),     // 15: trade.TradeRmbConsignmentWorkflow
+	(*TradeCommerceLeg)(nil),                // 16: trade.TradeCommerceLeg
+	(*TradeSellerCreditRecord)(nil),         // 17: trade.TradeSellerCreditRecord
+	(*TradeSellerCompletedOrderRecord)(nil), // 18: trade.TradeSellerCompletedOrderRecord
+	(*TradeSellerReviewRecord)(nil),         // 19: trade.TradeSellerReviewRecord
+	(*TradeSellerViolationRecord)(nil),      // 20: trade.TradeSellerViolationRecord
+	(ListingCategory)(0),                    // 21: trade.ListingCategory
+	(*TradeAssetSelection)(nil),             // 22: trade.TradeAssetSelection
+	(*asset.AssetBundle)(nil),               // 23: AssetBundle
+	(*RmbConsignmentView)(nil),              // 24: trade.RmbConsignmentView
+	(*asset.AssetSnapshot)(nil),             // 25: AssetSnapshot
 }
 var file_proto_trade_trade_table_proto_depIdxs = []int32{
-	17, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
+	21, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
 	0,  // 1: trade.TradeListingRecord.status:type_name -> trade.ListingStatus
 	1,  // 2: trade.TradeAssetOpRecord.kind:type_name -> trade.TradeAssetOpKind
 	2,  // 3: trade.TradeAssetOpRecord.status:type_name -> trade.TradeAssetOpStatus
 	3,  // 4: trade.TradeAssetOpRecord.ref_kind:type_name -> trade.TradeAssetOpRefKind
-	18, // 5: trade.TradeCommerceWorkflow.seller_assets:type_name -> trade.TradeAssetSelection
-	18, // 6: trade.TradeCommerceWorkflow.buyer_assets:type_name -> trade.TradeAssetSelection
+	22, // 5: trade.TradeCommerceWorkflow.seller_assets:type_name -> trade.TradeAssetSelection
+	22, // 6: trade.TradeCommerceWorkflow.buyer_assets:type_name -> trade.TradeAssetSelection
 	16, // 7: trade.TradeCommerceWorkflow.legs:type_name -> trade.TradeCommerceLeg
-	19, // 8: trade.TradeCommerceWorkflow.official_bundle:type_name -> AssetBundle
+	23, // 8: trade.TradeCommerceWorkflow.official_bundle:type_name -> AssetBundle
 	15, // 9: trade.TradeCommerceWorkflow.rmb:type_name -> trade.TradeRmbConsignmentWorkflow
 	14, // 10: trade.TradeCommerceWorkflow.seller_identity:type_name -> trade.TradeRoleIdentity
 	14, // 11: trade.TradeCommerceWorkflow.buyer_identity:type_name -> trade.TradeRoleIdentity
@@ -2306,10 +2908,10 @@ var file_proto_trade_trade_table_proto_depIdxs = []int32{
 	14, // 15: trade.TradeCommerceManualAction.identity_before:type_name -> trade.TradeRoleIdentity
 	14, // 16: trade.TradeCommerceManualAction.identity_after:type_name -> trade.TradeRoleIdentity
 	13, // 17: trade.TradeCommerceManualAction.partial_parts:type_name -> trade.TradeCommercePartialPart
-	19, // 18: trade.TradeCommercePartialPart.missing:type_name -> AssetBundle
-	20, // 19: trade.TradeRmbConsignmentWorkflow.registered_listing:type_name -> trade.RmbConsignmentView
-	19, // 20: trade.TradeCommerceLeg.bundle:type_name -> AssetBundle
-	21, // 21: trade.TradeCommerceLeg.snapshot:type_name -> AssetSnapshot
+	23, // 18: trade.TradeCommercePartialPart.missing:type_name -> AssetBundle
+	24, // 19: trade.TradeRmbConsignmentWorkflow.registered_listing:type_name -> trade.RmbConsignmentView
+	23, // 20: trade.TradeCommerceLeg.bundle:type_name -> AssetBundle
+	25, // 21: trade.TradeCommerceLeg.snapshot:type_name -> AssetSnapshot
 	22, // [22:22] is the sub-list for method output_type
 	22, // [22:22] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name
@@ -2330,7 +2932,7 @@ func file_proto_trade_trade_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_trade_table_proto_rawDesc), len(file_proto_trade_trade_table_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

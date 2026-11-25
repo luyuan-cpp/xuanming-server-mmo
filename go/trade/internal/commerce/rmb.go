@@ -58,7 +58,24 @@ func (s *RmbConsignments) Create(ctx context.Context, account string, player, re
 	if err != nil {
 		return nil, err
 	}
-	terms := &tradepb.TradeRmbConsignmentWorkflow{SellerAccount: account, SellerOwnerRevision: revision, CharacterPlayerId: in.CharacterPlayerId, Title: in.Title, AssetKind: kind, MarketZone: zone, PriceFen: in.PriceFen, ClientRequestId: in.ClientRequestId}
+	var designatedBuyerAccount string
+	if targetID := in.GetDesignatedBuyerPlayerId(); targetID != 0 {
+		if targetID == player {
+			return nil, ErrSelf
+		}
+		targetOwned, lookupErr := s.Directory.Lookup(ctx, targetID)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if targetOwned == nil || !accountdirectory.ValidAccount(targetOwned.Account) {
+			return nil, ErrInvalid
+		}
+		if targetOwned.Account == account {
+			return nil, ErrSelf
+		}
+		designatedBuyerAccount = targetOwned.Account
+	}
+	terms := &tradepb.TradeRmbConsignmentWorkflow{SellerAccount: account, SellerOwnerRevision: revision, CharacterPlayerId: in.CharacterPlayerId, Title: in.Title, AssetKind: kind, MarketZone: zone, PriceFen: in.PriceFen, ClientRequestId: in.ClientRequestId, DesignatedBuyerAccount: designatedBuyerAccount}
 	stage := "rmb_escrow"
 	if kind == "CHARACTER" {
 		stage = "rmb_freezing"

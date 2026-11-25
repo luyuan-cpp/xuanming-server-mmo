@@ -103,3 +103,15 @@ func (s *JubaozhaiServer) BrowseCommerceOffers(ctx context.Context, in *tradepb.
 func (s *JubaozhaiServer) ListTradeMarkets(ctx context.Context, in *tradepb.ListTradeMarketsRequest) (*tradepb.ListTradeMarketsResponse, error) {
 	return logic.NewJubaozhaiLogic(ctx, s.deps).ListTradeMarkets(in)
 }
+func (s *JubaozhaiServer) GetSellerCredit(ctx context.Context, in *tradepb.GetSellerCreditRequest) (*tradepb.SellerCreditResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).GetSellerCredit(in)
+}
+func (s *JubaozhaiServer) SubmitSellerReview(ctx context.Context, in *tradepb.SubmitSellerReviewRequest) (*tradepb.SubmitSellerReviewResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).SubmitSellerReview(in)
+}
+func (s *JubaozhaiServer) GetMarketReferencePrice(ctx context.Context, in *tradepb.GetMarketReferencePriceRequest) (*tradepb.GetMarketReferencePriceResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).GetMarketReferencePrice(in)
+}
+func (s *JubaozhaiServer) GetPlayerTradeQuota(ctx context.Context, in *tradepb.GetPlayerTradeQuotaRequest) (*tradepb.GetPlayerTradeQuotaResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).GetPlayerTradeQuota(in)
+}

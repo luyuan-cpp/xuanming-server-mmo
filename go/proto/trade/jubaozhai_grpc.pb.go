@@ -19,41 +19,45 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClientPlayerJubaozhai_BrowseListings_FullMethodName       = "/trade.ClientPlayerJubaozhai/BrowseListings"
-	ClientPlayerJubaozhai_GetListingDetail_FullMethodName     = "/trade.ClientPlayerJubaozhai/GetListingDetail"
-	ClientPlayerJubaozhai_SetFavorite_FullMethodName          = "/trade.ClientPlayerJubaozhai/SetFavorite"
-	ClientPlayerJubaozhai_GetMyShelf_FullMethodName           = "/trade.ClientPlayerJubaozhai/GetMyShelf"
-	ClientPlayerJubaozhai_ListOfficialSkus_FullMethodName     = "/trade.ClientPlayerJubaozhai/ListOfficialSkus"
-	ClientPlayerJubaozhai_CreateOfficialOrder_FullMethodName  = "/trade.ClientPlayerJubaozhai/CreateOfficialOrder"
-	ClientPlayerJubaozhai_GetCommerceOrder_FullMethodName     = "/trade.ClientPlayerJubaozhai/GetCommerceOrder"
-	ClientPlayerJubaozhai_CancelCommerceOrder_FullMethodName  = "/trade.ClientPlayerJubaozhai/CancelCommerceOrder"
-	ClientPlayerJubaozhai_ListCommerceOrders_FullMethodName   = "/trade.ClientPlayerJubaozhai/ListCommerceOrders"
-	ClientPlayerJubaozhai_CreatePlayerTrade_FullMethodName    = "/trade.ClientPlayerJubaozhai/CreatePlayerTrade"
-	ClientPlayerJubaozhai_ConfirmPlayerTrade_FullMethodName   = "/trade.ClientPlayerJubaozhai/ConfirmPlayerTrade"
-	ClientPlayerJubaozhai_CreateConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/CreateConsignment"
-	ClientPlayerJubaozhai_BuyConsignment_FullMethodName       = "/trade.ClientPlayerJubaozhai/BuyConsignment"
-	ClientPlayerJubaozhai_CancelConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/CancelConsignment"
-	ClientPlayerJubaozhai_PlaceMarketOrder_FullMethodName     = "/trade.ClientPlayerJubaozhai/PlaceMarketOrder"
-	ClientPlayerJubaozhai_CancelMarketOrder_FullMethodName    = "/trade.ClientPlayerJubaozhai/CancelMarketOrder"
-	ClientPlayerJubaozhai_ListMarketOrders_FullMethodName     = "/trade.ClientPlayerJubaozhai/ListMarketOrders"
-	ClientPlayerJubaozhai_GetMarketDepth_FullMethodName       = "/trade.ClientPlayerJubaozhai/GetMarketDepth"
-	ClientPlayerJubaozhai_CreateAuctionLot_FullMethodName     = "/trade.ClientPlayerJubaozhai/CreateAuctionLot"
-	ClientPlayerJubaozhai_PlaceAuctionBid_FullMethodName      = "/trade.ClientPlayerJubaozhai/PlaceAuctionBid"
-	ClientPlayerJubaozhai_GetAuctionLot_FullMethodName        = "/trade.ClientPlayerJubaozhai/GetAuctionLot"
-	ClientPlayerJubaozhai_CancelAuctionLot_FullMethodName     = "/trade.ClientPlayerJubaozhai/CancelAuctionLot"
-	ClientPlayerJubaozhai_BrowseCommerceOffers_FullMethodName = "/trade.ClientPlayerJubaozhai/BrowseCommerceOffers"
-	ClientPlayerJubaozhai_ListTradeMarkets_FullMethodName     = "/trade.ClientPlayerJubaozhai/ListTradeMarkets"
-	ClientPlayerJubaozhai_CreateRmbConsignment_FullMethodName = "/trade.ClientPlayerJubaozhai/CreateRmbConsignment"
-	ClientPlayerJubaozhai_GetRmbConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/GetRmbConsignment"
-	ClientPlayerJubaozhai_ListRmbConsignments_FullMethodName  = "/trade.ClientPlayerJubaozhai/ListRmbConsignments"
-	ClientPlayerJubaozhai_BuyRmbConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/BuyRmbConsignment"
-	ClientPlayerJubaozhai_CancelRmbConsignment_FullMethodName = "/trade.ClientPlayerJubaozhai/CancelRmbConsignment"
-	ClientPlayerJubaozhai_GetRmbOrder_FullMethodName          = "/trade.ClientPlayerJubaozhai/GetRmbOrder"
-	ClientPlayerJubaozhai_ListRmbOrders_FullMethodName        = "/trade.ClientPlayerJubaozhai/ListRmbOrders"
-	ClientPlayerJubaozhai_CancelRmbOrder_FullMethodName       = "/trade.ClientPlayerJubaozhai/CancelRmbOrder"
-	ClientPlayerJubaozhai_ListSellerIncomes_FullMethodName    = "/trade.ClientPlayerJubaozhai/ListSellerIncomes"
-	ClientPlayerJubaozhai_CreateWithdrawal_FullMethodName     = "/trade.ClientPlayerJubaozhai/CreateWithdrawal"
-	ClientPlayerJubaozhai_GetWithdrawal_FullMethodName        = "/trade.ClientPlayerJubaozhai/GetWithdrawal"
+	ClientPlayerJubaozhai_BrowseListings_FullMethodName          = "/trade.ClientPlayerJubaozhai/BrowseListings"
+	ClientPlayerJubaozhai_GetListingDetail_FullMethodName        = "/trade.ClientPlayerJubaozhai/GetListingDetail"
+	ClientPlayerJubaozhai_SetFavorite_FullMethodName             = "/trade.ClientPlayerJubaozhai/SetFavorite"
+	ClientPlayerJubaozhai_GetMyShelf_FullMethodName              = "/trade.ClientPlayerJubaozhai/GetMyShelf"
+	ClientPlayerJubaozhai_ListOfficialSkus_FullMethodName        = "/trade.ClientPlayerJubaozhai/ListOfficialSkus"
+	ClientPlayerJubaozhai_CreateOfficialOrder_FullMethodName     = "/trade.ClientPlayerJubaozhai/CreateOfficialOrder"
+	ClientPlayerJubaozhai_GetCommerceOrder_FullMethodName        = "/trade.ClientPlayerJubaozhai/GetCommerceOrder"
+	ClientPlayerJubaozhai_CancelCommerceOrder_FullMethodName     = "/trade.ClientPlayerJubaozhai/CancelCommerceOrder"
+	ClientPlayerJubaozhai_ListCommerceOrders_FullMethodName      = "/trade.ClientPlayerJubaozhai/ListCommerceOrders"
+	ClientPlayerJubaozhai_CreatePlayerTrade_FullMethodName       = "/trade.ClientPlayerJubaozhai/CreatePlayerTrade"
+	ClientPlayerJubaozhai_ConfirmPlayerTrade_FullMethodName      = "/trade.ClientPlayerJubaozhai/ConfirmPlayerTrade"
+	ClientPlayerJubaozhai_CreateConsignment_FullMethodName       = "/trade.ClientPlayerJubaozhai/CreateConsignment"
+	ClientPlayerJubaozhai_BuyConsignment_FullMethodName          = "/trade.ClientPlayerJubaozhai/BuyConsignment"
+	ClientPlayerJubaozhai_CancelConsignment_FullMethodName       = "/trade.ClientPlayerJubaozhai/CancelConsignment"
+	ClientPlayerJubaozhai_PlaceMarketOrder_FullMethodName        = "/trade.ClientPlayerJubaozhai/PlaceMarketOrder"
+	ClientPlayerJubaozhai_CancelMarketOrder_FullMethodName       = "/trade.ClientPlayerJubaozhai/CancelMarketOrder"
+	ClientPlayerJubaozhai_ListMarketOrders_FullMethodName        = "/trade.ClientPlayerJubaozhai/ListMarketOrders"
+	ClientPlayerJubaozhai_GetMarketDepth_FullMethodName          = "/trade.ClientPlayerJubaozhai/GetMarketDepth"
+	ClientPlayerJubaozhai_CreateAuctionLot_FullMethodName        = "/trade.ClientPlayerJubaozhai/CreateAuctionLot"
+	ClientPlayerJubaozhai_PlaceAuctionBid_FullMethodName         = "/trade.ClientPlayerJubaozhai/PlaceAuctionBid"
+	ClientPlayerJubaozhai_GetAuctionLot_FullMethodName           = "/trade.ClientPlayerJubaozhai/GetAuctionLot"
+	ClientPlayerJubaozhai_CancelAuctionLot_FullMethodName        = "/trade.ClientPlayerJubaozhai/CancelAuctionLot"
+	ClientPlayerJubaozhai_BrowseCommerceOffers_FullMethodName    = "/trade.ClientPlayerJubaozhai/BrowseCommerceOffers"
+	ClientPlayerJubaozhai_ListTradeMarkets_FullMethodName        = "/trade.ClientPlayerJubaozhai/ListTradeMarkets"
+	ClientPlayerJubaozhai_CreateRmbConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/CreateRmbConsignment"
+	ClientPlayerJubaozhai_GetRmbConsignment_FullMethodName       = "/trade.ClientPlayerJubaozhai/GetRmbConsignment"
+	ClientPlayerJubaozhai_ListRmbConsignments_FullMethodName     = "/trade.ClientPlayerJubaozhai/ListRmbConsignments"
+	ClientPlayerJubaozhai_BuyRmbConsignment_FullMethodName       = "/trade.ClientPlayerJubaozhai/BuyRmbConsignment"
+	ClientPlayerJubaozhai_CancelRmbConsignment_FullMethodName    = "/trade.ClientPlayerJubaozhai/CancelRmbConsignment"
+	ClientPlayerJubaozhai_GetRmbOrder_FullMethodName             = "/trade.ClientPlayerJubaozhai/GetRmbOrder"
+	ClientPlayerJubaozhai_ListRmbOrders_FullMethodName           = "/trade.ClientPlayerJubaozhai/ListRmbOrders"
+	ClientPlayerJubaozhai_CancelRmbOrder_FullMethodName          = "/trade.ClientPlayerJubaozhai/CancelRmbOrder"
+	ClientPlayerJubaozhai_ListSellerIncomes_FullMethodName       = "/trade.ClientPlayerJubaozhai/ListSellerIncomes"
+	ClientPlayerJubaozhai_CreateWithdrawal_FullMethodName        = "/trade.ClientPlayerJubaozhai/CreateWithdrawal"
+	ClientPlayerJubaozhai_GetWithdrawal_FullMethodName           = "/trade.ClientPlayerJubaozhai/GetWithdrawal"
+	ClientPlayerJubaozhai_GetSellerCredit_FullMethodName         = "/trade.ClientPlayerJubaozhai/GetSellerCredit"
+	ClientPlayerJubaozhai_SubmitSellerReview_FullMethodName      = "/trade.ClientPlayerJubaozhai/SubmitSellerReview"
+	ClientPlayerJubaozhai_GetMarketReferencePrice_FullMethodName = "/trade.ClientPlayerJubaozhai/GetMarketReferencePrice"
+	ClientPlayerJubaozhai_GetPlayerTradeQuota_FullMethodName     = "/trade.ClientPlayerJubaozhai/GetPlayerTradeQuota"
 )
 
 // ClientPlayerJubaozhaiClient is the client API for ClientPlayerJubaozhai service.
@@ -98,6 +102,11 @@ type ClientPlayerJubaozhaiClient interface {
 	ListSellerIncomes(ctx context.Context, in *ListSellerIncomesRequest, opts ...grpc.CallOption) (*ListSellerIncomesResponse, error)
 	CreateWithdrawal(ctx context.Context, in *CreateWithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error)
 	GetWithdrawal(ctx context.Context, in *GetWithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error)
+	// 卖家店铺信用档案、官方托管成交评价、近 7 日真实成交 p50 与当面交易防骗额度查询。
+	GetSellerCredit(ctx context.Context, in *GetSellerCreditRequest, opts ...grpc.CallOption) (*SellerCreditResponse, error)
+	SubmitSellerReview(ctx context.Context, in *SubmitSellerReviewRequest, opts ...grpc.CallOption) (*SubmitSellerReviewResponse, error)
+	GetMarketReferencePrice(ctx context.Context, in *GetMarketReferencePriceRequest, opts ...grpc.CallOption) (*GetMarketReferencePriceResponse, error)
+	GetPlayerTradeQuota(ctx context.Context, in *GetPlayerTradeQuotaRequest, opts ...grpc.CallOption) (*GetPlayerTradeQuotaResponse, error)
 }
 
 type clientPlayerJubaozhaiClient struct {
@@ -458,6 +467,46 @@ func (c *clientPlayerJubaozhaiClient) GetWithdrawal(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *clientPlayerJubaozhaiClient) GetSellerCredit(ctx context.Context, in *GetSellerCreditRequest, opts ...grpc.CallOption) (*SellerCreditResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SellerCreditResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_GetSellerCredit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) SubmitSellerReview(ctx context.Context, in *SubmitSellerReviewRequest, opts ...grpc.CallOption) (*SubmitSellerReviewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubmitSellerReviewResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_SubmitSellerReview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) GetMarketReferencePrice(ctx context.Context, in *GetMarketReferencePriceRequest, opts ...grpc.CallOption) (*GetMarketReferencePriceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMarketReferencePriceResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_GetMarketReferencePrice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerJubaozhaiClient) GetPlayerTradeQuota(ctx context.Context, in *GetPlayerTradeQuotaRequest, opts ...grpc.CallOption) (*GetPlayerTradeQuotaResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerTradeQuotaResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerJubaozhai_GetPlayerTradeQuota_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerJubaozhaiServer is the server API for ClientPlayerJubaozhai service.
 // All implementations must embed UnimplementedClientPlayerJubaozhaiServer
 // for forward compatibility.
@@ -500,6 +549,11 @@ type ClientPlayerJubaozhaiServer interface {
 	ListSellerIncomes(context.Context, *ListSellerIncomesRequest) (*ListSellerIncomesResponse, error)
 	CreateWithdrawal(context.Context, *CreateWithdrawalRequest) (*WithdrawalResponse, error)
 	GetWithdrawal(context.Context, *GetWithdrawalRequest) (*WithdrawalResponse, error)
+	// 卖家店铺信用档案、官方托管成交评价、近 7 日真实成交 p50 与当面交易防骗额度查询。
+	GetSellerCredit(context.Context, *GetSellerCreditRequest) (*SellerCreditResponse, error)
+	SubmitSellerReview(context.Context, *SubmitSellerReviewRequest) (*SubmitSellerReviewResponse, error)
+	GetMarketReferencePrice(context.Context, *GetMarketReferencePriceRequest) (*GetMarketReferencePriceResponse, error)
+	GetPlayerTradeQuota(context.Context, *GetPlayerTradeQuotaRequest) (*GetPlayerTradeQuotaResponse, error)
 	mustEmbedUnimplementedClientPlayerJubaozhaiServer()
 }
 
@@ -614,6 +668,18 @@ func (UnimplementedClientPlayerJubaozhaiServer) CreateWithdrawal(context.Context
 }
 func (UnimplementedClientPlayerJubaozhaiServer) GetWithdrawal(context.Context, *GetWithdrawalRequest) (*WithdrawalResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWithdrawal not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) GetSellerCredit(context.Context, *GetSellerCreditRequest) (*SellerCreditResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSellerCredit not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) SubmitSellerReview(context.Context, *SubmitSellerReviewRequest) (*SubmitSellerReviewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitSellerReview not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) GetMarketReferencePrice(context.Context, *GetMarketReferencePriceRequest) (*GetMarketReferencePriceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMarketReferencePrice not implemented")
+}
+func (UnimplementedClientPlayerJubaozhaiServer) GetPlayerTradeQuota(context.Context, *GetPlayerTradeQuotaRequest) (*GetPlayerTradeQuotaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlayerTradeQuota not implemented")
 }
 func (UnimplementedClientPlayerJubaozhaiServer) mustEmbedUnimplementedClientPlayerJubaozhaiServer() {}
 func (UnimplementedClientPlayerJubaozhaiServer) testEmbeddedByValue()                               {}
@@ -1266,6 +1332,78 @@ func _ClientPlayerJubaozhai_GetWithdrawal_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerJubaozhai_GetSellerCredit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSellerCreditRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).GetSellerCredit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_GetSellerCredit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).GetSellerCredit(ctx, req.(*GetSellerCreditRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_SubmitSellerReview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitSellerReviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).SubmitSellerReview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_SubmitSellerReview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).SubmitSellerReview(ctx, req.(*SubmitSellerReviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_GetMarketReferencePrice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMarketReferencePriceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).GetMarketReferencePrice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_GetMarketReferencePrice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).GetMarketReferencePrice(ctx, req.(*GetMarketReferencePriceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerJubaozhai_GetPlayerTradeQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerTradeQuotaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerJubaozhaiServer).GetPlayerTradeQuota(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerJubaozhai_GetPlayerTradeQuota_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerJubaozhaiServer).GetPlayerTradeQuota(ctx, req.(*GetPlayerTradeQuotaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerJubaozhai_ServiceDesc is the grpc.ServiceDesc for ClientPlayerJubaozhai service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1412,6 +1550,22 @@ var ClientPlayerJubaozhai_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWithdrawal",
 			Handler:    _ClientPlayerJubaozhai_GetWithdrawal_Handler,
+		},
+		{
+			MethodName: "GetSellerCredit",
+			Handler:    _ClientPlayerJubaozhai_GetSellerCredit_Handler,
+		},
+		{
+			MethodName: "SubmitSellerReview",
+			Handler:    _ClientPlayerJubaozhai_SubmitSellerReview_Handler,
+		},
+		{
+			MethodName: "GetMarketReferencePrice",
+			Handler:    _ClientPlayerJubaozhai_GetMarketReferencePrice_Handler,
+		},
+		{
+			MethodName: "GetPlayerTradeQuota",
+			Handler:    _ClientPlayerJubaozhai_GetPlayerTradeQuota_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -449,3 +449,7 @@ const SceneActivityClientPlayerStartFestivalBeastChallengeMessageId = 477
 const SceneActivityClientPlayerClaimFestivalBeastRewardMessageId = 478
 const BattleClientPlayerSurrenderBattleMessageId = 479
 const BattleClientPlayerNotifySurrenderVoteMessageId = 480
+const ClientPlayerJubaozhaiGetSellerCreditMessageId = 481
+const ClientPlayerJubaozhaiSubmitSellerReviewMessageId = 482
+const ClientPlayerJubaozhaiGetMarketReferencePriceMessageId = 483
+const ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId = 484

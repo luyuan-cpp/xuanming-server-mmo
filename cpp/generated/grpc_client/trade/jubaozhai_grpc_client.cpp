@@ -3211,6 +3211,370 @@ void SendClientPlayerJubaozhaiGetWithdrawalErased(entt::registry& registry, entt
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::WithdrawalResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region ClientPlayerJubaozhaiGetSellerCredit
+namespace {
+void QueueLocalClientPlayerJubaozhaiGetSellerCreditFailure(GrpcDone<::trade::SellerCreditResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetSellerCreditGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiGetSellerCreditCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::GetSellerCreditRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::SellerCreditResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.GetSellerCredit requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiGetSellerCreditGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiGetSellerCreditFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiGetSellerCreditFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::SellerCreditResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.GetSellerCredit response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiGetSellerCredit(entt::registry& registry, entt::entity nodeEntity, const ::trade::GetSellerCreditRequest& request,
+                                            GrpcDone<::trade::SellerCreditResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiGetSellerCreditCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiGetSellerCreditErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.GetSellerCredit requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::GetSellerCreditRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetSellerCredit: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetSellerCreditGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::GetSellerCreditRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetSellerCredit: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetSellerCreditGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiGetSellerCreditCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::SellerCreditResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiSubmitSellerReview
+namespace {
+void QueueLocalClientPlayerJubaozhaiSubmitSellerReviewFailure(GrpcDone<::trade::SubmitSellerReviewResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiSubmitSellerReviewGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiSubmitSellerReviewCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::SubmitSellerReviewRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::SubmitSellerReviewResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.SubmitSellerReview requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiSubmitSellerReviewGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiSubmitSellerReviewFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiSubmitSellerReviewFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::SubmitSellerReviewResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.SubmitSellerReview response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiSubmitSellerReview(entt::registry& registry, entt::entity nodeEntity, const ::trade::SubmitSellerReviewRequest& request,
+                                            GrpcDone<::trade::SubmitSellerReviewResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiSubmitSellerReviewCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiSubmitSellerReviewErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.SubmitSellerReview requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::SubmitSellerReviewRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.SubmitSellerReview: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiSubmitSellerReviewGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::SubmitSellerReviewRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.SubmitSellerReview: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiSubmitSellerReviewGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiSubmitSellerReviewCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::SubmitSellerReviewResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiGetMarketReferencePrice
+namespace {
+void QueueLocalClientPlayerJubaozhaiGetMarketReferencePriceFailure(GrpcDone<::trade::GetMarketReferencePriceResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMarketReferencePriceGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiGetMarketReferencePriceCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::GetMarketReferencePriceRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::GetMarketReferencePriceResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.GetMarketReferencePrice requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiGetMarketReferencePriceGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiGetMarketReferencePriceFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiGetMarketReferencePriceFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::GetMarketReferencePriceResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.GetMarketReferencePrice response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiGetMarketReferencePrice(entt::registry& registry, entt::entity nodeEntity, const ::trade::GetMarketReferencePriceRequest& request,
+                                            GrpcDone<::trade::GetMarketReferencePriceResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiGetMarketReferencePriceCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiGetMarketReferencePriceErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.GetMarketReferencePrice requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::GetMarketReferencePriceRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetMarketReferencePrice: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMarketReferencePriceGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::GetMarketReferencePriceRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetMarketReferencePrice: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMarketReferencePriceGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiGetMarketReferencePriceCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::GetMarketReferencePriceResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiGetPlayerTradeQuota
+namespace {
+void QueueLocalClientPlayerJubaozhaiGetPlayerTradeQuotaFailure(GrpcDone<::trade::GetPlayerTradeQuotaResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetPlayerTradeQuotaGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiGetPlayerTradeQuotaCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::GetPlayerTradeQuotaRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::GetPlayerTradeQuotaResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.GetPlayerTradeQuota requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiGetPlayerTradeQuotaGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiGetPlayerTradeQuotaFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiGetPlayerTradeQuotaFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::GetPlayerTradeQuotaResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.GetPlayerTradeQuota response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiGetPlayerTradeQuota(entt::registry& registry, entt::entity nodeEntity, const ::trade::GetPlayerTradeQuotaRequest& request,
+                                            GrpcDone<::trade::GetPlayerTradeQuotaResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiGetPlayerTradeQuotaCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.GetPlayerTradeQuota requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::GetPlayerTradeQuotaRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetPlayerTradeQuota: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetPlayerTradeQuotaGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::GetPlayerTradeQuotaRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetPlayerTradeQuota: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetPlayerTradeQuotaGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiGetPlayerTradeQuotaCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::GetPlayerTradeQuotaResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetJubaozhaiCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

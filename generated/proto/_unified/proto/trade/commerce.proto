@@ -56,6 +56,7 @@ message CommerceOrderView {
   bool seller_confirmed = 10;
   bool buyer_confirmed = 11;
   string related_id = 12;               // 商品/挂单/竞拍标识
+  uint64 designated_buyer_player_id = 13; // 官方指定买家定向单的目标角色 ID（0 = 公开单）
 }
 
 message CommerceOrderResponse {
@@ -124,6 +125,7 @@ message CreateConsignmentRequest {
   uint32 currency_type = 3;
   uint64 price = 4;
   uint64 duration_ms = 5;
+  uint64 designated_buyer_player_id = 6; // 可选：非 0 时创建仅允许该指定角色购买的定向托管单
 }
 message BuyConsignmentRequest { string listing_id = 1; string client_request_id = 2; }
 message CancelConsignmentRequest { string listing_id = 1; }
@@ -212,6 +214,7 @@ message CreateRmbConsignmentRequest {
   uint64 character_player_id = 3; // 非0出售同账号角色，assets必须为空；其余出售一类物品/宠物/货币
   uint64 price_fen = 4;
   string title = 5;
+  uint64 designated_buyer_player_id = 6; // 可选：非 0 时创建仅允许该指定角色所属账号购买的定向托管单
 }
 message GetRmbConsignmentRequest { uint64 listing_id = 1; }
 message ListRmbConsignmentsRequest { string cursor = 1; uint32 limit = 2; }
@@ -231,6 +234,7 @@ message RmbConsignmentView {
   string state = 11;
   string phase = 12;
   string order_id = 13;
+  bool designated_only = 14;
 }
 message RmbConsignmentResponse {
   TipInfoMessage error_message = 1;
@@ -252,6 +256,8 @@ message RmbSellerIncome {
   uint64 reserved_fen = 5;
   uint64 paid_fen = 6;
   uint64 available_ms = 7;
+  uint64 dispute_frozen_fen = 8;
+  string dispute_case_id = 9;
 }
 message ListSellerIncomesResponse {
   TipInfoMessage error_message = 1;
@@ -269,3 +275,89 @@ message RmbWithdrawalView {
   string transaction_id = 5;
 }
 message WithdrawalResponse { TipInfoMessage error_message = 1; RmbWithdrawalView withdrawal = 2; }
+
+// ---------------------------------------------------------------------------
+// 卖家店铺信用评分、近 7 日中位参考价与当面交易限额查询协议
+// ---------------------------------------------------------------------------
+
+enum SellerReviewRating {
+  SELLER_REVIEW_RATING_UNSPECIFIED = 0;
+  SELLER_REVIEW_RATING_POSITIVE = 1;
+  SELLER_REVIEW_RATING_NEUTRAL = 2;
+  SELLER_REVIEW_RATING_NEGATIVE = 3;
+}
+
+// 对外只返回脱敏后的店铺信用档案，严禁包含卖家原始账号、IP 或设备指纹。
+message SellerCreditView {
+  uint64 seller_player_id = 1;
+  uint64 owner_revision = 2;
+  bool ownership_changed = 3;
+  uint64 ownership_changed_at_ms = 4;
+  uint64 epoch_started_at_ms = 5;
+  uint64 completed_orders = 6;
+  uint64 positive_reviews = 7;
+  uint64 neutral_reviews = 8;
+  uint64 negative_reviews = 9;
+  uint64 violation_count = 10;
+  bool env_credit_cleared = 11;
+  uint64 env_reset_count = 12;
+  uint64 last_env_changed_at_ms = 13;
+  uint32 credit_score = 14;         // [0, 100]
+  uint32 star_rating_tenths = 15;   // [10, 50] => 1.0★ ~ 5.0★
+  uint32 positive_rate_bps = 16;    // [0, 10000] 万分比好评率
+  string risk_tier = 17;            // restricted / new_or_transferred / standard / trusted
+}
+
+message GetSellerCreditRequest {
+  uint64 seller_player_id = 1;
+}
+message SellerCreditResponse {
+  TipInfoMessage error_message = 1;
+  SellerCreditView profile = 2;
+  uint64 server_now_ms = 3;
+}
+
+message SubmitSellerReviewRequest {
+  string order_id = 1;
+  SellerReviewRating rating = 2;
+  string comment = 3;
+}
+message SubmitSellerReviewResponse {
+  TipInfoMessage error_message = 1;
+  bool counted_for_score = 2;
+  bool replayed = 3;
+  SellerCreditView profile = 4;
+  uint64 server_now_ms = 5;
+}
+
+message GetMarketReferencePriceRequest {
+  uint32 item_config_id = 1;
+  uint32 currency_type = 2;
+}
+message GetMarketReferencePriceResponse {
+  TipInfoMessage error_message = 1;
+  uint32 item_config_id = 2;
+  uint32 currency_type = 3;
+  uint64 median_unit_price = 4;
+  uint32 sample_count = 5;
+  bool insufficient_sample = 6;
+  uint32 window_days = 7;
+  uint64 server_now_ms = 8;
+}
+
+message GetPlayerTradeQuotaRequest {
+  uint32 currency_type = 1;
+}
+message GetPlayerTradeQuotaResponse {
+  TipInfoMessage error_message = 1;
+  string mode = 2;
+  uint32 currency_type = 3;
+  uint64 daily_currency_limit = 4;
+  uint64 daily_currency_used = 5;
+  uint64 daily_currency_remaining = 6;
+  repeated uint32 consumable_item_ids = 7;
+  uint64 min_friend_duration_ms = 8;
+  uint32 max_reference_deviation_pct = 9;
+  uint64 cooling_lock_duration_ms = 10;
+  uint64 server_now_ms = 11;
+}

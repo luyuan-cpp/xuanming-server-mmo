@@ -142,3 +142,19 @@ constexpr uint32_t ClientPlayerJubaozhaiCreateWithdrawalIndex = 33;
 constexpr uint32_t ClientPlayerJubaozhaiGetWithdrawalMessageId = 343;
 constexpr uint32_t ClientPlayerJubaozhaiGetWithdrawalIndex = 34;
 #define ClientPlayerJubaozhaiGetWithdrawalMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(34)
+
+constexpr uint32_t ClientPlayerJubaozhaiGetSellerCreditMessageId = 481;
+constexpr uint32_t ClientPlayerJubaozhaiGetSellerCreditIndex = 35;
+#define ClientPlayerJubaozhaiGetSellerCreditMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(35)
+
+constexpr uint32_t ClientPlayerJubaozhaiSubmitSellerReviewMessageId = 482;
+constexpr uint32_t ClientPlayerJubaozhaiSubmitSellerReviewIndex = 36;
+#define ClientPlayerJubaozhaiSubmitSellerReviewMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(36)
+
+constexpr uint32_t ClientPlayerJubaozhaiGetMarketReferencePriceMessageId = 483;
+constexpr uint32_t ClientPlayerJubaozhaiGetMarketReferencePriceIndex = 37;
+#define ClientPlayerJubaozhaiGetMarketReferencePriceMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(37)
+
+constexpr uint32_t ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId = 484;
+constexpr uint32_t ClientPlayerJubaozhaiGetPlayerTradeQuotaIndex = 38;
+#define ClientPlayerJubaozhaiGetPlayerTradeQuotaMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(38)

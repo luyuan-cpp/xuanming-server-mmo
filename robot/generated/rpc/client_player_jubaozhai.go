@@ -836,3 +836,95 @@ func (clientPlayerJubaozhaiRpc) decodeGetWithdrawal(reply *base.MessageContent, 
 	}
 	return resp, nil
 }
+
+// GetSellerCredit 异步调用 ClientPlayerJubaozhai.GetSellerCredit(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) GetSellerCredit(c *pkg.GameClient, req *trade.GetSellerCreditRequest, timeout time.Duration, done func(*trade.SellerCreditResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiGetSellerCreditMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetSellerCredit(reply, err))
+	})
+}
+
+// GetSellerCreditSync 同步调用 ClientPlayerJubaozhai.GetSellerCredit(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) GetSellerCreditSync(ctx context.Context, c *pkg.GameClient, req *trade.GetSellerCreditRequest, timeout time.Duration) (*trade.SellerCreditResponse, error) {
+	return r.decodeGetSellerCredit(c.CallSync(ctx, game.ClientPlayerJubaozhaiGetSellerCreditMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeGetSellerCredit(reply *base.MessageContent, err error) (*trade.SellerCreditResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.SellerCreditResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.GetSellerCredit reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SubmitSellerReview 异步调用 ClientPlayerJubaozhai.SubmitSellerReview(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) SubmitSellerReview(c *pkg.GameClient, req *trade.SubmitSellerReviewRequest, timeout time.Duration, done func(*trade.SubmitSellerReviewResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiSubmitSellerReviewMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSubmitSellerReview(reply, err))
+	})
+}
+
+// SubmitSellerReviewSync 同步调用 ClientPlayerJubaozhai.SubmitSellerReview(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) SubmitSellerReviewSync(ctx context.Context, c *pkg.GameClient, req *trade.SubmitSellerReviewRequest, timeout time.Duration) (*trade.SubmitSellerReviewResponse, error) {
+	return r.decodeSubmitSellerReview(c.CallSync(ctx, game.ClientPlayerJubaozhaiSubmitSellerReviewMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeSubmitSellerReview(reply *base.MessageContent, err error) (*trade.SubmitSellerReviewResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.SubmitSellerReviewResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.SubmitSellerReview reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetMarketReferencePrice 异步调用 ClientPlayerJubaozhai.GetMarketReferencePrice(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) GetMarketReferencePrice(c *pkg.GameClient, req *trade.GetMarketReferencePriceRequest, timeout time.Duration, done func(*trade.GetMarketReferencePriceResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiGetMarketReferencePriceMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetMarketReferencePrice(reply, err))
+	})
+}
+
+// GetMarketReferencePriceSync 同步调用 ClientPlayerJubaozhai.GetMarketReferencePrice(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) GetMarketReferencePriceSync(ctx context.Context, c *pkg.GameClient, req *trade.GetMarketReferencePriceRequest, timeout time.Duration) (*trade.GetMarketReferencePriceResponse, error) {
+	return r.decodeGetMarketReferencePrice(c.CallSync(ctx, game.ClientPlayerJubaozhaiGetMarketReferencePriceMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeGetMarketReferencePrice(reply *base.MessageContent, err error) (*trade.GetMarketReferencePriceResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.GetMarketReferencePriceResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.GetMarketReferencePrice reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetPlayerTradeQuota 异步调用 ClientPlayerJubaozhai.GetPlayerTradeQuota(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) GetPlayerTradeQuota(c *pkg.GameClient, req *trade.GetPlayerTradeQuotaRequest, timeout time.Duration, done func(*trade.GetPlayerTradeQuotaResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetPlayerTradeQuota(reply, err))
+	})
+}
+
+// GetPlayerTradeQuotaSync 同步调用 ClientPlayerJubaozhai.GetPlayerTradeQuota(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) GetPlayerTradeQuotaSync(ctx context.Context, c *pkg.GameClient, req *trade.GetPlayerTradeQuotaRequest, timeout time.Duration) (*trade.GetPlayerTradeQuotaResponse, error) {
+	return r.decodeGetPlayerTradeQuota(c.CallSync(ctx, game.ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeGetPlayerTradeQuota(reply *base.MessageContent, err error) (*trade.GetPlayerTradeQuotaResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.GetPlayerTradeQuotaResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.GetPlayerTradeQuota reply: %w", err)
+	}
+	return resp, nil
+}

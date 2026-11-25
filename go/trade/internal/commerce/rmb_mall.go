@@ -53,7 +53,7 @@ func (r rmbListing) view() (*tradepb.RmbConsignmentView, error) {
 	if r.Order != "" && !mallOrderID.MatchString(r.Order) {
 		return nil, errors.New("寄售订单号非法")
 	}
-	return &tradepb.RmbConsignmentView{ListingId: id, SellerPlayerId: seller, MarketZone: r.Zone, AssetKind: r.Kind, Title: r.Title, PriceFen: r.Price, FeeBps: r.Fee, CoolingMs: r.Cooling, NoticeEndMs: r.NoticeEnd, SaleEndMs: r.SaleEnd, State: r.State, Phase: r.Phase, OrderId: r.Order}, nil
+	return &tradepb.RmbConsignmentView{ListingId: id, SellerPlayerId: seller, MarketZone: r.Zone, AssetKind: r.Kind, Title: r.Title, PriceFen: r.Price, FeeBps: r.Fee, CoolingMs: r.Cooling, NoticeEndMs: r.NoticeEnd, SaleEndMs: r.SaleEnd, State: r.State, Phase: r.Phase, OrderId: r.Order, DesignatedOnly: r.DesignatedBuyer != ""}, nil
 }
 func rmbKind(kind string) bool {
 	return kind == "ITEMS" || kind == "PET" || kind == "CURRENCY" || kind == "CHARACTER"
@@ -113,6 +113,9 @@ func (m *Mall) rmbRegister(ctx context.Context, r *tradepb.TradeCommerceRecord, 
 	t := w.Rmb
 	var out rmbListing
 	input := map[string]any{"listingId": strconv.FormatUint(r.CommerceId, 10), "sellerPlayerId": strconv.FormatUint(r.SellerPlayerId, 10), "sellerAccount": t.SellerAccount, "marketZone": t.MarketZone, "assetKind": t.AssetKind, "escrowReference": t.EscrowReference, "escrowProof": t.EscrowProof, "priceFen": t.PriceFen, "title": t.Title, "assetCurrencyType": nil}
+	if t.DesignatedBuyerAccount != "" {
+		input["designatedBuyerAccount"] = t.DesignatedBuyerAccount
+	}
 	if t.AssetKind == "CURRENCY" {
 		input["assetCurrencyType"] = w.SellerAssets.GetCurrencyType()
 	}
@@ -232,7 +235,7 @@ func (m *Mall) RmbIncomes(ctx context.Context, account, after string, limit uint
 		if !mallOrderID.MatchString(r.Order) || r.Gross > 9_000_000_000_000_000 || r.Fee > r.Gross || r.Net != r.Gross-r.Fee || r.Paid > r.Net || r.Reserved > r.Net-r.Paid || r.Forfeited > r.Net-r.Paid-r.Reserved || r.DisputeFrozen > r.Net-r.Paid-r.Reserved-r.Forfeited {
 			return nil, errors.New("收入原件非法")
 		}
-		v.Incomes = append(v.Incomes, &tradepb.RmbSellerIncome{OrderId: r.Order, GrossFen: r.Gross, FeeFen: r.Fee, NetFen: r.Net, ReservedFen: r.Reserved, PaidFen: r.Paid, AvailableMs: r.Available})
+		v.Incomes = append(v.Incomes, &tradepb.RmbSellerIncome{OrderId: r.Order, GrossFen: r.Gross, FeeFen: r.Fee, NetFen: r.Net, ReservedFen: r.Reserved, PaidFen: r.Paid, AvailableMs: r.Available, DisputeFrozenFen: r.DisputeFrozen, DisputeCaseId: r.DisputeCase})
 		v.NextCursor = r.Order
 	}
 	return v, nil

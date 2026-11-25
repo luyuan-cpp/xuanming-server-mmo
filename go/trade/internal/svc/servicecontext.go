@@ -97,6 +97,7 @@ type ServiceContext struct {
 	// Roles 读本库的角色护栏副本,无条件装配:入口归属预检每个客户端请求都用它,Commerce 的合同事务用的也是这一个。
 	Roles       *commerce.RoleAuthority
 	Commerce    *commerce.Engine
+	Credits     *commerce.SellerCreditService
 	Mall        *commerce.Mall
 	Rmb         *commerce.RmbConsignments
 	RmbIdentity *RmbIdentity

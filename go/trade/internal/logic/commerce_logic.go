@@ -42,6 +42,7 @@ func orderView(r *tradepb.TradeCommerceRecord) *tradepb.CommerceOrderView {
 	if w != nil {
 		v.SellerConfirmed = w.SellerConfirmed
 		v.BuyerConfirmed = w.BuyerConfirmed
+		v.DesignatedBuyerPlayerId = w.DesignatedBuyerPlayerId
 		if r.Kind == 1 {
 			v.OrderId = w.ExternalOrderSn
 			v.RelatedId = strconv.FormatUint(w.SkuId, 10)
@@ -170,6 +171,15 @@ func (l *JubaozhaiLogic) ConfirmPlayerTrade(in *tradepb.ConfirmPlayerTradeReques
 }
 func (l *JubaozhaiLogic) CreateConsignment(in *tradepb.CreateConsignmentRequest) (*tradepb.CommerceOrderResponse, error) {
 	return l.commerceCall(func(ctx context.Context, me uint64, e *commerce.Engine) (*tradepb.TradeCommerceRecord, error) {
+		if targetID := in.GetDesignatedBuyerPlayerId(); targetID != 0 {
+			zone, err := l.deps.HomeZones.HomeZone(ctx, targetID)
+			if err != nil {
+				return nil, err
+			}
+			if zone == 0 {
+				return nil, commerce.Rejection(table.TradeError_kTradeCounterpartyUnknown)
+			}
+		}
 		return e.CreateConsignment(ctx, me, in)
 	})
 }

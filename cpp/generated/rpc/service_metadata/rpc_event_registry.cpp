@@ -416,6 +416,10 @@ namespace trade{void SendClientPlayerJubaozhaiCancelRmbOrderErased(entt::registr
 namespace trade{void SendClientPlayerJubaozhaiListSellerIncomesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiCreateWithdrawalErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiGetWithdrawalErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiGetSellerCreditErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiSubmitSellerReviewErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiGetMarketReferencePriceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminListManualContractsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -423,7 +427,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 481,
+static_assert(kMaxRpcMethodCount == 485,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -2746,6 +2750,26 @@ void InitMessageInfo()
         std::make_unique<::trade::GetWithdrawalRequest>(),
         std::make_unique<::trade::WithdrawalResponse>(),
         1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetWithdrawalErased, "/trade.ClientPlayerJubaozhai/GetWithdrawal"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiGetSellerCreditMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "GetSellerCredit",
+        std::make_unique<::trade::GetSellerCreditRequest>(),
+        std::make_unique<::trade::SellerCreditResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetSellerCreditErased, "/trade.ClientPlayerJubaozhai/GetSellerCredit"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiSubmitSellerReviewMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "SubmitSellerReview",
+        std::make_unique<::trade::SubmitSellerReviewRequest>(),
+        std::make_unique<::trade::SubmitSellerReviewResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiSubmitSellerReviewErased, "/trade.ClientPlayerJubaozhai/SubmitSellerReview"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiGetMarketReferencePriceMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "GetMarketReferencePrice",
+        std::make_unique<::trade::GetMarketReferencePriceRequest>(),
+        std::make_unique<::trade::GetMarketReferencePriceResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetMarketReferencePriceErased, "/trade.ClientPlayerJubaozhai/GetMarketReferencePrice"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "GetPlayerTradeQuota",
+        std::make_unique<::trade::GetPlayerTradeQuotaRequest>(),
+        std::make_unique<::trade::GetPlayerTradeQuotaResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased, "/trade.ClientPlayerJubaozhai/GetPlayerTradeQuota"};
 
     // --- TradeAdmin ---
     gRpcMethodRegistry[TradeAdminSeedListingMessageId] = RpcMethodMeta{
@@ -2994,6 +3018,10 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerJubaozhaiListSellerIncomesMessageId:
 	case ClientPlayerJubaozhaiCreateWithdrawalMessageId:
 	case ClientPlayerJubaozhaiGetWithdrawalMessageId:
+	case ClientPlayerJubaozhaiGetSellerCreditMessageId:
+	case ClientPlayerJubaozhaiSubmitSellerReviewMessageId:
+	case ClientPlayerJubaozhaiGetMarketReferencePriceMessageId:
+	case ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId:
 		return true;
 	default:
 		return false;

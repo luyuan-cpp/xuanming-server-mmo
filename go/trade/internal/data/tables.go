@@ -29,5 +29,9 @@ func Tables() []proto.Message {
 		&tradepb.TradeAssetOpRecord{},
 		&tradepb.TradeCommerceRecord{},
 		&tradepb.TradeCommerceGuardRecord{},
+		&tradepb.TradeSellerCreditRecord{},
+		&tradepb.TradeSellerCompletedOrderRecord{},
+		&tradepb.TradeSellerReviewRecord{},
+		&tradepb.TradeSellerViolationRecord{},
 	}
 }

@@ -216,6 +216,58 @@ func (MarketOrderSide) EnumDescriptor() ([]byte, []int) {
 	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{2}
 }
 
+type SellerReviewRating int32
+
+const (
+	SellerReviewRating_SELLER_REVIEW_RATING_UNSPECIFIED SellerReviewRating = 0
+	SellerReviewRating_SELLER_REVIEW_RATING_POSITIVE    SellerReviewRating = 1
+	SellerReviewRating_SELLER_REVIEW_RATING_NEUTRAL     SellerReviewRating = 2
+	SellerReviewRating_SELLER_REVIEW_RATING_NEGATIVE    SellerReviewRating = 3
+)
+
+// Enum value maps for SellerReviewRating.
+var (
+	SellerReviewRating_name = map[int32]string{
+		0: "SELLER_REVIEW_RATING_UNSPECIFIED",
+		1: "SELLER_REVIEW_RATING_POSITIVE",
+		2: "SELLER_REVIEW_RATING_NEUTRAL",
+		3: "SELLER_REVIEW_RATING_NEGATIVE",
+	}
+	SellerReviewRating_value = map[string]int32{
+		"SELLER_REVIEW_RATING_UNSPECIFIED": 0,
+		"SELLER_REVIEW_RATING_POSITIVE":    1,
+		"SELLER_REVIEW_RATING_NEUTRAL":     2,
+		"SELLER_REVIEW_RATING_NEGATIVE":    3,
+	}
+)
+
+func (x SellerReviewRating) Enum() *SellerReviewRating {
+	p := new(SellerReviewRating)
+	*p = x
+	return p
+}
+
+func (x SellerReviewRating) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SellerReviewRating) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_trade_commerce_proto_enumTypes[3].Descriptor()
+}
+
+func (SellerReviewRating) Type() protoreflect.EnumType {
+	return &file_proto_trade_commerce_proto_enumTypes[3]
+}
+
+func (x SellerReviewRating) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SellerReviewRating.Descriptor instead.
+func (SellerReviewRating) EnumDescriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{3}
+}
+
 // 客户端只选择自己已有资产，不提交实例快照或声称付款成功。
 // 实例属性由唯一在线资产权威提取；集合上限由服务端在写事务前及提交时复核。
 type TradeAssetSelection struct {
@@ -295,21 +347,22 @@ func (x *TradeAssetSelection) GetCurrencyAmount() uint64 {
 }
 
 type CommerceOrderView struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	OrderId         string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // 不透明稳定订单号
-	Kind            CommerceOrderKind      `protobuf:"varint,2,opt,name=kind,proto3,enum=trade.CommerceOrderKind" json:"kind,omitempty"`
-	State           CommerceOrderState     `protobuf:"varint,3,opt,name=state,proto3,enum=trade.CommerceOrderState" json:"state,omitempty"`
-	SellerPlayerId  uint64                 `protobuf:"varint,4,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
-	BuyerPlayerId   uint64                 `protobuf:"varint,5,opt,name=buyer_player_id,json=buyerPlayerId,proto3" json:"buyer_player_id,omitempty"`
-	Amount          uint64                 `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`    // 最小单位整数
-	Currency        string                 `protobuf:"bytes,7,opt,name=currency,proto3" json:"currency,omitempty"` // 官方渠道币种或游戏货币类型
-	CreatedMs       uint64                 `protobuf:"varint,8,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
-	Version         uint64                 `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
-	SellerConfirmed bool                   `protobuf:"varint,10,opt,name=seller_confirmed,json=sellerConfirmed,proto3" json:"seller_confirmed,omitempty"`
-	BuyerConfirmed  bool                   `protobuf:"varint,11,opt,name=buyer_confirmed,json=buyerConfirmed,proto3" json:"buyer_confirmed,omitempty"`
-	RelatedId       string                 `protobuf:"bytes,12,opt,name=related_id,json=relatedId,proto3" json:"related_id,omitempty"` // 商品/挂单/竞拍标识
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	OrderId                 string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // 不透明稳定订单号
+	Kind                    CommerceOrderKind      `protobuf:"varint,2,opt,name=kind,proto3,enum=trade.CommerceOrderKind" json:"kind,omitempty"`
+	State                   CommerceOrderState     `protobuf:"varint,3,opt,name=state,proto3,enum=trade.CommerceOrderState" json:"state,omitempty"`
+	SellerPlayerId          uint64                 `protobuf:"varint,4,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	BuyerPlayerId           uint64                 `protobuf:"varint,5,opt,name=buyer_player_id,json=buyerPlayerId,proto3" json:"buyer_player_id,omitempty"`
+	Amount                  uint64                 `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`    // 最小单位整数
+	Currency                string                 `protobuf:"bytes,7,opt,name=currency,proto3" json:"currency,omitempty"` // 官方渠道币种或游戏货币类型
+	CreatedMs               uint64                 `protobuf:"varint,8,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	Version                 uint64                 `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
+	SellerConfirmed         bool                   `protobuf:"varint,10,opt,name=seller_confirmed,json=sellerConfirmed,proto3" json:"seller_confirmed,omitempty"`
+	BuyerConfirmed          bool                   `protobuf:"varint,11,opt,name=buyer_confirmed,json=buyerConfirmed,proto3" json:"buyer_confirmed,omitempty"`
+	RelatedId               string                 `protobuf:"bytes,12,opt,name=related_id,json=relatedId,proto3" json:"related_id,omitempty"`                                                // 商品/挂单/竞拍标识
+	DesignatedBuyerPlayerId uint64                 `protobuf:"varint,13,opt,name=designated_buyer_player_id,json=designatedBuyerPlayerId,proto3" json:"designated_buyer_player_id,omitempty"` // 官方指定买家定向单的目标角色 ID（0 = 公开单）
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *CommerceOrderView) Reset() {
@@ -424,6 +477,13 @@ func (x *CommerceOrderView) GetRelatedId() string {
 		return x.RelatedId
 	}
 	return ""
+}
+
+func (x *CommerceOrderView) GetDesignatedBuyerPlayerId() uint64 {
+	if x != nil {
+		return x.DesignatedBuyerPlayerId
+	}
+	return 0
 }
 
 type CommerceOrderResponse struct {
@@ -1384,14 +1444,15 @@ func (x *ConfirmPlayerTradeRequest) GetOrderId() string {
 }
 
 type CreateConsignmentRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ClientRequestId string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
-	Assets          *TradeAssetSelection   `protobuf:"bytes,2,opt,name=assets,proto3" json:"assets,omitempty"`
-	CurrencyType    uint32                 `protobuf:"varint,3,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
-	Price           uint64                 `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
-	DurationMs      uint64                 `protobuf:"varint,5,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId         string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Assets                  *TradeAssetSelection   `protobuf:"bytes,2,opt,name=assets,proto3" json:"assets,omitempty"`
+	CurrencyType            uint32                 `protobuf:"varint,3,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	Price                   uint64                 `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
+	DurationMs              uint64                 `protobuf:"varint,5,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	DesignatedBuyerPlayerId uint64                 `protobuf:"varint,6,opt,name=designated_buyer_player_id,json=designatedBuyerPlayerId,proto3" json:"designated_buyer_player_id,omitempty"` // 可选：非 0 时创建仅允许该指定角色购买的定向托管单
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *CreateConsignmentRequest) Reset() {
@@ -1455,6 +1516,13 @@ func (x *CreateConsignmentRequest) GetPrice() uint64 {
 func (x *CreateConsignmentRequest) GetDurationMs() uint64 {
 	if x != nil {
 		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *CreateConsignmentRequest) GetDesignatedBuyerPlayerId() uint64 {
+	if x != nil {
+		return x.DesignatedBuyerPlayerId
 	}
 	return 0
 }
@@ -2726,14 +2794,15 @@ func (x *AuctionLotResponse) GetServerNowMs() uint64 {
 // 人民币寄售独立入口；旧CreateConsignment继续使用游戏币，不能改价单位。
 // 账号/修订/托管证明均由服务端核实，客户端没有声明这些身份或付款成功的字段。
 type CreateRmbConsignmentRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ClientRequestId   string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
-	Assets            *TradeAssetSelection   `protobuf:"bytes,2,opt,name=assets,proto3" json:"assets,omitempty"`
-	CharacterPlayerId uint64                 `protobuf:"varint,3,opt,name=character_player_id,json=characterPlayerId,proto3" json:"character_player_id,omitempty"` // 非0出售同账号角色，assets必须为空；其余出售一类物品/宠物/货币
-	PriceFen          uint64                 `protobuf:"varint,4,opt,name=price_fen,json=priceFen,proto3" json:"price_fen,omitempty"`
-	Title             string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId         string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Assets                  *TradeAssetSelection   `protobuf:"bytes,2,opt,name=assets,proto3" json:"assets,omitempty"`
+	CharacterPlayerId       uint64                 `protobuf:"varint,3,opt,name=character_player_id,json=characterPlayerId,proto3" json:"character_player_id,omitempty"` // 非0出售同账号角色，assets必须为空；其余出售一类物品/宠物/货币
+	PriceFen                uint64                 `protobuf:"varint,4,opt,name=price_fen,json=priceFen,proto3" json:"price_fen,omitempty"`
+	Title                   string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	DesignatedBuyerPlayerId uint64                 `protobuf:"varint,6,opt,name=designated_buyer_player_id,json=designatedBuyerPlayerId,proto3" json:"designated_buyer_player_id,omitempty"` // 可选：非 0 时创建仅允许该指定角色所属账号购买的定向托管单
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *CreateRmbConsignmentRequest) Reset() {
@@ -2799,6 +2868,13 @@ func (x *CreateRmbConsignmentRequest) GetTitle() string {
 		return x.Title
 	}
 	return ""
+}
+
+func (x *CreateRmbConsignmentRequest) GetDesignatedBuyerPlayerId() uint64 {
+	if x != nil {
+		return x.DesignatedBuyerPlayerId
+	}
+	return 0
 }
 
 type GetRmbConsignmentRequest struct {
@@ -3008,6 +3084,7 @@ type RmbConsignmentView struct {
 	State          string                 `protobuf:"bytes,11,opt,name=state,proto3" json:"state,omitempty"`
 	Phase          string                 `protobuf:"bytes,12,opt,name=phase,proto3" json:"phase,omitempty"`
 	OrderId        string                 `protobuf:"bytes,13,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	DesignatedOnly bool                   `protobuf:"varint,14,opt,name=designated_only,json=designatedOnly,proto3" json:"designated_only,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -3131,6 +3208,13 @@ func (x *RmbConsignmentView) GetOrderId() string {
 		return x.OrderId
 	}
 	return ""
+}
+
+func (x *RmbConsignmentView) GetDesignatedOnly() bool {
+	if x != nil {
+		return x.DesignatedOnly
+	}
+	return false
 }
 
 type RmbConsignmentResponse struct {
@@ -3314,16 +3398,18 @@ func (x *ListSellerIncomesRequest) GetLimit() uint32 {
 }
 
 type RmbSellerIncome struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrderId       string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
-	GrossFen      uint64                 `protobuf:"varint,2,opt,name=gross_fen,json=grossFen,proto3" json:"gross_fen,omitempty"`
-	FeeFen        uint64                 `protobuf:"varint,3,opt,name=fee_fen,json=feeFen,proto3" json:"fee_fen,omitempty"`
-	NetFen        uint64                 `protobuf:"varint,4,opt,name=net_fen,json=netFen,proto3" json:"net_fen,omitempty"`
-	ReservedFen   uint64                 `protobuf:"varint,5,opt,name=reserved_fen,json=reservedFen,proto3" json:"reserved_fen,omitempty"`
-	PaidFen       uint64                 `protobuf:"varint,6,opt,name=paid_fen,json=paidFen,proto3" json:"paid_fen,omitempty"`
-	AvailableMs   uint64                 `protobuf:"varint,7,opt,name=available_ms,json=availableMs,proto3" json:"available_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	OrderId          string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	GrossFen         uint64                 `protobuf:"varint,2,opt,name=gross_fen,json=grossFen,proto3" json:"gross_fen,omitempty"`
+	FeeFen           uint64                 `protobuf:"varint,3,opt,name=fee_fen,json=feeFen,proto3" json:"fee_fen,omitempty"`
+	NetFen           uint64                 `protobuf:"varint,4,opt,name=net_fen,json=netFen,proto3" json:"net_fen,omitempty"`
+	ReservedFen      uint64                 `protobuf:"varint,5,opt,name=reserved_fen,json=reservedFen,proto3" json:"reserved_fen,omitempty"`
+	PaidFen          uint64                 `protobuf:"varint,6,opt,name=paid_fen,json=paidFen,proto3" json:"paid_fen,omitempty"`
+	AvailableMs      uint64                 `protobuf:"varint,7,opt,name=available_ms,json=availableMs,proto3" json:"available_ms,omitempty"`
+	DisputeFrozenFen uint64                 `protobuf:"varint,8,opt,name=dispute_frozen_fen,json=disputeFrozenFen,proto3" json:"dispute_frozen_fen,omitempty"`
+	DisputeCaseId    string                 `protobuf:"bytes,9,opt,name=dispute_case_id,json=disputeCaseId,proto3" json:"dispute_case_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RmbSellerIncome) Reset() {
@@ -3403,6 +3489,20 @@ func (x *RmbSellerIncome) GetAvailableMs() uint64 {
 		return x.AvailableMs
 	}
 	return 0
+}
+
+func (x *RmbSellerIncome) GetDisputeFrozenFen() uint64 {
+	if x != nil {
+		return x.DisputeFrozenFen
+	}
+	return 0
+}
+
+func (x *RmbSellerIncome) GetDisputeCaseId() string {
+	if x != nil {
+		return x.DisputeCaseId
+	}
+	return ""
 }
 
 type ListSellerIncomesResponse struct {
@@ -3697,6 +3797,739 @@ func (x *WithdrawalResponse) GetWithdrawal() *RmbWithdrawalView {
 	return nil
 }
 
+// 对外只返回脱敏后的店铺信用档案，严禁包含卖家原始账号、IP 或设备指纹。
+type SellerCreditView struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	SellerPlayerId       uint64                 `protobuf:"varint,1,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	OwnerRevision        uint64                 `protobuf:"varint,2,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	OwnershipChanged     bool                   `protobuf:"varint,3,opt,name=ownership_changed,json=ownershipChanged,proto3" json:"ownership_changed,omitempty"`
+	OwnershipChangedAtMs uint64                 `protobuf:"varint,4,opt,name=ownership_changed_at_ms,json=ownershipChangedAtMs,proto3" json:"ownership_changed_at_ms,omitempty"`
+	EpochStartedAtMs     uint64                 `protobuf:"varint,5,opt,name=epoch_started_at_ms,json=epochStartedAtMs,proto3" json:"epoch_started_at_ms,omitempty"`
+	CompletedOrders      uint64                 `protobuf:"varint,6,opt,name=completed_orders,json=completedOrders,proto3" json:"completed_orders,omitempty"`
+	PositiveReviews      uint64                 `protobuf:"varint,7,opt,name=positive_reviews,json=positiveReviews,proto3" json:"positive_reviews,omitempty"`
+	NeutralReviews       uint64                 `protobuf:"varint,8,opt,name=neutral_reviews,json=neutralReviews,proto3" json:"neutral_reviews,omitempty"`
+	NegativeReviews      uint64                 `protobuf:"varint,9,opt,name=negative_reviews,json=negativeReviews,proto3" json:"negative_reviews,omitempty"`
+	ViolationCount       uint64                 `protobuf:"varint,10,opt,name=violation_count,json=violationCount,proto3" json:"violation_count,omitempty"`
+	EnvCreditCleared     bool                   `protobuf:"varint,11,opt,name=env_credit_cleared,json=envCreditCleared,proto3" json:"env_credit_cleared,omitempty"`
+	EnvResetCount        uint64                 `protobuf:"varint,12,opt,name=env_reset_count,json=envResetCount,proto3" json:"env_reset_count,omitempty"`
+	LastEnvChangedAtMs   uint64                 `protobuf:"varint,13,opt,name=last_env_changed_at_ms,json=lastEnvChangedAtMs,proto3" json:"last_env_changed_at_ms,omitempty"`
+	CreditScore          uint32                 `protobuf:"varint,14,opt,name=credit_score,json=creditScore,proto3" json:"credit_score,omitempty"`                  // [0, 100]
+	StarRatingTenths     uint32                 `protobuf:"varint,15,opt,name=star_rating_tenths,json=starRatingTenths,proto3" json:"star_rating_tenths,omitempty"` // [10, 50] => 1.0★ ~ 5.0★
+	PositiveRateBps      uint32                 `protobuf:"varint,16,opt,name=positive_rate_bps,json=positiveRateBps,proto3" json:"positive_rate_bps,omitempty"`    // [0, 10000] 万分比好评率
+	RiskTier             string                 `protobuf:"bytes,17,opt,name=risk_tier,json=riskTier,proto3" json:"risk_tier,omitempty"`                            // restricted / new_or_transferred / standard / trusted
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *SellerCreditView) Reset() {
+	*x = SellerCreditView{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SellerCreditView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SellerCreditView) ProtoMessage() {}
+
+func (x *SellerCreditView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SellerCreditView.ProtoReflect.Descriptor instead.
+func (*SellerCreditView) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *SellerCreditView) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetOwnershipChanged() bool {
+	if x != nil {
+		return x.OwnershipChanged
+	}
+	return false
+}
+
+func (x *SellerCreditView) GetOwnershipChangedAtMs() uint64 {
+	if x != nil {
+		return x.OwnershipChangedAtMs
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetEpochStartedAtMs() uint64 {
+	if x != nil {
+		return x.EpochStartedAtMs
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetCompletedOrders() uint64 {
+	if x != nil {
+		return x.CompletedOrders
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetPositiveReviews() uint64 {
+	if x != nil {
+		return x.PositiveReviews
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetNeutralReviews() uint64 {
+	if x != nil {
+		return x.NeutralReviews
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetNegativeReviews() uint64 {
+	if x != nil {
+		return x.NegativeReviews
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetViolationCount() uint64 {
+	if x != nil {
+		return x.ViolationCount
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetEnvCreditCleared() bool {
+	if x != nil {
+		return x.EnvCreditCleared
+	}
+	return false
+}
+
+func (x *SellerCreditView) GetEnvResetCount() uint64 {
+	if x != nil {
+		return x.EnvResetCount
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetLastEnvChangedAtMs() uint64 {
+	if x != nil {
+		return x.LastEnvChangedAtMs
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetCreditScore() uint32 {
+	if x != nil {
+		return x.CreditScore
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetStarRatingTenths() uint32 {
+	if x != nil {
+		return x.StarRatingTenths
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetPositiveRateBps() uint32 {
+	if x != nil {
+		return x.PositiveRateBps
+	}
+	return 0
+}
+
+func (x *SellerCreditView) GetRiskTier() string {
+	if x != nil {
+		return x.RiskTier
+	}
+	return ""
+}
+
+type GetSellerCreditRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SellerPlayerId uint64                 `protobuf:"varint,1,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetSellerCreditRequest) Reset() {
+	*x = GetSellerCreditRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSellerCreditRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSellerCreditRequest) ProtoMessage() {}
+
+func (x *GetSellerCreditRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSellerCreditRequest.ProtoReflect.Descriptor instead.
+func (*GetSellerCreditRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *GetSellerCreditRequest) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+type SellerCreditResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Profile       *SellerCreditView      `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	ServerNowMs   uint64                 `protobuf:"varint,3,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SellerCreditResponse) Reset() {
+	*x = SellerCreditResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SellerCreditResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SellerCreditResponse) ProtoMessage() {}
+
+func (x *SellerCreditResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SellerCreditResponse.ProtoReflect.Descriptor instead.
+func (*SellerCreditResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *SellerCreditResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SellerCreditResponse) GetProfile() *SellerCreditView {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *SellerCreditResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+type SubmitSellerReviewRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       string                 `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Rating        SellerReviewRating     `protobuf:"varint,2,opt,name=rating,proto3,enum=trade.SellerReviewRating" json:"rating,omitempty"`
+	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitSellerReviewRequest) Reset() {
+	*x = SubmitSellerReviewRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitSellerReviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitSellerReviewRequest) ProtoMessage() {}
+
+func (x *SubmitSellerReviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitSellerReviewRequest.ProtoReflect.Descriptor instead.
+func (*SubmitSellerReviewRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *SubmitSellerReviewRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *SubmitSellerReviewRequest) GetRating() SellerReviewRating {
+	if x != nil {
+		return x.Rating
+	}
+	return SellerReviewRating_SELLER_REVIEW_RATING_UNSPECIFIED
+}
+
+func (x *SubmitSellerReviewRequest) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+type SubmitSellerReviewResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	CountedForScore bool                   `protobuf:"varint,2,opt,name=counted_for_score,json=countedForScore,proto3" json:"counted_for_score,omitempty"`
+	Replayed        bool                   `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	Profile         *SellerCreditView      `protobuf:"bytes,4,opt,name=profile,proto3" json:"profile,omitempty"`
+	ServerNowMs     uint64                 `protobuf:"varint,5,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SubmitSellerReviewResponse) Reset() {
+	*x = SubmitSellerReviewResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitSellerReviewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitSellerReviewResponse) ProtoMessage() {}
+
+func (x *SubmitSellerReviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitSellerReviewResponse.ProtoReflect.Descriptor instead.
+func (*SubmitSellerReviewResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *SubmitSellerReviewResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SubmitSellerReviewResponse) GetCountedForScore() bool {
+	if x != nil {
+		return x.CountedForScore
+	}
+	return false
+}
+
+func (x *SubmitSellerReviewResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *SubmitSellerReviewResponse) GetProfile() *SellerCreditView {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *SubmitSellerReviewResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+type GetMarketReferencePriceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemConfigId  uint32                 `protobuf:"varint,1,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	CurrencyType  uint32                 `protobuf:"varint,2,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMarketReferencePriceRequest) Reset() {
+	*x = GetMarketReferencePriceRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMarketReferencePriceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMarketReferencePriceRequest) ProtoMessage() {}
+
+func (x *GetMarketReferencePriceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMarketReferencePriceRequest.ProtoReflect.Descriptor instead.
+func (*GetMarketReferencePriceRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *GetMarketReferencePriceRequest) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *GetMarketReferencePriceRequest) GetCurrencyType() uint32 {
+	if x != nil {
+		return x.CurrencyType
+	}
+	return 0
+}
+
+type GetMarketReferencePriceResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage       *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ItemConfigId       uint32                 `protobuf:"varint,2,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	CurrencyType       uint32                 `protobuf:"varint,3,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	MedianUnitPrice    uint64                 `protobuf:"varint,4,opt,name=median_unit_price,json=medianUnitPrice,proto3" json:"median_unit_price,omitempty"`
+	SampleCount        uint32                 `protobuf:"varint,5,opt,name=sample_count,json=sampleCount,proto3" json:"sample_count,omitempty"`
+	InsufficientSample bool                   `protobuf:"varint,6,opt,name=insufficient_sample,json=insufficientSample,proto3" json:"insufficient_sample,omitempty"`
+	WindowDays         uint32                 `protobuf:"varint,7,opt,name=window_days,json=windowDays,proto3" json:"window_days,omitempty"`
+	ServerNowMs        uint64                 `protobuf:"varint,8,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetMarketReferencePriceResponse) Reset() {
+	*x = GetMarketReferencePriceResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMarketReferencePriceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMarketReferencePriceResponse) ProtoMessage() {}
+
+func (x *GetMarketReferencePriceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMarketReferencePriceResponse.ProtoReflect.Descriptor instead.
+func (*GetMarketReferencePriceResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *GetMarketReferencePriceResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetMarketReferencePriceResponse) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *GetMarketReferencePriceResponse) GetCurrencyType() uint32 {
+	if x != nil {
+		return x.CurrencyType
+	}
+	return 0
+}
+
+func (x *GetMarketReferencePriceResponse) GetMedianUnitPrice() uint64 {
+	if x != nil {
+		return x.MedianUnitPrice
+	}
+	return 0
+}
+
+func (x *GetMarketReferencePriceResponse) GetSampleCount() uint32 {
+	if x != nil {
+		return x.SampleCount
+	}
+	return 0
+}
+
+func (x *GetMarketReferencePriceResponse) GetInsufficientSample() bool {
+	if x != nil {
+		return x.InsufficientSample
+	}
+	return false
+}
+
+func (x *GetMarketReferencePriceResponse) GetWindowDays() uint32 {
+	if x != nil {
+		return x.WindowDays
+	}
+	return 0
+}
+
+func (x *GetMarketReferencePriceResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+type GetPlayerTradeQuotaRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CurrencyType  uint32                 `protobuf:"varint,1,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlayerTradeQuotaRequest) Reset() {
+	*x = GetPlayerTradeQuotaRequest{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlayerTradeQuotaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlayerTradeQuotaRequest) ProtoMessage() {}
+
+func (x *GetPlayerTradeQuotaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlayerTradeQuotaRequest.ProtoReflect.Descriptor instead.
+func (*GetPlayerTradeQuotaRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *GetPlayerTradeQuotaRequest) GetCurrencyType() uint32 {
+	if x != nil {
+		return x.CurrencyType
+	}
+	return 0
+}
+
+type GetPlayerTradeQuotaResponse struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage             *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Mode                     string                 `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
+	CurrencyType             uint32                 `protobuf:"varint,3,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	DailyCurrencyLimit       uint64                 `protobuf:"varint,4,opt,name=daily_currency_limit,json=dailyCurrencyLimit,proto3" json:"daily_currency_limit,omitempty"`
+	DailyCurrencyUsed        uint64                 `protobuf:"varint,5,opt,name=daily_currency_used,json=dailyCurrencyUsed,proto3" json:"daily_currency_used,omitempty"`
+	DailyCurrencyRemaining   uint64                 `protobuf:"varint,6,opt,name=daily_currency_remaining,json=dailyCurrencyRemaining,proto3" json:"daily_currency_remaining,omitempty"`
+	ConsumableItemIds        []uint32               `protobuf:"varint,7,rep,packed,name=consumable_item_ids,json=consumableItemIds,proto3" json:"consumable_item_ids,omitempty"`
+	MinFriendDurationMs      uint64                 `protobuf:"varint,8,opt,name=min_friend_duration_ms,json=minFriendDurationMs,proto3" json:"min_friend_duration_ms,omitempty"`
+	MaxReferenceDeviationPct uint32                 `protobuf:"varint,9,opt,name=max_reference_deviation_pct,json=maxReferenceDeviationPct,proto3" json:"max_reference_deviation_pct,omitempty"`
+	CoolingLockDurationMs    uint64                 `protobuf:"varint,10,opt,name=cooling_lock_duration_ms,json=coolingLockDurationMs,proto3" json:"cooling_lock_duration_ms,omitempty"`
+	ServerNowMs              uint64                 `protobuf:"varint,11,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *GetPlayerTradeQuotaResponse) Reset() {
+	*x = GetPlayerTradeQuotaResponse{}
+	mi := &file_proto_trade_commerce_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlayerTradeQuotaResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlayerTradeQuotaResponse) ProtoMessage() {}
+
+func (x *GetPlayerTradeQuotaResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_commerce_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlayerTradeQuotaResponse.ProtoReflect.Descriptor instead.
+func (*GetPlayerTradeQuotaResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_commerce_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetCurrencyType() uint32 {
+	if x != nil {
+		return x.CurrencyType
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetDailyCurrencyLimit() uint64 {
+	if x != nil {
+		return x.DailyCurrencyLimit
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetDailyCurrencyUsed() uint64 {
+	if x != nil {
+		return x.DailyCurrencyUsed
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetDailyCurrencyRemaining() uint64 {
+	if x != nil {
+		return x.DailyCurrencyRemaining
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetConsumableItemIds() []uint32 {
+	if x != nil {
+		return x.ConsumableItemIds
+	}
+	return nil
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetMinFriendDurationMs() uint64 {
+	if x != nil {
+		return x.MinFriendDurationMs
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetMaxReferenceDeviationPct() uint32 {
+	if x != nil {
+		return x.MaxReferenceDeviationPct
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetCoolingLockDurationMs() uint64 {
+	if x != nil {
+		return x.CoolingLockDurationMs
+	}
+	return 0
+}
+
+func (x *GetPlayerTradeQuotaResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
 var File_proto_trade_commerce_proto protoreflect.FileDescriptor
 
 const file_proto_trade_commerce_proto_rawDesc = "" +
@@ -3712,7 +4545,7 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\n" +
 	"ItemsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xbf\x03\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xfc\x03\n" +
 	"\x11CommerceOrderView\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12,\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x18.trade.CommerceOrderKindR\x04kind\x12/\n" +
@@ -3728,7 +4561,8 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	" \x01(\bR\x0fsellerConfirmed\x12'\n" +
 	"\x0fbuyer_confirmed\x18\v \x01(\bR\x0ebuyerConfirmed\x12\x1d\n" +
 	"\n" +
-	"related_id\x18\f \x01(\tR\trelatedId\"\xaf\x04\n" +
+	"related_id\x18\f \x01(\tR\trelatedId\x12;\n" +
+	"\x1adesignated_buyer_player_id\x18\r \x01(\x04R\x17designatedBuyerPlayerId\"\xaf\x04\n" +
 	"\x15CommerceOrderResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12.\n" +
 	"\x05order\x18\x02 \x01(\v2\x18.trade.CommerceOrderViewR\x05order\x12\"\n" +
@@ -3801,14 +4635,15 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\rseller_assets\x18\x03 \x01(\v2\x1a.trade.TradeAssetSelectionR\fsellerAssets\x12=\n" +
 	"\fbuyer_assets\x18\x04 \x01(\v2\x1a.trade.TradeAssetSelectionR\vbuyerAssets\"6\n" +
 	"\x19ConfirmPlayerTradeRequest\x12\x19\n" +
-	"\border_id\x18\x01 \x01(\tR\aorderId\"\xd6\x01\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\"\x93\x02\n" +
 	"\x18CreateConsignmentRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x122\n" +
 	"\x06assets\x18\x02 \x01(\v2\x1a.trade.TradeAssetSelectionR\x06assets\x12#\n" +
 	"\rcurrency_type\x18\x03 \x01(\rR\fcurrencyType\x12\x14\n" +
 	"\x05price\x18\x04 \x01(\x04R\x05price\x12\x1f\n" +
 	"\vduration_ms\x18\x05 \x01(\x04R\n" +
-	"durationMs\"b\n" +
+	"durationMs\x12;\n" +
+	"\x1adesignated_buyer_player_id\x18\x06 \x01(\x04R\x17designatedBuyerPlayerId\"b\n" +
 	"\x15BuyConsignmentRequest\x12\x1d\n" +
 	"\n" +
 	"listing_id\x18\x01 \x01(\tR\tlistingId\x12*\n" +
@@ -3907,13 +4742,14 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\x12AuctionLotResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12'\n" +
 	"\x03lot\x18\x02 \x01(\v2\x15.trade.AuctionLotViewR\x03lot\x12\"\n" +
-	"\rserver_now_ms\x18\x03 \x01(\x04R\vserverNowMs\"\xe0\x01\n" +
+	"\rserver_now_ms\x18\x03 \x01(\x04R\vserverNowMs\"\x9d\x02\n" +
 	"\x1bCreateRmbConsignmentRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x122\n" +
 	"\x06assets\x18\x02 \x01(\v2\x1a.trade.TradeAssetSelectionR\x06assets\x12.\n" +
 	"\x13character_player_id\x18\x03 \x01(\x04R\x11characterPlayerId\x12\x1b\n" +
 	"\tprice_fen\x18\x04 \x01(\x04R\bpriceFen\x12\x14\n" +
-	"\x05title\x18\x05 \x01(\tR\x05title\"9\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12;\n" +
+	"\x1adesignated_buyer_player_id\x18\x06 \x01(\x04R\x17designatedBuyerPlayerId\"9\n" +
 	"\x18GetRmbConsignmentRequest\x12\x1d\n" +
 	"\n" +
 	"listing_id\x18\x01 \x01(\x04R\tlistingId\"J\n" +
@@ -3926,7 +4762,7 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x02 \x01(\tR\x0fclientRequestId\"<\n" +
 	"\x1bCancelRmbConsignmentRequest\x12\x1d\n" +
 	"\n" +
-	"listing_id\x18\x01 \x01(\x04R\tlistingId\"\x93\x03\n" +
+	"listing_id\x18\x01 \x01(\x04R\tlistingId\"\xbc\x03\n" +
 	"\x12RmbConsignmentView\x12\x1d\n" +
 	"\n" +
 	"listing_id\x18\x01 \x01(\x04R\tlistingId\x12(\n" +
@@ -3945,7 +4781,8 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	" \x01(\x04R\tsaleEndMs\x12\x14\n" +
 	"\x05state\x18\v \x01(\tR\x05state\x12\x14\n" +
 	"\x05phase\x18\f \x01(\tR\x05phase\x12\x19\n" +
-	"\border_id\x18\r \x01(\tR\aorderId\"\xa7\x01\n" +
+	"\border_id\x18\r \x01(\tR\aorderId\x12'\n" +
+	"\x0fdesignated_only\x18\x0e \x01(\bR\x0edesignatedOnly\"\xa7\x01\n" +
 	"\x16RmbConsignmentResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
 	"\alisting\x18\x02 \x01(\v2\x19.trade.RmbConsignmentViewR\alisting\x12\"\n" +
@@ -3958,7 +4795,7 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\rserver_now_ms\x18\x04 \x01(\x04R\vserverNowMs\"H\n" +
 	"\x18ListSellerIncomesRequest\x12\x16\n" +
 	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\rR\x05limit\"\xdc\x01\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"\xb2\x02\n" +
 	"\x0fRmbSellerIncome\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x1b\n" +
 	"\tgross_fen\x18\x02 \x01(\x04R\bgrossFen\x12\x17\n" +
@@ -3966,7 +4803,9 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\anet_fen\x18\x04 \x01(\x04R\x06netFen\x12!\n" +
 	"\freserved_fen\x18\x05 \x01(\x04R\vreservedFen\x12\x19\n" +
 	"\bpaid_fen\x18\x06 \x01(\x04R\apaidFen\x12!\n" +
-	"\favailable_ms\x18\a \x01(\x04R\vavailableMs\"\xc8\x01\n" +
+	"\favailable_ms\x18\a \x01(\x04R\vavailableMs\x12,\n" +
+	"\x12dispute_frozen_fen\x18\b \x01(\x04R\x10disputeFrozenFen\x12&\n" +
+	"\x0fdispute_case_id\x18\t \x01(\tR\rdisputeCaseId\"\xc8\x01\n" +
 	"\x19ListSellerIncomesResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x120\n" +
 	"\aincomes\x18\x02 \x03(\v2\x16.trade.RmbSellerIncomeR\aincomes\x12\x1f\n" +
@@ -3990,7 +4829,70 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
 	"\n" +
 	"withdrawal\x18\x02 \x01(\v2\x18.trade.RmbWithdrawalViewR\n" +
-	"withdrawal*\x99\x02\n" +
+	"withdrawal\"\xed\x05\n" +
+	"\x10SellerCreditView\x12(\n" +
+	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x12%\n" +
+	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\x12+\n" +
+	"\x11ownership_changed\x18\x03 \x01(\bR\x10ownershipChanged\x125\n" +
+	"\x17ownership_changed_at_ms\x18\x04 \x01(\x04R\x14ownershipChangedAtMs\x12-\n" +
+	"\x13epoch_started_at_ms\x18\x05 \x01(\x04R\x10epochStartedAtMs\x12)\n" +
+	"\x10completed_orders\x18\x06 \x01(\x04R\x0fcompletedOrders\x12)\n" +
+	"\x10positive_reviews\x18\a \x01(\x04R\x0fpositiveReviews\x12'\n" +
+	"\x0fneutral_reviews\x18\b \x01(\x04R\x0eneutralReviews\x12)\n" +
+	"\x10negative_reviews\x18\t \x01(\x04R\x0fnegativeReviews\x12'\n" +
+	"\x0fviolation_count\x18\n" +
+	" \x01(\x04R\x0eviolationCount\x12,\n" +
+	"\x12env_credit_cleared\x18\v \x01(\bR\x10envCreditCleared\x12&\n" +
+	"\x0fenv_reset_count\x18\f \x01(\x04R\renvResetCount\x122\n" +
+	"\x16last_env_changed_at_ms\x18\r \x01(\x04R\x12lastEnvChangedAtMs\x12!\n" +
+	"\fcredit_score\x18\x0e \x01(\rR\vcreditScore\x12,\n" +
+	"\x12star_rating_tenths\x18\x0f \x01(\rR\x10starRatingTenths\x12*\n" +
+	"\x11positive_rate_bps\x18\x10 \x01(\rR\x0fpositiveRateBps\x12\x1b\n" +
+	"\trisk_tier\x18\x11 \x01(\tR\briskTier\"B\n" +
+	"\x16GetSellerCreditRequest\x12(\n" +
+	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\"\xa3\x01\n" +
+	"\x14SellerCreditResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\aprofile\x18\x02 \x01(\v2\x17.trade.SellerCreditViewR\aprofile\x12\"\n" +
+	"\rserver_now_ms\x18\x03 \x01(\x04R\vserverNowMs\"\x83\x01\n" +
+	"\x19SubmitSellerReviewRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\tR\aorderId\x121\n" +
+	"\x06rating\x18\x02 \x01(\x0e2\x19.trade.SellerReviewRatingR\x06rating\x12\x18\n" +
+	"\acomment\x18\x03 \x01(\tR\acomment\"\xf1\x01\n" +
+	"\x1aSubmitSellerReviewResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11counted_for_score\x18\x02 \x01(\bR\x0fcountedForScore\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x121\n" +
+	"\aprofile\x18\x04 \x01(\v2\x17.trade.SellerCreditViewR\aprofile\x12\"\n" +
+	"\rserver_now_ms\x18\x05 \x01(\x04R\vserverNowMs\"k\n" +
+	"\x1eGetMarketReferencePriceRequest\x12$\n" +
+	"\x0eitem_config_id\x18\x01 \x01(\rR\fitemConfigId\x12#\n" +
+	"\rcurrency_type\x18\x02 \x01(\rR\fcurrencyType\"\xe7\x02\n" +
+	"\x1fGetMarketReferencePriceResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12$\n" +
+	"\x0eitem_config_id\x18\x02 \x01(\rR\fitemConfigId\x12#\n" +
+	"\rcurrency_type\x18\x03 \x01(\rR\fcurrencyType\x12*\n" +
+	"\x11median_unit_price\x18\x04 \x01(\x04R\x0fmedianUnitPrice\x12!\n" +
+	"\fsample_count\x18\x05 \x01(\rR\vsampleCount\x12/\n" +
+	"\x13insufficient_sample\x18\x06 \x01(\bR\x12insufficientSample\x12\x1f\n" +
+	"\vwindow_days\x18\a \x01(\rR\n" +
+	"windowDays\x12\"\n" +
+	"\rserver_now_ms\x18\b \x01(\x04R\vserverNowMs\"A\n" +
+	"\x1aGetPlayerTradeQuotaRequest\x12#\n" +
+	"\rcurrency_type\x18\x01 \x01(\rR\fcurrencyType\"\xa9\x04\n" +
+	"\x1bGetPlayerTradeQuotaResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\x12#\n" +
+	"\rcurrency_type\x18\x03 \x01(\rR\fcurrencyType\x120\n" +
+	"\x14daily_currency_limit\x18\x04 \x01(\x04R\x12dailyCurrencyLimit\x12.\n" +
+	"\x13daily_currency_used\x18\x05 \x01(\x04R\x11dailyCurrencyUsed\x128\n" +
+	"\x18daily_currency_remaining\x18\x06 \x01(\x04R\x16dailyCurrencyRemaining\x12.\n" +
+	"\x13consumable_item_ids\x18\a \x03(\rR\x11consumableItemIds\x123\n" +
+	"\x16min_friend_duration_ms\x18\b \x01(\x04R\x13minFriendDurationMs\x12=\n" +
+	"\x1bmax_reference_deviation_pct\x18\t \x01(\rR\x18maxReferenceDeviationPct\x127\n" +
+	"\x18cooling_lock_duration_ms\x18\n" +
+	" \x01(\x04R\x15coolingLockDurationMs\x12\"\n" +
+	"\rserver_now_ms\x18\v \x01(\x04R\vserverNowMs*\x99\x02\n" +
 	"\x11CommerceOrderKind\x12#\n" +
 	"\x1fCOMMERCE_ORDER_KIND_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cCOMMERCE_ORDER_KIND_OFFICIAL\x10\x01\x12$\n" +
@@ -4018,7 +4920,12 @@ const file_proto_trade_commerce_proto_rawDesc = "" +
 	"\x0fMarketOrderSide\x12!\n" +
 	"\x1dMARKET_ORDER_SIDE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15MARKET_ORDER_SIDE_BUY\x10\x01\x12\x1a\n" +
-	"\x16MARKET_ORDER_SIDE_SELL\x10\x02B\rZ\vproto/tradeb\x06proto3"
+	"\x16MARKET_ORDER_SIDE_SELL\x10\x02*\xa2\x01\n" +
+	"\x12SellerReviewRating\x12$\n" +
+	" SELLER_REVIEW_RATING_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dSELLER_REVIEW_RATING_POSITIVE\x10\x01\x12 \n" +
+	"\x1cSELLER_REVIEW_RATING_NEUTRAL\x10\x02\x12!\n" +
+	"\x1dSELLER_REVIEW_RATING_NEGATIVE\x10\x03B\rZ\vproto/tradeb\x06proto3"
 
 var (
 	file_proto_trade_commerce_proto_rawDescOnce sync.Once
@@ -4032,123 +4939,140 @@ func file_proto_trade_commerce_proto_rawDescGZIP() []byte {
 	return file_proto_trade_commerce_proto_rawDescData
 }
 
-var file_proto_trade_commerce_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_trade_commerce_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
+var file_proto_trade_commerce_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_trade_commerce_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_proto_trade_commerce_proto_goTypes = []any{
-	(CommerceOrderKind)(0),               // 0: trade.CommerceOrderKind
-	(CommerceOrderState)(0),              // 1: trade.CommerceOrderState
-	(MarketOrderSide)(0),                 // 2: trade.MarketOrderSide
-	(*TradeAssetSelection)(nil),          // 3: trade.TradeAssetSelection
-	(*CommerceOrderView)(nil),            // 4: trade.CommerceOrderView
-	(*CommerceOrderResponse)(nil),        // 5: trade.CommerceOrderResponse
-	(*GetCommerceOrderRequest)(nil),      // 6: trade.GetCommerceOrderRequest
-	(*CancelCommerceOrderRequest)(nil),   // 7: trade.CancelCommerceOrderRequest
-	(*ListCommerceOrdersRequest)(nil),    // 8: trade.ListCommerceOrdersRequest
-	(*ListCommerceOrdersResponse)(nil),   // 9: trade.ListCommerceOrdersResponse
-	(*TradeOfferInstance)(nil),           // 10: trade.TradeOfferInstance
-	(*CommerceOfferView)(nil),            // 11: trade.CommerceOfferView
-	(*BrowseCommerceOffersRequest)(nil),  // 12: trade.BrowseCommerceOffersRequest
-	(*BrowseCommerceOffersResponse)(nil), // 13: trade.BrowseCommerceOffersResponse
-	(*OfficialSkuView)(nil),              // 14: trade.OfficialSkuView
-	(*ListOfficialSkusRequest)(nil),      // 15: trade.ListOfficialSkusRequest
-	(*ListOfficialSkusResponse)(nil),     // 16: trade.ListOfficialSkusResponse
-	(*CreateOfficialOrderRequest)(nil),   // 17: trade.CreateOfficialOrderRequest
-	(*CreatePlayerTradeRequest)(nil),     // 18: trade.CreatePlayerTradeRequest
-	(*ConfirmPlayerTradeRequest)(nil),    // 19: trade.ConfirmPlayerTradeRequest
-	(*CreateConsignmentRequest)(nil),     // 20: trade.CreateConsignmentRequest
-	(*BuyConsignmentRequest)(nil),        // 21: trade.BuyConsignmentRequest
-	(*CancelConsignmentRequest)(nil),     // 22: trade.CancelConsignmentRequest
-	(*PlaceMarketOrderRequest)(nil),      // 23: trade.PlaceMarketOrderRequest
-	(*CancelMarketOrderRequest)(nil),     // 24: trade.CancelMarketOrderRequest
-	(*MarketOrderView)(nil),              // 25: trade.MarketOrderView
-	(*MarketOrderResponse)(nil),          // 26: trade.MarketOrderResponse
-	(*ListMarketOrdersRequest)(nil),      // 27: trade.ListMarketOrdersRequest
-	(*ListMarketOrdersResponse)(nil),     // 28: trade.ListMarketOrdersResponse
-	(*GetMarketDepthRequest)(nil),        // 29: trade.GetMarketDepthRequest
-	(*MarketDepthLevel)(nil),             // 30: trade.MarketDepthLevel
-	(*GetMarketDepthResponse)(nil),       // 31: trade.GetMarketDepthResponse
-	(*TradeMarketView)(nil),              // 32: trade.TradeMarketView
-	(*ListTradeMarketsRequest)(nil),      // 33: trade.ListTradeMarketsRequest
-	(*ListTradeMarketsResponse)(nil),     // 34: trade.ListTradeMarketsResponse
-	(*CreateAuctionLotRequest)(nil),      // 35: trade.CreateAuctionLotRequest
-	(*PlaceAuctionBidRequest)(nil),       // 36: trade.PlaceAuctionBidRequest
-	(*GetAuctionLotRequest)(nil),         // 37: trade.GetAuctionLotRequest
-	(*CancelAuctionLotRequest)(nil),      // 38: trade.CancelAuctionLotRequest
-	(*AuctionLotView)(nil),               // 39: trade.AuctionLotView
-	(*AuctionLotResponse)(nil),           // 40: trade.AuctionLotResponse
-	(*CreateRmbConsignmentRequest)(nil),  // 41: trade.CreateRmbConsignmentRequest
-	(*GetRmbConsignmentRequest)(nil),     // 42: trade.GetRmbConsignmentRequest
-	(*ListRmbConsignmentsRequest)(nil),   // 43: trade.ListRmbConsignmentsRequest
-	(*BuyRmbConsignmentRequest)(nil),     // 44: trade.BuyRmbConsignmentRequest
-	(*CancelRmbConsignmentRequest)(nil),  // 45: trade.CancelRmbConsignmentRequest
-	(*RmbConsignmentView)(nil),           // 46: trade.RmbConsignmentView
-	(*RmbConsignmentResponse)(nil),       // 47: trade.RmbConsignmentResponse
-	(*ListRmbConsignmentsResponse)(nil),  // 48: trade.ListRmbConsignmentsResponse
-	(*ListSellerIncomesRequest)(nil),     // 49: trade.ListSellerIncomesRequest
-	(*RmbSellerIncome)(nil),              // 50: trade.RmbSellerIncome
-	(*ListSellerIncomesResponse)(nil),    // 51: trade.ListSellerIncomesResponse
-	(*CreateWithdrawalRequest)(nil),      // 52: trade.CreateWithdrawalRequest
-	(*GetWithdrawalRequest)(nil),         // 53: trade.GetWithdrawalRequest
-	(*RmbWithdrawalView)(nil),            // 54: trade.RmbWithdrawalView
-	(*WithdrawalResponse)(nil),           // 55: trade.WithdrawalResponse
-	nil,                                  // 56: trade.TradeAssetSelection.ItemsEntry
-	(*base.TipInfoMessage)(nil),          // 57: TipInfoMessage
+	(CommerceOrderKind)(0),                  // 0: trade.CommerceOrderKind
+	(CommerceOrderState)(0),                 // 1: trade.CommerceOrderState
+	(MarketOrderSide)(0),                    // 2: trade.MarketOrderSide
+	(SellerReviewRating)(0),                 // 3: trade.SellerReviewRating
+	(*TradeAssetSelection)(nil),             // 4: trade.TradeAssetSelection
+	(*CommerceOrderView)(nil),               // 5: trade.CommerceOrderView
+	(*CommerceOrderResponse)(nil),           // 6: trade.CommerceOrderResponse
+	(*GetCommerceOrderRequest)(nil),         // 7: trade.GetCommerceOrderRequest
+	(*CancelCommerceOrderRequest)(nil),      // 8: trade.CancelCommerceOrderRequest
+	(*ListCommerceOrdersRequest)(nil),       // 9: trade.ListCommerceOrdersRequest
+	(*ListCommerceOrdersResponse)(nil),      // 10: trade.ListCommerceOrdersResponse
+	(*TradeOfferInstance)(nil),              // 11: trade.TradeOfferInstance
+	(*CommerceOfferView)(nil),               // 12: trade.CommerceOfferView
+	(*BrowseCommerceOffersRequest)(nil),     // 13: trade.BrowseCommerceOffersRequest
+	(*BrowseCommerceOffersResponse)(nil),    // 14: trade.BrowseCommerceOffersResponse
+	(*OfficialSkuView)(nil),                 // 15: trade.OfficialSkuView
+	(*ListOfficialSkusRequest)(nil),         // 16: trade.ListOfficialSkusRequest
+	(*ListOfficialSkusResponse)(nil),        // 17: trade.ListOfficialSkusResponse
+	(*CreateOfficialOrderRequest)(nil),      // 18: trade.CreateOfficialOrderRequest
+	(*CreatePlayerTradeRequest)(nil),        // 19: trade.CreatePlayerTradeRequest
+	(*ConfirmPlayerTradeRequest)(nil),       // 20: trade.ConfirmPlayerTradeRequest
+	(*CreateConsignmentRequest)(nil),        // 21: trade.CreateConsignmentRequest
+	(*BuyConsignmentRequest)(nil),           // 22: trade.BuyConsignmentRequest
+	(*CancelConsignmentRequest)(nil),        // 23: trade.CancelConsignmentRequest
+	(*PlaceMarketOrderRequest)(nil),         // 24: trade.PlaceMarketOrderRequest
+	(*CancelMarketOrderRequest)(nil),        // 25: trade.CancelMarketOrderRequest
+	(*MarketOrderView)(nil),                 // 26: trade.MarketOrderView
+	(*MarketOrderResponse)(nil),             // 27: trade.MarketOrderResponse
+	(*ListMarketOrdersRequest)(nil),         // 28: trade.ListMarketOrdersRequest
+	(*ListMarketOrdersResponse)(nil),        // 29: trade.ListMarketOrdersResponse
+	(*GetMarketDepthRequest)(nil),           // 30: trade.GetMarketDepthRequest
+	(*MarketDepthLevel)(nil),                // 31: trade.MarketDepthLevel
+	(*GetMarketDepthResponse)(nil),          // 32: trade.GetMarketDepthResponse
+	(*TradeMarketView)(nil),                 // 33: trade.TradeMarketView
+	(*ListTradeMarketsRequest)(nil),         // 34: trade.ListTradeMarketsRequest
+	(*ListTradeMarketsResponse)(nil),        // 35: trade.ListTradeMarketsResponse
+	(*CreateAuctionLotRequest)(nil),         // 36: trade.CreateAuctionLotRequest
+	(*PlaceAuctionBidRequest)(nil),          // 37: trade.PlaceAuctionBidRequest
+	(*GetAuctionLotRequest)(nil),            // 38: trade.GetAuctionLotRequest
+	(*CancelAuctionLotRequest)(nil),         // 39: trade.CancelAuctionLotRequest
+	(*AuctionLotView)(nil),                  // 40: trade.AuctionLotView
+	(*AuctionLotResponse)(nil),              // 41: trade.AuctionLotResponse
+	(*CreateRmbConsignmentRequest)(nil),     // 42: trade.CreateRmbConsignmentRequest
+	(*GetRmbConsignmentRequest)(nil),        // 43: trade.GetRmbConsignmentRequest
+	(*ListRmbConsignmentsRequest)(nil),      // 44: trade.ListRmbConsignmentsRequest
+	(*BuyRmbConsignmentRequest)(nil),        // 45: trade.BuyRmbConsignmentRequest
+	(*CancelRmbConsignmentRequest)(nil),     // 46: trade.CancelRmbConsignmentRequest
+	(*RmbConsignmentView)(nil),              // 47: trade.RmbConsignmentView
+	(*RmbConsignmentResponse)(nil),          // 48: trade.RmbConsignmentResponse
+	(*ListRmbConsignmentsResponse)(nil),     // 49: trade.ListRmbConsignmentsResponse
+	(*ListSellerIncomesRequest)(nil),        // 50: trade.ListSellerIncomesRequest
+	(*RmbSellerIncome)(nil),                 // 51: trade.RmbSellerIncome
+	(*ListSellerIncomesResponse)(nil),       // 52: trade.ListSellerIncomesResponse
+	(*CreateWithdrawalRequest)(nil),         // 53: trade.CreateWithdrawalRequest
+	(*GetWithdrawalRequest)(nil),            // 54: trade.GetWithdrawalRequest
+	(*RmbWithdrawalView)(nil),               // 55: trade.RmbWithdrawalView
+	(*WithdrawalResponse)(nil),              // 56: trade.WithdrawalResponse
+	(*SellerCreditView)(nil),                // 57: trade.SellerCreditView
+	(*GetSellerCreditRequest)(nil),          // 58: trade.GetSellerCreditRequest
+	(*SellerCreditResponse)(nil),            // 59: trade.SellerCreditResponse
+	(*SubmitSellerReviewRequest)(nil),       // 60: trade.SubmitSellerReviewRequest
+	(*SubmitSellerReviewResponse)(nil),      // 61: trade.SubmitSellerReviewResponse
+	(*GetMarketReferencePriceRequest)(nil),  // 62: trade.GetMarketReferencePriceRequest
+	(*GetMarketReferencePriceResponse)(nil), // 63: trade.GetMarketReferencePriceResponse
+	(*GetPlayerTradeQuotaRequest)(nil),      // 64: trade.GetPlayerTradeQuotaRequest
+	(*GetPlayerTradeQuotaResponse)(nil),     // 65: trade.GetPlayerTradeQuotaResponse
+	nil,                                     // 66: trade.TradeAssetSelection.ItemsEntry
+	(*base.TipInfoMessage)(nil),             // 67: TipInfoMessage
 }
 var file_proto_trade_commerce_proto_depIdxs = []int32{
-	56, // 0: trade.TradeAssetSelection.items:type_name -> trade.TradeAssetSelection.ItemsEntry
+	66, // 0: trade.TradeAssetSelection.items:type_name -> trade.TradeAssetSelection.ItemsEntry
 	0,  // 1: trade.CommerceOrderView.kind:type_name -> trade.CommerceOrderKind
 	1,  // 2: trade.CommerceOrderView.state:type_name -> trade.CommerceOrderState
-	57, // 3: trade.CommerceOrderResponse.error_message:type_name -> TipInfoMessage
-	4,  // 4: trade.CommerceOrderResponse.order:type_name -> trade.CommerceOrderView
-	3,  // 5: trade.CommerceOrderResponse.seller_assets:type_name -> trade.TradeAssetSelection
-	3,  // 6: trade.CommerceOrderResponse.buyer_assets:type_name -> trade.TradeAssetSelection
-	10, // 7: trade.CommerceOrderResponse.seller_item_instances:type_name -> trade.TradeOfferInstance
-	10, // 8: trade.CommerceOrderResponse.buyer_item_instances:type_name -> trade.TradeOfferInstance
-	10, // 9: trade.CommerceOrderResponse.seller_pet:type_name -> trade.TradeOfferInstance
-	10, // 10: trade.CommerceOrderResponse.buyer_pet:type_name -> trade.TradeOfferInstance
-	57, // 11: trade.ListCommerceOrdersResponse.error_message:type_name -> TipInfoMessage
-	4,  // 12: trade.ListCommerceOrdersResponse.orders:type_name -> trade.CommerceOrderView
-	4,  // 13: trade.CommerceOfferView.order:type_name -> trade.CommerceOrderView
-	3,  // 14: trade.CommerceOfferView.assets:type_name -> trade.TradeAssetSelection
-	10, // 15: trade.CommerceOfferView.item_instances:type_name -> trade.TradeOfferInstance
-	10, // 16: trade.CommerceOfferView.pet:type_name -> trade.TradeOfferInstance
-	39, // 17: trade.CommerceOfferView.auction:type_name -> trade.AuctionLotView
+	67, // 3: trade.CommerceOrderResponse.error_message:type_name -> TipInfoMessage
+	5,  // 4: trade.CommerceOrderResponse.order:type_name -> trade.CommerceOrderView
+	4,  // 5: trade.CommerceOrderResponse.seller_assets:type_name -> trade.TradeAssetSelection
+	4,  // 6: trade.CommerceOrderResponse.buyer_assets:type_name -> trade.TradeAssetSelection
+	11, // 7: trade.CommerceOrderResponse.seller_item_instances:type_name -> trade.TradeOfferInstance
+	11, // 8: trade.CommerceOrderResponse.buyer_item_instances:type_name -> trade.TradeOfferInstance
+	11, // 9: trade.CommerceOrderResponse.seller_pet:type_name -> trade.TradeOfferInstance
+	11, // 10: trade.CommerceOrderResponse.buyer_pet:type_name -> trade.TradeOfferInstance
+	67, // 11: trade.ListCommerceOrdersResponse.error_message:type_name -> TipInfoMessage
+	5,  // 12: trade.ListCommerceOrdersResponse.orders:type_name -> trade.CommerceOrderView
+	5,  // 13: trade.CommerceOfferView.order:type_name -> trade.CommerceOrderView
+	4,  // 14: trade.CommerceOfferView.assets:type_name -> trade.TradeAssetSelection
+	11, // 15: trade.CommerceOfferView.item_instances:type_name -> trade.TradeOfferInstance
+	11, // 16: trade.CommerceOfferView.pet:type_name -> trade.TradeOfferInstance
+	40, // 17: trade.CommerceOfferView.auction:type_name -> trade.AuctionLotView
 	0,  // 18: trade.BrowseCommerceOffersRequest.kind:type_name -> trade.CommerceOrderKind
-	57, // 19: trade.BrowseCommerceOffersResponse.error_message:type_name -> TipInfoMessage
-	11, // 20: trade.BrowseCommerceOffersResponse.offers:type_name -> trade.CommerceOfferView
-	57, // 21: trade.ListOfficialSkusResponse.error_message:type_name -> TipInfoMessage
-	14, // 22: trade.ListOfficialSkusResponse.skus:type_name -> trade.OfficialSkuView
-	3,  // 23: trade.CreatePlayerTradeRequest.seller_assets:type_name -> trade.TradeAssetSelection
-	3,  // 24: trade.CreatePlayerTradeRequest.buyer_assets:type_name -> trade.TradeAssetSelection
-	3,  // 25: trade.CreateConsignmentRequest.assets:type_name -> trade.TradeAssetSelection
+	67, // 19: trade.BrowseCommerceOffersResponse.error_message:type_name -> TipInfoMessage
+	12, // 20: trade.BrowseCommerceOffersResponse.offers:type_name -> trade.CommerceOfferView
+	67, // 21: trade.ListOfficialSkusResponse.error_message:type_name -> TipInfoMessage
+	15, // 22: trade.ListOfficialSkusResponse.skus:type_name -> trade.OfficialSkuView
+	4,  // 23: trade.CreatePlayerTradeRequest.seller_assets:type_name -> trade.TradeAssetSelection
+	4,  // 24: trade.CreatePlayerTradeRequest.buyer_assets:type_name -> trade.TradeAssetSelection
+	4,  // 25: trade.CreateConsignmentRequest.assets:type_name -> trade.TradeAssetSelection
 	2,  // 26: trade.PlaceMarketOrderRequest.side:type_name -> trade.MarketOrderSide
 	2,  // 27: trade.MarketOrderView.side:type_name -> trade.MarketOrderSide
-	57, // 28: trade.MarketOrderResponse.error_message:type_name -> TipInfoMessage
-	25, // 29: trade.MarketOrderResponse.order:type_name -> trade.MarketOrderView
-	57, // 30: trade.ListMarketOrdersResponse.error_message:type_name -> TipInfoMessage
-	25, // 31: trade.ListMarketOrdersResponse.orders:type_name -> trade.MarketOrderView
-	57, // 32: trade.GetMarketDepthResponse.error_message:type_name -> TipInfoMessage
-	30, // 33: trade.GetMarketDepthResponse.asks:type_name -> trade.MarketDepthLevel
-	30, // 34: trade.GetMarketDepthResponse.bids:type_name -> trade.MarketDepthLevel
-	57, // 35: trade.ListTradeMarketsResponse.error_message:type_name -> TipInfoMessage
-	32, // 36: trade.ListTradeMarketsResponse.markets:type_name -> trade.TradeMarketView
-	3,  // 37: trade.CreateAuctionLotRequest.assets:type_name -> trade.TradeAssetSelection
-	57, // 38: trade.AuctionLotResponse.error_message:type_name -> TipInfoMessage
-	39, // 39: trade.AuctionLotResponse.lot:type_name -> trade.AuctionLotView
-	3,  // 40: trade.CreateRmbConsignmentRequest.assets:type_name -> trade.TradeAssetSelection
-	57, // 41: trade.RmbConsignmentResponse.error_message:type_name -> TipInfoMessage
-	46, // 42: trade.RmbConsignmentResponse.listing:type_name -> trade.RmbConsignmentView
-	57, // 43: trade.ListRmbConsignmentsResponse.error_message:type_name -> TipInfoMessage
-	46, // 44: trade.ListRmbConsignmentsResponse.listings:type_name -> trade.RmbConsignmentView
-	57, // 45: trade.ListSellerIncomesResponse.error_message:type_name -> TipInfoMessage
-	50, // 46: trade.ListSellerIncomesResponse.incomes:type_name -> trade.RmbSellerIncome
-	57, // 47: trade.WithdrawalResponse.error_message:type_name -> TipInfoMessage
-	54, // 48: trade.WithdrawalResponse.withdrawal:type_name -> trade.RmbWithdrawalView
-	49, // [49:49] is the sub-list for method output_type
-	49, // [49:49] is the sub-list for method input_type
-	49, // [49:49] is the sub-list for extension type_name
-	49, // [49:49] is the sub-list for extension extendee
-	0,  // [0:49] is the sub-list for field type_name
+	67, // 28: trade.MarketOrderResponse.error_message:type_name -> TipInfoMessage
+	26, // 29: trade.MarketOrderResponse.order:type_name -> trade.MarketOrderView
+	67, // 30: trade.ListMarketOrdersResponse.error_message:type_name -> TipInfoMessage
+	26, // 31: trade.ListMarketOrdersResponse.orders:type_name -> trade.MarketOrderView
+	67, // 32: trade.GetMarketDepthResponse.error_message:type_name -> TipInfoMessage
+	31, // 33: trade.GetMarketDepthResponse.asks:type_name -> trade.MarketDepthLevel
+	31, // 34: trade.GetMarketDepthResponse.bids:type_name -> trade.MarketDepthLevel
+	67, // 35: trade.ListTradeMarketsResponse.error_message:type_name -> TipInfoMessage
+	33, // 36: trade.ListTradeMarketsResponse.markets:type_name -> trade.TradeMarketView
+	4,  // 37: trade.CreateAuctionLotRequest.assets:type_name -> trade.TradeAssetSelection
+	67, // 38: trade.AuctionLotResponse.error_message:type_name -> TipInfoMessage
+	40, // 39: trade.AuctionLotResponse.lot:type_name -> trade.AuctionLotView
+	4,  // 40: trade.CreateRmbConsignmentRequest.assets:type_name -> trade.TradeAssetSelection
+	67, // 41: trade.RmbConsignmentResponse.error_message:type_name -> TipInfoMessage
+	47, // 42: trade.RmbConsignmentResponse.listing:type_name -> trade.RmbConsignmentView
+	67, // 43: trade.ListRmbConsignmentsResponse.error_message:type_name -> TipInfoMessage
+	47, // 44: trade.ListRmbConsignmentsResponse.listings:type_name -> trade.RmbConsignmentView
+	67, // 45: trade.ListSellerIncomesResponse.error_message:type_name -> TipInfoMessage
+	51, // 46: trade.ListSellerIncomesResponse.incomes:type_name -> trade.RmbSellerIncome
+	67, // 47: trade.WithdrawalResponse.error_message:type_name -> TipInfoMessage
+	55, // 48: trade.WithdrawalResponse.withdrawal:type_name -> trade.RmbWithdrawalView
+	67, // 49: trade.SellerCreditResponse.error_message:type_name -> TipInfoMessage
+	57, // 50: trade.SellerCreditResponse.profile:type_name -> trade.SellerCreditView
+	3,  // 51: trade.SubmitSellerReviewRequest.rating:type_name -> trade.SellerReviewRating
+	67, // 52: trade.SubmitSellerReviewResponse.error_message:type_name -> TipInfoMessage
+	57, // 53: trade.SubmitSellerReviewResponse.profile:type_name -> trade.SellerCreditView
+	67, // 54: trade.GetMarketReferencePriceResponse.error_message:type_name -> TipInfoMessage
+	67, // 55: trade.GetPlayerTradeQuotaResponse.error_message:type_name -> TipInfoMessage
+	56, // [56:56] is the sub-list for method output_type
+	56, // [56:56] is the sub-list for method input_type
+	56, // [56:56] is the sub-list for extension type_name
+	56, // [56:56] is the sub-list for extension extendee
+	0,  // [0:56] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_commerce_proto_init() }
@@ -4161,8 +5085,8 @@ func file_proto_trade_commerce_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_commerce_proto_rawDesc), len(file_proto_trade_commerce_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   54,
+			NumEnums:      4,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

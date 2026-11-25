@@ -125,6 +125,7 @@ type SellerReviewRecord struct {
 	BuyerDeviceID       string
 	Rating              SellerReviewRating
 	CountedForScore     bool // 因同 IP/同设备、防刷分窗口或低于最低计分金额时为 false（留痕但不涨分）
+	Comment             string
 	CreatedAtMs         uint64
 }
 
@@ -514,6 +515,7 @@ func (s *SellerCreditService) SubmitReview(ctx context.Context, in SellerReviewR
 		BuyerDeviceID:       buyerDev,
 		Rating:              in.Rating,
 		CountedForScore:     counted,
+		Comment:             strings.TrimSpace(in.Comment),
 		CreatedAtMs:         nowMs,
 	}
 	if err := s.Store.SaveReview(ctx, rec); err != nil {

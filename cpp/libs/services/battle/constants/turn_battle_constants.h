@@ -74,6 +74,12 @@ constexpr bool IsBossRejuvTrialKind(uint32_t kind) {
     return kind == kBossTrialKindBreakRejuv || kind == kBossTrialKindBreakDualGuard;
 }
 
+// 首领试炼 V2 护势联防阵类型（对应 BattleStateS2C.boss_stance_type：0=无，1=物防阵，2=法防阵；
+// 不可直接存 combatdamage::kMagicDamage=0，否则法防阵与“无护势”冲突）。
+inline constexpr uint32_t kBossStanceNone = 0;
+inline constexpr uint32_t kBossStancePhysical = 1;
+inline constexpr uint32_t kBossStanceMagic = 2;
+
 // 首领试炼 V2 怪物表角色定位 ID（对应 data/Monster.xlsx，不修改既有 101..108）
 inline constexpr uint32_t kBossTrialMonsterGuardRejuv = 102;
 inline constexpr uint32_t kBossTrialMonsterGuardStance = 103;

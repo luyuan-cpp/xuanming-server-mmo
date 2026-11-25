@@ -5077,3 +5077,22 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - Java：`game-proto` / `game-table` / `game-battle-engine` `clean install` 0 错误；定向对账套件（`RankedBattleEngineTest` 8/8、`RankedParityTest` + `MatchReportsScriptsAndRankedTest` 6/6、`BattleProtocolTest` + `BattleViewsTest` + `ClientActionsTest` + `BattleEdgeHandlerTest` 68/68）全部 **PASS**；`game-battle` 全量 640 项（含 UTF-8 控制台日志复验 `BattleConfigurationTest`/`BattleNodeTest` 46/46）**0 失败**（22 跳过）。
   - Unity：`tools/client_compile_check.ps1` **`exit=0, files=718, errors=0`**；Roslyn + NUnit 实跑 `RankedClientTests` + `BattleClientAutoBattleTests` **27/27 PASS**（`DirectRoutingBattleTransportTests.cs` 同步 0 错误编过）。
 - **未执行范围**：未重编 `scene.exe` 复跑 `scene.exe --validate-tables`（实表由 `dev.bat gen`、Go `TestBuildFromRealTables`、C++ `TableBattleDataProviderTest` 与 Java `ConfigTables` 验证）；Unity UGUI 面板留待另一台电脑 Codex 按交接单实施；未执行 `git commit` / `git push`。
+
+## 2026-11-25 《首领试炼》V2 全量落地（C++/Go 权威服 + Java 双版对账 + Unity 客户端非 UI 层 + Codex UI/美术交接规范）
+
+- **设计与权威表/协议（`xuanming-server-mmo-cpp`）**：
+  - 升级 [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) 至 V2 定稿，逐项解决原设计 5 大硬伤（全员 AOE 抹平转火、止损无正反馈、护势存在感弱与多人白板杂兵拖沓、全程一阶段垃圾时间、困难缺独特荣誉与变奏），并同时保留困难单卫进阶（方案 B）与困难专属双卫同阵（方案 A）。
+  - 配表无撞号追加：`Monster.xlsx` 新增 `109`（策应卫·破军）与 `110`（策应卫·鼓噪）；`Dungeon.xlsx` 新增 `112`（困难·双卫同阵，`boss_trial_kind=8, difficulty=2, round_limit=15`）；`PlayMode.xlsx` 新增 `112`/`212`；`TrialJournalEntry.xlsx` 新增 `105`、`TrialJournalSeal.xlsx` 新增 `1051..1053`（条件 `13` 连环双破、`14` 化劲宗师，永久位序 `30..32`）、`TrialJournalMilestone.xlsx` 新增 `105`（永久位序 `10`，「破阵双绝」徽章与留灯院跋文）。
+  - 扩展协议：`BattleTelegraphEntry.target_actor_ids=9`、`BattleStateS2C` 字段 `13..20`（阶段/蓄势/护势/破绽/试炼类型与难度）、`BATTLE_EVENT_BOSS_MECHANIC=22`（`mechanic_kind=1..9`）、`BattleEventItem.is_splash_reduced=26`、`BattleTrialJournalFacts` 字段 `21..25`，执行 `dev.bat gen` 全量导出（70 表）。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - C++ `battle`（`turn_battle_constants.h`、`trial_journal_rules.h`、`turn_battle_engine.{h,cpp}`、`configured_battle_effects.cpp`、`battle_room_manager.cpp`、`season_battle_test.cpp`）：完整实现群攻主点 100%/溅射 60%、统一破绽（+35%/+20% 直伤与毒火同享、V1 倒地退出不送破绽）、护势联防阵与轻反制蓄势/困难动态顺势应变/A34 崩势双破绽、回春早杀/控断 6% 反噬与困难净益/A35 断脉气馁、双卫同阵 75% 护卫血量与错峰运转、精简精英阵（109/110）与 3–5 人裂地双劈、半血/特卫全灭二阶段决战姿态、18 秒首领试炼行动窗及确定人宠离场（常规 PVE 逃跑保持旧不变量）。
+  - C++ `scene`（`player_battle.cpp`）与 Go `match`（`internal/catalog/catalog{,_test}.go`）：纳入 `boss_trial_kind=8` 困难准入门禁、满血无耗材隔离快照与 `Dungeon 112 -> Entry 105` 试炼志上下文映射。
+- **Java 独立服务端对账（`xuanming-server-mmo`）**：
+  - `ContractSync` 全量核验同步（143 proto、70 表），在 `game-battle-engine`、`game-battle`、`game-scene`、`game-match` 100% 对齐首领试炼 V2 全机制、18 秒行动窗、`Dungeon 112` 困难门禁与永久战法印位序（`1051..1053`、`105`），并同步更新 `PARITY.md`。
+- **Unity 客户端非 UI 层与 Codex 交接（`mmorpg-client`）**：
+  - 执行 `gen.bat client` 同步 70 表与 84 proto；在零 `UnityEngine` 依赖的纯 C# 层扩展 `CoreGameplayLoopModels.cs`（`BuildBossTrialCardsV2` 5 卡列表、V2 `BattleCoreHudView`、`CollectQuickParryDefendActorIds`、`IsSplashFocusApplicable`、`DescribeBossMechanicEvent`、`BuildBossTrialHighlightBadges`）、`CoreGameplayLoopClient.cs`、`TrialJournalModels.cs`（`boss_trial:hard:dual_guard` 与 Entry 105 双护卫头像 ID）与 `BattleClient.cs`（`SubmitQuickParryDefend` V8 归属防线、`GetLastUsedSkillId` 技能记忆）；严格不改 `Assets/Scripts/UI/**`，输出面向 Codex 的完整 UI/美术交接规范与离线联调 JSON（`mmorpg-client/Docs/boss-trial-v2-ui-handoff.md`）。
+- **实际验证结果**：
+  - C++ / Go：`dev.bat gen` 70/70 表、`bin/scene.exe --validate-tables generated/tables` 70 表 PASS；`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**、`check_log_text_english.py` exit 0；串行 MSBuild `/m:1` 全目标 0 错误；`turn_battle_engine_test.exe` **495/495 PASS**（44 套件全绿）；Go `match/internal/catalog` **PASS**。
+  - Java：`game-battle-engine` `install` **2,438/2,438 PASS**（1 跳过，含 `TurnBattleInvariantTest` 2000/2000、`BossTrialV2BattleEngineTest` 5/5、`TableBattleDataTest` 15/15）；`game-scene` `CoreGameplayLoopParityTest`+`TrialJournalFeatureAndServiceTest` **6/6 PASS**；`game-match` `RankedParityTest` **3/3 PASS**；`game-battle` `BattleViewsTest`+`BattleProtocolTest` **13/13 PASS**。
+  - Unity：`tools/client_compile_check.ps1` **`exit=0, files=721, errors=0`**；Roslyn + NUnit 实跑 `CoreGameplayLoopTests`（4/4）+ `TrialJournalClientTests`（6/6）= **10/10 PASS**。
+- **未执行范围**：未改动 Unity `Assets/Scripts/UI/**` 与美术切图（已按约定移交 Codex 执行）；未启动多进程真库全栈实网回归；未执行 `git commit` / `git push`。

@@ -105,13 +105,29 @@ func (sc *ServiceContext) initRmb() error {
 	}
 	directory := accountdirectory.NewTradeClient(sc.DataServiceClient, secret)
 	sc.RmbIdentity = &RmbIdentity{Directory: directory}
+	sc.Credits = &commerce.SellerCreditService{
+		Store: &commerce.SQLSellerCreditStore{
+			DB:  sc.DB,
+			IDs: sc.ListingIDSegment,
+			Now: time.Now,
+		},
+		Ownership: directory,
+		Policy: commerce.SellerCreditPolicy{
+			ReviewWindowMs:                  sc.Config.Commerce.SellerCredit.ReviewWindowMs,
+			PairScoreWindowMs:               sc.Config.Commerce.SellerCredit.PairScoreWindowMs,
+			MaxScoredReviewsPerPairInWindow: sc.Config.Commerce.SellerCredit.MaxScoredReviewsPerPairInWindow,
+			MinScoreAmountMinor:             sc.Config.Commerce.SellerCredit.MinScoreAmountMinor,
+			PostEnvChangeScoreCooldownMs:    sc.Config.Commerce.SellerCredit.PostEnvChangeScoreCooldownMs,
+		},
+	}
+	sc.Commerce.Credits = sc.Credits
 	if !sc.Config.Rmb.Enabled {
 		return nil
 	}
 	if sc.Mall == nil {
 		return errors.New("人民币寄售必须装配商城")
 	}
-	sc.Rmb = &commerce.RmbConsignments{Engine: sc.Commerce, Mall: sc.Mall, Directory: directory, Sealer: &nativeRoleSealer{Watcher: sc.Assets.Watcher, Conns: sc.Assets.Conns, Secret: secret}, CurrencyTypes: sc.Config.Rmb.CurrencyTypes}
+	sc.Rmb = &commerce.RmbConsignments{Engine: sc.Commerce, Mall: sc.Mall, Directory: directory, Sealer: &nativeRoleSealer{Watcher: sc.Assets.Watcher, Conns: sc.Assets.Conns, Secret: secret}, Credits: sc.Credits, CurrencyTypes: sc.Config.Rmb.CurrencyTypes}
 	sc.Commerce.Rmb = sc.Rmb
 	sc.Assets.Rmb = sc.Rmb
 	return nil
