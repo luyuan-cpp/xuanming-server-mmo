@@ -237,8 +237,9 @@ TEST_F(EquipmentMaterialRewardTest, OnlyEligibleCompletedBattlesAndAntiAfkPvpLos
     }
     // PVE 败局不给。
     battle = Battle(1); battle.set_outcome(BATTLE_OUTCOME_SIDE_B_WIN); EXPECT_FALSE(Reward::IsEligibleBattle(battle));
-    // PVP 胜局（含轮换物法易势 5V5）达标。
+    // PVP 胜局（含轮换物法易势 5V5 与全服赛季战队锦标赛）达标。
     battle = Battle(1, match::MATCH_MODE_POLARITY_5V5); EXPECT_TRUE(Reward::IsEligibleBattle(battle));
+    battle = Battle(1, match::MATCH_MODE_SEASON_TOURNAMENT); EXPECT_TRUE(Reward::IsEligibleBattle(battle));
     // PVP 败局：满足 >=3 回合、>=2 手动回合、有效贡献才达标，且为全绑定 10 份（0 可交易）。
     battle = Battle(2, match::MATCH_MODE_1V1); battle.set_outcome(BATTLE_OUTCOME_SIDE_B_WIN);
     EXPECT_TRUE(Reward::IsEligibleBattle(battle));

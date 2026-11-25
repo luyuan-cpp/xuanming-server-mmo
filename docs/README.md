@@ -173,7 +173,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [guild-play-ui-handoff.md](design/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v1.md](design/guild-play-v1.md) — 帮会玩法首发 V1 · 帮会会武与同道历练
 - [guild-play-v2.md](design/guild-play-v2.md) — 帮会玩法 V2 · 全天无匹配帮战、野外任意异帮直打、江湖追杀令与三灵脉争夺
-- [guild-play-v2-ui-handoff.md](design/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接
+- [guild-play-v2-implementation-plan.md](design/guild-play-v2-implementation-plan.md) — 帮会玩法 V2（全天无匹配帮战、三灵脉争夺与江湖追杀令）实施计划
+- [guild-play-v2-ui-handoff.md](design/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
 - [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
 - [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — 帮会排行榜架构 · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
@@ -335,7 +336,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
 - [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
 - [long-term-progression-v1.md](design/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
-- [long-term-progression-v2.md](design/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2）
+- [long-term-progression-v2.md](design/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2.1 终版）
 - [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
 - [minigame-remote-map-streaming-and-scene-gating.md](design/minigame-remote-map-streaming-and-scene-gating.md) — 小游戏与 App 双形态远程地图流式加载、CDN 分发与服务端切图门禁设计
 - [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
