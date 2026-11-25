@@ -1,0 +1,24 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "FestivalBeastTierTableOuterClass";
+option java_multiple_files = true;
+
+
+message FestivalBeastTierTable {
+	uint32 id = 1;
+	uint32 min_level = 2;
+	uint32 max_level = 3;
+	uint64 boss_health = 4;
+	uint64 boss_physical_attack = 5;
+	uint64 boss_defense = 6;
+	uint64 boss_resistance = 7;
+	uint64 boss_speed = 8;
+}
+
+message FestivalBeastTierTableData {
+	repeated FestivalBeastTierTable data = 1;
+}

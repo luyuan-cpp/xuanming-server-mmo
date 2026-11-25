@@ -45,4 +45,6 @@ enum pet_error {
 
   kPetNameSensitive = 26017;
 
+  kPetNotTransferable = 26018;
+
 };

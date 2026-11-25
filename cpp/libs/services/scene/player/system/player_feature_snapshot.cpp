@@ -27,6 +27,7 @@
 #include "services/scene/player/system/player_mission.h"
 #include "services/scene/player/system/player_activity_schedule.h"
 #include "services/scene/player/system/player_activity.h"
+#include "services/scene/player/system/player_festival_beast.h"
 #include "engine/core/time/system/time.h"
 
 namespace {
@@ -322,6 +323,7 @@ uint32_t PlayerActivityReadSystem::BuildList(entt::entity player, uint64_t serve
             else info->set_unavailable_reason("活动所需玩法或当前状态暂不满足参与条件");
         }
     }
+    PlayerFestivalBeastSystem::AppendActivityCatalogEntry(player, serverTimeMs, out);
     std::sort(out.mutable_activities()->begin(), out.mutable_activities()->end(),
         [](const PlayerActivityInfo& left, const PlayerActivityInfo& right) {
             return left.activity_id() < right.activity_id();

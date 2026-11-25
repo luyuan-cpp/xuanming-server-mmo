@@ -40,6 +40,7 @@
 #include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
 namespace
@@ -826,6 +827,9 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 		for (const auto& pet : pets->pets()) if (pet.pet_id() == bundle.pet_id())
 		{
+			// 绑定/禁交易宠物必须在整单副作用前拒绝，防止混单已扣物品或货币。
+			if (!PetSystem::IsTransferableSpecies(pet.pet_table_id()))
+			{ RejectAndRecord(player, ledgerComp, request, kPetNotTransferable, nowMs, response); return; }
 			if (pet.ByteSizeLong() > kInstanceBytesLimit)
 			{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 			auto* transfer = snapshot.mutable_pet();
@@ -1349,11 +1353,11 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 	{
 		if (!transferredPet.ParseFromString(bundle.pet_instance().instance_proto()))
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
+		if (!PetSystem::IsTransferableSpecies(transferredPet.pet_table_id()))
+		{ RejectAndRecord(player, ledgerComp, request, kPetNotTransferable, nowMs, response); return; }
 		const auto* pets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
 		if (pets == nullptr) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere); return; }
-		const auto& rows = PetRuleTableManager::Instance().FindAll().data();
-		const auto maxPets = rows.size() > 0 && rows.Get(0).max_pets() > 0 ? rows.Get(0).max_pets() : 1;
-		if (static_cast<uint32_t>(pets->pets_size()) >= maxPets) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
+		if (!PetSystem::HasNormalPetSlot(*pets)) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
 		for (const auto& pet : pets->pets()) if (pet.pet_id() == transferredPet.pet_id())
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 		// 完整实例来自经签名的托管快照；配表调低上限不应改写已有资产。

@@ -331,6 +331,9 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 		return &base.Empty{}, nil
 	}
 
+	if err := syncOwnerAuthorityLeave(l.ctx, l.svcCtx, l.Logger, in.PlayerId, in.SceneId, currentLoc.NodeId, currentLoc.ZoneId); err != nil {
+		return nil, fmt.Errorf("release owner authority for player %d: %w", in.PlayerId, err)
+	}
 	metrics.ObserveLeaveHolderRelease(release.verdict.String())
 	l.Logger.Infof("Player %d left scene %d on node %s (holder_release=%s owner_epoch=%d)",
 		in.PlayerId, in.SceneId, currentLoc.NodeId, release.verdict, release.epoch)

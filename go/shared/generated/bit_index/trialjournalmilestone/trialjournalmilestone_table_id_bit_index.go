@@ -13,6 +13,7 @@ const (
 	ID_901 = 7
 	ID_301 = 8
 	ID_302 = 9
+	ID_105 = 10
 )
 
-const BitmapCapacity = 10
+const BitmapCapacity = 11

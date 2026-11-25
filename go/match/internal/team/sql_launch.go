@@ -320,21 +320,3 @@ func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, cal
 	}
 	return &PinnedResult{Commit: commit}, launch, nil
 }
-
-func (s *Service) checkRankedPresets(rec *teampb.TeamRecord, roster []uint64, reqRuleVer uint32) (uint32, uint64) {
-	cat := s.svcCtx.ActiveRanked()
-	curVer := cat.RuleVersion()
-	if reqRuleVer != 0 && reqRuleVer != curVer {
-		return ErrRankedPresetInvalid, 0
-	}
-	for _, pid := range roster {
-		m := FindMember(rec, pid)
-		if m == nil || !m.GetRankedPresetConfirmed() || m.GetRankedRuleVersion() != curVer {
-			return ErrRankedPresetUnconfirmed, pid
-		}
-		if !cat.IsValidPair(m.GetRankedCharacterPresetId(), m.GetRankedPetPresetId()) {
-			return ErrRankedPresetInvalid, pid
-		}
-	}
-	return 0, 0
-}

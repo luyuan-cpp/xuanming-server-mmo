@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+// FestivalBeastActivity 表的权威 schema。源表 data/FestivalBeastActivity.xlsx。
+//
+// 瑞兽迎春限时活动期次配置（docs/design/battle-festival-beast-implementation-contract.md）。
+// 时间统一为 UTC Unix 毫秒；开放区间左闭右开 [effective_start_at_ms, effective_end_at_ms)。
+// 默认 enabled=false，正式日期由运营填表，绝不自行开放。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message FestivalBeastActivityTable {
+  option (cfg_sheet)       = "FestivalBeastActivity";
+  option (cfg_source_file) = "FestivalBeastActivity.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 活动期次实例 ID（如 202601）
+  uint32 id = 1;
+  // 运营总开关（默认 false，未排期关闭）
+  bool enabled = 2;
+  // 配置版本号（每次运营修改期次规则递增，发起挑战原样校验）
+  uint32 config_revision = 3;
+  // 活动展示名（默认“瑞兽迎春”）
+  string activity_name = 4;
+  // 首领/神兽工作名（默认“春禧兽”）
+  string boss_name = 5;
+  // 活动横幅资源引用键
+  string banner_asset_key = 6;
+  // 活动图标资源引用键
+  string icon_key = 7;
+  // 开放开始 UTC 毫秒（含）
+  uint64 effective_start_at_ms = 8;
+  // 开放结束 UTC 毫秒（不含；正式期次须为 14 个完整 24 小时）
+  uint64 effective_end_at_ms = 9;
+  // 结束后集中领奖展示天数（默认 7 天）
+  uint32 claim_showcase_days = 10;
+  // 关联战斗副本配置 ID（Dungeon.id = 111，boss_trial_kind = 7）
+  uint32 battle_config_id = 11 [(cfg_fk) = "Dungeon"];
+  // 本期累计领奖所需胜场（默认 3）
+  uint32 required_wins = 12;
+  // 稳定奖励身份（复刻复用，同一角色终身最多领取 1 只）
+  string reward_identity = 13;
+  // 奖励定义版本（达成永久资格时冻结，后续改表不影响已达成权益）
+  uint32 reward_definition_version = 14;
+  // 固定奖励神兽种类 ID（Pet.id = 101）
+  uint32 reward_pet_table_id = 15 [(cfg_fk) = "Pet"];
+  // 回合上限（默认 12）
+  uint32 round_limit = 16;
+  // 首领行动循环周期（默认 3）
+  uint32 cycle_rounds = 17;
+  // 首次重击回合（默认 3，即 R3/6/9/12）
+  uint32 first_heavy_round = 18;
+  // 预告提前回合数（默认 1，即 R2/5/8/11 预告下一轮重击目标）
+  uint32 telegraph_lead_rounds = 19;
+  // 重击基础伤害倍率百分比（默认 180）
+  uint32 heavy_damage_percent = 20;
+}

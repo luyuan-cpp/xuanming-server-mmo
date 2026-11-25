@@ -8,11 +8,13 @@
 
 #include "memory_battle_data_provider.h"
 #include "system/combat_damage_rules.h"
+#include "system/trial_journal_rules.h"
 #include "system/turn_battle_engine.h"
 
 namespace {
 
 using turnbattle::BattleEffectOp;
+using turnbattle::BattleModifier;
 using turnbattle::TurnBattleEngine;
 
 constexpr uint64_t kHero = 101;
@@ -580,4 +582,460 @@ TEST_F(SeasonBattleTest, Polarity5v5RotatesEveryTwoRoundsBoostsMatchingDamageDra
 
     const auto settlePassive = eng.BuildSettlement(40002);
     EXPECT_EQ(settlePassive.manual_action_rounds(), 1u);
+}
+
+TEST_F(SeasonBattleTest, BossTrialV2FocusSplashAndParryExposedAndV1DeadTargetNoExpose) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 101, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/1, /*roundLimit=*/12, 20000, 10000);
+    // 注册 5 目标物理群攻（battle_model=1）用于验证主目标聚火 100% vs 副目标溅射 60%。
+    auto& aoeSkill = mem->AddSkill(8901);
+    aoeSkill.Clear();
+    aoeSkill.set_id(8901);
+    aoeSkill.set_battle_model(1);
+    aoeSkill.set_caster_mask(1);
+    aoeSkill.set_ability_kind(1);
+    aoeSkill.set_unlock_level(1);
+    aoeSkill.set_max_rank(10);
+    aoeSkill.set_target_team(1);
+    aoeSkill.set_max_targets(5);
+    aoeSkill.set_damage_type(combatdamage::kPhysicalDamage);
+    aoeSkill.set_attack_multiplier(1.0);
+    aoeSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    aoeSkill.set_mana_percent(0.01);
+    aoeSkill.add_effect(89010);
+    auto& aoeDmg = mem->AddBuff(89010);
+    aoeDmg.Clear();
+    aoeDmg.set_id(89010);
+    aoeDmg.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Damage));
+    aoeDmg.set_value_basis(1);
+    aoeDmg.set_ratio(1.0);
+
+    auto req = MakeBossTrialRequest(5101, 101, /*playerCount=*/1, /*playerSpeed=*/100);
+    req.mutable_players(0)->add_skill_table_ids(8901);
+    (*req.mutable_players(0)->mutable_skill_ranks())[8901] = 1;
+    req.mutable_trial_context()->set_journal_entry_id(101);
+    req.mutable_trial_context()->set_trial_rule_version(1);
+
+    TurnBattleEngine eng(mem);
+    ASSERT_TRUE(eng.Initialize(req));
+    EXPECT_TRUE(eng.IsBossTrialBattle());
+    const auto s1 = eng.BuildStateSnapshot();
+    EXPECT_EQ(s1.boss_phase(), 1u);
+    EXPECT_EQ(s1.boss_trial_kind(), turnbattle::kBossTrialKindBreakRejuv);
+    EXPECT_EQ(s1.battle_difficulty(), 1u);
+    uint64_t bossId = 0, guardId = 0;
+    for (const auto& a : s1.actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            if (a.is_boss()) bossId = a.actor_id();
+            else guardId = a.actor_id();
+        }
+    }
+    ASSERT_NE(bossId, 0u);
+    ASSERT_NE(guardId, 0u);
+
+    // R1：主目标选首领放 5 目标群攻，首领吃 100%，护卫吃 60% 溅射且事件标记 is_splash_reduced。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8901));
+    const auto r1 = eng.ResolveCurrentRound();
+    uint64_t bossDmgR1 = 0, guardDmgR1 = 0;
+    bool bossSplash = false, guardSplash = false;
+    for (const auto& ev : r1.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 30001 && ev.skill_table_id() == 8901) {
+            if (ev.target_id() == bossId) { bossDmgR1 = ev.value(); bossSplash = ev.is_splash_reduced(); }
+            if (ev.target_id() == guardId) { guardDmgR1 = ev.value(); guardSplash = ev.is_splash_reduced(); }
+        }
+    }
+    EXPECT_GT(bossDmgR1, 0u);
+    EXPECT_GT(guardDmgR1, 0u);
+    EXPECT_FALSE(bossSplash);
+    EXPECT_TRUE(guardSplash);
+    EXPECT_GT(bossDmgR1, guardDmgR1);
+
+    // R2：低速玩家防御化解慢重劈 -> 首领挂「破绽 +35%」至 R3 末。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r2 = eng.ResolveCurrentRound();
+    bool sawParryMechanic = false;
+    for (const auto& ev : r2.events()) {
+        if (ev.event_type() == BATTLE_EVENT_BOSS_MECHANIC &&
+            ev.mechanic_kind() == turnbattle::kBossMechanicCleaveParryExpose &&
+            ev.value() == turnbattle::kBossExposedFullPct) {
+            sawParryMechanic = true;
+        }
+    }
+    EXPECT_TRUE(sawParryMechanic);
+    EXPECT_EQ(r2.state().boss_exposed_pct(), turnbattle::kBossExposedFullPct);
+    EXPECT_EQ(r2.state().boss_exposed_until_round(), 3u);
+
+    // R3：趁破绽再次对首领放同技能，伤害显著高于 R1（约 +35%）。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8901));
+    const auto r3 = eng.ResolveCurrentRound();
+    uint64_t bossDmgR3 = 0;
+    for (const auto& ev : r3.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 30001 &&
+            ev.skill_table_id() == 8901 && ev.target_id() == bossId) {
+            bossDmgR3 = ev.value();
+        }
+    }
+    EXPECT_GT(bossDmgR3, (bossDmgR1 * 125ULL) / 100ULL);
+    EXPECT_EQ(r3.state().boss_exposed_pct(), 0u) << "破绽在 R3 末到期清理";
+
+    // 首领试炼确定退出验证（必成功且不消耗 RNG）。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_FLEE));
+    const auto r4 = eng.ResolveCurrentRound();
+    EXPECT_EQ(eng.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN);
+    const auto settle = eng.BuildSettlement(30001);
+    EXPECT_TRUE(settle.fled());
+    EXPECT_EQ(settle.trial_facts().cleave_parry_count(), 1u);
+    EXPECT_TRUE(settle.trial_facts().all_self_cleaves_parried());
+
+    // V1 防线：被点名目标在重劈兑现前死亡 -> 取消重劈且绝不给首领挂破绽。
+    auto reqV1 = MakeBossTrialRequest(5102, 101, /*playerCount=*/2, /*playerSpeed=*/100);
+    reqV1.mutable_players(0)->mutable_base_attributes()->set_health(1);
+    reqV1.mutable_players(1)->mutable_base_attributes()->set_health(50000);
+    // 让玩家 0 成为极低血量并提前被护卫/首领打死（两人都给 1 血或只盯被点名者）
+    TurnBattleEngine engV1(mem);
+    ASSERT_TRUE(engV1.Initialize(reqV1));
+    uint64_t marked = 0;
+    for (const auto& t : engV1.BuildStateSnapshot().telegraphs()) {
+        if (t.intent_kind() == turnbattle::kTelegraphKindSlowCleave) marked = t.target_actor_id();
+    }
+    ASSERT_NE(marked, 0u);
+    // 被点名者逃跑使其在 R2 重劈前失效（确定退出），另一人存活。
+    engV1.SubmitAction(marked, Command(BATTLE_ACTION_FLEE));
+    engV1.SubmitAction(marked == 30001 ? 30002 : 30001, Command(BATTLE_ACTION_DEFEND));
+    engV1.ResolveCurrentRound();
+    engV1.SubmitAction(marked == 30001 ? 30002 : 30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r2V1 = engV1.ResolveCurrentRound();
+    EXPECT_EQ(r2V1.state().boss_exposed_pct(), 0u) << "V1防线：目标失效取消重劈绝不能白嫖破绽";
+}
+
+TEST_F(SeasonBattleTest, BossTrialV2HardRejuvCleanseAntiHealBacklashAndPhaseTwo) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 102, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/2, /*roundLimit=*/15, 20000, 100);
+    // 注册减疗技能（IncomingHeal -0.5）用于验证阻止净化并挂气馁。
+    auto& antiHealSkill = mem->AddSkill(8902);
+    antiHealSkill.Clear();
+    antiHealSkill.set_id(8902);
+    antiHealSkill.set_battle_model(1);
+    antiHealSkill.set_caster_mask(1);
+    antiHealSkill.set_ability_kind(1);
+    antiHealSkill.set_unlock_level(1);
+    antiHealSkill.set_max_rank(10);
+    antiHealSkill.set_target_team(1);
+    antiHealSkill.set_max_targets(5);
+    antiHealSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    antiHealSkill.set_mana_percent(0.01);
+    antiHealSkill.add_effect(89020);
+    auto& antiHealBuff = mem->AddBuff(89020);
+    antiHealBuff.Clear();
+    antiHealBuff.set_id(89020);
+    antiHealBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Modifier));
+    antiHealBuff.set_modifier_stat(static_cast<uint32_t>(BattleModifier::IncomingHeal));
+    antiHealBuff.set_ratio(-0.5);
+    antiHealBuff.set_duration_rounds(5);
+    antiHealBuff.set_tick_on_apply(1);
+    (*antiHealBuff.mutable_tag())["Debuff"] = true;
+
+    // 场景 A：R1 对首领上减疗 -> R2 回春被压制，触发「气馁」且不净化减疗。
+    auto req = MakeBossTrialRequest(5103, 102, 1, 1000);
+    req.mutable_players(0)->add_skill_table_ids(8902);
+    (*req.mutable_players(0)->mutable_skill_ranks())[8902] = 1;
+    req.mutable_trial_context()->set_journal_entry_id(103);
+    req.mutable_trial_context()->set_trial_rule_version(1);
+
+    TurnBattleEngine engA(mem);
+    ASSERT_TRUE(engA.Initialize(req));
+    uint64_t bossId = 0, guardId = 0;
+    for (const auto& a : engA.BuildStateSnapshot().actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            if (a.is_boss()) bossId = a.actor_id();
+            else guardId = a.actor_id();
+        }
+    }
+    engA.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8902));
+    engA.ResolveCurrentRound();
+    engA.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+    const auto r2A = engA.ResolveCurrentRound();
+    bool sawDishearten = false, sawCleanse = false;
+    for (const auto& ev : r2A.events()) {
+        if (ev.event_type() == BATTLE_EVENT_BOSS_MECHANIC) {
+            if (ev.mechanic_kind() == turnbattle::kBossMechanicAntiHealDishearten) sawDishearten = true;
+            if (ev.mechanic_kind() == turnbattle::kBossMechanicRejuvCleanse) sawCleanse = true;
+        }
+    }
+    EXPECT_TRUE(sawDishearten);
+    EXPECT_FALSE(sawCleanse);
+
+    // 场景 B：R1 击杀已发出治疗预告的 100 血回春护卫 -> 触发 6% 断疗反噬 + 破绽 + 回合末进二阶段「决战姿态」且绝不双劈。
+    TurnBattleEngine engB(mem);
+    ASSERT_TRUE(engB.Initialize(req));
+    engB.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, guardId));
+    const auto r1B = engB.ResolveCurrentRound();
+    bool sawBacklash = false, sawPhaseTwo = false;
+    for (const auto& ev : r1B.events()) {
+        if (ev.event_type() == BATTLE_EVENT_BOSS_MECHANIC) {
+            if (ev.mechanic_kind() == turnbattle::kBossMechanicHealBacklash && ev.value() >= 1200u) sawBacklash = true;
+            if (ev.mechanic_kind() == turnbattle::kBossMechanicPhaseTwoEnrage) sawPhaseTwo = true;
+        }
+    }
+    EXPECT_TRUE(sawBacklash) << "击杀读条中的回春护卫必须触发 6% 灵力反噬";
+    EXPECT_TRUE(sawPhaseTwo) << "特殊护卫全灭回合末必须进入二阶段决战姿态";
+    EXPECT_EQ(r1B.state().boss_phase(), 2u);
+    EXPECT_EQ(r1B.state().boss_exposed_pct(), turnbattle::kBossExposedFullPct);
+    EXPECT_EQ(engB.BuildSettlement(30001).trial_facts().heal_interrupt_backlash_count(), 1u);
+
+    // V7 防线：R1 已预告 R2 重劈，进二阶段后 R2 仅正常兑现 R2 重劈，R3 才发下一次 2 回合循环预告（R4 兑现）。
+    engB.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r2B = engB.ResolveCurrentRound();
+    uint32_t r3BossCleaves = 0;
+    for (const auto& t : r2B.state().telegraphs()) {
+        if (t.source_actor_id() == bossId && t.intent_kind() == turnbattle::kTelegraphKindSlowCleave) {
+            EXPECT_EQ(t.execute_round(), 4u) << "二阶段 2 回合循环：R2 兑现后应于 R3 预告 R4 兑现";
+            ++r3BossCleaves;
+        }
+    }
+    EXPECT_EQ(r3BossCleaves, 1u);
+}
+
+TEST_F(SeasonBattleTest, BossTrialV2HardStanceDynamicSwitchMomentumAndDispelBreak) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 104, turnbattle::kBossTrialKindBreakStance, /*difficulty=*/2, /*roundLimit=*/15, 40000, 20000);
+    auto& magicSkill = mem->AddSkill(8903);
+    magicSkill.Clear();
+    magicSkill.set_id(8903);
+    magicSkill.set_battle_model(1);
+    magicSkill.set_caster_mask(1);
+    magicSkill.set_ability_kind(1);
+    magicSkill.set_unlock_level(1);
+    magicSkill.set_max_rank(10);
+    magicSkill.set_target_team(1);
+    magicSkill.set_max_targets(1);
+    magicSkill.set_damage_type(combatdamage::kMagicDamage);
+    magicSkill.set_attack_multiplier(1.5);
+    magicSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    magicSkill.set_mana_percent(0.01);
+    magicSkill.add_effect(89030);
+    auto& magicDmg = mem->AddBuff(89030);
+    magicDmg.Clear();
+    magicDmg.set_id(89030);
+    magicDmg.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Damage));
+    magicDmg.set_value_basis(2);
+    magicDmg.set_ratio(1.5);
+
+    auto& dispelSkill = mem->AddSkill(8904);
+    dispelSkill.Clear();
+    dispelSkill.set_id(8904);
+    dispelSkill.set_battle_model(1);
+    dispelSkill.set_caster_mask(1);
+    dispelSkill.set_ability_kind(1);
+    dispelSkill.set_unlock_level(1);
+    dispelSkill.set_max_rank(10);
+    dispelSkill.set_target_team(1);
+    dispelSkill.set_max_targets(1);
+    dispelSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    dispelSkill.set_mana_percent(0.01);
+    dispelSkill.add_effect(89040);
+    auto& dispelBuff = mem->AddBuff(89040);
+    dispelBuff.Clear();
+    dispelBuff.set_id(89040);
+    dispelBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::DispelBuff));
+    dispelBuff.set_effect_count(1);
+
+    auto req = MakeBossTrialRequest(5104, 104, 1, 1000);
+    req.mutable_players(0)->add_skill_table_ids(8903);
+    req.mutable_players(0)->add_skill_table_ids(8904);
+    (*req.mutable_players(0)->mutable_skill_ranks())[8903] = 1;
+    (*req.mutable_players(0)->mutable_skill_ranks())[8904] = 1;
+    req.mutable_trial_context()->set_journal_entry_id(104);
+    req.mutable_trial_context()->set_trial_rule_version(1);
+
+    TurnBattleEngine eng(mem);
+    ASSERT_TRUE(eng.Initialize(req));
+    uint64_t bossId = 0, guardId = 0;
+    for (const auto& a : eng.BuildStateSnapshot().actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            if (a.is_boss()) bossId = a.actor_id();
+            else guardId = a.actor_id();
+        }
+    }
+    // R1：护势展开物防阵 + 困难切阵叠 1 层蓄势。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r1 = eng.ResolveCurrentRound();
+    EXPECT_EQ(r1.state().boss_stance_type(), combatdamage::kPhysicalDamage);
+    EXPECT_EQ(r1.state().boss_momentum_stacks(), 1u);
+
+    // R2：物理普攻打在物防阵上 -> 触发轻反制蓄势（但在 R2 重劈发动时消耗清零）；先验事件中有蓄势叠加。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, guardId));
+    const auto r2 = eng.ResolveCurrentRound();
+    bool sawCounterMomentum = false;
+    for (const auto& ev : r2.events()) {
+        if (ev.event_type() == BATTLE_EVENT_BOSS_MECHANIC &&
+            ev.mechanic_kind() == turnbattle::kBossMechanicMomentumGain && ev.value() == 2u) {
+            sawCounterMomentum = true;
+        }
+    }
+    EXPECT_TRUE(sawCounterMomentum) << "打中联防物防阵应触发轻反制叠蓄势";
+
+    // R3：先对护卫施放法术大招压高法伤，再测 R4 顺势应变切法防阵。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8903));
+    const auto r3 = eng.ResolveCurrentRound();
+    bool sawDynamicMagicStance = false;
+    for (const auto& t : r3.state().telegraphs()) {
+        if (t.intent_kind() == turnbattle::kTelegraphKindGuardStanceMagic && t.execute_round() == 4u) {
+            sawDynamicMagicStance = true;
+        }
+    }
+    EXPECT_TRUE(sawDynamicMagicStance) << "困难护势进阶在 R2-R3 法伤更高时，R4 必须动态切法防阵";
+
+    // R4 让法防阵落地，R5 驱散护卫触发崩势（清护势与蓄势，且首领挂破绽 +35%）。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r4 = eng.ResolveCurrentRound();
+    EXPECT_EQ(r4.state().boss_stance_type(), combatdamage::kMagicDamage);
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, guardId, 8904));
+    const auto r5 = eng.ResolveCurrentRound();
+    EXPECT_EQ(r5.state().boss_stance_type(), 0u);
+    EXPECT_EQ(r5.state().boss_momentum_stacks(), 0u);
+    EXPECT_EQ(r5.state().boss_exposed_pct(), turnbattle::kBossExposedFullPct);
+    EXPECT_EQ(eng.BuildSettlement(30001).trial_facts().stance_break_count(), 1u);
+}
+
+TEST_F(SeasonBattleTest, BossTrialV2HardDualGuardEliteFormationAndDualCleavePartialParry) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    // 配置 Dungeon 112（困难·双卫同阵：101首领 + 102回春 + 103护势）及策应卫 109破军 / 110鼓噪。
+    const auto addMon = [&](uint32_t id, uint64_t hp, bool isBoss) {
+        auto& m = mem->AddMonster(id);
+        m.Clear();
+        m.set_id(id);
+        m.set_health(hp);
+        m.set_strength(120);
+        m.set_armor(150);
+        m.set_resistance(10);
+        m.set_speed(700);
+        m.set_is_boss(isBoss ? 1 : 0);
+    };
+    addMon(101, 10000, true);
+    addMon(102, 4000, false);
+    addMon(103, 4000, false);
+    addMon(109, 2200, false);
+    addMon(110, 2000, false);
+
+    auto& d112 = mem->AddDungeon(112);
+    d112.Clear();
+    d112.set_id(112);
+    d112.set_max_team_size(5);
+    d112.set_boss_trial_kind(turnbattle::kBossTrialKindBreakDualGuard);
+    d112.set_difficulty(2);
+    d112.set_round_limit(15);
+    d112.add_monster(101);
+    d112.add_monster(102);
+    d112.add_monster(103);
+
+    // 单人双卫同阵：3 怪，两位护卫压缩至 75% 血（3000）。
+    {
+        auto reqSolo = MakeBossTrialRequest(5105, 112, 1, 500);
+        TurnBattleEngine engSolo(mem);
+        ASSERT_TRUE(engSolo.Initialize(reqSolo));
+        const auto snap = engSolo.BuildStateSnapshot();
+        uint32_t monCount = 0;
+        for (const auto& a : snap.actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+                ++monCount;
+                if (!a.is_boss()) EXPECT_EQ(a.max_health(), 3000u) << "双卫同阵核心护卫血量应压缩至 75%";
+            }
+        }
+        EXPECT_EQ(monCount, 3u);
+    }
+
+    // 3 人双卫同阵：4 怪（含破军卫 109），首领裂地双劈点名 2 人，1/2 化解触发轻破绽 +20%（V3 防线）。
+    auto req3p = MakeBossTrialRequest(5106, 112, 3, 200);
+    TurnBattleEngine eng3p(mem);
+    ASSERT_TRUE(eng3p.Initialize(req3p));
+    const auto s1 = eng3p.BuildStateSnapshot();
+    uint32_t monCount3p = 0;
+    bool hasBreaker = false;
+    for (const auto& a : s1.actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            ++monCount3p;
+            if (a.monster_table_id() == turnbattle::kBossTrialMonsterSupportBreaker) hasBreaker = true;
+        }
+    }
+    EXPECT_EQ(monCount3p, 4u);
+    EXPECT_TRUE(hasBreaker);
+    std::vector<uint64_t> dualTargets;
+    bool r1HasStance = false, r1HasHeal = false;
+    for (const auto& t : s1.telegraphs()) {
+        if (t.intent_kind() == turnbattle::kTelegraphKindSlowCleave) {
+            for (const uint64_t tid : t.target_actor_ids()) dualTargets.push_back(tid);
+        }
+        if (t.intent_kind() == turnbattle::kTelegraphKindGuardStancePhys) r1HasStance = true;
+        if (t.intent_kind() == turnbattle::kTelegraphKindGuardHeal) r1HasHeal = true;
+    }
+    ASSERT_EQ(dualTargets.size(), 2u) << "3人局裂地双劈应点名2名不同目标";
+    EXPECT_NE(dualTargets[0], dualTargets[1]);
+    EXPECT_TRUE(r1HasStance);
+    EXPECT_FALSE(r1HasHeal) << "双卫同阵 R1 护势/R2 重劈/R3 回春错峰";
+
+    // R1 推进，R2 仅第 1 个点名目标防御，第 2 个不防 -> 触发 20% 轻破绽（V3）。
+    for (uint64_t pid : {30001ULL, 30002ULL, 30003ULL}) eng3p.SubmitAction(pid, Command(BATTLE_ACTION_DEFEND));
+    eng3p.ResolveCurrentRound();
+    for (uint64_t pid : {30001ULL, 30002ULL, 30003ULL}) {
+        eng3p.SubmitAction(pid, Command(pid == dualTargets[0] ? BATTLE_ACTION_DEFEND : BATTLE_ACTION_ATTACK, 1000001));
+    }
+    const auto r2 = eng3p.ResolveCurrentRound();
+    EXPECT_EQ(r2.state().boss_exposed_pct(), turnbattle::kBossExposedPartialPct)
+        << "3人裂地双劈 1/2 化解应触发 +20% 轻破绽";
+
+    // 4 人单卫战阵：应生成 4 怪（首领 + 特殊护卫 + 破军卫 109 + 鼓噪卫 110），且鼓噪卫回合末叠蓄势。
+    auto& d101 = mem->AddDungeon(101);
+    d101.Clear();
+    d101.set_id(101);
+    d101.set_max_team_size(5);
+    d101.set_boss_trial_kind(turnbattle::kBossTrialKindBreakRejuv);
+    d101.set_difficulty(1);
+    d101.set_round_limit(12);
+    d101.add_monster(101);
+    d101.add_monster(102);
+    auto req4p = MakeBossTrialRequest(5107, 101, 4, 200);
+    TurnBattleEngine eng4p(mem);
+    ASSERT_TRUE(eng4p.Initialize(req4p));
+    uint32_t monCount4p = 0;
+    bool hasDrummer = false;
+    for (const auto& a : eng4p.BuildStateSnapshot().actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            ++monCount4p;
+            if (a.monster_table_id() == turnbattle::kBossTrialMonsterSupportDrummer) hasDrummer = true;
+        }
+    }
+    EXPECT_EQ(monCount4p, 4u);
+    EXPECT_TRUE(hasDrummer);
+    for (uint64_t pid : {30001ULL, 30002ULL, 30003ULL, 30004ULL}) eng4p.SubmitAction(pid, Command(BATTLE_ACTION_DEFEND));
+    const auto r1_4p = eng4p.ResolveCurrentRound();
+    EXPECT_EQ(r1_4p.state().boss_momentum_stacks(), 1u) << "鼓噪卫存活回合末应给首领 +1 蓄势";
+}
+
+TEST_F(SeasonBattleTest, BossTrialV2TrialJournalSealConditionsWorkCorrectly) {
+    BattleSettlementData settle;
+    settle.set_battle_id(9001);
+    settle.set_player_id(1001);
+    settle.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    settle.set_player_team_index(0);
+    settle.set_total_rounds(6);
+    auto* f = settle.mutable_trial_facts();
+    f->set_journal_entry_id(105);
+    f->set_trial_rule_version(1);
+    f->set_initial_human_count(1);
+    f->set_guard_stance_dispelled(true);
+    f->set_boss_guard_heal_total(500);
+    f->set_heal_interrupt_backlash_count(1);
+    f->set_all_self_cleaves_parried(true);
+
+    EXPECT_TRUE(trialjournal::IsValidConditionType(static_cast<uint32_t>(trialjournal::SealConditionType::kDualGuardBreak)));
+    EXPECT_TRUE(trialjournal::IsValidConditionType(static_cast<uint32_t>(trialjournal::SealConditionType::kPerfectCleaveParry)));
+    EXPECT_TRUE(trialjournal::EvaluateSealCondition(
+        static_cast<uint32_t>(trialjournal::SealConditionType::kDualGuardBreak), 0, settle));
+    EXPECT_TRUE(trialjournal::EvaluateSealCondition(
+        static_cast<uint32_t>(trialjournal::SealConditionType::kPerfectCleaveParry), 0, settle));
+
+    f->set_heal_interrupt_backlash_count(0);
+    EXPECT_FALSE(trialjournal::EvaluateSealCondition(
+        static_cast<uint32_t>(trialjournal::SealConditionType::kDualGuardBreak), 0, settle));
 }

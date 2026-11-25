@@ -31,20 +31,23 @@ enum ActivityBattleReject {
   ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE = 3;   // offender 持有 battle:lock(已在战斗中)
   ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY = 4;   // offender 无场景位置 / 有未自愈的在途票据 / 建 matched 票失败
   ACTIVITY_BATTLE_REJECT_INTERNAL = 5;           // match 内部故障:发号失败 / Redis 读写出错(guild 映射为 GuildTrialServiceBusy)
+  ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW = 6;     // SQL 权威提交点时间不在活动开放窗口 [effective_start_at_ms, effective_end_at_ms) 内
 }
 
 message StartActivityBattleRequest {
-  uint32 battle_config_id = 1;                 // DungeonTable id(= GuildActivity.dungeon_id);非 0
+  uint32 battle_config_id = 1;                 // DungeonTable id(= GuildActivity.dungeon_id 或 FestivalBeastActivity.battle_config_id);非 0
   // 站位顺序即队伍顺序,发起人在首位;1..kMaxBattleTeamSize(5)人、非 0、不重复。
   // 名单是 guild 邀请房间里全员已同意的同帮成员,match 只做在线 / 战斗锁 / 位置 / 在途票的只读预检,不复核帮会归属。
   repeated uint64 member_player_ids = 2;
-  // 活动上下文:kind 必须非 NONE,guild_id / activity_id / period_key / guild_period_key 非 0,
-  // initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
+  // 活动上下文:kind 必须非 NONE,initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
   BattleActivityContext activity_context = 3;
-  uint64 request_id = 4; // 调用方持久的邀请房间/业务操作号；全球模式为0拒绝，重试必须复用。
-  // guild 的签名。match 读不到 guild 的库，原件由这个签名担保(docs/design/horizontal-scale-logical-db.md §4)。
+  uint64 request_id = 4; // 帮会历练调用方持久的邀请房间号；瑞兽迎春改用 request_high/request_low（128 位 UUID）。
+  // 内部调用方签名（GUILD_TRIAL 只认 "guild"，FESTIVAL_BEAST 只认 "scene"）。
   // 持久化的意图正文不含它：每次重试的时间戳不同，正文要逐字节相等。
   common.base.ServiceCallAuth auth = 5;
+  // 瑞兽迎春客户端 128 位 UUID 拆分（Kind=5 幂等主键）；两者不得同时为 0。
+  uint64 request_high = 6;
+  uint64 request_low = 7;
 }
 
 message StartActivityBattleResponse {
@@ -55,6 +58,7 @@ message StartActivityBattleResponse {
   // 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
   uint64 battle_id = 3;
   uint32 formation_state = 4; // 全球SQL成局状态1..5；不独自作为可安全撤销的证明。
+  uint64 admitted_at_ms = 5;  // Match SQL 事务持久准入时刻 UTC 毫秒（瑞兽迎春等用于确认在途准入）
 }
 
 // 取消必须绑定整份原Start；未知结果只能按原request重放，不能换名单或活动上下文。

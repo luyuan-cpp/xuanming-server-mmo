@@ -197,6 +197,24 @@
    "source_kind": 4,
    "unlock_mode": 0,
    "variant_key": "ranked_pvp"
+  },
+  {
+   "chapter_id": 1,
+   "chapter_name": "卷一 · 破阵试炼",
+   "desc": "困难破阵终极合阵：回春护卫与护势护卫同场联防错峰，驱散崩势、断疗反噬与化劲破绽环环相扣。",
+   "difficulty": 2,
+   "display_name": "困难·双卫同阵",
+   "enabled": true,
+   "icon_key": "UI/TrialJournal/guard_dual",
+   "id": 105,
+   "jump_target": "boss_trial:hard:dual_guard",
+   "rule_version": 1,
+   "rule_version_name": "首测规则",
+   "season_id": 0,
+   "sort_order": 5,
+   "source_kind": 1,
+   "unlock_mode": 1,
+   "variant_key": "dual_guard"
   }
  ]
 }

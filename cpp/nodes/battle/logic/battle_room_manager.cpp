@@ -1312,6 +1312,83 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
     }
 }
 
+void BattleRoomManager::HandleSurrenderBattle(const ::SessionDetails &sessionDetails,
+                                              const ::SurrenderBattleRequest &request,
+                                              ::SurrenderBattleResponse &response)
+{
+    const auto playerId = sessionDetails.player_id();
+    if (playerId == 0)
+    {
+        LOG_WARN << "SurrenderBattle session has no player identity: session_id=" << sessionDetails.session_id();
+        response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
+        return;
+    }
+
+    auto *room = FindRoom(request.battle_id());
+    if (room == nullptr)
+    {
+        LOG_DEBUG << "SurrenderBattle room does not exist: battle_id=" << request.battle_id()
+                  << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (room->routingByPlayer.find(playerId) == room->routingByPlayer.end())
+    {
+        LOG_WARN << "SurrenderBattle player is not in this battle: battle_id=" << request.battle_id()
+                 << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (TerminalPending(*room))
+    {
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+
+    auto visibleBefore = room->engine.BuildStateSnapshot();
+    visibleBefore.set_battle_id(room->battleId);
+
+    ::BattleSurrenderVoteState voteState;
+    const uint32_t err = room->engine.SubmitSurrenderVote(playerId, request.agree(), &voteState);
+    if (err != 0)
+    {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+
+    *response.mutable_vote_state() = voteState;
+
+    // 仅向投票所属同队成员推送投票变动，对手与观众一律不知情。
+    ::SurrenderVoteS2C notify;
+    notify.set_battle_id(room->battleId);
+    *notify.mutable_vote_state() = voteState;
+    for (const auto &[memberId, routing] : room->routingByPlayer)
+    {
+        (void)routing;
+        const auto memberTeam = room->engine.TeamIndexOfPlayer(memberId);
+        if (memberTeam.has_value() && *memberTeam == voteState.team_index())
+        {
+            PushBattleFrame(*room, memberId, BattleClientPlayerNotifySurrenderVoteMessageId, notify);
+        }
+    }
+
+    const auto outcome = room->engine.Outcome();
+    if (outcome != ::BATTLE_OUTCOME_ONGOING)
+    {
+        if (room->replay)
+        {
+            auto finalState = room->engine.BuildStateSnapshot();
+            finalState.set_battle_id(room->battleId);
+            RedactStateForViewer(finalState, 0);
+            room->replay->MarkDeadlineDraw(finalState);
+        }
+        BeginResultCommit(*room, outcome, ::SPECTATE_END_BATTLE_FINISHED,
+                          std::nullopt, std::move(visibleBefore));
+    }
+}
+
 void BattleRoomManager::ArmRoundTimer(BattleRoom &room)
 {
     // 手动行动收集窗口为 25 秒,不影响技能/buff 的时间→回合换算。
@@ -1321,9 +1398,12 @@ void BattleRoomManager::ArmRoundTimer(BattleRoom &room)
     // 故改用 kAutoRoundIntervalMs 固定节奏推进。
     // 全自动间隔随刚结算那一回合的出手单位数放宽(AutoRoundIntervalMsFor):固定 2000ms 时单位一多,
     // 客户端 6 倍速也演不完,会把整回合演出跳过。开局首次装填 LastActionOrder 为空 → 仍是下限 2000ms。
+    const uint64_t manualWindowMs = room.engine.IsBossTrialBattle()
+                                        ? turnbattle::kBossTrialActionTimeoutMs
+                                        : turnbattle::kActionTimeoutMs;
     const uint64_t windowMs = room.engine.AllPlayersReady()
                                   ? turnbattle::AutoRoundIntervalMsFor(room.engine.LastActionOrder().size())
-                                  : turnbattle::kActionTimeoutMs;
+                                  : manualWindowMs;
     room.actionDeadlineMs = TimeSystem::NowMillisecondsUTC() + windowMs;
     const auto battleId = room.battleId;
     // timer 回调按 battle_id 重查房间:房间可能在窗口内被销毁,不能捕获裸指针
@@ -1775,6 +1855,7 @@ void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
     // 道具余量是私有信息:统一在这里清掉,再由 FillSelfItems 只给本人回填。
     // 不依赖"BuildStateSnapshot 恰好不填 self_items"这一外部事实 —— 那是别处的实现细节。
     state.clear_self_items();
+    state.clear_surrender_vote();
     // 战斗类属性(装备带来的必杀 / 连击 / 反击 / 反震 / 抗性概率)只供引擎判定:不分视角全员清掉,
     // 自己的看属性面板(equipment-attributes.md §4.5)。所有出站状态(开战包 / 回合结果 / 补拉 /
     // 观战首帧)都经过本函数,新增下发路径必须同样先过这里。
@@ -1798,6 +1879,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
                                       const uint64_t viewerPlayerId) const
 {
     state.clear_self_items();
+    state.clear_surrender_vote();
     if (viewerPlayerId == 0)
     {
         return;
@@ -1806,6 +1888,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     {
         *state.add_self_items() = item;
     }
+    room.engine.FillSurrenderVoteForViewer(state, viewerPlayerId);
 }
 
 ::SpectateStateS2C BattleRoomManager::BuildSpectatorState(const BattleRoom &room, const uint32_t observerCount) const

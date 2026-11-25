@@ -162,6 +162,31 @@ namespace player_appearance
 		return totalCount > 0 && ownedCount >= totalCount;
 	}
 
+	inline bool IsBlankText(std::string_view value)
+	{
+		return value.find_first_not_of(" \t\r\n") == std::string_view::npos;
+	}
+
+	// 人物志字段必须全空(暂无人物志)或四项核心字段(档案名/小传/篇名/正文)同时非空,禁止半残行上线。
+	inline bool BiographyFieldsValid(std::string_view archiveName,
+									 std::string_view nickname,
+									 std::string_view biographySummary,
+									 std::string_view storyTitle,
+									 std::string_view storyBody)
+	{
+		const bool hasArchive = !IsBlankText(archiveName);
+		const bool hasNickname = !IsBlankText(nickname);
+		const bool hasSummary = !IsBlankText(biographySummary);
+		const bool hasTitle = !IsBlankText(storyTitle);
+		const bool hasBody = !IsBlankText(storyBody);
+		const bool hasAny = hasArchive || hasNickname || hasSummary || hasTitle || hasBody;
+		if (!hasAny)
+		{
+			return true;
+		}
+		return hasArchive && hasSummary && hasTitle && hasBody;
+	}
+
 	// 目录外观同步失败时的有界指数退避:2s, 4s, 8s, 16s, 30s 封顶。
 	inline uint64_t DirectorySyncRetryDelayMs(uint32_t attempt)
 	{

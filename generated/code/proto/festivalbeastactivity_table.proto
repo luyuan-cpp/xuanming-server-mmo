@@ -1,0 +1,36 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "FestivalBeastActivityTableOuterClass";
+option java_multiple_files = true;
+
+
+message FestivalBeastActivityTable {
+	uint32 id = 1;
+	bool enabled = 2;
+	uint32 config_revision = 3;
+	string activity_name = 4;
+	string boss_name = 5;
+	string banner_asset_key = 6;
+	string icon_key = 7;
+	uint64 effective_start_at_ms = 8;
+	uint64 effective_end_at_ms = 9;
+	uint32 claim_showcase_days = 10;
+	uint32 battle_config_id = 11;
+	uint32 required_wins = 12;
+	string reward_identity = 13;
+	uint32 reward_definition_version = 14;
+	uint32 reward_pet_table_id = 15;
+	uint32 round_limit = 16;
+	uint32 cycle_rounds = 17;
+	uint32 first_heavy_round = 18;
+	uint32 telegraph_lead_rounds = 19;
+	uint32 heavy_damage_percent = 20;
+}
+
+message FestivalBeastActivityTableData {
+	repeated FestivalBeastActivityTable data = 1;
+}

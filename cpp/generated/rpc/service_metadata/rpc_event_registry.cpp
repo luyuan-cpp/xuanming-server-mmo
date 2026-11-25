@@ -126,6 +126,8 @@ void SendBattleClientPlayerNotifySpectateStateErased(entt::registry& , entt::ent
 void SendBattleClientPlayerNotifySpectateTurnResultErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleClientPlayerNotifySpectateEndErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleClientPlayerNotifyBattleAssignedErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleClientPlayerSurrenderBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleClientPlayerNotifySurrenderVoteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeQueryObserverErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeQueryBattleCreationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeCreateBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
@@ -421,7 +423,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 476,
+static_assert(kMaxRpcMethodCount == 481,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -488,6 +490,16 @@ void InitMessageInfo()
         std::make_unique<::BattleAssignedS2C>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifyBattleAssignedErased, "/BattleClientPlayer/NotifyBattleAssigned"};
+    gRpcMethodRegistry[BattleClientPlayerSurrenderBattleMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "SurrenderBattle",
+        std::make_unique<::SurrenderBattleRequest>(),
+        std::make_unique<::SurrenderBattleResponse>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerSurrenderBattleErased, "/BattleClientPlayer/SurrenderBattle"};
+    gRpcMethodRegistry[BattleClientPlayerNotifySurrenderVoteMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "NotifySurrenderVote",
+        std::make_unique<::SurrenderVoteS2C>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifySurrenderVoteErased, "/BattleClientPlayer/NotifySurrenderVote"};
 
     // --- BattleNode ---
     gRpcMethodRegistry[BattleNodeQueryObserverMessageId] = RpcMethodMeta{
@@ -1741,6 +1753,21 @@ void InitMessageInfo()
         std::make_unique<::ClaimActivityVitalityRewardRequest>(),
         std::make_unique<::ClaimActivityVitalityRewardResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerGetFestivalBeastDetailMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "GetFestivalBeastDetail",
+        std::make_unique<::GetFestivalBeastDetailRequest>(),
+        std::make_unique<::GetFestivalBeastDetailResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerStartFestivalBeastChallengeMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "StartFestivalBeastChallenge",
+        std::make_unique<::StartFestivalBeastChallengeRequest>(),
+        std::make_unique<::StartFestivalBeastChallengeResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerClaimFestivalBeastRewardMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "ClaimFestivalBeastReward",
+        std::make_unique<::ClaimFestivalBeastRewardRequest>(),
+        std::make_unique<::ClaimFestivalBeastRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneAfkPassClientPlayer ---
     gRpcMethodRegistry[SceneAfkPassClientPlayerGetAfkPassMessageId] = RpcMethodMeta{
@@ -2745,6 +2772,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerGetBattleStateMessageId:
 	case BattleClientPlayerStopWatchBattleMessageId:
 	case BattleClientPlayerSetAutoBattleMessageId:
+	case BattleClientPlayerSurrenderBattleMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
 	case ClientPlayerChatReportChatMessageId:
@@ -2837,6 +2865,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneClientPlayerCommonRenamePlayerMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
 	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
+	case SceneActivityClientPlayerGetFestivalBeastDetailMessageId:
+	case SceneActivityClientPlayerStartFestivalBeastChallengeMessageId:
+	case SceneActivityClientPlayerClaimFestivalBeastRewardMessageId:
 	case SceneAfkPassClientPlayerGetAfkPassMessageId:
 	case SceneAfkPassClientPlayerBuyAfkPassMessageId:
 	case SceneAfkPassClientPlayerGmSetAfkPassMessageId:

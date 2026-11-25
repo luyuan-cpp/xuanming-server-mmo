@@ -50,14 +50,16 @@ message RankedRuleTable {
   uint32 milestone_card_matches = 16;
   // 永久青云玉符累计有效场次门槛(首测=12)
   uint32 milestone_talisman_matches = 17;
-  // 青锋段位下限(×100,首测=140000)
+  // 青锋段位下限(×100,V2=152000;新号1500起步落初试,净胜2场破冰升青锋)
   uint32 tier_qingfeng_centi = 18;
-  // 云章段位下限(×100,首测=155000)
+  // 云章段位下限(×100,V2=160000;封榜可留存云章徽章与称号)
   uint32 tier_yunzhang_centi = 19;
-  // 天枢段位下限(×100,首测=170000)
+  // 天枢段位下限(×100,V2=172000)
   uint32 tier_tianshu_centi = 20;
-  // 无双段位下限(×100,首测=185000)
+  // 无双段位下限(×100,V2=185000)
   uint32 tier_wushuang_centi = 21;
   // 规则说明
   string desc = 22;
+  // 本季累计胜场锋芒称号门槛(V2=6)
+  uint32 milestone_win_matches = 23;
 }

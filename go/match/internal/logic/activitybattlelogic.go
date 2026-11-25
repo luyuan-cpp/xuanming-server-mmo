@@ -115,11 +115,36 @@ func validateStartActivityBattle(in *matchpb.StartActivityBattleRequest) string 
 		actx.GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE {
 		return "activity kind is NONE or unknown"
 	}
-	if actx.GetGuildId() == 0 || actx.GetActivityId() == 0 || actx.GetPeriodKey() == 0 || actx.GetGuildPeriodKey() == 0 {
-		return "activity context field is 0"
-	}
 	if actx.GetInitiatorPlayerId() != members[0] {
 		return "initiator is not first in the member list"
+	}
+	switch actx.GetKind() {
+	case battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL:
+		if actx.GetGuildId() == 0 || actx.GetActivityId() == 0 || actx.GetPeriodKey() == 0 || actx.GetGuildPeriodKey() == 0 {
+			return "guild activity context field is 0"
+		}
+	case battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST:
+		if len(members) != 1 {
+			return "festival beast battle must have exactly 1 player"
+		}
+		if in.GetRequestHigh() == 0 && in.GetRequestLow() == 0 {
+			return "festival beast request uuid is empty"
+		}
+		fb := actx.GetFestivalBeast()
+		if fb == nil {
+			return "missing festival beast context"
+		}
+		if fb.GetActivityInstanceId() == 0 || fb.GetRewardIdentity() == "" || fb.GetRequiredWins() == 0 ||
+			fb.GetLockedPetId() == 0 || fb.GetTierId() == 0 || fb.GetBossHealth() == 0 ||
+			fb.GetRoundLimit() == 0 || fb.GetCycleRounds() == 0 || fb.GetFirstHeavyRound() == 0 ||
+			fb.GetFirstHeavyRound() > fb.GetCycleRounds() || fb.GetTelegraphLeadRounds() == 0 ||
+			fb.GetTelegraphLeadRounds() >= fb.GetFirstHeavyRound() || fb.GetHeavyDamagePercent() == 0 ||
+			fb.GetEffectiveStartAtMs() == 0 || fb.GetEffectiveEndAtMs() <= fb.GetEffectiveStartAtMs() ||
+			fb.GetClientRequestId() == "" {
+			return "festival beast context field invalid"
+		}
+	default:
+		return "unsupported activity kind"
 	}
 	return ""
 }
@@ -194,6 +219,8 @@ func activityRejectResult(reject matchpb.ActivityBattleReject) string {
 		return activityResultInBattle
 	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY:
 		return activityResultNotReady
+	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW:
+		return activityResultInvalid
 	default:
 		return activityResultInternal
 	}

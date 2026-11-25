@@ -35,6 +35,7 @@ const (
 	ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE ActivityBattleReject = 3 // offender 持有 battle:lock(已在战斗中)
 	ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY ActivityBattleReject = 4 // offender 无场景位置 / 有未自愈的在途票据 / 建 matched 票失败
 	ActivityBattleReject_ACTIVITY_BATTLE_REJECT_INTERNAL         ActivityBattleReject = 5 // match 内部故障:发号失败 / Redis 读写出错(guild 映射为 GuildTrialServiceBusy)
+	ActivityBattleReject_ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW   ActivityBattleReject = 6 // SQL 权威提交点时间不在活动开放窗口 [effective_start_at_ms, effective_end_at_ms) 内
 )
 
 // Enum value maps for ActivityBattleReject.
@@ -46,6 +47,7 @@ var (
 		3: "ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE",
 		4: "ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY",
 		5: "ACTIVITY_BATTLE_REJECT_INTERNAL",
+		6: "ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW",
 	}
 	ActivityBattleReject_value = map[string]int32{
 		"ACTIVITY_BATTLE_REJECT_NONE":             0,
@@ -54,6 +56,7 @@ var (
 		"ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE": 3,
 		"ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY": 4,
 		"ACTIVITY_BATTLE_REJECT_INTERNAL":         5,
+		"ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW":   6,
 	}
 )
 
@@ -476,17 +479,19 @@ func (BattleScriptReviewReject) EnumDescriptor() ([]byte, []int) {
 
 type StartActivityBattleRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(= GuildActivity.dungeon_id);非 0
+	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(= GuildActivity.dungeon_id 或 FestivalBeastActivity.battle_config_id);非 0
 	// 站位顺序即队伍顺序,发起人在首位;1..kMaxBattleTeamSize(5)人、非 0、不重复。
 	// 名单是 guild 邀请房间里全员已同意的同帮成员,match 只做在线 / 战斗锁 / 位置 / 在途票的只读预检,不复核帮会归属。
 	MemberPlayerIds []uint64 `protobuf:"varint,2,rep,packed,name=member_player_ids,json=memberPlayerIds,proto3" json:"member_player_ids,omitempty"`
-	// 活动上下文:kind 必须非 NONE,guild_id / activity_id / period_key / guild_period_key 非 0,
-	// initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
+	// 活动上下文:kind 必须非 NONE,initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
 	ActivityContext *battle.BattleActivityContext `protobuf:"bytes,3,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`
-	RequestId       uint64                        `protobuf:"varint,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 调用方持久的邀请房间/业务操作号；全球模式为0拒绝，重试必须复用。
-	// guild 的签名。match 读不到 guild 的库，原件由这个签名担保(docs/design/horizontal-scale-logical-db.md §4)。
+	RequestId       uint64                        `protobuf:"varint,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 帮会历练调用方持久的邀请房间号；瑞兽迎春改用 request_high/request_low（128 位 UUID）。
+	// 内部调用方签名（GUILD_TRIAL 只认 "guild"，FESTIVAL_BEAST 只认 "scene"）。
 	// 持久化的意图正文不含它：每次重试的时间戳不同，正文要逐字节相等。
-	Auth          *base.ServiceCallAuth `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	Auth *base.ServiceCallAuth `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	// 瑞兽迎春客户端 128 位 UUID 拆分（Kind=5 幂等主键）；两者不得同时为 0。
+	RequestHigh   uint64 `protobuf:"varint,6,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"`
+	RequestLow    uint64 `protobuf:"varint,7,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -556,6 +561,20 @@ func (x *StartActivityBattleRequest) GetAuth() *base.ServiceCallAuth {
 	return nil
 }
 
+func (x *StartActivityBattleRequest) GetRequestHigh() uint64 {
+	if x != nil {
+		return x.RequestHigh
+	}
+	return 0
+}
+
+func (x *StartActivityBattleRequest) GetRequestLow() uint64 {
+	if x != nil {
+		return x.RequestLow
+	}
+	return 0
+}
+
 type StartActivityBattleResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Reject           ActivityBattleReject   `protobuf:"varint,1,opt,name=reject,proto3,enum=match.ActivityBattleReject" json:"reject,omitempty"`
@@ -565,6 +584,7 @@ type StartActivityBattleResponse struct {
 	// 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
 	BattleId       uint64 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
 	FormationState uint32 `protobuf:"varint,4,opt,name=formation_state,json=formationState,proto3" json:"formation_state,omitempty"` // 全球SQL成局状态1..5；不独自作为可安全撤销的证明。
+	AdmittedAtMs   uint64 `protobuf:"varint,5,opt,name=admitted_at_ms,json=admittedAtMs,proto3" json:"admitted_at_ms,omitempty"`     // Match SQL 事务持久准入时刻 UTC 毫秒（瑞兽迎春等用于确认在途准入）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -623,6 +643,13 @@ func (x *StartActivityBattleResponse) GetBattleId() uint64 {
 func (x *StartActivityBattleResponse) GetFormationState() uint32 {
 	if x != nil {
 		return x.FormationState
+	}
+	return 0
+}
+
+func (x *StartActivityBattleResponse) GetAdmittedAtMs() uint64 {
+	if x != nil {
+		return x.AdmittedAtMs
 	}
 	return 0
 }
@@ -2579,19 +2606,23 @@ var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\n" +
-	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\"\x86\x02\n" +
+	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\"\xca\x02\n" +
 	"\x1aStartActivityBattleRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12*\n" +
 	"\x11member_player_ids\x18\x02 \x03(\x04R\x0fmemberPlayerIds\x12A\n" +
 	"\x10activity_context\x18\x03 \x01(\v2\x16.BattleActivityContextR\x0factivityContext\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x04 \x01(\x04R\trequestId\x120\n" +
-	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xc6\x01\n" +
+	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12!\n" +
+	"\frequest_high\x18\x06 \x01(\x04R\vrequestHigh\x12\x1f\n" +
+	"\vrequest_low\x18\a \x01(\x04R\n" +
+	"requestLow\"\xec\x01\n" +
 	"\x1bStartActivityBattleResponse\x123\n" +
 	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.ActivityBattleRejectR\x06reject\x12,\n" +
 	"\x12offender_player_id\x18\x02 \x01(\x04R\x10offenderPlayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12'\n" +
-	"\x0fformation_state\x18\x04 \x01(\rR\x0eformationState\"\x8e\x01\n" +
+	"\x0fformation_state\x18\x04 \x01(\rR\x0eformationState\x12$\n" +
+	"\x0eadmitted_at_ms\x18\x05 \x01(\x04R\fadmittedAtMs\"\x8e\x01\n" +
 	"\x1bCancelActivityBattleRequest\x12=\n" +
 	"\boriginal\x18\x01 \x01(\v2!.match.StartActivityBattleRequestR\boriginal\x120\n" +
 	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb5\x02\n" +
@@ -2750,14 +2781,15 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x120\n" +
 	"\x04auth\x18\x06 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"U\n" +
 	"\x1aReviewBattleScriptResponse\x127\n" +
-	"\x06reject\x18\x01 \x01(\x0e2\x1f.match.BattleScriptReviewRejectR\x06reject*\x8e\x02\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1f.match.BattleScriptReviewRejectR\x06reject*\xb9\x02\n" +
 	"\x14ActivityBattleReject\x12\x1f\n" +
 	"\x1bACTIVITY_BATTLE_REJECT_NONE\x10\x00\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT\x10\x01\x12)\n" +
 	"%ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE\x10\x02\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE\x10\x03\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY\x10\x04\x12#\n" +
-	"\x1fACTIVITY_BATTLE_REJECT_INTERNAL\x10\x05*\x85\x01\n" +
+	"\x1fACTIVITY_BATTLE_REJECT_INTERNAL\x10\x05\x12)\n" +
+	"%ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW\x10\x06*\x85\x01\n" +
 	"\x15BattleOutcomeDecision\x12#\n" +
 	"\x1fBATTLE_OUTCOME_DECISION_UNKNOWN\x10\x00\x12$\n" +
 	" BATTLE_OUTCOME_DECISION_COMPLETE\x10\x01\x12!\n" +

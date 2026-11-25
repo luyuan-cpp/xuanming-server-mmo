@@ -20,6 +20,15 @@ public:
     static void ClaimActivityVitalityReward(entt::entity player,
         const ::ClaimActivityVitalityRewardRequest* request,
         ::ClaimActivityVitalityRewardResponse* response);
+    static void GetFestivalBeastDetail(entt::entity player,
+        const ::GetFestivalBeastDetailRequest* request,
+        ::GetFestivalBeastDetailResponse* response);
+    static void StartFestivalBeastChallenge(entt::entity player,
+        const ::StartFestivalBeastChallengeRequest* request,
+        ::StartFestivalBeastChallengeResponse* response);
+    static void ClaimFestivalBeastReward(entt::entity player,
+        const ::ClaimFestivalBeastRewardRequest* request,
+        ::ClaimFestivalBeastRewardResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -44,6 +53,33 @@ public:
             ClaimActivityVitalityReward(player,
                 static_cast<const ::ClaimActivityVitalityRewardRequest*>(request),
                 static_cast<::ClaimActivityVitalityRewardResponse*>(response));
+			}
+            break;
+        case 2:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetFestivalBeastDetailResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetFestivalBeastDetail(player,
+                static_cast<const ::GetFestivalBeastDetailRequest*>(request),
+                static_cast<::GetFestivalBeastDetailResponse*>(response));
+			}
+            break;
+        case 3:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::StartFestivalBeastChallengeResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            StartFestivalBeastChallenge(player,
+                static_cast<const ::StartFestivalBeastChallengeRequest*>(request),
+                static_cast<::StartFestivalBeastChallengeResponse*>(response));
+			}
+            break;
+        case 4:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ClaimFestivalBeastRewardResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ClaimFestivalBeastReward(player,
+                static_cast<const ::ClaimFestivalBeastRewardRequest*>(request),
+                static_cast<::ClaimFestivalBeastRewardResponse*>(response));
 			}
             break;
         default:

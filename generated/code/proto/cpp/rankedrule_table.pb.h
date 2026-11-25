@@ -250,6 +250,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedRuleTable final : public ::go
     kTierYunzhangCentiFieldNumber = 19,
     kTierTianshuCentiFieldNumber = 20,
     kTierWushuangCentiFieldNumber = 21,
+    kMilestoneWinMatchesFieldNumber = 23,
   };
   // string desc = 22;
   void clear_desc() ;
@@ -476,11 +477,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedRuleTable final : public ::go
   void _internal_set_tier_wushuang_centi(::uint32_t value);
 
   public:
+  // uint32 milestone_win_matches = 23;
+  void clear_milestone_win_matches() ;
+  [[nodiscard]] ::uint32_t milestone_win_matches() const;
+  void set_milestone_win_matches(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_milestone_win_matches() const;
+  void _internal_set_milestone_win_matches(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:RankedRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
+      ::google::protobuf::internal::TcParseTable<5, 23,
                           0, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -531,6 +542,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedRuleTable final : public ::go
     ::uint32_t tier_yunzhang_centi_;
     ::uint32_t tier_tianshu_centi_;
     ::uint32_t tier_wushuang_centi_;
+    ::uint32_t milestone_win_matches_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1331,6 +1343,30 @@ inline void RankedRuleTable::set_allocated_desc(::std::string* PROTOBUF_NULLABLE
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:RankedRuleTable.desc)
+}
+
+// uint32 milestone_win_matches = 23;
+inline void RankedRuleTable::clear_milestone_win_matches() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.milestone_win_matches_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t RankedRuleTable::milestone_win_matches() const {
+  // @@protoc_insertion_point(field_get:RankedRuleTable.milestone_win_matches)
+  return _internal_milestone_win_matches();
+}
+inline void RankedRuleTable::set_milestone_win_matches(::uint32_t value) {
+  _internal_set_milestone_win_matches(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:RankedRuleTable.milestone_win_matches)
+}
+inline ::uint32_t RankedRuleTable::_internal_milestone_win_matches() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.milestone_win_matches_;
+}
+inline void RankedRuleTable::_internal_set_milestone_win_matches(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.milestone_win_matches_ = value;
 }
 
 // -------------------------------------------------------------------

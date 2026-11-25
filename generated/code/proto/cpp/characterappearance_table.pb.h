@@ -231,6 +231,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
     kAppearanceIdFieldNumber = 2,
     kNameFieldNumber = 3,
     kDescFieldNumber = 6,
+    kArchiveNameFieldNumber = 10,
+    kNicknameFieldNumber = 11,
+    kBiographySummaryFieldNumber = 12,
+    kStoryTitleFieldNumber = 13,
+    kStoryBodyFieldNumber = 14,
     kIdFieldNumber = 1,
     kEnabledFieldNumber = 4,
     kSortOrderFieldNumber = 5,
@@ -281,6 +286,81 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
   const ::std::string& _internal_desc() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
+
+  public:
+  // string archive_name = 10;
+  void clear_archive_name() ;
+  [[nodiscard]] const ::std::string& archive_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_archive_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_archive_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_archive_name();
+  void set_allocated_archive_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_archive_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_archive_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_archive_name();
+
+  public:
+  // string nickname = 11;
+  void clear_nickname() ;
+  [[nodiscard]] const ::std::string& nickname() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_nickname(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_nickname();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_nickname();
+  void set_allocated_nickname(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_nickname() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_nickname(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_nickname();
+
+  public:
+  // string biography_summary = 12;
+  void clear_biography_summary() ;
+  [[nodiscard]] const ::std::string& biography_summary() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_biography_summary(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_biography_summary();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_biography_summary();
+  void set_allocated_biography_summary(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_biography_summary() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_biography_summary(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_biography_summary();
+
+  public:
+  // string story_title = 13;
+  void clear_story_title() ;
+  [[nodiscard]] const ::std::string& story_title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_story_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_story_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_story_title();
+  void set_allocated_story_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_story_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_story_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_story_title();
+
+  public:
+  // string story_body = 14;
+  void clear_story_body() ;
+  [[nodiscard]] const ::std::string& story_body() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_story_body(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_story_body();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_story_body();
+  void set_allocated_story_body(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_story_body() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_story_body(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_story_body();
 
   public:
   // uint32 id = 1;
@@ -347,8 +427,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
-                          0, 62,
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          0, 120,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -379,6 +459,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
     ::google::protobuf::internal::ArenaStringPtr appearance_id_;
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr desc_;
+    ::google::protobuf::internal::ArenaStringPtr archive_name_;
+    ::google::protobuf::internal::ArenaStringPtr nickname_;
+    ::google::protobuf::internal::ArenaStringPtr biography_summary_;
+    ::google::protobuf::internal::ArenaStringPtr story_title_;
+    ::google::protobuf::internal::ArenaStringPtr story_body_;
     ::uint32_t id_;
     ::uint32_t enabled_;
     ::uint32_t sort_order_;
@@ -623,7 +708,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTableData final 
 inline void CharacterAppearanceTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t CharacterAppearanceTable::id() const {
   // @@protoc_insertion_point(field_get:CharacterAppearanceTable.id)
@@ -631,7 +716,7 @@ inline ::uint32_t CharacterAppearanceTable::id() const {
 }
 inline void CharacterAppearanceTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:CharacterAppearanceTable.id)
 }
 inline ::uint32_t CharacterAppearanceTable::_internal_id() const {
@@ -775,7 +860,7 @@ inline void CharacterAppearanceTable::set_allocated_name(::std::string* PROTOBUF
 inline void CharacterAppearanceTable::clear_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enabled_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t CharacterAppearanceTable::enabled() const {
   // @@protoc_insertion_point(field_get:CharacterAppearanceTable.enabled)
@@ -783,7 +868,7 @@ inline ::uint32_t CharacterAppearanceTable::enabled() const {
 }
 inline void CharacterAppearanceTable::set_enabled(::uint32_t value) {
   _internal_set_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:CharacterAppearanceTable.enabled)
 }
 inline ::uint32_t CharacterAppearanceTable::_internal_enabled() const {
@@ -799,7 +884,7 @@ inline void CharacterAppearanceTable::_internal_set_enabled(::uint32_t value) {
 inline void CharacterAppearanceTable::clear_sort_order() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sort_order_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t CharacterAppearanceTable::sort_order() const {
   // @@protoc_insertion_point(field_get:CharacterAppearanceTable.sort_order)
@@ -807,7 +892,7 @@ inline ::uint32_t CharacterAppearanceTable::sort_order() const {
 }
 inline void CharacterAppearanceTable::set_sort_order(::uint32_t value) {
   _internal_set_sort_order(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:CharacterAppearanceTable.sort_order)
 }
 inline ::uint32_t CharacterAppearanceTable::_internal_sort_order() const {
@@ -887,7 +972,7 @@ inline void CharacterAppearanceTable::set_allocated_desc(::std::string* PROTOBUF
 inline void CharacterAppearanceTable::clear_starter_creatable() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.starter_creatable_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t CharacterAppearanceTable::starter_creatable() const {
   // @@protoc_insertion_point(field_get:CharacterAppearanceTable.starter_creatable)
@@ -895,7 +980,7 @@ inline ::uint32_t CharacterAppearanceTable::starter_creatable() const {
 }
 inline void CharacterAppearanceTable::set_starter_creatable(::uint32_t value) {
   _internal_set_starter_creatable(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:CharacterAppearanceTable.starter_creatable)
 }
 inline ::uint32_t CharacterAppearanceTable::_internal_starter_creatable() const {
@@ -911,7 +996,7 @@ inline void CharacterAppearanceTable::_internal_set_starter_creatable(::uint32_t
 inline void CharacterAppearanceTable::clear_card_unlockable() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.card_unlockable_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t CharacterAppearanceTable::card_unlockable() const {
   // @@protoc_insertion_point(field_get:CharacterAppearanceTable.card_unlockable)
@@ -919,7 +1004,7 @@ inline ::uint32_t CharacterAppearanceTable::card_unlockable() const {
 }
 inline void CharacterAppearanceTable::set_card_unlockable(::uint32_t value) {
   _internal_set_card_unlockable(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:CharacterAppearanceTable.card_unlockable)
 }
 inline ::uint32_t CharacterAppearanceTable::_internal_card_unlockable() const {
@@ -935,7 +1020,7 @@ inline void CharacterAppearanceTable::_internal_set_card_unlockable(::uint32_t v
 inline void CharacterAppearanceTable::clear_series_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.series_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t CharacterAppearanceTable::series_id() const {
   // @@protoc_insertion_point(field_get:CharacterAppearanceTable.series_id)
@@ -943,7 +1028,7 @@ inline ::uint32_t CharacterAppearanceTable::series_id() const {
 }
 inline void CharacterAppearanceTable::set_series_id(::uint32_t value) {
   _internal_set_series_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:CharacterAppearanceTable.series_id)
 }
 inline ::uint32_t CharacterAppearanceTable::_internal_series_id() const {
@@ -953,6 +1038,326 @@ inline ::uint32_t CharacterAppearanceTable::_internal_series_id() const {
 inline void CharacterAppearanceTable::_internal_set_series_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.series_id_ = value;
+}
+
+// string archive_name = 10;
+inline void CharacterAppearanceTable::clear_archive_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.archive_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& CharacterAppearanceTable::archive_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.archive_name)
+  return _internal_archive_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceTable::set_archive_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.archive_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.archive_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::mutable_archive_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_archive_name();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceTable.archive_name)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceTable::_internal_archive_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.archive_name_.Get();
+}
+inline void CharacterAppearanceTable::_internal_set_archive_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.archive_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::_internal_mutable_archive_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.archive_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceTable::release_archive_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceTable.archive_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.archive_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.archive_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceTable::set_allocated_archive_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.archive_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.archive_name_.IsDefault()) {
+    _impl_.archive_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceTable.archive_name)
+}
+
+// string nickname = 11;
+inline void CharacterAppearanceTable::clear_nickname() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.nickname_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& CharacterAppearanceTable::nickname() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.nickname)
+  return _internal_nickname();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceTable::set_nickname(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.nickname_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.nickname)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::mutable_nickname()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_nickname();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceTable.nickname)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceTable::_internal_nickname() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.nickname_.Get();
+}
+inline void CharacterAppearanceTable::_internal_set_nickname(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.nickname_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::_internal_mutable_nickname() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.nickname_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceTable::release_nickname() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceTable.nickname)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.nickname_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.nickname_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceTable::set_allocated_nickname(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.nickname_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.nickname_.IsDefault()) {
+    _impl_.nickname_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceTable.nickname)
+}
+
+// string biography_summary = 12;
+inline void CharacterAppearanceTable::clear_biography_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.biography_summary_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& CharacterAppearanceTable::biography_summary() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.biography_summary)
+  return _internal_biography_summary();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceTable::set_biography_summary(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.biography_summary_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.biography_summary)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::mutable_biography_summary()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_biography_summary();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceTable.biography_summary)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceTable::_internal_biography_summary() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.biography_summary_.Get();
+}
+inline void CharacterAppearanceTable::_internal_set_biography_summary(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.biography_summary_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::_internal_mutable_biography_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.biography_summary_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceTable::release_biography_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceTable.biography_summary)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.biography_summary_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.biography_summary_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceTable::set_allocated_biography_summary(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.biography_summary_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.biography_summary_.IsDefault()) {
+    _impl_.biography_summary_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceTable.biography_summary)
+}
+
+// string story_title = 13;
+inline void CharacterAppearanceTable::clear_story_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.story_title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& CharacterAppearanceTable::story_title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.story_title)
+  return _internal_story_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceTable::set_story_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.story_title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.story_title)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::mutable_story_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_story_title();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceTable.story_title)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceTable::_internal_story_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.story_title_.Get();
+}
+inline void CharacterAppearanceTable::_internal_set_story_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.story_title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::_internal_mutable_story_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.story_title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceTable::release_story_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceTable.story_title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.story_title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.story_title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceTable::set_allocated_story_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.story_title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.story_title_.IsDefault()) {
+    _impl_.story_title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceTable.story_title)
+}
+
+// string story_body = 14;
+inline void CharacterAppearanceTable::clear_story_body() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.story_body_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& CharacterAppearanceTable::story_body() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.story_body)
+  return _internal_story_body();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceTable::set_story_body(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.story_body_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.story_body)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::mutable_story_body()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_story_body();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceTable.story_body)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceTable::_internal_story_body() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.story_body_.Get();
+}
+inline void CharacterAppearanceTable::_internal_set_story_body(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.story_body_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceTable::_internal_mutable_story_body() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.story_body_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceTable::release_story_body() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceTable.story_body)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.story_body_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.story_body_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceTable::set_allocated_story_body(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.story_body_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.story_body_.IsDefault()) {
+    _impl_.story_body_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceTable.story_body)
 }
 
 // -------------------------------------------------------------------

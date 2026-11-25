@@ -22,7 +22,7 @@ public static partial class RankedruleTableReflection {
   static RankedruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChZyYW5rZWRydWxlX3RhYmxlLnByb3RvIv0ECg9SYW5rZWRSdWxlVGFibGUS",
+          "ChZyYW5rZWRydWxlX3RhYmxlLnByb3RvIpwFCg9SYW5rZWRSdWxlVGFibGUS",
           "CgoCaWQYASABKA0SFAoMcnVsZV92ZXJzaW9uGAIgASgNEhgKEGJhdHRsZV9j",
           "b25maWdfaWQYAyABKA0SGgoScmVmZXJlbmNlX2NsYXNzX2lkGAQgASgNEhkK",
           "EWNvbXBldGl0aXZlX2xldmVsGAUgASgNEiMKG2RlZmF1bHRfY2hhcmFjdGVy",
@@ -36,14 +36,15 @@ public static partial class RankedruleTableReflection {
           "IAEoDRIiChptaWxlc3RvbmVfdGFsaXNtYW5fbWF0Y2hlcxgRIAEoDRIbChN0",
           "aWVyX3FpbmdmZW5nX2NlbnRpGBIgASgNEhsKE3RpZXJfeXVuemhhbmdfY2Vu",
           "dGkYEyABKA0SGgoSdGllcl90aWFuc2h1X2NlbnRpGBQgASgNEhsKE3RpZXJf",
-          "d3VzaHVhbmdfY2VudGkYFSABKA0SDAoEZGVzYxgWIAEoCSI1ChNSYW5rZWRS",
-          "dWxlVGFibGVEYXRhEh4KBGRhdGEYASADKAsyEC5SYW5rZWRSdWxlVGFibGVC",
-          "QQoOY29tLmdhbWUudGFibGVCGVJhbmtlZFJ1bGVUYWJsZU91dGVyQ2xhc3NQ",
-          "AVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "d3VzaHVhbmdfY2VudGkYFSABKA0SDAoEZGVzYxgWIAEoCRIdChVtaWxlc3Rv",
+          "bmVfd2luX21hdGNoZXMYFyABKA0iNQoTUmFua2VkUnVsZVRhYmxlRGF0YRIe",
+          "CgRkYXRhGAEgAygLMhAuUmFua2VkUnVsZVRhYmxlQkEKDmNvbS5nYW1lLnRh",
+          "YmxlQhlSYW5rZWRSdWxlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9w",
+          "Yi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::RankedRuleTable), global::RankedRuleTable.Parser, new[]{ "Id", "RuleVersion", "BattleConfigId", "ReferenceClassId", "CompetitiveLevel", "DefaultCharacterPresetId", "DefaultPetPresetId", "SeasonDurationDays", "WaitPromptSeconds", "SpreadTier1Seconds", "SpreadTier1Points", "SpreadTier2Seconds", "SpreadTier2Points", "SpreadTier3Points", "MilestoneAvatarMatches", "MilestoneCardMatches", "MilestoneTalismanMatches", "TierQingfengCenti", "TierYunzhangCenti", "TierTianshuCenti", "TierWushuangCenti", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::RankedRuleTable), global::RankedRuleTable.Parser, new[]{ "Id", "RuleVersion", "BattleConfigId", "ReferenceClassId", "CompetitiveLevel", "DefaultCharacterPresetId", "DefaultPetPresetId", "SeasonDurationDays", "WaitPromptSeconds", "SpreadTier1Seconds", "SpreadTier1Points", "SpreadTier2Seconds", "SpreadTier2Points", "SpreadTier3Points", "MilestoneAvatarMatches", "MilestoneCardMatches", "MilestoneTalismanMatches", "TierQingfengCenti", "TierYunzhangCenti", "TierTianshuCenti", "TierWushuangCenti", "Desc", "MilestoneWinMatches" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::RankedRuleTableData), global::RankedRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -108,6 +109,7 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
     tierTianshuCenti_ = other.tierTianshuCenti_;
     tierWushuangCenti_ = other.tierWushuangCenti_;
     desc_ = other.desc_;
+    milestoneWinMatches_ = other.milestoneWinMatches_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -381,6 +383,18 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
     }
   }
 
+  /// <summary>Field number for the "milestone_win_matches" field.</summary>
+  public const int MilestoneWinMatchesFieldNumber = 23;
+  private uint milestoneWinMatches_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint MilestoneWinMatches {
+    get { return milestoneWinMatches_; }
+    set {
+      milestoneWinMatches_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -418,6 +432,7 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
     if (TierTianshuCenti != other.TierTianshuCenti) return false;
     if (TierWushuangCenti != other.TierWushuangCenti) return false;
     if (Desc != other.Desc) return false;
+    if (MilestoneWinMatches != other.MilestoneWinMatches) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -447,6 +462,7 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
     if (TierTianshuCenti != 0) hash ^= TierTianshuCenti.GetHashCode();
     if (TierWushuangCenti != 0) hash ^= TierWushuangCenti.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (MilestoneWinMatches != 0) hash ^= MilestoneWinMatches.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -553,6 +569,10 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
       output.WriteRawTag(178, 1);
       output.WriteString(Desc);
     }
+    if (MilestoneWinMatches != 0) {
+      output.WriteRawTag(184, 1);
+      output.WriteUInt32(MilestoneWinMatches);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -651,6 +671,10 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
       output.WriteRawTag(178, 1);
       output.WriteString(Desc);
     }
+    if (MilestoneWinMatches != 0) {
+      output.WriteRawTag(184, 1);
+      output.WriteUInt32(MilestoneWinMatches);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -726,6 +750,9 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
     }
     if (Desc.Length != 0) {
       size += 2 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (MilestoneWinMatches != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(MilestoneWinMatches);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -804,6 +831,9 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.MilestoneWinMatches != 0) {
+      MilestoneWinMatches = other.MilestoneWinMatches;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -912,6 +942,10 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
           Desc = input.ReadString();
           break;
         }
+        case 184: {
+          MilestoneWinMatches = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -1017,6 +1051,10 @@ public sealed partial class RankedRuleTable : pb::IMessage<RankedRuleTable>
         }
         case 178: {
           Desc = input.ReadString();
+          break;
+        }
+        case 184: {
+          MilestoneWinMatches = input.ReadUInt32();
           break;
         }
       }

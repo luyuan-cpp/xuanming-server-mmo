@@ -35,6 +35,7 @@ import (
 	rfpb "proto/role_fence"
 	teampb "proto/team"
 
+	"shared/accountdirectory"
 	"shared/buildinfo"
 	"shared/clockcheck"
 	"shared/generated/clientrpc"
@@ -140,6 +141,14 @@ func main() {
 		}
 		svcCtx.GuildCallAuth = verifier
 		svcCtx.GuildCallSecret = secret
+	}
+	// scene 调 MatchInternal.StartActivityBattle(瑞兽迎春)的独立签名校验；与 guild 严格分域，缺密钥则拒绝。
+	if secret := strings.TrimSpace(os.Getenv(accountdirectory.SceneSecretEnv)); secret != "" {
+		verifier, err := serviceauth.New(map[string]string{"scene": secret})
+		if err != nil {
+			logx.Must(fmt.Errorf("invalid dedicated signing configuration for scene internal calls"))
+		}
+		svcCtx.SceneCallAuth = verifier
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

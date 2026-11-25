@@ -13,6 +13,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_attribute.h"
+#include "player/system/player_equipment_material_reward.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
@@ -346,8 +347,24 @@ bool PlayerSeasonSystem::IsEligibleBattle(const BattleSettlementData& settlement
                (settlement.outcome() == BATTLE_OUTCOME_SIDE_B_WIN && settlement.player_team_index() == 1);
     case match::MATCH_MODE_1V1:
     case match::MATCH_MODE_5V5:
-    case match::MATCH_MODE_PVP_TEAM:
-        return !settlement.competitive_ranked() || settlement.participated();
+    case match::MATCH_MODE_PVP_TEAM: {
+        if (!settlement.competitive_ranked()) {
+            return true;
+        }
+        if (!settlement.participated()) {
+            return false;
+        }
+        const bool playerWon =
+            (settlement.outcome() == BATTLE_OUTCOME_SIDE_A_WIN && settlement.player_team_index() == 0) ||
+            (settlement.outcome() == BATTLE_OUTCOME_SIDE_B_WIN && settlement.player_team_index() == 1);
+        if (playerWon) {
+            return true;
+        }
+        // 正式排位败局/平局复用材料总账的防挂机门槛，防止秒退/纯托管白嫖赛季印进度点。
+        return settlement.total_rounds() >= PlayerEquipmentMaterialRewardSystem::kPvpMinRoundsForLoss &&
+               settlement.manual_action_rounds() >= PlayerEquipmentMaterialRewardSystem::kPvpMinManualRoundsForLoss &&
+               settlement.effective_combat_contribution();
+    }
     default:
         return false;
     }

@@ -340,6 +340,48 @@
    "resistance": 20,
    "speed": 820,
    "strength": 135
+  },
+  {
+   "armor": 0,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
+   "critchance": 0,
+   "exp_reward": 0,
+   "gold_reward": 0,
+   "health": 2000,
+   "id": 108,
+   "is_boss": 1,
+   "resistance": 5,
+   "speed": 320,
+   "strength": 0
+  },
+  {
+   "armor": 170,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
+   "critchance": 5,
+   "exp_reward": 100,
+   "gold_reward": 60,
+   "health": 2200,
+   "id": 109,
+   "is_boss": 0,
+   "resistance": 15,
+   "speed": 700,
+   "strength": 145
+  },
+  {
+   "armor": 160,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
+   "critchance": 5,
+   "exp_reward": 100,
+   "gold_reward": 60,
+   "health": 2000,
+   "id": 110,
+   "is_boss": 0,
+   "resistance": 15,
+   "speed": 760,
+   "strength": 115
   }
  ]
 }

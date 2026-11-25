@@ -243,6 +243,22 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchTournamentRewardUnavailable = 16051;</code>
      */
     kMatchTournamentRewardUnavailable(16051),
+    /**
+     * <code>kMatchBattleSurrenderNotAllowed = 16052;</code>
+     */
+    kMatchBattleSurrenderNotAllowed(16052),
+    /**
+     * <code>kMatchBattleSurrenderTooEarly = 16053;</code>
+     */
+    kMatchBattleSurrenderTooEarly(16053),
+    /**
+     * <code>kMatchBattleSurrenderCooldown = 16054;</code>
+     */
+    kMatchBattleSurrenderCooldown(16054),
+    /**
+     * <code>kMatchBattleSurrenderAlreadyVoted = 16055;</code>
+     */
+    kMatchBattleSurrenderAlreadyVoted(16055),
     UNRECOGNIZED(-1),
     ;
 
@@ -467,6 +483,22 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchTournamentRewardUnavailable = 16051;</code>
      */
     public static final int kMatchTournamentRewardUnavailable_VALUE = 16051;
+    /**
+     * <code>kMatchBattleSurrenderNotAllowed = 16052;</code>
+     */
+    public static final int kMatchBattleSurrenderNotAllowed_VALUE = 16052;
+    /**
+     * <code>kMatchBattleSurrenderTooEarly = 16053;</code>
+     */
+    public static final int kMatchBattleSurrenderTooEarly_VALUE = 16053;
+    /**
+     * <code>kMatchBattleSurrenderCooldown = 16054;</code>
+     */
+    public static final int kMatchBattleSurrenderCooldown_VALUE = 16054;
+    /**
+     * <code>kMatchBattleSurrenderAlreadyVoted = 16055;</code>
+     */
+    public static final int kMatchBattleSurrenderAlreadyVoted_VALUE = 16055;
 
 
     public final int getNumber() {
@@ -546,6 +578,10 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16049: return kMatchTournamentMatchNotReady;
         case 16050: return kMatchTournamentAlreadyCheered;
         case 16051: return kMatchTournamentRewardUnavailable;
+        case 16052: return kMatchBattleSurrenderNotAllowed;
+        case 16053: return kMatchBattleSurrenderTooEarly;
+        case 16054: return kMatchBattleSurrenderCooldown;
+        case 16055: return kMatchBattleSurrenderAlreadyVoted;
         default: return null;
       }
     }
@@ -611,7 +647,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\254\r\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\302\016\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -654,8 +690,12 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "mentQualifierLimit\020\260}\022\"\n\035kMatchTournamen" +
       "tMatchNotReady\020\261}\022#\n\036kMatchTournamentAlr" +
       "eadyCheered\020\262}\022&\n!kMatchTournamentReward" +
-      "Unavailable\020\263}B$\n\016com.game.tableZ\022genera" +
-      "ted/pb/tableb\006proto3"
+      "Unavailable\020\263}\022$\n\037kMatchBattleSurrenderN" +
+      "otAllowed\020\264}\022\"\n\035kMatchBattleSurrenderToo" +
+      "Early\020\265}\022\"\n\035kMatchBattleSurrenderCooldow" +
+      "n\020\266}\022&\n!kMatchBattleSurrenderAlreadyVote" +
+      "d\020\267}B$\n\016com.game.tableZ\022generated/pb/tab" +
+      "leb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

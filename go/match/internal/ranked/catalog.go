@@ -99,7 +99,7 @@ func NewFromRows(rule *tablepb.RankedRuleTable, presets []*tablepb.RankedPresetT
 func DefaultFallback() *Catalog {
 	rule := &tablepb.RankedRuleTable{
 		Id:                       1,
-		RuleVersion:              1,
+		RuleVersion:              2,
 		BattleConfigId:           5,
 		ReferenceClassId:         1,
 		CompetitiveLevel:         30,
@@ -115,18 +115,19 @@ func DefaultFallback() *Catalog {
 		MilestoneAvatarMatches:   4,
 		MilestoneCardMatches:     8,
 		MilestoneTalismanMatches: 12,
-		TierQingfengCenti:        140000,
-		TierYunzhangCenti:        155000,
-		TierTianshuCenti:         170000,
+		MilestoneWinMatches:      6,
+		TierQingfengCenti:        152000,
+		TierYunzhangCenti:        160000,
+		TierTianshuCenti:         172000,
 		TierWushuangCenti:        185000,
 	}
 	presets := []*tablepb.RankedPresetTable{
-		{Id: 101, RoleKind: RoleKindCharacter, Code: "pozhen", Name: "破阵", RoleTag: "物攻", WeightCon: 1, WeightSpi: 0, WeightStr: 3, WeightAgi: 1, SkillIds: []uint32{10002, 10039, 10025}, Sort: 1},
-		{Id: 102, RoleKind: RoleKindCharacter, Code: "kongchang", Name: "控场", RoleTag: "控制", WeightCon: 1, WeightSpi: 2, WeightStr: 0, WeightAgi: 2, SkillIds: []uint32{10006, 10021, 10034}, Sort: 2},
-		{Id: 103, RoleKind: RoleKindCharacter, Code: "shouxin", Name: "守心", RoleTag: "治疗", WeightCon: 2, WeightSpi: 2, WeightStr: 0, WeightAgi: 1, SkillIds: []uint32{10010, 10033, 10040}, Sort: 3},
-		{Id: 201, RoleKind: RoleKindPet, Code: "pojia", Name: "破甲", RoleTag: "破甲", PetTableId: 3, WeightCon: 1, WeightSpi: 0, WeightStr: 3, WeightAgi: 1, SkillIds: []uint32{10002, 10018, 13001}, PetEntryIds: []uint32{501}, PetEntryPoints: []uint32{20}, Sort: 1},
-		{Id: 202, RoleKind: RoleKindPet, Code: "lingzhou", Name: "灵咒", RoleTag: "法控", PetTableId: 1, WeightCon: 1, WeightSpi: 2, WeightStr: 0, WeightAgi: 2, SkillIds: []uint32{10006, 10019, 10034}, PetEntryIds: []uint32{502, 531}, PetEntryPoints: []uint32{10, 10}, Sort: 2},
-		{Id: 203, RoleKind: RoleKindPet, Code: "huzhu", Name: "护主", RoleTag: "护盾", PetTableId: 2, WeightCon: 2, WeightSpi: 2, WeightStr: 0, WeightAgi: 1, SkillIds: []uint32{10014, 10010, 11006, 12004}, PetEntryIds: []uint32{503, 504}, PetEntryPoints: []uint32{10, 10}, Sort: 3},
+		{Id: 101, RoleKind: RoleKindCharacter, Code: "pozhen", Name: "破阵", RoleTag: "爆发破疗", WeightCon: 1, WeightSpi: 0, WeightStr: 3, WeightAgi: 1, SkillIds: []uint32{10002, 10039, 10025, 10035}, Sort: 1},
+		{Id: 102, RoleKind: RoleKindCharacter, Code: "kongchang", Name: "控场", RoleTag: "全封映法", WeightCon: 1, WeightSpi: 2, WeightStr: 0, WeightAgi: 2, SkillIds: []uint32{10006, 10020, 10034, 10041}, Sort: 2},
+		{Id: 103, RoleKind: RoleKindCharacter, Code: "shouxin", Name: "守心", RoleTag: "奶盾复苏", WeightCon: 2, WeightSpi: 2, WeightStr: 0, WeightAgi: 1, SkillIds: []uint32{10010, 10033, 10040, 10026}, Sort: 3},
+		{Id: 201, RoleKind: RoleKindPet, Code: "pojia", Name: "破甲", RoleTag: "破甲提速", PetTableId: 3, WeightCon: 1, WeightSpi: 0, WeightStr: 3, WeightAgi: 1, SkillIds: []uint32{10002, 10018, 10016, 13005}, PetEntryIds: []uint32{501}, PetEntryPoints: []uint32{20}, Sort: 1},
+		{Id: 202, RoleKind: RoleKindPet, Code: "lingzhou", Name: "灵咒", RoleTag: "毒法回响", PetTableId: 1, WeightCon: 1, WeightSpi: 2, WeightStr: 0, WeightAgi: 2, SkillIds: []uint32{10006, 10019, 10034, 13006}, PetEntryIds: []uint32{502, 531}, PetEntryPoints: []uint32{10, 10}, Sort: 2},
+		{Id: 203, RoleKind: RoleKindPet, Code: "huzhu", Name: "护主", RoleTag: "双罩护主", PetTableId: 2, WeightCon: 2, WeightSpi: 2, WeightStr: 0, WeightAgi: 1, SkillIds: []uint32{10014, 10010, 11006, 11005}, PetEntryIds: []uint32{503, 504}, PetEntryPoints: []uint32{10, 10}, Sort: 3},
 	}
 	cat, err := NewFromRows(rule, presets)
 	if err != nil {
@@ -149,8 +150,9 @@ func validateRule(r *tablepb.RankedRuleTable) error {
 	}
 	if r.GetMilestoneAvatarMatches() == 0 ||
 		r.GetMilestoneCardMatches() <= r.GetMilestoneAvatarMatches() ||
-		r.GetMilestoneTalismanMatches() <= r.GetMilestoneCardMatches() {
-		return errors.New("ranked: RankedRule milestone match counts must strictly increase")
+		r.GetMilestoneTalismanMatches() <= r.GetMilestoneCardMatches() ||
+		r.GetMilestoneWinMatches() == 0 {
+		return errors.New("ranked: RankedRule milestone match counts invalid")
 	}
 	if r.GetTierQingfengCenti() == 0 ||
 		r.GetTierYunzhangCenti() <= r.GetTierQingfengCenti() ||
@@ -334,7 +336,8 @@ func (c *Catalog) Fingerprint() string            { return c.effective().fingerp
 func (c *Catalog) RankedCurve() ratingrule.RankedCurve {
 	return c.effective().curve
 }
-func (c *Catalog) WaitPromptSeconds() uint32 { return c.effective().rule.GetWaitPromptSeconds() }
+func (c *Catalog) WaitPromptSeconds() uint32   { return c.effective().rule.GetWaitPromptSeconds() }
+func (c *Catalog) WinMilestoneMatches() uint32 { return c.effective().rule.GetMilestoneWinMatches() }
 
 func (c *Catalog) DefaultPresets() (uint32, uint32) {
 	r := c.effective().rule

@@ -508,4 +508,8 @@
     <ClCompile Include="common\component\player_craft_comp.pb.cc" />
     <ClInclude Include="common\component\player_craft_comp.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_festival_beast_comp.pb.cc" />
+    <ClInclude Include="common\component\player_festival_beast_comp.pb.h" />
+  </ItemGroup>
 </Project>

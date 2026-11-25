@@ -261,10 +261,10 @@ type RankedTier int32
 
 const (
 	RankedTier_RANKED_TIER_UNSPECIFIED RankedTier = 0 // 本季未亮段
-	RankedTier_RANKED_TIER_CHUSHI      RankedTier = 1 // 初试: [0, 1400)
-	RankedTier_RANKED_TIER_QINGFENG    RankedTier = 2 // 青锋: [1400, 1550)
-	RankedTier_RANKED_TIER_YUNZHANG    RankedTier = 3 // 云章: [1550, 1700)
-	RankedTier_RANKED_TIER_TIANSHU     RankedTier = 4 // 天枢: [1700, 1850)
+	RankedTier_RANKED_TIER_CHUSHI      RankedTier = 1 // 初试: [0, 1520)（新号 1500 起步，净胜 2 场破冰升青锋）
+	RankedTier_RANKED_TIER_QINGFENG    RankedTier = 2 // 青锋: [1520, 1600)
+	RankedTier_RANKED_TIER_YUNZHANG    RankedTier = 3 // 云章: [1600, 1720)（封榜起享段位徽章与赛季称号）
+	RankedTier_RANKED_TIER_TIANSHU     RankedTier = 4 // 天枢: [1720, 1850)
 	RankedTier_RANKED_TIER_WUSHUANG    RankedTier = 5 // 无双: [1850, +∞)
 )
 
@@ -374,9 +374,10 @@ const (
 	RankedRewardKind_RANKED_REWARD_AVATAR_PATTERN       RankedRewardKind = 1 // 累计 4 场: 主题头像纹样
 	RankedRewardKind_RANKED_REWARD_CARD_BACKGROUND      RankedRewardKind = 2 // 累计 8 场: 名片底纹
 	RankedRewardKind_RANKED_REWARD_TALISMAN             RankedRewardKind = 3 // 累计 12 场: 永久青云玉符
-	RankedRewardKind_RANKED_REWARD_TIER_BADGE           RankedRewardKind = 4 // 最高段位徽章(天枢/无双)
-	RankedRewardKind_RANKED_REWARD_TIER_TITLE           RankedRewardKind = 5 // 赛季称号(天枢/无双)
+	RankedRewardKind_RANKED_REWARD_TIER_BADGE           RankedRewardKind = 4 // 最高段位徽章(云章/天枢/无双)
+	RankedRewardKind_RANKED_REWARD_TIER_TITLE           RankedRewardKind = 5 // 赛季称号(云章/天枢/无双)
 	RankedRewardKind_RANKED_REWARD_CHAMPION_INSCRIPTION RankedRewardKind = 6 // 封榜第 1 且终分达到无双: 榜首题名
+	RankedRewardKind_RANKED_REWARD_WIN_MILESTONE        RankedRewardKind = 7 // 本季累计 6 胜: 永久「锋芒」赛季称号（可佩戴于称号栏）
 )
 
 // Enum value maps for RankedRewardKind.
@@ -389,6 +390,7 @@ var (
 		4: "RANKED_REWARD_TIER_BADGE",
 		5: "RANKED_REWARD_TIER_TITLE",
 		6: "RANKED_REWARD_CHAMPION_INSCRIPTION",
+		7: "RANKED_REWARD_WIN_MILESTONE",
 	}
 	RankedRewardKind_value = map[string]int32{
 		"RANKED_REWARD_KIND_UNSPECIFIED":     0,
@@ -398,6 +400,7 @@ var (
 		"RANKED_REWARD_TIER_BADGE":           4,
 		"RANKED_REWARD_TIER_TITLE":           5,
 		"RANKED_REWARD_CHAMPION_INSCRIPTION": 6,
+		"RANKED_REWARD_WIN_MILESTONE":        7,
 	}
 )
 
@@ -3518,8 +3521,15 @@ type RankedSeasonInfo struct {
 	PrimaryTeamSizes []uint32 `protobuf:"varint,22,rep,packed,name=primary_team_sizes,json=primaryTeamSizes,proto3" json:"primary_team_sizes,omitempty"`
 	// 归属特殊玩法开关的人数档（如 [2, 4]，对应帮会 2V2 会武 / 主题 4V4 特殊赛）。
 	SpecialTeamSizes []uint32 `protobuf:"varint,23,rep,packed,name=special_team_sizes,json=specialTeamSizes,proto3" json:"special_team_sizes,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 权威五段下限（×100，客户端直读用于展示“距下一段还差 X 分”，严禁硬编码）。
+	TierQingfengCenti uint32 `protobuf:"varint,24,opt,name=tier_qingfeng_centi,json=tierQingfengCenti,proto3" json:"tier_qingfeng_centi,omitempty"`
+	TierYunzhangCenti uint32 `protobuf:"varint,25,opt,name=tier_yunzhang_centi,json=tierYunzhangCenti,proto3" json:"tier_yunzhang_centi,omitempty"`
+	TierTianshuCenti  uint32 `protobuf:"varint,26,opt,name=tier_tianshu_centi,json=tierTianshuCenti,proto3" json:"tier_tianshu_centi,omitempty"`
+	TierWushuangCenti uint32 `protobuf:"varint,27,opt,name=tier_wushuang_centi,json=tierWushuangCenti,proto3" json:"tier_wushuang_centi,omitempty"`
+	// 本季胜场锋芒称号里程碑门槛（V2=6）。
+	MilestoneWinMatches uint32 `protobuf:"varint,28,opt,name=milestone_win_matches,json=milestoneWinMatches,proto3" json:"milestone_win_matches,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *RankedSeasonInfo) Reset() {
@@ -3713,6 +3723,41 @@ func (x *RankedSeasonInfo) GetSpecialTeamSizes() []uint32 {
 	return nil
 }
 
+func (x *RankedSeasonInfo) GetTierQingfengCenti() uint32 {
+	if x != nil {
+		return x.TierQingfengCenti
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetTierYunzhangCenti() uint32 {
+	if x != nil {
+		return x.TierYunzhangCenti
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetTierTianshuCenti() uint32 {
+	if x != nil {
+		return x.TierTianshuCenti
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetTierWushuangCenti() uint32 {
+	if x != nil {
+		return x.TierWushuangCenti
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetMilestoneWinMatches() uint32 {
+	if x != nil {
+		return x.MilestoneWinMatches
+	}
+	return 0
+}
+
 type RankedPlayerSeasonSummary struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	SeasonId        uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
@@ -3727,7 +3772,7 @@ type RankedPlayerSeasonSummary struct {
 	Losses          uint32                 `protobuf:"varint,10,opt,name=losses,proto3" json:"losses,omitempty"`
 	Draws           uint32                 `protobuf:"varint,11,opt,name=draws,proto3" json:"draws,omitempty"`
 	QualifiedAtMs   uint64                 `protobuf:"varint,12,opt,name=qualified_at_ms,json=qualifiedAtMs,proto3" json:"qualified_at_ms,omitempty"`     // 本季首次亮段时刻
-	MilestoneBits   uint32                 `protobuf:"varint,13,opt,name=milestone_bits,json=milestoneBits,proto3" json:"milestone_bits,omitempty"`       // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
+	MilestoneBits   uint32                 `protobuf:"varint,13,opt,name=milestone_bits,json=milestoneBits,proto3" json:"milestone_bits,omitempty"`       // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符, bit3=6胜锋芒称号
 	FinalRank       uint64                 `protobuf:"varint,14,opt,name=final_rank,json=finalRank,proto3" json:"final_rank,omitempty"`                   // 封榜后最终名次;0=未上榜或未封榜
 	ChampionAwarded bool                   `protobuf:"varint,15,opt,name=champion_awarded,json=championAwarded,proto3" json:"champion_awarded,omitempty"` // 封榜第 1 且终分达到无双
 	unknownFields   protoimpl.UnknownFields
@@ -7038,7 +7083,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x1cequipped_avatar_pattern_code\x18\x02 \x01(\tR\x19equippedAvatarPatternCode\x121\n" +
 	"\x15equipped_card_bg_code\x18\x03 \x01(\tR\x12equippedCardBgCode\x12.\n" +
 	"\x13equipped_title_code\x18\x04 \x01(\tR\x11equippedTitleCode\x12#\n" +
-	"\rhide_talisman\x18\x05 \x01(\bR\fhideTalisman\"\xda\a\n" +
+	"\rhide_talisman\x18\x05 \x01(\bR\fhideTalisman\"\xcc\t\n" +
 	"\x10RankedSeasonInfo\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -7065,7 +7110,12 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x12allowed_team_sizes\x18\x14 \x03(\rR\x10allowedTeamSizes\x120\n" +
 	"\x14uses_own_progression\x18\x15 \x01(\bR\x12usesOwnProgression\x12,\n" +
 	"\x12primary_team_sizes\x18\x16 \x03(\rR\x10primaryTeamSizes\x12,\n" +
-	"\x12special_team_sizes\x18\x17 \x03(\rR\x10specialTeamSizes\"\xaa\x04\n" +
+	"\x12special_team_sizes\x18\x17 \x03(\rR\x10specialTeamSizes\x12.\n" +
+	"\x13tier_qingfeng_centi\x18\x18 \x01(\rR\x11tierQingfengCenti\x12.\n" +
+	"\x13tier_yunzhang_centi\x18\x19 \x01(\rR\x11tierYunzhangCenti\x12,\n" +
+	"\x12tier_tianshu_centi\x18\x1a \x01(\rR\x10tierTianshuCenti\x12.\n" +
+	"\x13tier_wushuang_centi\x18\x1b \x01(\rR\x11tierWushuangCenti\x122\n" +
+	"\x15milestone_win_matches\x18\x1c \x01(\rR\x13milestoneWinMatches\"\xaa\x04\n" +
 	"\x19RankedPlayerSeasonSummary\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -7396,7 +7446,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x1fRANKED_SEASON_STATE_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aRANKED_SEASON_STATE_ACTIVE\x10\x01\x12 \n" +
 	"\x1cRANKED_SEASON_STATE_SETTLING\x10\x02\x12\x1e\n" +
-	"\x1aRANKED_SEASON_STATE_CLOSED\x10\x03*\xfb\x01\n" +
+	"\x1aRANKED_SEASON_STATE_CLOSED\x10\x03*\x9c\x02\n" +
 	"\x10RankedRewardKind\x12\"\n" +
 	"\x1eRANKED_REWARD_KIND_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cRANKED_REWARD_AVATAR_PATTERN\x10\x01\x12!\n" +
@@ -7404,7 +7454,8 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x16RANKED_REWARD_TALISMAN\x10\x03\x12\x1c\n" +
 	"\x18RANKED_REWARD_TIER_BADGE\x10\x04\x12\x1c\n" +
 	"\x18RANKED_REWARD_TIER_TITLE\x10\x05\x12&\n" +
-	"\"RANKED_REWARD_CHAMPION_INSCRIPTION\x10\x06*\xc4\x01\n" +
+	"\"RANKED_REWARD_CHAMPION_INSCRIPTION\x10\x06\x12\x1f\n" +
+	"\x1bRANKED_REWARD_WIN_MILESTONE\x10\a*\xc4\x01\n" +
 	"\x17RankedMatchRatingStatus\x12#\n" +
 	"\x1fRANKED_MATCH_RATING_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bRANKED_MATCH_RATING_PENDING\x10\x01\x12!\n" +

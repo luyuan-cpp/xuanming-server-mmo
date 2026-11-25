@@ -378,6 +378,16 @@ bool PlayerAppearanceSystem::ValidateTables()
 			LOG_ERROR << "[PlayerAppearance] table validation failed: missing bit_index mapping for id=" << row.id();
 			return false;
 		}
+		if (!player_appearance::BiographyFieldsValid(
+				row.archive_name(),
+				row.nickname(),
+				row.biography_summary(),
+				row.story_title(),
+				row.story_body()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: incomplete biography fields for id=" << row.id();
+			return false;
+		}
 		if (row.enabled() != 0)
 		{
 			if (row.series_id() != 0 && enabledSeriesIds.find(row.series_id()) == enabledSeriesIds.end())

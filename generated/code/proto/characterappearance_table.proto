@@ -18,6 +18,11 @@ message CharacterAppearanceTable {
 	uint32 starter_creatable = 7;
 	uint32 card_unlockable = 8;
 	uint32 series_id = 9;
+	string archive_name = 10;
+	string nickname = 11;
+	string biography_summary = 12;
+	string story_title = 13;
+	string story_body = 14;
 }
 
 message CharacterAppearanceTableData {

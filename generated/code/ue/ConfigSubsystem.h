@@ -60,6 +60,8 @@
 #include "EquipGemSocketTable.h"
 #include "EquipSlotTable.h"
 #include "EquipV1AffixTable.h"
+#include "FestivalBeastActivityTable.h"
+#include "FestivalBeastTierTable.h"
 #include "GlobalVariableTable.h"
 #include "GuildActivityTable.h"
 #include "GuildDonateTable.h"
@@ -135,7 +137,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 68;
+	static constexpr int32 TableCount = 70;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -278,6 +280,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UEquipV1AffixTable* GetEquipV1AffixTable() const { return EquipV1AffixTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UFestivalBeastActivityTable* GetFestivalBeastActivityTable() const { return FestivalBeastActivityTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UFestivalBeastTierTable* GetFestivalBeastTierTable() const { return FestivalBeastTierTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UGlobalVariableTable* GetGlobalVariableTable() const { return GlobalVariableTable; }
@@ -453,6 +461,10 @@ private:
 	TObjectPtr<UEquipSlotTable> EquipSlotTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UEquipV1AffixTable> EquipV1AffixTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UFestivalBeastActivityTable> FestivalBeastActivityTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UFestivalBeastTierTable> FestivalBeastTierTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UGlobalVariableTable> GlobalVariableTable;
 	UPROPERTY(Transient)

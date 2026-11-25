@@ -77,3 +77,72 @@ func (sceneActivityClientPlayerRpc) decodeClaimActivityVitalityReward(reply *bas
 	}
 	return resp, nil
 }
+
+// GetFestivalBeastDetail 异步调用 SceneActivityClientPlayer.GetFestivalBeastDetail(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) GetFestivalBeastDetail(c *pkg.GameClient, req *scene.GetFestivalBeastDetailRequest, timeout time.Duration, done func(*scene.GetFestivalBeastDetailResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerGetFestivalBeastDetailMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetFestivalBeastDetail(reply, err))
+	})
+}
+
+// GetFestivalBeastDetailSync 同步调用 SceneActivityClientPlayer.GetFestivalBeastDetail(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) GetFestivalBeastDetailSync(ctx context.Context, c *pkg.GameClient, req *scene.GetFestivalBeastDetailRequest, timeout time.Duration) (*scene.GetFestivalBeastDetailResponse, error) {
+	return r.decodeGetFestivalBeastDetail(c.CallSync(ctx, game.SceneActivityClientPlayerGetFestivalBeastDetailMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeGetFestivalBeastDetail(reply *base.MessageContent, err error) (*scene.GetFestivalBeastDetailResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetFestivalBeastDetailResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.GetFestivalBeastDetail reply: %w", err)
+	}
+	return resp, nil
+}
+
+// StartFestivalBeastChallenge 异步调用 SceneActivityClientPlayer.StartFestivalBeastChallenge(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) StartFestivalBeastChallenge(c *pkg.GameClient, req *scene.StartFestivalBeastChallengeRequest, timeout time.Duration, done func(*scene.StartFestivalBeastChallengeResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerStartFestivalBeastChallengeMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeStartFestivalBeastChallenge(reply, err))
+	})
+}
+
+// StartFestivalBeastChallengeSync 同步调用 SceneActivityClientPlayer.StartFestivalBeastChallenge(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) StartFestivalBeastChallengeSync(ctx context.Context, c *pkg.GameClient, req *scene.StartFestivalBeastChallengeRequest, timeout time.Duration) (*scene.StartFestivalBeastChallengeResponse, error) {
+	return r.decodeStartFestivalBeastChallenge(c.CallSync(ctx, game.SceneActivityClientPlayerStartFestivalBeastChallengeMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeStartFestivalBeastChallenge(reply *base.MessageContent, err error) (*scene.StartFestivalBeastChallengeResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.StartFestivalBeastChallengeResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.StartFestivalBeastChallenge reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ClaimFestivalBeastReward 异步调用 SceneActivityClientPlayer.ClaimFestivalBeastReward(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) ClaimFestivalBeastReward(c *pkg.GameClient, req *scene.ClaimFestivalBeastRewardRequest, timeout time.Duration, done func(*scene.ClaimFestivalBeastRewardResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerClaimFestivalBeastRewardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeClaimFestivalBeastReward(reply, err))
+	})
+}
+
+// ClaimFestivalBeastRewardSync 同步调用 SceneActivityClientPlayer.ClaimFestivalBeastReward(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) ClaimFestivalBeastRewardSync(ctx context.Context, c *pkg.GameClient, req *scene.ClaimFestivalBeastRewardRequest, timeout time.Duration) (*scene.ClaimFestivalBeastRewardResponse, error) {
+	return r.decodeClaimFestivalBeastReward(c.CallSync(ctx, game.SceneActivityClientPlayerClaimFestivalBeastRewardMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeClaimFestivalBeastReward(reply *base.MessageContent, err error) (*scene.ClaimFestivalBeastRewardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ClaimFestivalBeastRewardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.ClaimFestivalBeastReward reply: %w", err)
+	}
+	return resp, nil
+}

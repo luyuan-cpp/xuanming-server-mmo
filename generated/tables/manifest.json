@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
-  "schema_digest": "2d08ed0321d964c6",
-  "version": 62,
-  "content_digest": "901fb10be23b0bcf0149c930c03dc7c796f845aa36b95999e7662e5e091426d8",
-  "generated_at": "2026-11-24T14:40:56Z",
+  "schema_digest": "06b4950b3c21900a",
+  "version": 66,
+  "content_digest": "5a64a86cb2aeabb8dd99044a275137f56a4b5d1191118663251cf061bcb5309d",
+  "generated_at": "2026-11-25T06:19:23Z",
   "source_rev": {
-    "commit": "5676d207a6ab960edff7ce7e54bbff6d93a796c1",
+    "commit": "bba38b77cffc99b37f418948d0b64e92add08589",
     "data_dirty": true
   },
-  "table_count": 68,
+  "table_count": 70,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -392,21 +392,21 @@
       "rows": 9,
       "source": {
         "file": "CharacterAppearance.xlsx",
-        "size": 6332,
-        "sha256": "7fa13b87382c007732340f68f893ead60cc39546e2a46c130378a5bc7275307f"
+        "size": 10119,
+        "sha256": "5386d93839308e7a5ffc189f6e5859a87d4c2457e7b4351895467eef68e0538f"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "characterappearance.json",
-          "size": 2317,
-          "sha256": "50332de23f5421eef308f3052ec6cbf1934c334cdcfb330c1be6861ebdf822a9"
+          "size": 8839,
+          "sha256": "7792dcb676b78e535bb1586b918187c7200d47c7650729e1f459df0aaf47e849"
         },
         {
           "kind": "binary",
           "file": "characterappearance.pb",
-          "size": 824,
-          "sha256": "7dcc3db01ba3d4f220d8d20de54b305ec80e565d16953d4245a98f09c733208d"
+          "size": 6508,
+          "sha256": "1379d1c9cca24423b80566e0ad2b0c72f3636d1b993378be12931bd7c93bb026"
         }
       ]
     },
@@ -489,24 +489,24 @@
       "name": "Dungeon",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 15,
+      "rows": 17,
       "source": {
         "file": "Dungeon.xlsx",
-        "size": 5902,
-        "sha256": "e3190547f2d0d522fb31ceb13270ef05e6328c66f66e7243a9fdfbea1c156fc2"
+        "size": 5986,
+        "sha256": "57e173235feb68360e3264b08f20213a21d18deb7b5c05d806ceaa7da798fa01"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "dungeon.json",
-          "size": 3205,
-          "sha256": "951d658dcc0224c2879582174904086dd3499e7ec5585326f2d667a615fc4c84"
+          "size": 3644,
+          "sha256": "9fa26c24b5a188247fb7c73160d23d525463d0e22e69e258435b4d8fc560e2f1"
         },
         {
           "kind": "binary",
           "file": "dungeon.pb",
-          "size": 278,
-          "sha256": "40cd68388ef409af9068c70d03f50a2e41aaa92a49a9e1ee15fd0f25a8cc92a8"
+          "size": 322,
+          "sha256": "c5f48528733220ce64b965af993034d25dadb8cf021e65382e254d90e01cf599"
         }
       ]
     },
@@ -786,6 +786,56 @@
       ]
     },
     {
+      "name": "FestivalBeastActivity",
+      "hot_reload": true,
+      "ids_permanent": false,
+      "rows": 1,
+      "source": {
+        "file": "FestivalBeastActivity.xlsx",
+        "size": 5688,
+        "sha256": "0cefd46813d09ca1871b11990d3c8ad4a369dff6d8f7512e860e39955f90ea90"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "festivalbeastactivity.json",
+          "size": 641,
+          "sha256": "bf5773d609a6f45a4855fb2cf5a42762e354708a06fb7c00f125be8897c1242c"
+        },
+        {
+          "kind": "binary",
+          "file": "festivalbeastactivity.pb",
+          "size": 143,
+          "sha256": "2e75f3bf02beddd9c759955dcfed9d1c5eeb16bed5790e076a18ddf7a204d7c6"
+        }
+      ]
+    },
+    {
+      "name": "FestivalBeastTier",
+      "hot_reload": true,
+      "ids_permanent": false,
+      "rows": 8,
+      "source": {
+        "file": "FestivalBeastTier.xlsx",
+        "size": 5430,
+        "sha256": "3714293888e669b9fa92f5b94e8c157d1301f940689cbff478a3a16cc10d6ca2"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "festivalbeasttier.json",
+          "size": 1544,
+          "sha256": "f3618191c3e3a1d7308bd38c8be84545465ca9b97e6503a747a2ccf53d545b8f"
+        },
+        {
+          "kind": "binary",
+          "file": "festivalbeasttier.pb",
+          "size": 182,
+          "sha256": "31089c7e34185cbb941eee5b1f5b16a4fbb038bfe8a9d253b433977fce67d219"
+        }
+      ]
+    },
+    {
       "name": "GlobalVariable",
       "hot_reload": false,
       "ids_permanent": false,
@@ -1039,24 +1089,24 @@
       "name": "Monster",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 23,
+      "rows": 26,
       "source": {
         "file": "Monster.xlsx",
-        "size": 6618,
-        "sha256": "43ba79a64988bd845d8642616e2bed4dfaf19b8cf75e6e035feb8e8e1ad5bfa0"
+        "size": 6755,
+        "sha256": "690e95113750c2685f30bca77c7bc0d08c7f418f31d6de578202922ace19f171"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "monster.json",
-          "size": 6007,
-          "sha256": "28ba71aeeb93ace0f92dae5750383a871e4a676fcf82e823f9fc55840690aa2f"
+          "size": 6746,
+          "sha256": "7ef9432ebb57dd0a88068cfd77c38a6e03eadac4197e4cd20333fa73e469c78d"
         },
         {
           "kind": "binary",
           "file": "monster.pb",
-          "size": 592,
-          "sha256": "aae3d50ebb385a2fd951a47b57e0a6c040e2a36252d279b33e5adee3711f43ff"
+          "size": 653,
+          "sha256": "93ffb12640955fac0ceb94a0ae00fc2bd5f637dd13162466165a8e65c92f12c4"
         }
       ]
     },
@@ -1139,24 +1189,24 @@
       "name": "Pet",
       "hot_reload": false,
       "ids_permanent": true,
-      "rows": 22,
+      "rows": 23,
       "source": {
         "file": "Pet.xlsx",
-        "size": 7501,
-        "sha256": "8c988411c0c4a407f50b557787aa2fde2fb0264708cdbc6a608c6eb422df749c"
+        "size": 8095,
+        "sha256": "e19be27192b7014fe00eb8b06802e566582934edb18f8c369ae9dc2120d9e9b8"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "pet.json",
-          "size": 10774,
-          "sha256": "e6f657eeceb2a51e5ef46fae4efe62daddd1e7717c4d35d33a44d899afbda119"
+          "size": 13408,
+          "sha256": "77ee0767fdf0076f5390040da8ac24a4ffc10dcfde85568b9028f02f489ce68e"
         },
         {
           "kind": "binary",
           "file": "pet.pb",
-          "size": 2167,
-          "sha256": "99c7f4cd766dc8567f6ce3c9ce3a33d583a3663abfad1e00c67eae4f7d52a43e"
+          "size": 2328,
+          "sha256": "87d7dd3a79dc082d0b667f40ad44691bb7434326663773a992da572ec873b254"
         }
       ]
     },
@@ -1239,24 +1289,24 @@
       "name": "PlayMode",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 26,
+      "rows": 28,
       "source": {
         "file": "PlayMode.xlsx",
-        "size": 6089,
-        "sha256": "341a51a0a59e7a7709bcba3bdde4ba3038e52c53f5d36b92f17ed7ea20db7828"
+        "size": 6124,
+        "sha256": "aee8a6c43d690adbf4586346bdfef38c22966396b8df5343dedac11d4984477a"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "playmode.json",
-          "size": 2972,
-          "sha256": "d9413d35a9321ae7832c1d391554a725d06101974c66dbf3049454d20343fed9"
+          "size": 3198,
+          "sha256": "31cec82d060eac2b7fa70686f0cbc9ba378c74fbe405f9d775c21e0e2ee0d3f2"
         },
         {
           "kind": "binary",
           "file": "playmode.pb",
-          "size": 316,
-          "sha256": "21ccb341d1475412857aabff39e985bce64cda12131e2e06ecb42ba40bd70dd5"
+          "size": 341,
+          "sha256": "e5ec0f336462578e2341eff998aee87920860815c88757cb59e011108bffaae3"
         }
       ]
     },
@@ -1267,21 +1317,21 @@
       "rows": 6,
       "source": {
         "file": "RankedPreset.xlsx",
-        "size": 6059,
-        "sha256": "764e8bb801aedbfa22626b097b085d88052e376cb7ee54da81ae17ce1a019c70"
+        "size": 6217,
+        "sha256": "086c4a8df20eaa8fd922424e85f6dc7a2483a5aeef4e380f5e6bc3b430c28020"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "rankedpreset.json",
-          "size": 2450,
-          "sha256": "56b6d577aaef9f99088eeeaa7eacbec100be37f6b1dd118806d999b0d7ed3d61"
+          "size": 2661,
+          "sha256": "77b60a3d4f5ecab2c3662adf0236a0a7a8e01c318fc7a7ec7420ec4df346a736"
         },
         {
           "kind": "binary",
           "file": "rankedpreset.pb",
-          "size": 724,
-          "sha256": "d809fc7da84dd65ebc79265cb9f8b32e88ca98f41c1128a9552307eab25b1bb5"
+          "size": 894,
+          "sha256": "a0ab1316131dbcd6f5acc66f9dbc013f25e339e806ad03fc7d1e7f6304f610da"
         }
       ]
     },
@@ -1292,21 +1342,21 @@
       "rows": 1,
       "source": {
         "file": "RankedRule.xlsx",
-        "size": 5666,
-        "sha256": "c27d010604a1a61732012ba72b290e844afaa1be5c638d522e04fadc6314e58b"
+        "size": 5747,
+        "sha256": "e487d4e503ea6c20dac27e8a3ed9e093a9912b7641f16245151775101b4ee1c9"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "rankedrule.json",
-          "size": 722,
-          "sha256": "1cc0a561163b6d2203dc4329e886a38dea6115b5ec7d259253a835141aaa065a"
+          "size": 814,
+          "sha256": "c336daa0508d2b22e8de9f358bf3d761b68a5729ca251d0ee5b4b1e5c6390220"
         },
         {
           "kind": "binary",
           "file": "rankedrule.pb",
-          "size": 104,
-          "sha256": "662d09cfe172e224772db58015f0c2846cafe07d5cbde0a5552e9452e4e30da1"
+          "size": 169,
+          "sha256": "e64198d27e0acefded2cde2e81a75a3692fa3bbe7ff58c9a4b96ce1e04847150"
         }
       ]
     },
@@ -1589,24 +1639,24 @@
       "name": "TrialJournalEntry",
       "hot_reload": true,
       "ids_permanent": true,
-      "rows": 11,
+      "rows": 12,
       "source": {
         "file": "TrialJournalEntry.xlsx",
-        "size": 7020,
-        "sha256": "3e3cadcb07aa45f22f77df0b21626c4ae629dccb8a8de0c05f52e24281b672dc"
+        "size": 7190,
+        "sha256": "845b71819efce11c481146663367081bc9ce00baf358f6c7a310a4eddd1ea154"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalentry.json",
-          "size": 6226,
-          "sha256": "a1871d88f9017bb8b305d65c8b2b58f672a73c8f95f89b3499beaff2bb679d7e"
+          "size": 6811,
+          "sha256": "ab1ebe022332f674cdc9b68688fc59e18889ed62766d21109413cf9c43419f35"
         },
         {
           "kind": "binary",
           "file": "trialjournalentry.pb",
-          "size": 2876,
-          "sha256": "fd09bcbaa5e10f0fb2a75e45261d0c1f76fc76da6e874b894d49babec3713867"
+          "size": 3159,
+          "sha256": "4abb35cc3e9e6fc8e4c382b28c8b98d56b3f65e9f1962a0bf92e05429b9febab"
         }
       ]
     },
@@ -1614,24 +1664,24 @@
       "name": "TrialJournalMilestone",
       "hot_reload": true,
       "ids_permanent": true,
-      "rows": 10,
+      "rows": 11,
       "source": {
         "file": "TrialJournalMilestone.xlsx",
-        "size": 7065,
-        "sha256": "0dce19385fc91d0bfac5c98b2e1622622b4a1005f726824edc8d47a2dccef04d"
+        "size": 7441,
+        "sha256": "441228dcd267d7c48574bb401b6555c006c1bd3473d1db5e57fbfdcdb0675387"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalmilestone.json",
-          "size": 5088,
-          "sha256": "e38d79b797e457a10438efb242066429017731486291cc2ed90b6bc92e593fcc"
+          "size": 6010,
+          "sha256": "d6cb798bb2846091e91fda39e85db08cad7d3a495246582870dd688bca6de619"
         },
         {
           "kind": "binary",
           "file": "trialjournalmilestone.pb",
-          "size": 2763,
-          "sha256": "949425af4d99921190fd2c4dd8a24fa8b9e26f4716b35b3d5c7a968a004d3d6b"
+          "size": 3386,
+          "sha256": "da6c82901de7d1ff32775028b4c1610625f47b91619a08e71f1f22e7042da512"
         }
       ]
     },
@@ -1639,24 +1689,24 @@
       "name": "TrialJournalSeal",
       "hot_reload": true,
       "ids_permanent": true,
-      "rows": 30,
+      "rows": 33,
       "source": {
         "file": "TrialJournalSeal.xlsx",
-        "size": 6810,
-        "sha256": "edf761921ce0928d94bc0cc9cbbe57ac7337130e7605577aadab3d0149f8e27d"
+        "size": 7003,
+        "sha256": "09e3fb9a20f020007135bb95aeb52e9ae585545feb45683dfb3f022d12e5a297"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalseal.json",
-          "size": 7069,
-          "sha256": "00c1927842dc12a545efdd0b8bf9ea2ba3f40fe11295d53ab53f0b34ee3ec207"
+          "size": 7864,
+          "sha256": "01fe8666be7eb9bd5a1dd5b2efe4954dfb8cffb6116444d6f43f00d105b285da"
         },
         {
           "kind": "binary",
           "file": "trialjournalseal.pb",
-          "size": 2572,
-          "sha256": "78cd4c8b0dc526b16d7a756ed18a4fb92250e01edd9821d7a78ce8643d8bc469"
+          "size": 2917,
+          "sha256": "23522de0ba95466a653dab365e930cec56a7d8af7cb5adf7e4de67fa5a90bc41"
         }
       ]
     },

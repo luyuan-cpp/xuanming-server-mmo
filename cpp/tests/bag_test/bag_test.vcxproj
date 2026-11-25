@@ -180,6 +180,7 @@
     <ClCompile Include="player_appearance_test.cpp" />
     <ClCompile Include="player_season_test.cpp" />
     <ClCompile Include="player_trial_journal_test.cpp" />
+    <ClCompile Include="player_festival_beast_test.cpp" />
     <ClCompile Include="player_rename_test.cpp" />
     <ClCompile Include="player_feature_snapshot_test.cpp" />
   </ItemGroup>

@@ -29,11 +29,14 @@ message BattleTelegraphEntry {
   uint64 source_actor_id = 1;
   uint64 target_actor_id = 2;
   uint32 execute_round = 3; // 兑现回合号
-  // 意图种类：1=慢动作重劈，2=回春治疗，3=物防护势，4=法防护势，5=灵障蓄盾，6=玄毒封灵。
+  // 意图种类：1=慢动作重劈，2=回春治疗，3=物防护势，4=法防护势，5=灵障蓄盾，6=玄毒封灵，7=强法重击，8=群体玄毒，9=瑞兽慢速重击。
   uint32 intent_kind = 4;
   // 预告状态：1=即将发动，2=本回合发动，3=已发动，4=已受控取消，5=目标失效取消。
   uint32 status = 5;
   string label = 6;
+  uint32 telegraph_round = 7; // 发出预告的回合号（瑞兽迎春为 R2/5/8/11）
+  uint64 state_version = 8;   // 预告状态递增版本号，防客户端乱序覆盖
+  repeated uint64 target_actor_ids = 9; // 多目标点名列表（3～5人裂地双劈为2名目标；单目标同时填充 target_actor_id 与本字段）
 }
 
 // ---- 战斗全量状态(开战下发 / 回合后同步 / 重连补拉,v1 全量同步免客户端预测) ----
@@ -52,6 +55,20 @@ message BattleStateS2C {
   uint32 active_polarity = 9;                   // 物法易势当前强势类型：0=无，1=物势(物理直伤×1.15)，2=法势(法术直伤×1.15)
   uint32 next_polarity_switch_round = 10;       // 物法易势下次换势回合号（非易势为 0）
   uint64 protected_guard_actor_id = 11;         // 护卫救援模式须保全的护卫局内 actor_id（非救援为 0）
+  repeated BattleTelegraphEntry last_resolved_telegraphs = 12; // 最近一回合已兑现或已取消的预告终态（供重连还原）
+  uint32 boss_phase = 13;                       // 首领试炼当前阶段：0=非首领试炼，1=一阶段，2=二阶段决战姿态(破釜)
+  uint32 boss_momentum_stacks = 14;             // 首领当前「蓄势」层数(0..3，可驱散，重劈消耗，每层+12%)
+  uint32 boss_stance_type = 15;                 // 敌方护势联防阵类型：0=无，1=物防阵，2=法防阵
+  uint32 boss_stance_remain_rounds = 16;        // 当前护势联防剩余回合数(含当轮)
+  uint32 boss_exposed_pct = 17;                 // 首领当前「破绽」易伤百分点(0/20/35)
+  uint32 boss_exposed_until_round = 18;         // 首领「破绽」持续到期回合号(含该回合末)
+  uint32 boss_trial_kind = 19;                  // 本局首领试炼类型(镜像 DungeonTable.boss_trial_kind)
+  uint32 battle_difficulty = 20;                // 本局试炼难度档(0常规/1普通/2困难)
+  uint32 round_limit = 21;                      // 本局权威逻辑回合上限（供 HUD 展示与决胜倒计时）
+  uint32 escalation_stacks = 22;                // 竞技 PVP 后期「战意渐盛」当前层数（0=未开启；每层伤+10%、疗盾-10%）
+  uint32 escalation_start_round = 23;           // 「战意渐盛」起算回合号（0=本模式不启用）
+  uint32 surrender_unlock_round = 24;           // PVP 投降解锁回合号（0=不可投降，PVP 为 5）
+  BattleSurrenderVoteState surrender_vote = 25; // 本队当前投降投票或冷却状态（对手与观众视角由节点清空）
 }
 
 message BattleStartS2C {
@@ -65,6 +82,21 @@ message TurnResultS2C {
   repeated BattleEventItem events = 3;    // 按结算顺序播表现
   BattleStateS2C state = 4;               // 结算后权威状态
   repeated uint64 action_order = 5;  // 本回合按速度排定的出手序(actor_id;含被跳过者),演出"行动预告条"用
+  repeated BattleTelegraphEntry resolved_telegraphs = 6; // 本回合刚兑现或取消的预告终态（status=3/4/5）
+}
+
+// 瑞兽迎春单局结算摘要（与 PlayerBattleResult 同源，供结算面板直接展示，UI 不自算）。
+message FestivalBeastSettlementSummary {
+  uint32 activity_instance_id = 1;
+  string reward_identity = 2;
+  uint32 wins_before = 3;
+  uint32 wins_after = 4;
+  uint32 required_wins = 5;
+  bool newly_eligible = 6;
+  uint32 material_units_added = 7;
+  uint32 material_tradable_units_added = 8;
+  uint64 material_available_units_after = 9;
+  uint32 material_earnable_remaining_after = 10;
 }
 
 // scene 在结算随存档确认提交之后推。客户端没有这一局的战斗上下文时(断线清了上下文、重登才应用)不要丢弃,
@@ -82,6 +114,7 @@ message BattleEndS2C {
   uint32 season_id = 6;
   uint32 material_tradable_units_added = 7; // 本局实际新增材料中可交易份数（0 或 1）
   bool material_pvp_loss_ineligible = 8;    // true = PVP 负/平未达有效对抗门槛（+0 且不扣永久 660 额度）
+  FestivalBeastSettlementSummary festival_beast_settlement = 9; // 瑞兽迎春活动局结算摘要
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;
@@ -149,6 +182,23 @@ message SetAutoBattleRequest {
 
 message SetAutoBattleResponse {
   TipInfoMessage error_message = 1;
+}
+
+// PVP 延迟投降 / 投降投票表态(参战者;经直连发到 battle 节点，第 5 回合起开放)。
+message SurrenderBattleRequest {
+  uint64 battle_id = 1;
+  bool agree = 2; // true=发起或同意投降；false=否决同队当前投降投票
+}
+
+message SurrenderBattleResponse {
+  TipInfoMessage error_message = 1;
+  BattleSurrenderVoteState vote_state = 2; // 成功时回填本队最新投票/冷却态
+}
+
+// 投降投票变动推送(仅推给投票所属同队成员，绝不向对手或观众推送)。
+message SurrenderVoteS2C {
+  uint64 battle_id = 1;
+  BattleSurrenderVoteState vote_state = 2;
 }
 
 // ==== 客户端直连 battle 节点(设计文档 turn-based-battle-server.md §18,D23-D28)====
@@ -246,6 +296,10 @@ service BattleClientPlayer {
 
   // ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
   rpc NotifyBattleAssigned (BattleAssignedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // ---- PVP 延迟投降(docs/design/ranked-play-v2-overhaul.md):第 5 回合解锁,1V1 秒认输/多人同队投票 ----
+  rpc SurrenderBattle (SurrenderBattleRequest) returns (SurrenderBattleResponse);
+  rpc NotifySurrenderVote (SurrenderVoteS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }
 
 // ==== 战报回放(docs/design/battle-report-replay.md)====

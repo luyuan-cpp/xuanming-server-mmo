@@ -5,6 +5,9 @@
 #include "player/system/player_season.h"
 #include "player/system/player_trial_journal.h"
 #include "proto/common/component/player_trial_journal_comp.pb.h"
+#include "player/system/player_festival_beast.h"
+#include "proto/common/component/player_festival_beast_comp.pb.h"
+#include "proto/scene/player_activity.pb.h"
 #include "player/system/player_attribute.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_appearance.h"
@@ -1041,6 +1044,20 @@ namespace
 				{
 					message.set_season_id(result->season_id());
 				}
+				if (result->festival_activity_instance_id() != 0)
+				{
+					auto* fbSummary = message.mutable_festival_beast_settlement();
+					fbSummary->set_activity_instance_id(result->festival_activity_instance_id());
+					fbSummary->set_reward_identity(result->festival_reward_identity());
+					fbSummary->set_wins_before(result->festival_wins_before());
+					fbSummary->set_wins_after(result->festival_wins_after());
+					fbSummary->set_required_wins(result->festival_required_wins());
+					fbSummary->set_newly_eligible(result->festival_newly_eligible());
+					fbSummary->set_material_units_added(result->material_credit_units_added());
+					fbSummary->set_material_tradable_units_added(result->material_tradable_units_added());
+					fbSummary->set_material_available_units_after(result->material_available_units_after());
+					fbSummary->set_material_earnable_remaining_after(result->material_earnable_remaining_after());
+				}
 			}
 		}
 		SendToPlayerClient(BattleClientPlayerNotifyBattleEndMessageId, message, player);
@@ -1482,9 +1499,33 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		? DungeonTableManager::Instance().FindByIdSilent(request.battle_config_id()).first
 		: nullptr;
 	const uint32_t bossTrialKind = dungeonRow != nullptr ? dungeonRow->boss_trial_kind() : turnbattle::kBossTrialKindNone;
-	const bool isBossTrial = bossTrialKind >= turnbattle::kBossTrialKindBreakRejuv &&
-							 bossTrialKind <= turnbattle::kBossTrialKindVenom;
+	const bool isBossTrial = turnbattle::IsBossTrialKind(bossTrialKind);
 	const bool isGuardRescue = bossTrialKind == turnbattle::kBossTrialKindGuardianRescue;
+	const bool isFestivalBeast = request.has_activity_context() &&
+								 request.activity_context().kind() == ::BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST &&
+								 request.activity_context().has_festival_beast();
+
+	// 瑞兽迎春准入硬隔离：boss_trial_kind=7 必须携带合法 FESTIVAL_BEAST 上下文，防普通开局入口绕过。
+	if ((bossTrialKind == turnbattle::kBossTrialKindFestivalBeast) != isFestivalBeast)
+	{
+		LOG_WARN << "[PlayerBattle] PrepareBattle rejected: festival beast context mismatch, player_id=" << playerId
+				 << " battle_id=" << battleId << " battle_config_id=" << request.battle_config_id();
+		response.mutable_error_message()->set_id(kFeatureUnavailable);
+		return;
+	}
+	if (isFestivalBeast)
+	{
+		// 开局意图锁定出战宝宝身份，生成快照前必须再次复核（防预检后换宠/收宠/死宠开局）。
+		const uint32_t petCheckErr =
+			PlayerFestivalBeastSystem::VerifyPrepareBattlePet(player, request.activity_context().festival_beast());
+		if (petCheckErr != kSuccess)
+		{
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: festival beast pet recheck failed, player_id=" << playerId
+					 << " battle_id=" << battleId << " err=" << petCheckErr;
+			response.mutable_error_message()->set_id(petCheckErr);
+			return;
+		}
+	}
 
 	// 困难首领试炼准入硬校验（core-gameplay-loop.md §1）：普通首通任意一只后解锁，组队困难全员各校一次。
 	if (isBossTrial && dungeonRow->difficulty() >= 2u &&
@@ -1496,8 +1537,8 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		return;
 	}
 
-	// 免费预设娱乐场、正式人宠会武与首领试炼均以局内满血蓝无耗材快照入场，不受场外残血或 0 血阻断。
-	const bool isolateBattleTempState = useFreePreset || isFormalRanked || isBossTrial || isGuardRescue;
+	// 免费预设娱乐场、正式人宠会武、首领试炼与瑞兽迎春均以局内满血蓝无耗材快照入场（不改局外永久血蓝）。
+	const bool isolateBattleTempState = useFreePreset || isFormalRanked || isBossTrial || isGuardRescue || isFestivalBeast;
 	if (!isolateBattleTempState)
 	{
 		if (const auto* attrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
@@ -1688,6 +1729,7 @@ void PlayerBattleSystem::CancelBattlePrepare(const ::CancelBattlePrepareRequest&
 	}
 
 	ClearBattleFreeze(player, playerId, battleId);
+	PlayerFestivalBeastSystem::OnBattlePrepareCancelledOrVoid(player, battleId, TimeSystem::NowMillisecondsUTC());
 	// match 取消备战 = 这一局不会开打、也不会有结算:道具预留一并释放(docs/design/battle-item-reservation.md)。
 	// 玩家不在本节点时(上面的离线分支)预留在他的存档里,下次加载后由 reaper 的预留复核按 SQL 终局收尾。
 	ReleaseBattleItemHold(player, playerId, battleId, "prepare_cancelled");
@@ -2334,7 +2376,8 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
                         const SettlementCurrencyGains& currencyGains, const ItemCountMap& granted, const ItemCountMap& consumed,
                         const bool itemsMailed,
                         const PlayerTrialJournalSystem::SettlementDelta* trialDelta = nullptr,
-                        const PlayerEquipmentMaterialRewardSystem::BattleCreditDelta* materialDelta = nullptr)
+                        const PlayerEquipmentMaterialRewardSystem::BattleCreditDelta* materialDelta = nullptr,
+                        const PlayerFestivalBeastSystem::SettlementDelta* festivalDelta = nullptr)
 {
     const uint64_t battleId = settlement.battle_id();
     auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
@@ -2345,7 +2388,8 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
                   << ";persisted PlayerBattleResultComp vanished after the preflight, result not recorded (rewards already applied)";
         return;
     }
-    auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, TimeSystem::NowMillisecondsUTC());
+    const uint64_t recordedNowMs = TimeSystem::NowMillisecondsUTC();
+    auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, recordedNowMs);
     entry.set_items_mailed(itemsMailed);
     entry.set_season_id(settlement.season_id());
     if (materialDelta != nullptr)
@@ -2353,6 +2397,19 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
         entry.set_material_credit_units_added(materialDelta->totalUnitsAdded);
         entry.set_material_tradable_units_added(materialDelta->tradableUnitsAdded);
         entry.set_material_pvp_loss_ineligible(materialDelta->pvpLossIneligible);
+    }
+    if (festivalDelta != nullptr && festivalDelta->active)
+    {
+        entry.set_festival_activity_instance_id(festivalDelta->activityInstanceId);
+        entry.set_festival_reward_identity(festivalDelta->rewardIdentity);
+        entry.set_festival_wins_before(festivalDelta->winsBefore);
+        entry.set_festival_wins_after(festivalDelta->winsAfter);
+        entry.set_festival_required_wins(festivalDelta->requiredWins);
+        entry.set_festival_newly_eligible(festivalDelta->newlyEligible);
+        FestivalBeastMaterialSummary matSummary;
+        PlayerFestivalBeastSystem::BuildMaterialSummary(player, recordedNowMs, matSummary);
+        entry.set_material_available_units_after(matSummary.available_units());
+        entry.set_material_earnable_remaining_after(matSummary.earnable_remaining_units());
     }
     if (trialDelta != nullptr && trialDelta->entryId != 0)
     {
@@ -2473,6 +2530,7 @@ PlayerInboxExecResult ApplyVoidSettlement(entt::entity player, const ::BattleSet
         return {PlayerInboxExecKind::kDefer, 0};
     }
     ReleaseBattleItemHold(player, playerId, battleId, "void_settlement");
+    PlayerFestivalBeastSystem::OnBattlePrepareCancelledOrVoid(player, battleId, TimeSystem::NowMillisecondsUTC());
     RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
                        /*itemsMailed=*/false);
     LOG_INFO << "[PlayerBattle] metric=battle_void_settlement_applied player_id=" << playerId << " battle_id=" << battleId
@@ -2672,9 +2730,25 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             settlementNowMs, unusedCandidate, &materialCreditDelta);
     }
 
-    // 赛季印进度同在首次收件箱应用时原子入账（仅正规 PVE 胜利与正规排位 PVP，受封顶夹取）。
+    // 瑞兽迎春活动局结算：严格资产隔离（绝不回写场外血蓝/复活/宝宝/道具/经验/货币），
+    // 同收件箱单帧原子入账活动期次胜场、永久神兽资格与全游戏材料自选额度。
+    const bool isFestivalBeast =
+        settlement.has_festival_beast() && settlement.festival_beast().activity_instance_id() != 0;
+    PlayerFestivalBeastComp festivalBeastCandidate;
+    std::string festivalBeastBefore;
+    PlayerFestivalBeastSystem::SettlementDelta festivalBeastDelta;
+    if (isFestivalBeast) {
+        const auto* festivalComp = tlsEcs.actorRegistry.try_get<PlayerFestivalBeastComp>(player);
+        if (festivalComp == nullptr) return false;
+        festivalBeastBefore = festivalComp->SerializeAsString();
+        if (PlayerFestivalBeastSystem::PrepareBattleCredit(*festivalComp, settlement, settlementNowMs,
+            festivalBeastCandidate, festivalBeastDelta) != kSuccess) return false;
+    }
+
+    // 赛季印进度同在首次收件箱应用时原子入账（仅正规 PVE 胜利与正规排位 PVP，受封顶夹取；瑞兽迎春不额外发赛季进度）。
     const bool creditsSeasonProgress =
-        PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 && PlayerSeasonSystem::IsEligibleBattle(settlement);
+        !isFestivalBeast && PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 &&
+        PlayerSeasonSystem::IsEligibleBattle(settlement);
     PlayerSeasonComp seasonProgressCandidate;
     std::string seasonProgressBefore;
     bool seasonPointsIncreased = false;
@@ -2687,7 +2761,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     }
 
     // 五行试炼志 V2：同一收件箱原子入账，先制备候选并记录本局增量回显（不改写材料日额度）。
-    const bool creditsTrialJournal = PlayerTrialJournalSystem::HasJournalUpdate(settlement);
+    const bool creditsTrialJournal = !isFestivalBeast && PlayerTrialJournalSystem::HasJournalUpdate(settlement);
     PlayerTrialJournalComp trialJournalCandidate;
     std::string trialJournalBefore;
     PlayerTrialJournalSystem::SettlementDelta trialJournalDelta;
@@ -2699,9 +2773,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             trialJournalCandidate, trialJournalDelta) != kSuccess) return false;
     }
 
-    // 正式人宠会武(competitive_ranked)与免费预设娱乐场(use_free_preset)严格资产隔离：
-    // 绝不回写场外血蓝/复活/宠物/道具消耗，仅原子记材料额度、赛季进度、试炼志（如护卫救援）与近期战果。
-    if (settlement.competitive_ranked() || settlement.use_free_preset()) {
+    // 正式人宠会武(competitive_ranked)、免费预设娱乐场(use_free_preset)与瑞兽迎春(isFestivalBeast)严格资产隔离：
+    // 绝不回写场外血蓝/复活/宠物/道具消耗，仅原子记材料额度、赛季/活动进度、试炼志与近期战果。
+    if (settlement.competitive_ranked() || settlement.use_free_preset() || isFestivalBeast) {
         const auto rankedIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
         if (!rankedIdentity || !IsSettlementApplicable(player) ||
             !tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player)) {
@@ -2710,6 +2784,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         auto* currentLedger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
         auto* currentSeason = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
         auto* currentTrialJournal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
+        auto* currentFestival = tlsEcs.actorRegistry.try_get<PlayerFestivalBeastComp>(player);
         if (creditsMaterialReward && (currentLedger == nullptr ||
             currentLedger->SerializeAsString() != materialRewardBefore ||
             tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) {
@@ -2723,9 +2798,14 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             currentTrialJournal->SerializeAsString() != trialJournalBefore)) {
             return false;
         }
+        if (isFestivalBeast && (currentFestival == nullptr ||
+            currentFestival->SerializeAsString() != festivalBeastBefore)) {
+            return false;
+        }
         if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
         if (creditsSeasonProgress && seasonPointsIncreased) currentSeason->Swap(&seasonProgressCandidate);
         if (creditsTrialJournal && trialJournalDelta.changed) currentTrialJournal->Swap(&trialJournalCandidate);
+        if (isFestivalBeast && festivalBeastDelta.changed) currentFestival->Swap(&festivalBeastCandidate);
         if (BagService::ReleaseHold(player, battleId)) {
             LOG_INFO << "[PlayerBattle] metric=battle_item_hold_released player_id=" << playerId << " battle_id=" << battleId
                      << " reason=isolated_settlement_applied";
@@ -2735,7 +2815,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             PlayerAttributeSystem::PushPanel(player);
         }
         RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
-                           /*itemsMailed=*/false, nullptr, &materialCreditDelta);
+                           /*itemsMailed=*/false, nullptr, &materialCreditDelta,
+                           isFestivalBeast ? &festivalBeastDelta : nullptr);
         return true;
     }
 

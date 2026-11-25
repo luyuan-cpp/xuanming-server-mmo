@@ -2,7 +2,7 @@
 
 > 日期：2026-11-24  
 > 对标来源：`xuanming-server/pkg/cellroute` 与 `pkg/cellroute/etcdtable`  
-> 状态：核心 4096 槽位确定性路由器、`AtomicTable`、`etcdwatch` 热更及 `go/login` 可选装配已落地并通过单测。  
+> 状态：核心 4096 槽位确定性路由器、`AtomicTable`、`etcdwatch` 热更、`go/login` 装配，以及 `EnterGame` 归属守卫（观测/强制双档）与 `AssignGate` 单元亲和筛选均已落地并通过单测。  
 > Java 独立版（`xuanming-server-mmo`）状态：本阶段为服务端内部无状态路由基础组件（默认未配置不启用），未修改客户端可见 proto/配表，暂无需同步 `xuanming-server-mmo`；后续在登录回包或网关转发正式暴露 `region_id`/`cell_id` 时同步 `PARITY.md`。
 
 ---

@@ -14,6 +14,7 @@ const std::unordered_map<uint64_t, uint32_t> TrialJournalMilestoneBitMap{
     { 901, 7 },
     { 301, 8 },
     { 302, 9 },
+    { 105, 10 },
 };
 
-constexpr uint32_t kTrialJournalMilestoneBitmapCapacity = 10;
+constexpr uint32_t kTrialJournalMilestoneBitmapCapacity = 11;

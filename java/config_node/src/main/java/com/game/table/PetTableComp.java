@@ -95,6 +95,24 @@ public final class PetTableComp {
         }
     }
 
+    public record Transfer_policy(int value) {
+        public static Transfer_policy from(PetTable row) {
+            return new Transfer_policy(row.getTransferPolicy());
+        }
+    }
+
+    public record Exclusive_gift_slots(int value) {
+        public static Exclusive_gift_slots from(PetTable row) {
+            return new Exclusive_gift_slots(row.getExclusiveGiftSlots());
+        }
+    }
+
+    public record Fixed_initial_aptitude(boolean value) {
+        public static Fixed_initial_aptitude from(PetTable row) {
+            return new Fixed_initial_aptitude(row.getFixedInitialAptitude());
+        }
+    }
+
     public record Aptitude_min(List<Integer> values) {
         public static Aptitude_min from(PetTable row) {
             return new Aptitude_min(row.getAptitudeMinList());

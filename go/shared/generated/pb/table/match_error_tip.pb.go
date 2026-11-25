@@ -77,6 +77,10 @@ const (
 	MatchError_kMatchTournamentMatchNotReady      MatchError = 16049
 	MatchError_kMatchTournamentAlreadyCheered     MatchError = 16050
 	MatchError_kMatchTournamentRewardUnavailable  MatchError = 16051
+	MatchError_kMatchBattleSurrenderNotAllowed    MatchError = 16052
+	MatchError_kMatchBattleSurrenderTooEarly      MatchError = 16053
+	MatchError_kMatchBattleSurrenderCooldown      MatchError = 16054
+	MatchError_kMatchBattleSurrenderAlreadyVoted  MatchError = 16055
 )
 
 // Enum value maps for MatchError.
@@ -135,6 +139,10 @@ var (
 		16049: "kMatchTournamentMatchNotReady",
 		16050: "kMatchTournamentAlreadyCheered",
 		16051: "kMatchTournamentRewardUnavailable",
+		16052: "kMatchBattleSurrenderNotAllowed",
+		16053: "kMatchBattleSurrenderTooEarly",
+		16054: "kMatchBattleSurrenderCooldown",
+		16055: "kMatchBattleSurrenderAlreadyVoted",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":                     0,
@@ -190,6 +198,10 @@ var (
 		"kMatchTournamentMatchNotReady":      16049,
 		"kMatchTournamentAlreadyCheered":     16050,
 		"kMatchTournamentRewardUnavailable":  16051,
+		"kMatchBattleSurrenderNotAllowed":    16052,
+		"kMatchBattleSurrenderTooEarly":      16053,
+		"kMatchBattleSurrenderCooldown":      16054,
+		"kMatchBattleSurrenderAlreadyVoted":  16055,
 	}
 )
 
@@ -224,7 +236,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xac\r\n" +
+	"\x15match_error_tip.proto*\xc2\x0e\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -278,7 +290,11 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x1ekMatchTournamentQualifierLimit\x10\xb0}\x12\"\n" +
 	"\x1dkMatchTournamentMatchNotReady\x10\xb1}\x12#\n" +
 	"\x1ekMatchTournamentAlreadyCheered\x10\xb2}\x12&\n" +
-	"!kMatchTournamentRewardUnavailable\x10\xb3}B$\n" +
+	"!kMatchTournamentRewardUnavailable\x10\xb3}\x12$\n" +
+	"\x1fkMatchBattleSurrenderNotAllowed\x10\xb4}\x12\"\n" +
+	"\x1dkMatchBattleSurrenderTooEarly\x10\xb5}\x12\"\n" +
+	"\x1dkMatchBattleSurrenderCooldown\x10\xb6}\x12&\n" +
+	"!kMatchBattleSurrenderAlreadyVoted\x10\xb7}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

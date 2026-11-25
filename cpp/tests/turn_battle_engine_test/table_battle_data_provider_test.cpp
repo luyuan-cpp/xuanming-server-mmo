@@ -192,12 +192,31 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
     turnbattle::TableBattleDataProvider provider;
     const auto& monsters = MonsterTableManager::Instance().FindAll().data();
     ASSERT_GT(monsters.size(), 0) << "Monster 表为空 = PVE 全靠引擎回退常量";
+    std::vector<uint32_t> festivalBeastMonsters;
+    for (const auto& dungeon : DungeonTableManager::Instance().FindAll().data()) {
+        if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindFestivalBeast) {
+            for (const uint32_t id : provider.GetDungeonMonsterIds(dungeon.id())) {
+                festivalBeastMonsters.push_back(id);
+            }
+        }
+    }
     for (const auto& row : monsters) {
         const auto* found = provider.FindMonster(row.id());
         ASSERT_NE(found, nullptr) << "monster id=" << row.id();
         EXPECT_GT(found->health(), 0u) << "0 血怪物开局即死(秒杀事故) id=" << row.id();
-        EXPECT_GT(found->strength(), 0u) << "0 力量怪物打不出伤害 id=" << row.id();
         EXPECT_GT(found->speed(), 0u) << "0 速度怪物破坏出手序 id=" << row.id();
+        const bool isFestivalBeast =
+            std::find(festivalBeastMonsters.begin(), festivalBeastMonsters.end(), row.id()) !=
+            festivalBeastMonsters.end();
+        if (isFestivalBeast) {
+            // 瑞兽迎春首领按档位覆盖物理攻击并关闭普通经验/银两/暴击/捕捉。
+            EXPECT_EQ(found->exp_reward(), 0u) << "瑞兽迎春首领不应配置普通经验 id=" << row.id();
+            EXPECT_EQ(found->gold_reward(), 0u) << "瑞兽迎春首领不应配置普通银两 id=" << row.id();
+            EXPECT_EQ(found->critchance(), 0u) << "瑞兽迎春首领首发暴击应为 0 id=" << row.id();
+            EXPECT_EQ(found->capture_pet_table_id(), 0u) << "瑞兽迎春首领不应可捕捉 id=" << row.id();
+            continue;
+        }
+        EXPECT_GT(found->strength(), 0u) << "0 力量怪物打不出伤害 id=" << row.id();
         EXPECT_GT(found->exp_reward(), 0u) << "无经验奖励 id=" << row.id();
         EXPECT_GT(found->gold_reward(), 0u) << "无金币奖励 id=" << row.id();
     }
@@ -208,6 +227,11 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
         if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindPolarity5v5) {
             EXPECT_TRUE(group.empty()) << "纯 PVP 物法易势模板不应配怪物组 dungeon " << dungeon.id();
             EXPECT_EQ(dungeon.round_limit(), turnbattle::kPolarityDefaultMaxRounds);
+            continue;
+        }
+        if (dungeon.id() == 5u) {
+            EXPECT_TRUE(group.empty()) << "纯 PVP 正式会武模板不应配怪物组 dungeon " << dungeon.id();
+            EXPECT_EQ(dungeon.round_limit(), 20u);
             continue;
         }
         EXPECT_FALSE(group.empty()) << "dungeon " << dungeon.id() << " 没配怪物组";
@@ -228,7 +252,7 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
 TEST_F(TableBattleDataProviderTest, EveryPlayerFacesOneWholeMonsterGroup) {
     turnbattle::TableBattleDataProvider provider;
     for (const auto& dungeon : DungeonTableManager::Instance().FindAll().data()) {
-        if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindPolarity5v5) {
+        if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindPolarity5v5 || dungeon.id() == 5u) {
             continue;
         }
         const auto group = provider.GetDungeonMonsterIds(dungeon.id());

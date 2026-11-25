@@ -81,6 +81,7 @@ enum pet_error : int {
   kPetNothingToChange = 26015,
   kPetIdGenerateFailed = 26016,
   kPetNameSensitive = 26017,
+  kPetNotTransferable = 26018,
   pet_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   pet_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -91,11 +92,11 @@ extern const uint32_t pet_error_internal_data_[];
 inline constexpr pet_error pet_error_MIN =
     static_cast<pet_error>(0);
 inline constexpr pet_error pet_error_MAX =
-    static_cast<pet_error>(26017);
+    static_cast<pet_error>(26018);
 [[nodiscard]] inline bool pet_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, pet_error_internal_data_);
 }
-inline constexpr int pet_error_ARRAYSIZE = 26017 + 1;
+inline constexpr int pet_error_ARRAYSIZE = 26018 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 pet_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(pet_error) {

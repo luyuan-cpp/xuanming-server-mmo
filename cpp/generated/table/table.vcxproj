@@ -250,6 +250,7 @@
     <ClInclude Include="proto\tip\appearance_error_tip.pb.h" />
     <ClInclude Include="proto\tip\season_error_tip.pb.h" />
     <ClInclude Include="proto\tip\trial_journal_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\festival_beast_error_tip.pb.h" />
     <ClInclude Include="proto\tip\chat_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
@@ -429,6 +430,7 @@
     <ClCompile Include="proto\tip\appearance_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\season_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\trial_journal_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\festival_beast_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
@@ -614,6 +616,18 @@
     <ClInclude Include="code\activityschedule_table_fk.h" />
     <ClInclude Include="code\activityschedule_table_comp.h" />
     <ClInclude Include="proto\activityschedule_table.pb.h" />
+    <ClCompile Include="code\festivalbeastactivity_table.cpp" />
+    <ClCompile Include="code\festivalbeastactivity_table_fk.cpp" />
+    <ClCompile Include="code\festivalbeasttier_table.cpp" />
+    <ClCompile Include="proto\festivalbeastactivity_table.pb.cc" />
+    <ClCompile Include="proto\festivalbeasttier_table.pb.cc" />
+    <ClInclude Include="code\festivalbeastactivity_table.h" />
+    <ClInclude Include="code\festivalbeastactivity_table_fk.h" />
+    <ClInclude Include="code\festivalbeastactivity_table_comp.h" />
+    <ClInclude Include="code\festivalbeasttier_table.h" />
+    <ClInclude Include="code\festivalbeasttier_table_comp.h" />
+    <ClInclude Include="proto\festivalbeastactivity_table.pb.h" />
+    <ClInclude Include="proto\festivalbeasttier_table.pb.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="code\equipartifact_table.cpp" />

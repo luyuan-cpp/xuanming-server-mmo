@@ -811,6 +811,18 @@ void BattleClientEdge::DispatchVerifiedRequest(DirectSession &session,
         reply.set_serialized_message(resp.SerializeAsString());
         break;
     }
+    case BattleClientPlayerSurrenderBattleMessageId:
+    {
+        ::SurrenderBattleRequest req;
+        if (!parseOrReject(req))
+        {
+            return;
+        }
+        ::SurrenderBattleResponse resp;
+        BattleRoomManager::Instance().HandleSurrenderBattle(sessionDetails, req, resp);
+        reply.set_serialized_message(resp.SerializeAsString());
+        break;
+    }
     default:
         SendEnvelopeError(conn, request, kInvalidParameter);
         RegisterIllegalPacket(session, conn, "message_id_not_allowed");

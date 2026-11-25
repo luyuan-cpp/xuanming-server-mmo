@@ -200,6 +200,7 @@ set(SOURCE_FILES
     proto/tip/appearance_error_tip.pb.cc
     proto/tip/season_error_tip.pb.cc
     proto/tip/trial_journal_error_tip.pb.cc
+    proto/tip/festival_beast_error_tip.pb.cc
     proto/tip/chat_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc
@@ -224,6 +225,11 @@ set(SOURCE_FILES
     proto/activityvitalityreward_table.pb.cc
     code/activityschedule_table_fk.cpp
     proto/activityschedule_table.pb.cc
+    code/festivalbeastactivity_table.cpp
+    code/festivalbeastactivity_table_fk.cpp
+    code/festivalbeasttier_table.cpp
+    proto/festivalbeastactivity_table.pb.cc
+    proto/festivalbeasttier_table.pb.cc
     code/equipartifact_table.cpp
     code/equipv1affix_table.cpp
     code/equipv1affix_table_fk.cpp

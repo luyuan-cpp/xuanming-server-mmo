@@ -71,4 +71,34 @@ public final class CharacterAppearanceTableComp {
         }
     }
 
+    public record Archive_name(String value) {
+        public static Archive_name from(CharacterAppearanceTable row) {
+            return new Archive_name(row.getArchiveName());
+        }
+    }
+
+    public record Nickname(String value) {
+        public static Nickname from(CharacterAppearanceTable row) {
+            return new Nickname(row.getNickname());
+        }
+    }
+
+    public record Biography_summary(String value) {
+        public static Biography_summary from(CharacterAppearanceTable row) {
+            return new Biography_summary(row.getBiographySummary());
+        }
+    }
+
+    public record Story_title(String value) {
+        public static Story_title from(CharacterAppearanceTable row) {
+            return new Story_title(row.getStoryTitle());
+        }
+    }
+
+    public record Story_body(String value) {
+        public static Story_body from(CharacterAppearanceTable row) {
+            return new Story_body(row.getStoryBody());
+        }
+    }
+
 }

@@ -90,4 +90,24 @@ struct FCfgCharacterAppearanceRow : public FTableRowBase
 	/** 所属人物收藏系列 ID(AppearanceSeries.id,0 = 未归册;纯外观与叙事分册,零属性加成) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
 	int32 series_id = 0;
+
+	/** 人物志档案名(如 "陆照禾",空串表示该形象暂无人物志;纯叙事,零属性加成) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	FString archive_name;
+
+	/** 人物志小名/别称(如 "阿禾",无小名留空) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	FString nickname;
+
+	/** 人物志小传摘要(纯叙事,零属性加成) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	FString biography_summary;
+
+	/** 人物志一段往事篇名(与 story_body 配套,纯叙事) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	FString story_title;
+
+	/** 人物志一段往事正文(段落间以 \n\n 分隔,纯叙事,零属性加成) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	FString story_body;
 };

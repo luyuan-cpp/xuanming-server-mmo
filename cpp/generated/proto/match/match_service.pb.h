@@ -1046,6 +1046,7 @@ enum RankedRewardKind : int {
   RANKED_REWARD_TIER_BADGE = 4,
   RANKED_REWARD_TIER_TITLE = 5,
   RANKED_REWARD_CHAMPION_INSCRIPTION = 6,
+  RANKED_REWARD_WIN_MILESTONE = 7,
   RankedRewardKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   RankedRewardKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -1056,11 +1057,11 @@ extern const uint32_t RankedRewardKind_internal_data_[];
 inline constexpr RankedRewardKind RankedRewardKind_MIN =
     static_cast<RankedRewardKind>(0);
 inline constexpr RankedRewardKind RankedRewardKind_MAX =
-    static_cast<RankedRewardKind>(6);
+    static_cast<RankedRewardKind>(7);
 [[nodiscard]] inline bool RankedRewardKind_IsValid(int value) {
-  return 0 <= value && value <= 6;
+  return 0 <= value && value <= 7;
 }
-inline constexpr int RankedRewardKind_ARRAYSIZE = 6 + 1;
+inline constexpr int RankedRewardKind_ARRAYSIZE = 7 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 RankedRewardKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(RankedRewardKind) {
@@ -1075,7 +1076,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& RankedRewardKind_Name(RankedRewardKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<RankedRewardKind_descriptor, 0, 6>(
+  return ::google::protobuf::internal::NameOfDenseEnum<RankedRewardKind_descriptor, 0, 7>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool RankedRewardKind_Parse(
@@ -4785,6 +4786,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
     kChampionRatingCentiFieldNumber = 18,
     kRankBoardSealedFieldNumber = 19,
     kUsesOwnProgressionFieldNumber = 21,
+    kTierQingfengCentiFieldNumber = 24,
+    kTierYunzhangCentiFieldNumber = 25,
+    kTierTianshuCentiFieldNumber = 26,
+    kTierWushuangCentiFieldNumber = 27,
+    kMilestoneWinMatchesFieldNumber = 28,
   };
   // repeated uint32 allowed_team_sizes = 20;
   [[nodiscard]] int allowed_team_sizes_size()
@@ -5061,12 +5067,62 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
   void _internal_set_uses_own_progression(bool value);
 
   public:
+  // uint32 tier_qingfeng_centi = 24;
+  void clear_tier_qingfeng_centi() ;
+  [[nodiscard]] ::uint32_t tier_qingfeng_centi() const;
+  void set_tier_qingfeng_centi(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_qingfeng_centi() const;
+  void _internal_set_tier_qingfeng_centi(::uint32_t value);
+
+  public:
+  // uint32 tier_yunzhang_centi = 25;
+  void clear_tier_yunzhang_centi() ;
+  [[nodiscard]] ::uint32_t tier_yunzhang_centi() const;
+  void set_tier_yunzhang_centi(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_yunzhang_centi() const;
+  void _internal_set_tier_yunzhang_centi(::uint32_t value);
+
+  public:
+  // uint32 tier_tianshu_centi = 26;
+  void clear_tier_tianshu_centi() ;
+  [[nodiscard]] ::uint32_t tier_tianshu_centi() const;
+  void set_tier_tianshu_centi(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_tianshu_centi() const;
+  void _internal_set_tier_tianshu_centi(::uint32_t value);
+
+  public:
+  // uint32 tier_wushuang_centi = 27;
+  void clear_tier_wushuang_centi() ;
+  [[nodiscard]] ::uint32_t tier_wushuang_centi() const;
+  void set_tier_wushuang_centi(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_wushuang_centi() const;
+  void _internal_set_tier_wushuang_centi(::uint32_t value);
+
+  public:
+  // uint32 milestone_win_matches = 28;
+  void clear_milestone_win_matches() ;
+  [[nodiscard]] ::uint32_t milestone_win_matches() const;
+  void set_milestone_win_matches(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_milestone_win_matches() const;
+  void _internal_set_milestone_win_matches(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.RankedSeasonInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          0, 81,
+      ::google::protobuf::internal::TcParseTable<5, 28,
+                          0, 89,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5120,6 +5176,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
     ::int64_t champion_rating_centi_;
     bool rank_board_sealed_;
     bool uses_own_progression_;
+    ::uint32_t tier_qingfeng_centi_;
+    ::uint32_t tier_yunzhang_centi_;
+    ::uint32_t tier_tianshu_centi_;
+    ::uint32_t tier_wushuang_centi_;
+    ::uint32_t milestone_win_matches_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -28908,6 +28969,126 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 RankedSeasonInfo::_internal_mutable_special_team_sizes() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.special_team_sizes_;
+}
+
+// uint32 tier_qingfeng_centi = 24;
+inline void RankedSeasonInfo::clear_tier_qingfeng_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_qingfeng_centi_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t RankedSeasonInfo::tier_qingfeng_centi() const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.tier_qingfeng_centi)
+  return _internal_tier_qingfeng_centi();
+}
+inline void RankedSeasonInfo::set_tier_qingfeng_centi(::uint32_t value) {
+  _internal_set_tier_qingfeng_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.tier_qingfeng_centi)
+}
+inline ::uint32_t RankedSeasonInfo::_internal_tier_qingfeng_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_qingfeng_centi_;
+}
+inline void RankedSeasonInfo::_internal_set_tier_qingfeng_centi(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_qingfeng_centi_ = value;
+}
+
+// uint32 tier_yunzhang_centi = 25;
+inline void RankedSeasonInfo::clear_tier_yunzhang_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_yunzhang_centi_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t RankedSeasonInfo::tier_yunzhang_centi() const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.tier_yunzhang_centi)
+  return _internal_tier_yunzhang_centi();
+}
+inline void RankedSeasonInfo::set_tier_yunzhang_centi(::uint32_t value) {
+  _internal_set_tier_yunzhang_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.tier_yunzhang_centi)
+}
+inline ::uint32_t RankedSeasonInfo::_internal_tier_yunzhang_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_yunzhang_centi_;
+}
+inline void RankedSeasonInfo::_internal_set_tier_yunzhang_centi(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_yunzhang_centi_ = value;
+}
+
+// uint32 tier_tianshu_centi = 26;
+inline void RankedSeasonInfo::clear_tier_tianshu_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_tianshu_centi_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t RankedSeasonInfo::tier_tianshu_centi() const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.tier_tianshu_centi)
+  return _internal_tier_tianshu_centi();
+}
+inline void RankedSeasonInfo::set_tier_tianshu_centi(::uint32_t value) {
+  _internal_set_tier_tianshu_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.tier_tianshu_centi)
+}
+inline ::uint32_t RankedSeasonInfo::_internal_tier_tianshu_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_tianshu_centi_;
+}
+inline void RankedSeasonInfo::_internal_set_tier_tianshu_centi(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_tianshu_centi_ = value;
+}
+
+// uint32 tier_wushuang_centi = 27;
+inline void RankedSeasonInfo::clear_tier_wushuang_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_wushuang_centi_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t RankedSeasonInfo::tier_wushuang_centi() const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.tier_wushuang_centi)
+  return _internal_tier_wushuang_centi();
+}
+inline void RankedSeasonInfo::set_tier_wushuang_centi(::uint32_t value) {
+  _internal_set_tier_wushuang_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.tier_wushuang_centi)
+}
+inline ::uint32_t RankedSeasonInfo::_internal_tier_wushuang_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_wushuang_centi_;
+}
+inline void RankedSeasonInfo::_internal_set_tier_wushuang_centi(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_wushuang_centi_ = value;
+}
+
+// uint32 milestone_win_matches = 28;
+inline void RankedSeasonInfo::clear_milestone_win_matches() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.milestone_win_matches_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint32_t RankedSeasonInfo::milestone_win_matches() const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.milestone_win_matches)
+  return _internal_milestone_win_matches();
+}
+inline void RankedSeasonInfo::set_milestone_win_matches(::uint32_t value) {
+  _internal_set_milestone_win_matches(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.milestone_win_matches)
+}
+inline ::uint32_t RankedSeasonInfo::_internal_milestone_win_matches() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.milestone_win_matches_;
+}
+inline void RankedSeasonInfo::_internal_set_milestone_win_matches(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.milestone_win_matches_ = value;
 }
 
 // -------------------------------------------------------------------

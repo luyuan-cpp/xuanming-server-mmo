@@ -1,6 +1,6 @@
 # 官方通行证与账号注册接入设计（Casdoor OIDC）
 
-状态：2026-11-23 初版设计与服务端接缝落码，待 Claude Code 审核与真进程联调；Unity 客户端 UI 与 PKCE 回调交由另一台机器 Codex 按 §7 实施。
+状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证；待 Claude Code 审核全球账号库收口与生产上线前外部配置。
 
 关联：[认证提供者框架](./auth-provider-framework.md)、[第三方登录端到端设计](./third-party-login-end-to-end-design.md)、[双 Token 体系](./dual-token-authentication.md)、[账号注销](./account-deletion.md)、[账号角色目录](./account-role-authority.md)。
 
@@ -162,10 +162,29 @@ curl.exe -s http://127.0.0.1:8000/.well-known/jwks
 #     Endpoint: "http://127.0.0.1:8000"   # 容器内改为 http://casdoor:8000
 ```
 
-### 5.3 交付 Claude Code 审核清单
+### 5.3 真实 Casdoor 容器端到端验收记录（2026-11-24）
+使用 `deploy/passport/docker-compose.yml`（真实 `casbin/casdoor:v4.27.1` + `mysql:8.0`，配置独立默认子网 `${PASSPORT_SUBNET:-10.249.88.0/24}`）执行真进程验证并销毁临时容器与卷，全部实测通过：
+1. **OIDC Discovery & JWKS**：`/.well-known/openid-configuration` 与 `/.well-known/jwks` 正常返回 `issuer=http://127.0.0.1:8000`、`alg=RS256`、`kid=cert-built-in`。
+2. **真实注册 + 无密钥 Public PKCE（S256）换票**：调用 `POST /api/signup` 注册新用户后，经 OAuth2 Authorization Code + PKCE（S256，不传 `client_secret`）换票返回 HTTP 200；实测错误 `code_verifier` 被 Casdoor 直接拒绝（HTTP 400 `invalid_grant`）。
+3. **真实 `id_token` 声明核验**：
+   - 紧凑大小 `1481` 字节（远低于 `idtoken.go` 的 16 KiB 上限）；
+   - Header：`{"alg":"RS256","kid":"cert-built-in","typ":"JWT"}`；
+   - `iss = "http://127.0.0.1:8000"`、`aud = ["xuanming-game-client"]`；
+   - `sub` 为不可变 UUID v4（非可变用户名 `preferred_username`），重复登录 `sub` 一致；
+   - 有效期 `exp - iat = 3600s`（1.00h，符合 `expireInHours: 1` 与 `go/login` 2h 硬上限）。
+4. **`go/login` `PassportProvider` 真验签与防重放**：实时拉取 Casdoor JWKS 验签通过并产出 `passport_<uuid>`（日志脱敏为 `passport_4035***10`，不泄露原始令牌），同一枚 `id_token` 二次提交被 `ReplayGuard` 拒绝。
+5. **沙箱与客户端校验**：
+   - `deploy/login-stack.linux/login.yaml` 已增补 `AuthProviders.Passport` 沙箱段并通过 `TestLinuxLoginStackPassportSectionPointsAtSandbox` 契约单测；
+   - `mmorpg-client` 已合入道家 Q 版 5 张切图与 `PassportOAuthProtocol.cs` / `PassportSignIn.cs` / `QdaoServerSelectView.Passport.cs` / `Assets/Editor/PassportMobileDeepLinkBuildPostProcess.cs`（iOS `Info.plist` `CFBundleURLTypes` + Android `AndroidManifest.xml` `VIEW/DEFAULT/BROWSABLE` 深度链接注册）。
+
+### 5.4 交付 Claude Code 审核与上线前生产清单
 1. **全球账号库对接**：确认全球账号库接纳 `auth_type = "passport"` 及 `passport_<sub>`（或改为 `(provider="passport", uid=sub)` 绑定表映射）。
-2. **文件冲突核对**：仅在既有文件 `config.go`、`auth_providers.go`、`auth_init.go`、`cmd/sandbox_mock/main.go` 有数行增量，确认与全球账号库分支无冲突。
-3. **生产部署与 K8s 渲染**：上生产前决定是否在 `tools/scripts/k8s_deploy.ps1` 增加 `-LoginPassportIssuer` / `-LoginPassportClientId` / `-LoginPassportEndpoint` 渲染参数，以及注销执行器是否补充 Casdoor 用户停用/匿名化钩子。
+2. **文件冲突核对**：仅在既有文件 `config.go`、`auth_providers.go`、`auth_init.go`、`cmd/sandbox_mock/main.go`、`deploy/login-stack.linux/login.yaml` 有数行增量，确认与全球账号库分支无冲突。
+3. **上线前生产项（需真实外部凭证/域名/真机）**：
+   - 将 `init_data.json` 中 `Email` 的 `rule` 由本地开发用的 `"No verification"` 切为邮箱/短信验证码校验，并在 Casdoor 后台配置真实 SMTP/短信通道与人机验证（如 Turnstile）；
+   - 设置 HTTPS 生产域名作为 `PASSPORT_ORIGIN` 与 `go/login` `AuthProviders.Passport.Issuer`，在 Casdoor 后台上传 `deploy/passport/theme/` 品牌主题图并按需调整登录页配色；
+   - 确认是否在 `tools/scripts/k8s_deploy.ps1` 增加 `-LoginPassportIssuer` / `-LoginPassportClientId` / `-LoginPassportEndpoint` 渲染参数，以及注销执行器是否补充 Casdoor 用户停用/匿名化钩子；
+   - 在 iOS / Android 真机完成一次 `xuanming://passport/callback` 深度链接冷/热启动回归。
 
 ---
 

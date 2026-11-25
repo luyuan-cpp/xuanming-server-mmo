@@ -1190,17 +1190,90 @@ bool PetSystem::EnsureStarterPetGranted(entt::entity player) {
     return true;
 }
 
+bool PetSystem::IsTransferableSpecies(uint32_t petTableId) {
+    const auto* row = PetRow(petTableId);
+    return row != nullptr && row->transfer_policy() == 0;
+}
+
+bool PetSystem::IsExclusiveGiftSpecies(uint32_t petTableId) {
+    const auto* row = PetRow(petTableId);
+    return row != nullptr && row->exclusive_gift_slots() > 0;
+}
+
+uint32_t PetSystem::CountNormalPets(const PlayerPetComp& comp) {
+    uint32_t count = 0;
+    for (const auto& pet : comp.pets()) {
+        if (!IsExclusiveGiftSpecies(pet.pet_table_id())) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+uint32_t PetSystem::CountSpeciesPets(const PlayerPetComp& comp, uint32_t petTableId) {
+    uint32_t count = 0;
+    for (const auto& pet : comp.pets()) {
+        if (pet.pet_table_id() == petTableId) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+bool PetSystem::HasNormalPetSlot(const PlayerPetComp& comp) {
+    return CountNormalPets(comp) < MaxPets();
+}
+
+bool PetSystem::HasExclusiveGiftSlot(const PlayerPetComp& comp, uint32_t petTableId) {
+    const auto* row = PetRow(petTableId);
+    return row != nullptr && row->exclusive_gift_slots() > 0 &&
+        CountSpeciesPets(comp, petTableId) < row->exclusive_gift_slots();
+}
+
+uint32_t PetSystem::PrepareExclusiveActivityPet(entt::entity player, uint32_t petTableId, PetInstance& candidateOut) {
+    candidateOut.Clear();
+    if (const auto err = CheckWritable(player); err != kSuccess) return err;
+    const auto* comp = FindComp(player);
+    const auto level = OwnerLevel(player);
+    if (comp == nullptr || !level.has_value() || !PetDataKnown(*comp)) return kServiceUnavailable;
+    const auto* row = PetRow(petTableId);
+    if (row == nullptr) return kPetTableRowMissing;
+    const auto* pool = PetPool();
+    if (pool == nullptr || !row->GetReflection()->GetUnknownFields(*row).empty() ||
+        !pool->GetReflection()->GetUnknownFields(*pool).empty()) return kInvalidTableData;
+    if (row->name().empty() || row->model_id() == 0 || row->acquisition_tier() != 2 ||
+        row->cultivation_tier() != 4 || row->transfer_policy() != 1 ||
+        row->exclusive_gift_slots() == 0 || !row->fixed_initial_aptitude() ||
+        row->aptitude_min_size() < 4 || row->aptitude_max_size() < 4) {
+        return kInvalidTableData;
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (row->aptitude_min(i) == 0 || row->aptitude_min(i) != row->aptitude_max(i)) {
+            return kInvalidTableData;
+        }
+    }
+    if (!HasExclusiveGiftSlot(*comp, petTableId)) return kPetSlotFull;
+    return PrepareNewPet(player, *row, *pool, *level, candidateOut);
+}
+
+void PetSystem::CommitPreparedActivityPet(entt::entity player, PetInstance&& candidate) {
+    auto* comp = FindComp(player);
+    assert(comp != nullptr);
+    *comp->add_pets() = std::move(candidate);
+}
+
 uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut) {
     petIdOut = 0;
     if (const auto err = CheckWritable(player); err != kSuccess) return err;
     const auto* row = PetRow(petTableId);
     if (row == nullptr) return kPetTableRowMissing;
+    if (row->transfer_policy() != 0 || row->exclusive_gift_slots() > 0) return kFeatureUnavailable;
     const auto* pool = PetPool();
     if (pool == nullptr) return kInvalidTableData;
     auto* comp = FindComp(player);
     const auto level = OwnerLevel(player);
     if (comp == nullptr || !level.has_value()) return kServiceUnavailable;
-    if (static_cast<uint32_t>(comp->pets_size()) >= MaxPets()) return kPetSlotFull;
+    if (!HasNormalPetSlot(*comp)) return kPetSlotFull;
     PetInstance candidate;
     if (const auto err = PrepareNewPet(player, *row, *pool, *level, candidate); err != kSuccess) return err;
     petIdOut = candidate.pet_id();
@@ -1227,7 +1300,8 @@ uint32_t PetSystem::BuildShop(entt::entity player, GetPetShopResponse& response)
     const auto* pool = PetPool();
     if (pool == nullptr || !pool->GetReflection()->GetUnknownFields(*pool).empty()) return kInvalidTableData;
     for (const auto& row : PetTableManager::Instance().FindAll().data()) {
-        if (!row.GetReflection()->GetUnknownFields(row).empty() || row.acquisition_tier() != 0 || row.shop_price_gold() == 0 ||
+        if (!row.GetReflection()->GetUnknownFields(row).empty() || row.acquisition_tier() != 0 ||
+            row.transfer_policy() != 0 || row.exclusive_gift_slots() > 0 || row.shop_price_gold() == 0 ||
             row.shop_price_gold() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) continue;
         auto* offer = response.add_offers();
         offer->set_pet_table_id(row.id());
@@ -1259,7 +1333,7 @@ uint32_t PetSystem::BuyPet(entt::entity player, uint32_t petTableId, uint64_t se
     const auto* row = PetRow(petTableId);
     if (row == nullptr) return kPetTableRowMissing;
     if (!row->GetReflection()->GetUnknownFields(*row).empty()) return kInvalidTableData;
-    if (row->acquisition_tier() != 0 || row->shop_price_gold() == 0) return kFeatureUnavailable;
+    if (row->acquisition_tier() != 0 || row->transfer_policy() != 0 || row->exclusive_gift_slots() > 0 || row->shop_price_gold() == 0) return kFeatureUnavailable;
     if (priceGold != row->shop_price_gold()) return kInvalidParameter;
     if (priceGold > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return kInvalidTableData;
     const auto* pool = PetPool();
@@ -1268,7 +1342,7 @@ uint32_t PetSystem::BuyPet(entt::entity player, uint32_t petTableId, uint64_t se
     if (!level.has_value() || !tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player))
         return kServiceUnavailable;
     if (*level < row->unlock_level()) return kPetOwnerLevelNotEnough;
-    if (static_cast<uint32_t>(comp->pets_size()) >= MaxPets()) return kPetSlotFull;
+    if (!HasNormalPetSlot(*comp)) return kPetSlotFull;
     if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(priceGold))) return kPetGoldNotEnough;
     PetInstance candidate;
     if (const auto err = PrepareNewPet(player, *row, *pool, *level, candidate); err != kSuccess) return err;
@@ -1291,7 +1365,7 @@ uint32_t PetSystem::AvailableCaptureSlots(entt::entity player) {
     const auto* pool = PetPool();
     if (comp == nullptr || !PetDataKnown(*comp) || pool == nullptr ||
         !pool->GetReflection()->GetUnknownFields(*pool).empty()) return 0;
-    const auto count = static_cast<uint32_t>(comp->pets_size());
+    const auto count = CountNormalPets(*comp);
     return count < MaxPets() ? MaxPets() - count : 0;
 }
 
@@ -1311,7 +1385,7 @@ uint32_t PetSystem::PrepareCapturedPets(entt::entity player,
         const auto* row = PetRow(id);
         if (row == nullptr) return kPetTableRowMissing;
         if (!row->GetReflection()->GetUnknownFields(*row).empty()) return kInvalidTableData;
-        if (row->acquisition_tier() != 0) return kFeatureUnavailable;
+        if (row->acquisition_tier() != 0 || row->transfer_policy() != 0 || row->exclusive_gift_slots() > 0) return kFeatureUnavailable;
         if (*level < row->unlock_level()) return kPetOwnerLevelNotEnough;
     }
     for (uint32_t id : petTableIds) {
@@ -1359,6 +1433,9 @@ uint32_t PetSystem::RemovePetForTrade(entt::entity player, uint64_t petId, PetIn
 	if (index < 0) {
 		return kPetNotFound;
 	}
+	if (!IsTransferableSpecies(comp.pets(index).pet_table_id())) {
+		return kPetNotTransferable;
+	}
 
 	// 先整条拷出再删:删完就没有第二次机会取快照了,而快照是托管期间唯一的权威副本。
 	snapshotOut = comp.pets(index);
@@ -1391,7 +1468,10 @@ uint32_t PetSystem::RestorePetFromSnapshot(entt::entity player, const PetInstanc
 				  << " pet_id=" << snapshot.pet_id();
 		return kInvalidParameter;
 	}
-	if (static_cast<uint32_t>(comp.pets_size()) >= MaxPets()) {
+	if (!IsTransferableSpecies(snapshot.pet_table_id())) {
+		return kPetNotTransferable;
+	}
+	if (!HasNormalPetSlot(comp)) {
 		// 槽位满不是终局:调用方应映射成 RETRY,让买家腾位后自动到账(见头文件)。
 		return kPetSlotFull;
 	}

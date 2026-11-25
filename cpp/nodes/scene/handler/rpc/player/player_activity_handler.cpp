@@ -4,6 +4,7 @@
 ///<<< BEGIN WRITING YOUR CODE
 #include "services/scene/player/system/player_feature_snapshot.h"
 #include "services/scene/player/system/player_activity.h"
+#include "services/scene/player/system/player_festival_beast.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 #include <muduo/base/Timestamp.h>
@@ -26,6 +27,39 @@ void SceneActivityClientPlayerHandler::ClaimActivityVitalityReward(entt::entity 
 ///<<< BEGIN WRITING YOUR CODE
     const auto nowMs = static_cast<uint64_t>(muduo::Timestamp::now().microSecondsSinceEpoch() / 1000);
     const auto result = PlayerActivitySystem::Claim(player, nowMs, *request, *response);
+    if (result != kSuccess) response->mutable_error_message()->set_id(result);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneActivityClientPlayerHandler::GetFestivalBeastDetail(entt::entity player,const ::GetFestivalBeastDetailRequest* request,
+	::GetFestivalBeastDetailResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto nowMs = static_cast<uint64_t>(muduo::Timestamp::now().microSecondsSinceEpoch() / 1000);
+    const auto result = PlayerFestivalBeastSystem::GetDetail(player, nowMs, *request, *response);
+    if (result != kSuccess) response->mutable_error_message()->set_id(result);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneActivityClientPlayerHandler::StartFestivalBeastChallenge(entt::entity player,const ::StartFestivalBeastChallengeRequest* request,
+	::StartFestivalBeastChallengeResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto nowMs = static_cast<uint64_t>(muduo::Timestamp::now().microSecondsSinceEpoch() / 1000);
+    const auto result = PlayerFestivalBeastSystem::StartChallenge(player, nowMs, *request, *response);
+    if (result != kSuccess) response->mutable_error_message()->set_id(result);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneActivityClientPlayerHandler::ClaimFestivalBeastReward(entt::entity player,const ::ClaimFestivalBeastRewardRequest* request,
+	::ClaimFestivalBeastRewardResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto nowMs = static_cast<uint64_t>(muduo::Timestamp::now().microSecondsSinceEpoch() / 1000);
+    const auto result = PlayerFestivalBeastSystem::ClaimReward(player, nowMs, *request, *response);
     if (result != kSuccess) response->mutable_error_message()->set_id(result);
 ///<<< END WRITING YOUR CODE
 

@@ -234,6 +234,16 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     if (origin == BattleDamageOrigin::Mirror) context.rank = std::max(1u, context.rank);
     context.origin = origin; context.scale = scale;
     context.primaryTargetId = targets.front();
+    const uint32_t subjectMaxTargets = actor.actor_type() == BATTLE_ACTOR_TYPE_PET
+        ? (row.pet_max_targets() > 0 ? row.pet_max_targets() : row.max_targets())
+        : row.max_targets();
+    const bool explicitPrimarySelected = action.target_id() != 0 && targets.front() == action.target_id();
+    context.primaryFocusBonus = IsCompetitivePvpBattle() && normal &&
+        actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+        subjectMaxTargets > 1 && explicitPrimarySelected &&
+        targets.size() < subjectMaxTargets;
+    context.isMultiTargetSkill =
+        (actor.actor_type() == BATTLE_ACTOR_TYPE_PET ? row.pet_max_targets() : row.max_targets()) > 1u;
     auto* event = AppendEvent(result, BATTLE_EVENT_SKILL, actor.actor_id(), targets.front());
     event->set_skill_table_id(row.id());
     event->set_hit_kind(origin == BattleDamageOrigin::Mirror ? BATTLE_HIT_MIRROR : BATTLE_HIT_NORMAL);
@@ -314,6 +324,9 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     if (op == BattleEffectOp::Shield && (row.hit_limit() == 0 || caster.actor_type() == BATTLE_ACTOR_TYPE_PET)) {
         value = EquipmentShield(caster, receiver, value, context, shieldArtifacts);
     }
+    if (op == BattleEffectOp::Shield && EscalationStacks() > 0) {
+        value *= static_cast<double>(EscalationSupportPct()) / 100.0;
+    }
     if (!Persistent(op) && row.trigger_event() == 0) {
         switch (op) {
         case BattleEffectOp::Damage: {
@@ -327,6 +340,10 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
                 skill->damage_type(), critical) * classskill::DamageRankFactor(context.rank) * context.scale;
             if (!row.required_tag().empty() && HasBuffTag(receiver, row.required_tag())) amount *= 1 + row.conditional_bonus();
             auto damageContext = context; damageContext.critical = critical;
+            if (context.primaryFocusBonus && receiver.actor_id() == context.primaryTargetId) {
+                amount *= static_cast<double>(kPvpPrimaryFocusNum) / static_cast<double>(kPvpPrimaryFocusDen);
+                damageContext.isPrimaryFocus = true;
+            }
             const uint64_t dealt = ResolveConfiguredDamage(caster, receiver, amount, skill->damage_type(), damageContext,
                 result, context.origin == BattleDamageOrigin::Mirror ? BATTLE_HIT_MIRROR : BATTLE_HIT_NORMAL);
             if (row.secondary_ratio() > 0 && dealt > 0 && IsActorActive(caster)) {
@@ -383,8 +400,13 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
                 }
                 RemoveConfiguredBuff(receiver, ids[i], result);
             }
+            if (op == BattleEffectOp::DispelDebuff) {
+                if (sunderUntilRound.erase(receiver.actor_id()) > 0) {
+                    RecordEffectiveContribution(caster);
+                }
+            }
             if (op == BattleEffectOp::DispelBuff && caster.team_index() != receiver.team_index()) {
-                TryDispelBossStance(caster, receiver);
+                TryDispelBossStance(caster, receiver, result);
             }
             if (limit > 0) {
                 RecordEffectiveContribution(caster);
@@ -602,9 +624,15 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     // 护盾处理前不能按当前生命截断:残血不应把一记致死重击缩成可被小盾全吃的伤害。
     if (ActorHasBuffOfType(target, kBuffTypeInvincibility)) damage = 0;
     if (target.is_defending() && context.origin != BattleDamageOrigin::Reflect && context.origin != BattleDamageOrigin::Redirect) damage *= 0.5;
+    if (EscalationStacks() > 0 && context.origin != BattleDamageOrigin::Redirect && context.origin != BattleDamageOrigin::ResourceCost) {
+        damage *= static_cast<double>(EscalationDamagePct()) / 100.0;
+    }
     uint64_t remaining = combatdamage::DamageToHealth(damage, UINT64_MAX);
+    const bool isPrimaryTarget = context.primaryTargetId == 0 || target.actor_id() == context.primaryTargetId;
+    bool splashReduced = false;
     remaining = ApplyEncounterDamageModifiers(source, target, remaining, damageType,
-        direct && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER, result);
+        direct && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER,
+        result, context.isMultiTargetSkill, isPrimaryTarget, &splashReduced);
     uint64_t absorbed = 0;
     std::vector<std::pair<uint32_t, uint64_t>> defenses;
     if (direct) for (const auto& entry : target.buffs()) {
@@ -683,6 +711,10 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     event->set_hit_kind(hitKind); event->set_damage_origin(static_cast<uint32_t>(context.origin));
     event->set_instigator_id(context.instigatorId);
     event->set_is_critical(context.critical);
+    if (context.isPrimaryFocus) {
+        event->set_is_primary_focus(true);
+    }
+    if (splashReduced) event->set_is_splash_reduced(true);
     if (dealt > 0) {
         std::vector<uint64_t> sleeping;
         for (const auto& entry : target.buffs()) {

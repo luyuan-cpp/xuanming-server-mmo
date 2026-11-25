@@ -89,6 +89,15 @@ TEST(PlayerAppearanceRulesTest, RuleBoundsBitStorageAndUnknownHighBitPreservatio
 	EXPECT_FALSE(player_appearance::IsSeriesCompleted(0, 0));
 	EXPECT_FALSE(player_appearance::IsSeriesCompleted(2, 3));
 	EXPECT_TRUE(player_appearance::IsSeriesCompleted(3, 3));
+
+	// 人物志字段合法性: 全空放行, 四项核心字段齐全(无论有无小名)放行, 半残行或仅填空白一律拒绝。
+	EXPECT_TRUE(player_appearance::BiographyFieldsValid("", "", "", "", ""));
+	EXPECT_TRUE(player_appearance::BiographyFieldsValid("   ", "\t", "", "\n", ""));
+	EXPECT_TRUE(player_appearance::BiographyFieldsValid("陆照禾", "阿禾", "小传", "第四只碗", "正文"));
+	EXPECT_TRUE(player_appearance::BiographyFieldsValid("霜见雪", "", "小传", "霜阶扫雪", "正文"));
+	EXPECT_FALSE(player_appearance::BiographyFieldsValid("霜见雪", "", "", "霜阶扫雪", "正文"));
+	EXPECT_FALSE(player_appearance::BiographyFieldsValid("", "小名", "", "", ""));
+	EXPECT_FALSE(player_appearance::BiographyFieldsValid("星璇", "", "小传", "十八星印", "   "));
 }
 
 class PlayerAppearanceSystemTest : public testing::Test
@@ -486,5 +495,35 @@ TEST_F(PlayerAppearanceSystemTest, SeriesProgressTracksOwnershipIgnoresTrialsAnd
 	EXPECT_EQ(completedSeries.epilogue_title(), "灯下三碗面");
 	EXPECT_EQ(stateNotifies.back().info().series_progress(1).owned_count(), 0u);
 	EXPECT_EQ(stateNotifies.back().info().series_progress(2).owned_count(), 0u);
+}
+
+TEST_F(PlayerAppearanceSystemTest, AllNineActiveAppearancesHaveCompleteBiographiesWithoutRemovedName)
+{
+	EXPECT_TRUE(PlayerAppearanceSystem::ValidateTables());
+	const auto &rows = CharacterAppearanceTableManager::Instance().FindAll().data();
+	ASSERT_EQ(rows.size(), 9);
+	uint32_t withBiography = 0;
+	for (const auto &row : rows)
+	{
+		if (row.enabled() == 0)
+		{
+			continue;
+		}
+		EXPECT_TRUE(player_appearance::BiographyFieldsValid(
+			row.archive_name(),
+			row.nickname(),
+			row.biography_summary(),
+			row.story_title(),
+			row.story_body()))
+			<< "id=" << row.id();
+		EXPECT_FALSE(row.archive_name().empty()) << "id=" << row.id();
+		EXPECT_FALSE(row.biography_summary().empty()) << "id=" << row.id();
+		EXPECT_FALSE(row.story_title().empty()) << "id=" << row.id();
+		EXPECT_FALSE(row.story_body().empty()) << "id=" << row.id();
+		EXPECT_EQ(row.biography_summary().find("闻砚生"), std::string::npos) << "id=" << row.id();
+		EXPECT_EQ(row.story_body().find("闻砚生"), std::string::npos) << "id=" << row.id();
+		++withBiography;
+	}
+	EXPECT_EQ(withBiography, 9u);
 }
 } // namespace

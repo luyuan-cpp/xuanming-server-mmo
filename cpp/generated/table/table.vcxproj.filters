@@ -681,6 +681,9 @@
     <ClInclude Include="proto\tip\trial_journal_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\tip\festival_beast_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\tip\chat_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -1227,6 +1230,9 @@
     <ClCompile Include="proto\tip\trial_journal_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\tip\festival_beast_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -1288,6 +1294,18 @@
     <ClInclude Include="code\activityschedule_table_fk.h" />
     <ClInclude Include="code\activityschedule_table_comp.h" />
     <ClInclude Include="proto\activityschedule_table.pb.h" />
+    <ClCompile Include="code\festivalbeastactivity_table.cpp" />
+    <ClCompile Include="code\festivalbeastactivity_table_fk.cpp" />
+    <ClCompile Include="code\festivalbeasttier_table.cpp" />
+    <ClCompile Include="proto\festivalbeastactivity_table.pb.cc" />
+    <ClCompile Include="proto\festivalbeasttier_table.pb.cc" />
+    <ClInclude Include="code\festivalbeastactivity_table.h" />
+    <ClInclude Include="code\festivalbeastactivity_table_fk.h" />
+    <ClInclude Include="code\festivalbeastactivity_table_comp.h" />
+    <ClInclude Include="code\festivalbeasttier_table.h" />
+    <ClInclude Include="code\festivalbeasttier_table_comp.h" />
+    <ClInclude Include="proto\festivalbeastactivity_table.pb.h" />
+    <ClInclude Include="proto\festivalbeasttier_table.pb.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="code\equipartifact_table.cpp">

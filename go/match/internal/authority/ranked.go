@@ -493,6 +493,11 @@ func ownsRewardCode(owned []*pb.MatchRankedRewardRecord, kind pb.RankedRewardKin
 	return false
 }
 
+func ownsTitleRewardCode(owned []*pb.MatchRankedRewardRecord, code string) bool {
+	return ownsRewardCode(owned, pb.RankedRewardKind_RANKED_REWARD_TIER_TITLE, code) ||
+		ownsRewardCode(owned, pb.RankedRewardKind_RANKED_REWARD_WIN_MILESTONE, code)
+}
+
 func (s *Store) toSeasonInfo(r *pb.MatchRankedSeasonRecord) *pb.RankedSeasonInfo {
 	rule := s.RankedCatalog().Rule()
 	allowedSizes := s.Catalog().AllowedTeamSizes(pb.MatchMode_MATCH_MODE_PVP_TEAM, rule.GetBattleConfigId())
@@ -523,6 +528,11 @@ func (s *Store) toSeasonInfo(r *pb.MatchRankedSeasonRecord) *pb.RankedSeasonInfo
 		UsesOwnProgression:  true,
 		PrimaryTeamSizes:    []uint32{1, 3, 5},
 		SpecialTeamSizes:    []uint32{2, 4},
+		TierQingfengCenti:   rule.GetTierQingfengCenti(),
+		TierYunzhangCenti:   rule.GetTierYunzhangCenti(),
+		TierTianshuCenti:    rule.GetTierTianshuCenti(),
+		TierWushuangCenti:   rule.GetTierWushuangCenti(),
+		MilestoneWinMatches: s.RankedCatalog().WinMilestoneMatches(),
 	}
 }
 
@@ -742,7 +752,7 @@ func (s *Store) UpdateRankedCosmetic(ctx context.Context, playerID uint64, loado
 		if !ownsRewardCode(owned, pb.RankedRewardKind_RANKED_REWARD_TALISMAN, loadout.GetEquippedTalismanCode()) ||
 			!ownsRewardCode(owned, pb.RankedRewardKind_RANKED_REWARD_AVATAR_PATTERN, loadout.GetEquippedAvatarPatternCode()) ||
 			!ownsRewardCode(owned, pb.RankedRewardKind_RANKED_REWARD_CARD_BACKGROUND, loadout.GetEquippedCardBgCode()) ||
-			!ownsRewardCode(owned, pb.RankedRewardKind_RANKED_REWARD_TIER_TITLE, loadout.GetEquippedTitleCode()) {
+			!ownsTitleRewardCode(owned, loadout.GetEquippedTitleCode()) {
 			return ErrRankedPresetInvalid
 		}
 		stamp, err := now(ctx, tx)
@@ -800,20 +810,41 @@ func (s *Store) GetRankedBattleResult(ctx context.Context, playerID, battleID ui
 	return view, nil
 }
 
-func evaluateRankedParticipation(fact *battlepb.BattleParticipationFact, settlement *battlepb.BattleSettlementData, totalRounds uint32) bool {
+const (
+	rankedMinRoundsForLoss       uint32 = 3
+	rankedMinManualRoundsForLoss uint32 = 2
+)
+
+func evaluateRankedParticipation(fact *battlepb.BattleParticipationFact, settlement *battlepb.BattleSettlementData, totalRounds uint32, playerWon bool) bool {
 	if totalRounds == 0 {
 		return false
 	}
 	if settlement != nil && settlement.GetFled() {
 		return false
 	}
+	baseParticipated := false
+	noActionOpportunity := false
 	if fact != nil {
-		if fact.GetManualActionAccepted() {
-			return true
+		noActionOpportunity = fact.GetEnteredRoom() && fact.GetNoActionOpportunity()
+		if fact.GetManualActionAccepted() || noActionOpportunity || (fact.GetEnteredRoom() && fact.GetExplicitAutoEnabled()) {
+			baseParticipated = true
 		}
-		return fact.GetEnteredRoom() && (fact.GetExplicitAutoEnabled() || fact.GetNoActionOpportunity())
+	} else {
+		baseParticipated = settlement != nil && settlement.GetParticipated()
 	}
-	return settlement != nil && settlement.GetParticipated()
+	if !baseParticipated {
+		return false
+	}
+	// 胜局与首回合即被秒/全程受控无操作机会者直接放行；负/平局与材料账统一要求有效对抗门槛，防 1 回合开自动送死蹭 12 场皮肤与 3V3 坑队友。
+	if playerWon || noActionOpportunity {
+		return true
+	}
+	if settlement == nil {
+		return false
+	}
+	return totalRounds >= rankedMinRoundsForLoss &&
+		settlement.GetManualActionRounds() >= rankedMinManualRoundsForLoss &&
+		settlement.GetEffectiveCombatContribution()
 }
 
 // ApplyRankedRating 在单一 SQL 事务内完成论剑排位的 Elo 落账、有效参赛与首次亮段判定、4/8/12 展示权益解锁、
@@ -999,7 +1030,8 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 		beforeRating := ratings[pid]
 		tierBefore := cat.TierFor(beforeRating, ps.Qualified)
 		fled := st != nil && st.GetFled()
-		participated := evaluateRankedParticipation(fact, st, event.GetTotalRounds())
+		playerWon := !zeroRound && ((sides[pid] == 0 && scoreA == 1.0) || (sides[pid] == 1 && scoreA == 0.0))
+		participated := evaluateRankedParticipation(fact, st, event.GetTotalRounds(), playerWon)
 
 		status := pb.RankedMatchRatingStatus_RANKED_MATCH_RATING_CONFIRMED
 		afterRating := beforeRating
@@ -1082,6 +1114,16 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 				if (bits&4) == 0 && validAfter >= rule.GetMilestoneTalismanMatches() {
 					bits |= 4
 					r, gErr := grantRankedRewardTx(ctx, tx, pid, season.SeasonId, pb.RankedRewardKind_RANKED_REWARD_TALISMAN, rule.GetMilestoneTalismanMatches(), season.SeasonKey+"_qingyun_talisman", stamp)
+					if gErr != nil {
+						return false, gErr
+					}
+					if r != nil {
+						unlocked = append(unlocked, r)
+					}
+				}
+				if winTarget := cat.WinMilestoneMatches(); (bits&8) == 0 && winTarget > 0 && wins >= winTarget {
+					bits |= 8
+					r, gErr := grantRankedRewardTx(ctx, tx, pid, season.SeasonId, pb.RankedRewardKind_RANKED_REWARD_WIN_MILESTONE, winTarget, fmt.Sprintf("%s_win_milestone_%d", season.SeasonKey, winTarget), stamp)
 					if gErr != nil {
 						return false, gErr
 					}

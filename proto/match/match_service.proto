@@ -424,10 +424,10 @@ message SetBattleScriptLoadoutResponse {
 
 enum RankedTier {
   RANKED_TIER_UNSPECIFIED = 0; // 本季未亮段
-  RANKED_TIER_CHUSHI = 1;      // 初试: [0, 1400)
-  RANKED_TIER_QINGFENG = 2;    // 青锋: [1400, 1550)
-  RANKED_TIER_YUNZHANG = 3;    // 云章: [1550, 1700)
-  RANKED_TIER_TIANSHU = 4;     // 天枢: [1700, 1850)
+  RANKED_TIER_CHUSHI = 1;      // 初试: [0, 1520)（新号 1500 起步，净胜 2 场破冰升青锋）
+  RANKED_TIER_QINGFENG = 2;    // 青锋: [1520, 1600)
+  RANKED_TIER_YUNZHANG = 3;    // 云章: [1600, 1720)（封榜起享段位徽章与赛季称号）
+  RANKED_TIER_TIANSHU = 4;     // 天枢: [1720, 1850)
   RANKED_TIER_WUSHUANG = 5;    // 无双: [1850, +∞)
 }
 
@@ -443,9 +443,10 @@ enum RankedRewardKind {
   RANKED_REWARD_AVATAR_PATTERN = 1;       // 累计 4 场: 主题头像纹样
   RANKED_REWARD_CARD_BACKGROUND = 2;      // 累计 8 场: 名片底纹
   RANKED_REWARD_TALISMAN = 3;             // 累计 12 场: 永久青云玉符
-  RANKED_REWARD_TIER_BADGE = 4;           // 最高段位徽章(天枢/无双)
-  RANKED_REWARD_TIER_TITLE = 5;           // 赛季称号(天枢/无双)
+  RANKED_REWARD_TIER_BADGE = 4;           // 最高段位徽章(云章/天枢/无双)
+  RANKED_REWARD_TIER_TITLE = 5;           // 赛季称号(云章/天枢/无双)
   RANKED_REWARD_CHAMPION_INSCRIPTION = 6; // 封榜第 1 且终分达到无双: 榜首题名
+  RANKED_REWARD_WIN_MILESTONE = 7;        // 本季累计 6 胜: 永久「锋芒」赛季称号（可佩戴于称号栏）
 }
 
 enum RankedMatchRatingStatus {
@@ -515,6 +516,13 @@ message RankedSeasonInfo {
   repeated uint32 primary_team_sizes = 22;
   // 归属特殊玩法开关的人数档（如 [2, 4]，对应帮会 2V2 会武 / 主题 4V4 特殊赛）。
   repeated uint32 special_team_sizes = 23;
+  // 权威五段下限（×100，客户端直读用于展示“距下一段还差 X 分”，严禁硬编码）。
+  uint32 tier_qingfeng_centi = 24;
+  uint32 tier_yunzhang_centi = 25;
+  uint32 tier_tianshu_centi = 26;
+  uint32 tier_wushuang_centi = 27;
+  // 本季胜场锋芒称号里程碑门槛（V2=6）。
+  uint32 milestone_win_matches = 28;
 }
 
 message RankedPlayerSeasonSummary {
@@ -530,7 +538,7 @@ message RankedPlayerSeasonSummary {
   uint32 losses = 10;
   uint32 draws = 11;
   uint64 qualified_at_ms = 12;     // 本季首次亮段时刻
-  uint32 milestone_bits = 13;      // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
+  uint32 milestone_bits = 13;      // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符, bit3=6胜锋芒称号
   uint64 final_rank = 14;          // 封榜后最终名次;0=未上榜或未封榜
   bool champion_awarded = 15;      // 封榜第 1 且终分达到无双
 }

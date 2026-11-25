@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+// FestivalBeastTier 表的权威 schema。源表 data/FestivalBeastTier.xlsx。
+//
+// 瑞兽迎春首领固定等级档配置：仅按开局人物生效等级匹配，装备和宝宝强弱不参与选档。
+// 全部档位必须无重叠且连续覆盖 1..120 级，否则活动配置门禁 fail-closed 拒绝开放。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message FestivalBeastTierTable {
+  option (cfg_sheet)       = "FestivalBeastTier";
+  option (cfg_source_file) = "FestivalBeastTier.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 等级档 ID
+  uint32 id = 1;
+  // 人物开局生效等级下限（含）
+  uint32 min_level = 2;
+  // 人物开局生效等级上限（含）
+  uint32 max_level = 3;
+  // 首领气血上限
+  uint64 boss_health = 4;
+  // 首领物理攻击（写入 physical_attack，响应减攻 Debuff）
+  uint64 boss_physical_attack = 5;
+  // 首领防御（写入 defense，响应减防 Debuff）
+  uint64 boss_defense = 6;
+  // 首领抗性百分比（0..100）
+  uint64 boss_resistance = 7;
+  // 首领出手速度
+  uint64 boss_speed = 8;
+}

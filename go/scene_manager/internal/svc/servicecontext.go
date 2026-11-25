@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"scene_manager/internal/config"
@@ -17,6 +18,7 @@ import (
 	"shared/etcdwatch"
 	"shared/gatepick"
 	"shared/kafkacmd"
+	"shared/ownerauthority"
 	"shared/playerredis"
 	"shared/snowflake"
 	"shared/snowflakealloc"
@@ -70,7 +72,10 @@ type ServiceContext struct {
 	// OwnerEpochMint 是铸造 owner_epoch 的执行面(墙钟地板 + 铸造 EVAL 与 WAITAOF 同一条连接,owner_epoch_mint.go)。
 	// 生产恒非 nil;logic 遇到 nil 一律拒绝铸造(fail-closed),不退回 Redis 字段上的无确认路径。
 	OwnerEpochMint OwnerEpochMinter
-	SceneIDGen     *snowflake.Node
+	// OwnerAuthority is the optional linearizable SQL player ownership store (nil when unconfigured).
+	OwnerAuthority   *ownerauthority.Store
+	ownerAuthorityDB *sql.DB
+	SceneIDGen       *snowflake.Node
 	// RedirectGateRevisions 记跨 zone 重定向每次直读到的 gate 注册记录版本,判 gate 停写用(logic.AssignGateForZone),零值可用。
 	RedirectGateRevisions gatepick.RevisionTracker
 	snowflakeHd           *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
@@ -184,6 +189,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		TableBundle: tableMgr,
 	}
 	tableMgr.Start()
+	ownerStore, ownerDB, err := initOwnerAuthority(context.Background(), c.OwnerAuthority, os.LookupEnv)
+	if err != nil {
+		panic("scene_manager owner authority init failed: " + err.Error())
+	}
+	sc.OwnerAuthority = ownerStore
+	sc.ownerAuthorityDB = ownerDB
 	sc.ownerEpochMintRedis = mustStartOwnerEpochMinter(c)
 	sc.OwnerEpochMint = sc.ownerEpochMintRedis
 	kafkaWriteTimeout := c.EffectiveKafkaWriteTimeout()
@@ -230,6 +241,28 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	sc.PlayerStoreHolders = directory
 	sc.PlayerStoreDeadHolders = directory
 	return sc
+}
+
+// initOwnerAuthority builds the optional SQL player ownership authority store.
+// Returns (nil, nil, nil) when OwnerAuthority is not configured.
+func initOwnerAuthority(ctx context.Context, cfg config.OwnerAuthorityConfig, lookup func(string) (string, bool)) (*ownerauthority.Store, *sql.DB, error) {
+	if !cfg.Enabled() {
+		return nil, nil, nil
+	}
+	dsn, err := cfg.ResolveDSN(lookup)
+	if err != nil {
+		return nil, nil, err
+	}
+	openCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	db, err := ownerauthority.OpenStrongDB(openCtx, dsn, cfg.Database, cfg.Backend, cfg.MaxOpenConns)
+	if err != nil {
+		return nil, nil, err
+	}
+	skew := time.Duration(cfg.SkewMarginMs) * time.Millisecond
+	store := ownerauthority.NewStore(db, skew)
+	logx.Infof("[scene_manager] owner authority sql store ready: backend=%q database=%q", cfg.Backend, cfg.Database)
+	return store, db, nil
 }
 
 // mustStartOwnerEpochMinter 建铸造专用客户端并做启动探针,任何一步失败都 panic(拒启)。
@@ -320,6 +353,11 @@ func (sc *ServiceContext) Stop() {
 		if sc.ownerEpochMintRedis != nil {
 			if err := sc.ownerEpochMintRedis.Close(); err != nil {
 				logx.Errorf("[OwnerEpochMint] mint redis client close failed: %v", err)
+			}
+		}
+		if sc.ownerAuthorityDB != nil {
+			if err := sc.ownerAuthorityDB.Close(); err != nil {
+				logx.Errorf("[scene_manager] owner authority sql close failed: %v", err)
 			}
 		}
 		if sc.PlayerRedis != nil {

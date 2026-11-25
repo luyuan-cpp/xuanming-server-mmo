@@ -424,11 +424,11 @@ constexpr StartActivityBattleResponse::ParseTableT_ StartActivityBattleResponse:
     {
       PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -438,10 +438,7 @@ constexpr StartActivityBattleResponse::ParseTableT_ StartActivityBattleResponse:
       ::_pbi::TcParser::GetTable<::match::StartActivityBattleResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 formation_state = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(StartActivityBattleResponse, _impl_.formation_state_), 2>(),
-       {32, 2, 0,
-        PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.formation_state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .match.ActivityBattleReject reject = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(StartActivityBattleResponse, _impl_.reject_), 1>(),
        {8, 1, 0,
@@ -454,6 +451,16 @@ constexpr StartActivityBattleResponse::ParseTableT_ StartActivityBattleResponse:
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartActivityBattleResponse, _impl_.battle_id_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.battle_id_)}},
+      // uint32 formation_state = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(StartActivityBattleResponse, _impl_.formation_state_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.formation_state_)}},
+      // uint64 admitted_at_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartActivityBattleResponse, _impl_.admitted_at_ms_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.admitted_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -465,6 +472,8 @@ constexpr StartActivityBattleResponse::ParseTableT_ StartActivityBattleResponse:
       {PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.battle_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 formation_state = 4;
       {PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.formation_state_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 admitted_at_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.admitted_at_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -480,7 +489,8 @@ inline constexpr StartActivityBattleResponse::Impl_::Impl_(
         offender_player_id_{::uint64_t{0u}},
         reject_{static_cast< ::match::ActivityBattleReject >(0)},
         formation_state_{0u},
-        battle_id_{::uint64_t{0u}} {}
+        battle_id_{::uint64_t{0u}},
+        admitted_at_ms_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr StartActivityBattleResponse::StartActivityBattleResponse(::_pbi::ConstantInitialized,
@@ -1688,194 +1698,6 @@ const ::_pbi::ClassData* StrandedFormation_get_class_data() {
   return StrandedFormation_globals_.GetClassData();
 #else
   return StrandedFormation_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
-class StartActivityBattleRequest::_Internal {
- public:
-  using HasBits = decltype(::std::declval<StartActivityBattleRequest>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_._has_bits_);
-};
-
-constexpr StartActivityBattleRequest::ParseTableT_ StartActivityBattleRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_._has_bits_),
-      0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
-      2,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::match::StartActivityBattleRequest>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint32 battle_config_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(StartActivityBattleRequest, _impl_.battle_config_id_), 4>(),
-       {8, 4, 0,
-        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.battle_config_id_)}},
-      // repeated uint64 member_player_ids = 2;
-      {::_pbi::TcParser::FastV64P1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.member_player_ids_)}},
-      // .BattleActivityContext activity_context = 3;
-      {::_pbi::TcParser::FastMtS1,
-       {26, 1, 0,
-        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.activity_context_)}},
-      // uint64 request_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartActivityBattleRequest, _impl_.request_id_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_id_)}},
-      // .common.base.ServiceCallAuth auth = 5;
-      {::_pbi::TcParser::FastMtS1,
-       {42, 2, 1,
-        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.auth_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // uint32 battle_config_id = 1;
-      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // repeated uint64 member_player_ids = 2;
-      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.member_player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-      // .BattleActivityContext activity_context = 3;
-      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.activity_context_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // uint64 request_id = 4;
-      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // .common.base.ServiceCallAuth auth = 5;
-      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.auth_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::BattleActivityContext>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::BattleActivityContext_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr StartActivityBattleRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        member_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::match::StartActivityBattleRequest,
-            PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.member_player_ids_)>()
-         }
-        ,
-        _member_player_ids_cached_byte_size_{0},
-        activity_context_{nullptr},
-        auth_{nullptr},
-        request_id_{::uint64_t{0u}},
-        battle_config_id_{0u} {}
-
-template <typename>
-constexpr StartActivityBattleRequest::StartActivityBattleRequest(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL StartActivityBattleRequest::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) StartActivityBattleRequest(arena);
-}
-constexpr auto StartActivityBattleRequest::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(StartActivityBattleRequest), alignof(StartActivityBattleRequest));
-}
-constexpr auto StartActivityBattleRequest::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &StartActivityBattleRequest::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<StartActivityBattleRequest>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &StartActivityBattleRequest::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<StartActivityBattleRequest>(), &StartActivityBattleRequest::ByteSizeLong,
-              &StartActivityBattleRequest::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[0],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct StartActivityBattleRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr StartActivityBattleRequestGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 StartActivityBattleRequest_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(StartActivityBattleRequest::InternalGenerateClassData_(
-            _default, &StartActivityBattleRequest_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<StartActivityBattleRequest>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~StartActivityBattleRequestGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) StartActivityBattleRequest _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<StartActivityBattleRequest>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(StartActivityBattleRequestGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST StartActivityBattleRequestGlobalsTypeInternal StartActivityBattleRequest_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* StartActivityBattleRequest_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return StartActivityBattleRequest_globals_.GetClassData();
-#else
-  return StartActivityBattleRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4150,6 +3972,206 @@ const ::_pbi::ClassData* AcquireTrialOccupancyRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class StartActivityBattleRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<StartActivityBattleRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_._has_bits_);
+};
+
+constexpr StartActivityBattleRequest::ParseTableT_ StartActivityBattleRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::StartActivityBattleRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 battle_config_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(StartActivityBattleRequest, _impl_.battle_config_id_), 6>(),
+       {8, 6, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.battle_config_id_)}},
+      // repeated uint64 member_player_ids = 2;
+      {::_pbi::TcParser::FastV64P1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.member_player_ids_)}},
+      // .BattleActivityContext activity_context = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.activity_context_)}},
+      // uint64 request_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartActivityBattleRequest, _impl_.request_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_id_)}},
+      // .common.base.ServiceCallAuth auth = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 2, 1,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.auth_)}},
+      // uint64 request_high = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartActivityBattleRequest, _impl_.request_high_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_high_)}},
+      // uint64 request_low = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartActivityBattleRequest, _impl_.request_low_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_low_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 battle_config_id = 1;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint64 member_player_ids = 2;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.member_player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // .BattleActivityContext activity_context = 3;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.activity_context_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 request_id = 4;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .common.base.ServiceCallAuth auth = 5;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.auth_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 request_high = 6;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_high_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 request_low = 7;
+      {PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_.request_low_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BattleActivityContext>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BattleActivityContext_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr StartActivityBattleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        member_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::StartActivityBattleRequest,
+            PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.member_player_ids_)>()
+         }
+        ,
+        _member_player_ids_cached_byte_size_{0},
+        activity_context_{nullptr},
+        auth_{nullptr},
+        request_id_{::uint64_t{0u}},
+        request_high_{::uint64_t{0u}},
+        request_low_{::uint64_t{0u}},
+        battle_config_id_{0u} {}
+
+template <typename>
+constexpr StartActivityBattleRequest::StartActivityBattleRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL StartActivityBattleRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) StartActivityBattleRequest(arena);
+}
+constexpr auto StartActivityBattleRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(StartActivityBattleRequest), alignof(StartActivityBattleRequest));
+}
+constexpr auto StartActivityBattleRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &StartActivityBattleRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<StartActivityBattleRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &StartActivityBattleRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<StartActivityBattleRequest>(), &StartActivityBattleRequest::ByteSizeLong,
+              &StartActivityBattleRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(StartActivityBattleRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[0],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct StartActivityBattleRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr StartActivityBattleRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 StartActivityBattleRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(StartActivityBattleRequest::InternalGenerateClassData_(
+            _default, &StartActivityBattleRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<StartActivityBattleRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~StartActivityBattleRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) StartActivityBattleRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<StartActivityBattleRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(StartActivityBattleRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST StartActivityBattleRequestGlobalsTypeInternal StartActivityBattleRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* StartActivityBattleRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return StartActivityBattleRequest_globals_.GetClassData();
+#else
+  return StartActivityBattleRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ResolveStrandedFormationResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<ResolveStrandedFormationResponse>()._impl_._has_bits_);
@@ -5058,28 +5080,34 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.battle_config_id_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.member_player_ids_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.activity_context_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.auth_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.request_high_),
+        PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleRequest, _impl_.request_low_),
+        6,
         0,
         1,
         3,
         2,
+        4,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleResponse, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleResponse, _impl_.reject_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleResponse, _impl_.offender_player_id_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleResponse, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleResponse, _impl_.formation_state_),
+        PROTOBUF_FIELD_OFFSET(::match::StartActivityBattleResponse, _impl_.admitted_at_ms_),
         1,
         0,
         3,
         2,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::CancelActivityBattleRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -5409,33 +5437,33 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::match::StartActivityBattleRequest)},
-        {13, sizeof(::match::StartActivityBattleResponse)},
-        {24, sizeof(::match::CancelActivityBattleRequest)},
-        {31, sizeof(::match::CancelActivityBattleResponse)},
-        {46, sizeof(::match::CommitBattleOutcomeRequest)},
-        {61, sizeof(::match::CommitBattleOutcomeResponse)},
-        {70, sizeof(::match::SetSpectateFeaturedRequest)},
-        {79, sizeof(::match::SetSpectateFeaturedResponse)},
-        {86, sizeof(::match::TrialOccupancyRole)},
-        {95, sizeof(::match::AcquireTrialOccupancyRequest)},
-        {106, sizeof(::match::AcquireTrialOccupancyResponse)},
-        {113, sizeof(::match::ReleaseTrialOccupancyRequest)},
-        {122, sizeof(::match::ReleaseTrialOccupancyResponse)},
-        {127, sizeof(::match::GetBattleCompletionRequest)},
-        {134, sizeof(::match::GetBattleCompletionResponse)},
-        {143, sizeof(::match::GetBattleTerminalDecisionRequest)},
-        {150, sizeof(::match::GetBattleTerminalDecisionResponse)},
-        {163, sizeof(::match::StrandedFormationTicket)},
-        {174, sizeof(::match::StrandedFormation)},
-        {239, sizeof(::match::ListStrandedFormationsRequest)},
-        {250, sizeof(::match::ListStrandedFormationsResponse)},
-        {265, sizeof(::match::ResolveStrandedFormationRequest)},
-        {282, sizeof(::match::ResolveStrandedFormationResponse)},
-        {299, sizeof(::match::ListPendingBattleScriptsRequest)},
-        {306, sizeof(::match::PendingBattleScript)},
-        {321, sizeof(::match::ListPendingBattleScriptsResponse)},
-        {328, sizeof(::match::ReviewBattleScriptRequest)},
-        {343, sizeof(::match::ReviewBattleScriptResponse)},
+        {17, sizeof(::match::StartActivityBattleResponse)},
+        {30, sizeof(::match::CancelActivityBattleRequest)},
+        {37, sizeof(::match::CancelActivityBattleResponse)},
+        {52, sizeof(::match::CommitBattleOutcomeRequest)},
+        {67, sizeof(::match::CommitBattleOutcomeResponse)},
+        {76, sizeof(::match::SetSpectateFeaturedRequest)},
+        {85, sizeof(::match::SetSpectateFeaturedResponse)},
+        {92, sizeof(::match::TrialOccupancyRole)},
+        {101, sizeof(::match::AcquireTrialOccupancyRequest)},
+        {112, sizeof(::match::AcquireTrialOccupancyResponse)},
+        {119, sizeof(::match::ReleaseTrialOccupancyRequest)},
+        {128, sizeof(::match::ReleaseTrialOccupancyResponse)},
+        {133, sizeof(::match::GetBattleCompletionRequest)},
+        {140, sizeof(::match::GetBattleCompletionResponse)},
+        {149, sizeof(::match::GetBattleTerminalDecisionRequest)},
+        {156, sizeof(::match::GetBattleTerminalDecisionResponse)},
+        {169, sizeof(::match::StrandedFormationTicket)},
+        {180, sizeof(::match::StrandedFormation)},
+        {245, sizeof(::match::ListStrandedFormationsRequest)},
+        {256, sizeof(::match::ListStrandedFormationsResponse)},
+        {271, sizeof(::match::ResolveStrandedFormationRequest)},
+        {288, sizeof(::match::ResolveStrandedFormationResponse)},
+        {305, sizeof(::match::ListPendingBattleScriptsRequest)},
+        {312, sizeof(::match::PendingBattleScript)},
+        {327, sizeof(::match::ListPendingBattleScriptsResponse)},
+        {334, sizeof(::match::ReviewBattleScriptRequest)},
+        {349, sizeof(::match::ReviewBattleScriptResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5475,201 +5503,203 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto[] 
     "ttle/battle_data.proto\032 proto/battle/bat"
     "tle_script.proto\032 proto/battle/player_ba"
     "ttle.proto\032)proto/common/base/service_ca"
-    "ll_auth.proto\"\303\001\n\032StartActivityBattleReq"
+    "ll_auth.proto\"\356\001\n\032StartActivityBattleReq"
     "uest\022\030\n\020battle_config_id\030\001 \001(\r\022\031\n\021member"
     "_player_ids\030\002 \003(\004\0220\n\020activity_context\030\003 "
     "\001(\0132\026.BattleActivityContext\022\022\n\nrequest_i"
     "d\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.Serv"
-    "iceCallAuth\"\222\001\n\033StartActivityBattleRespo"
-    "nse\022+\n\006reject\030\001 \001(\0162\033.match.ActivityBatt"
-    "leReject\022\032\n\022offender_player_id\030\002 \001(\004\022\021\n\t"
-    "battle_id\030\003 \001(\004\022\027\n\017formation_state\030\004 \001(\r"
-    "\"~\n\033CancelActivityBattleRequest\0223\n\010origi"
-    "nal\030\001 \001(\0132!.match.StartActivityBattleReq"
-    "uest\022*\n\004auth\030\002 \001(\0132\034.common.base.Service"
-    "CallAuth\"\342\001\n\034CancelActivityBattleRespons"
-    "e\022\021\n\tbattle_id\030\001 \001(\004\022\031\n\021request_cancelle"
-    "d\030\002 \001(\010\022\027\n\017formation_state\030\003 \001(\r\022*\n\004auth"
-    "\030\004 \001(\0132\034.common.base.ServiceCallAuth\022\026\n\016"
-    "request_digest\030\005 \001(\t\0227\n\021terminal_decisio"
-    "n\030\006 \001(\0162\034.match.BattleOutcomeDecision\"\332\001"
-    "\n\032CommitBattleOutcomeRequest\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\022\036\n\026placement_operation_id\030\002 \001(\t\022"
-    "\032\n\022target_instance_id\030\003 \001(\t\022\032\n\022raw_resul"
-    "t_payload\030\004 \001(\014\022*\n\004auth\030\005 \001(\0132\034.common.b"
-    "ase.ServiceCallAuth\022%\n\006replay\030\006 \001(\0132\025.Ba"
-    "ttleReplayEnvelope\"\221\001\n\033CommitBattleOutco"
-    "meResponse\022.\n\010decision\030\001 \001(\0162\034.match.Bat"
-    "tleOutcomeDecision\022\026\n\016request_digest\030\002 \001"
-    "(\t\022*\n\004auth\030\003 \001(\0132\034.common.base.ServiceCa"
-    "llAuth\"m\n\032SetSpectateFeaturedRequest\022\021\n\t"
-    "battle_id\030\001 \001(\004\022\020\n\010featured\030\002 \001(\010\022*\n\004aut"
-    "h\030\003 \001(\0132\034.common.base.ServiceCallAuth\"j\n"
-    "\033SetSpectateFeaturedResponse\022-\n\006reject\030\001"
-    " \001(\0162\035.match.SpectateFeaturedReject\022\034\n\004t"
-    "ier\030\002 \001(\0162\016.eSpectateTier\"P\n\022TrialOccupa"
-    "ncyRole\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007account\030\002 "
-    "\001(\t\022\026\n\016owner_revision\030\003 \001(\004\"\227\001\n\034AcquireT"
-    "rialOccupancyRequest\022\020\n\010owner_id\030\001 \001(\004\022)"
-    "\n\006roster\030\002 \003(\0132\031.match.TrialOccupancyRol"
-    "e\022\016\n\006ttl_ms\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common"
-    ".base.ServiceCallAuth\"h\n\035AcquireTrialOcc"
-    "upancyResponse\022+\n\006reject\030\001 \001(\0162\033.match.T"
-    "rialOccupancyReject\022\032\n\022offender_player_i"
-    "d\030\002 \001(\004\"p\n\034ReleaseTrialOccupancyRequest\022"
-    "\020\n\010owner_id\030\001 \001(\004\022\022\n\nplayer_ids\030\002 \003(\004\022*\n"
-    "\004auth\030\003 \001(\0132\034.common.base.ServiceCallAut"
-    "h\"L\n\035ReleaseTrialOccupancyResponse\022+\n\006re"
-    "ject\030\001 \001(\0162\033.match.TrialOccupancyReject\""
-    "[\n\032GetBattleCompletionRequest\022\021\n\tbattle_"
-    "id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Ser"
-    "viceCallAuth\"\217\001\n\033GetBattleCompletionResp"
-    "onse\022+\n\006reject\030\001 \001(\0162\033.match.TrialOccupa"
-    "ncyReject\022.\n\010decision\030\002 \001(\0162\034.match.Batt"
-    "leOutcomeDecision\022\023\n\013raw_payload\030\003 \001(\014\"a"
-    "\n GetBattleTerminalDecisionRequest\022\021\n\tba"
-    "ttle_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.bas"
-    "e.ServiceCallAuth\"\301\001\n!GetBattleTerminalD"
-    "ecisionResponse\022.\n\010decision\030\001 \001(\0162\034.matc"
-    "h.BattleOutcomeDecision\022\r\n\005retry\030\002 \001(\010\022\026"
-    "\n\016request_digest\030\003 \001(\t\022*\n\004auth\030\004 \001(\0132\034.c"
-    "ommon.base.ServiceCallAuth\022\031\n\021terminal_e"
-    "xpected\030\005 \001(\010\"i\n\027StrandedFormationTicket"
-    "\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005state\030\002 \001(\r\022\024\n\014fo"
-    "rmation_id\030\003 \001(\004\022\026\n\016owner_revision\030\004 \001(\004"
-    "\"\205\007\n\021StrandedFormation\022\021\n\tbattle_id\030\001 \001("
-    "\004\022\r\n\005state\030\002 \001(\r\022\024\n\014operation_id\030\003 \001(\t\022\032"
-    "\n\022target_instance_id\030\004 \001(\t\022\035\n\025preflight_"
-    "instance_id\030\005 \001(\t\022\022\n\nmatch_mode\030\006 \001(\r\022\021\n"
-    "\tconfig_id\030\007 \001(\r\022\024\n\014member_count\030\010 \001(\r\022\020"
-    "\n\010activity\030\t \001(\010\022\022\n\ncreated_ms\030\n \001(\004\022\023\n\013"
-    "deadline_ms\030\013 \001(\004\022\023\n\013retry_at_ms\030\014 \001(\004\022 "
-    "\n\030outcome_protocol_version\030\r \001(\r\022#\n\033pref"
-    "light_supported_version\030\016 \001(\r\022(\n adopted"
-    "_outcome_protocol_version\030\017 \001(\r\022 \n\030adopt"
-    "ed_outcome_observed\030\020 \001(\010\022\034\n\024create_requ"
-    "est_bytes\030\021 \001(\r\022\030\n\020create_decodable\030\022 \001("
-    "\010\022\034\n\024create_created_at_ms\030\023 \001(\004\022\032\n\022creat"
-    "e_deadline_ms\030\024 \001(\004\022\036\n\026create_admit_befo"
-    "re_ms\030\025 \001(\004\022\033\n\023create_player_count\030\026 \001(\r"
-    "\0226\n\017formation_class\030\027 \001(\0162\035.match.Strand"
-    "edFormationClass\022\024\n\014failed_check\030\030 \001(\t\022\035"
-    "\n\025effective_deadline_ms\030\031 \001(\004\022\030\n\020has_ter"
-    "minal_row\030\032 \001(\010\0227\n\021terminal_decision\030\033 \001"
-    "(\0162\034.match.BattleOutcomeDecision\022\034\n\024term"
-    "inal_source_kind\030\034 \001(\r\022\016\n\006digest\030\035 \001(\t\022\017"
-    "\n\007refusal\030\036 \001(\t\022/\n\007tickets\030\037 \003(\0132\036.match"
-    ".StrandedFormationTicket\"\216\001\n\035ListStrande"
-    "dFormationsRequest\022\031\n\021after_retry_at_ms\030"
-    "\001 \001(\004\022\027\n\017after_battle_id\030\002 \001(\004\022\r\n\005limit\030"
-    "\003 \001(\r\022*\n\004auth\030\004 \001(\0132\034.common.base.Servic"
-    "eCallAuth\"\257\001\n\036ListStrandedFormationsResp"
-    "onse\022\r\n\005retry\030\001 \001(\010\022,\n\nformations\030\002 \003(\0132"
-    "\030.match.StrandedFormation\022\030\n\020next_retry_"
-    "at_ms\030\003 \001(\004\022\026\n\016next_battle_id\030\004 \001(\004\022\016\n\006n"
-    "ow_ms\030\005 \001(\004\022\016\n\006target\030\006 \001(\t\"\341\001\n\037ResolveS"
-    "trandedFormationRequest\022\021\n\tbattle_id\030\001 \001"
-    "(\004\022*\n\004mode\030\002 \001(\0162\034.match.StrandedFormati"
-    "onMode\022\025\n\rexpect_digest\030\003 \001(\t\022\025\n\rexpect_"
-    "target\030\004 \001(\t\022\025\n\roperator_name\030\005 \001(\t\022\016\n\006r"
-    "eason\030\006 \001(\t\022*\n\004auth\030\007 \001(\0132\034.common.base."
-    "ServiceCallAuth\"\327\001\n ResolveStrandedForma"
-    "tionResponse\0220\n\007verdict\030\001 \001(\0162\037.match.St"
-    "randedFormationVerdict\022+\n\tformation\030\002 \001("
-    "\0132\030.match.StrandedFormation\022\016\n\006now_ms\030\003 "
-    "\001(\004\022\016\n\006target\030\004 \001(\t\022\017\n\007replica\030\005 \001(\t\022\017\n\007"
-    "refusal\030\006 \001(\t\022\022\n\naudit_line\030\007 \001(\t\"\\\n\037Lis"
-    "tPendingBattleScriptsRequest\022\r\n\005limit\030\001 "
-    "\001(\r\022*\n\004auth\030\002 \001(\0132\034.common.base.ServiceC"
-    "allAuth\"\244\001\n\023PendingBattleScript\022\021\n\tscrip"
-    "t_id\030\001 \001(\004\022\027\n\017owner_player_id\030\002 \001(\004\022\020\n\010r"
-    "evision\030\003 \001(\r\022\036\n\007content\030\004 \001(\0132\r.BattleS"
-    "cript\022\024\n\014submitted_ms\030\005 \001(\004\022\031\n\021approved_"
-    "revision\030\006 \001(\r\"\200\001\n ListPendingBattleScri"
-    "ptsResponse\022/\n\006reject\030\001 \001(\0162\037.match.Batt"
-    "leScriptReviewReject\022+\n\007scripts\030\002 \003(\0132\032."
-    "match.PendingBattleScript\"\237\001\n\031ReviewBatt"
-    "leScriptRequest\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010re"
-    "vision\030\002 \001(\r\022\017\n\007approve\030\003 \001(\010\022\020\n\010reviewe"
-    "r\030\004 \001(\t\022\016\n\006reason\030\005 \001(\t\022*\n\004auth\030\006 \001(\0132\034."
-    "common.base.ServiceCallAuth\"M\n\032ReviewBat"
-    "tleScriptResponse\022/\n\006reject\030\001 \001(\0162\037.matc"
-    "h.BattleScriptReviewReject*\216\002\n\024ActivityB"
-    "attleReject\022\037\n\033ACTIVITY_BATTLE_REJECT_NO"
-    "NE\020\000\022+\n\'ACTIVITY_BATTLE_REJECT_INVALID_A"
-    "RGUMENT\020\001\022)\n%ACTIVITY_BATTLE_REJECT_MEMB"
-    "ER_OFFLINE\020\002\022+\n\'ACTIVITY_BATTLE_REJECT_M"
-    "EMBER_IN_BATTLE\020\003\022+\n\'ACTIVITY_BATTLE_REJ"
-    "ECT_MEMBER_NOT_READY\020\004\022#\n\037ACTIVITY_BATTL"
-    "E_REJECT_INTERNAL\020\005*\205\001\n\025BattleOutcomeDec"
-    "ision\022#\n\037BATTLE_OUTCOME_DECISION_UNKNOWN"
-    "\020\000\022$\n BATTLE_OUTCOME_DECISION_COMPLETE\020\001"
-    "\022!\n\035BATTLE_OUTCOME_DECISION_ABORT\020\002*\325\001\n\026"
-    "SpectateFeaturedReject\022!\n\035SPECTATE_FEATU"
-    "RED_REJECT_NONE\020\000\022&\n\"SPECTATE_FEATURED_R"
-    "EJECT_NOT_FOUND\020\001\022$\n SPECTATE_FEATURED_R"
-    "EJECT_PRIVATE\020\002\022%\n!SPECTATE_FEATURED_REJ"
-    "ECT_INTERNAL\020\003\022#\n\037SPECTATE_FEATURED_REJE"
-    "CT_DENIED\020\004*\302\001\n\024TrialOccupancyReject\022\037\n\033"
-    "TRIAL_OCCUPANCY_REJECT_NONE\020\000\022#\n\037TRIAL_O"
-    "CCUPANCY_REJECT_OCCUPIED\020\001\022\037\n\033TRIAL_OCCU"
-    "PANCY_REJECT_ROLE\020\002\022!\n\035TRIAL_OCCUPANCY_R"
-    "EJECT_DENIED\020\003\022 \n\034TRIAL_OCCUPANCY_REJECT"
-    "_RETRY\020\004*\301\001\n\026StrandedFormationClass\022(\n$S"
-    "TRANDED_FORMATION_CLASS_UNSPECIFIED\020\000\022!\n"
-    "\035STRANDED_FORMATION_CLASS_AUTO\020\001\022.\n*STRA"
-    "NDED_FORMATION_CLASS_ORIGINAL_MISMATCH\020\002"
-    "\022*\n&STRANDED_FORMATION_CLASS_SHAPE_INVAL"
-    "ID\020\003*\252\001\n\025StrandedFormationMode\022\'\n#STRAND"
-    "ED_FORMATION_MODE_UNSPECIFIED\020\000\022 \n\034STRAN"
-    "DED_FORMATION_MODE_SHOW\020\001\022#\n\037STRANDED_FO"
-    "RMATION_MODE_DRY_RUN\020\002\022!\n\035STRANDED_FORMA"
-    "TION_MODE_ABORT\020\003*\270\002\n\030StrandedFormationV"
-    "erdict\022*\n&STRANDED_FORMATION_VERDICT_UNS"
-    "PECIFIED\020\000\022\'\n#STRANDED_FORMATION_VERDICT"
-    "_ELIGIBLE\020\001\022&\n\"STRANDED_FORMATION_VERDIC"
-    "T_REFUSED\020\002\022&\n\"STRANDED_FORMATION_VERDIC"
-    "T_CHANGED\020\003\022\'\n#STRANDED_FORMATION_VERDIC"
-    "T_RESOLVED\020\004\022(\n$STRANDED_FORMATION_VERDI"
-    "CT_NOT_FOUND\020\005\022$\n STRANDED_FORMATION_VER"
-    "DICT_RETRY\020\006*\342\001\n\030BattleScriptReviewRejec"
-    "t\022$\n BATTLE_SCRIPT_REVIEW_REJECT_NONE\020\000\022"
-    "&\n\"BATTLE_SCRIPT_REVIEW_REJECT_DENIED\020\001\022"
-    "\'\n#BATTLE_SCRIPT_REVIEW_REJECT_INVALID\020\002"
-    "\022%\n!BATTLE_SCRIPT_REVIEW_REJECT_STALE\020\003\022"
-    "(\n$BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL\020"
-    "\0042\274\t\n\rMatchInternal\022\\\n\023StartActivityBatt"
-    "le\022!.match.StartActivityBattleRequest\032\"."
-    "match.StartActivityBattleResponse\022_\n\024Can"
-    "celActivityBattle\022\".match.CancelActivity"
-    "BattleRequest\032#.match.CancelActivityBatt"
-    "leResponse\022\\\n\023CommitBattleOutcome\022!.matc"
-    "h.CommitBattleOutcomeRequest\032\".match.Com"
-    "mitBattleOutcomeResponse\022\\\n\023SetSpectateF"
-    "eatured\022!.match.SetSpectateFeaturedReque"
-    "st\032\".match.SetSpectateFeaturedResponse\022b"
-    "\n\025AcquireTrialOccupancy\022#.match.AcquireT"
-    "rialOccupancyRequest\032$.match.AcquireTria"
-    "lOccupancyResponse\022b\n\025ReleaseTrialOccupa"
-    "ncy\022#.match.ReleaseTrialOccupancyRequest"
-    "\032$.match.ReleaseTrialOccupancyResponse\022\\"
-    "\n\023GetBattleCompletion\022!.match.GetBattleC"
-    "ompletionRequest\032\".match.GetBattleComple"
-    "tionResponse\022n\n\031GetBattleTerminalDecisio"
-    "n\022\'.match.GetBattleTerminalDecisionReque"
-    "st\032(.match.GetBattleTerminalDecisionResp"
-    "onse\022e\n\026ListStrandedFormations\022$.match.L"
-    "istStrandedFormationsRequest\032%.match.Lis"
-    "tStrandedFormationsResponse\022k\n\030ResolveSt"
-    "randedFormation\022&.match.ResolveStrandedF"
-    "ormationRequest\032\'.match.ResolveStrandedF"
-    "ormationResponse\022k\n\030ListPendingBattleScr"
-    "ipts\022&.match.ListPendingBattleScriptsReq"
-    "uest\032\'.match.ListPendingBattleScriptsRes"
-    "ponse\022Y\n\022ReviewBattleScript\022 .match.Revi"
-    "ewBattleScriptRequest\032!.match.ReviewBatt"
-    "leScriptResponseB\024Z\013match/match\200\001\000\230\324a\025b\006"
-    "proto3"
+    "iceCallAuth\022\024\n\014request_high\030\006 \001(\004\022\023\n\013req"
+    "uest_low\030\007 \001(\004\"\252\001\n\033StartActivityBattleRe"
+    "sponse\022+\n\006reject\030\001 \001(\0162\033.match.ActivityB"
+    "attleReject\022\032\n\022offender_player_id\030\002 \001(\004\022"
+    "\021\n\tbattle_id\030\003 \001(\004\022\027\n\017formation_state\030\004 "
+    "\001(\r\022\026\n\016admitted_at_ms\030\005 \001(\004\"~\n\033CancelAct"
+    "ivityBattleRequest\0223\n\010original\030\001 \001(\0132!.m"
+    "atch.StartActivityBattleRequest\022*\n\004auth\030"
+    "\002 \001(\0132\034.common.base.ServiceCallAuth\"\342\001\n\034"
+    "CancelActivityBattleResponse\022\021\n\tbattle_i"
+    "d\030\001 \001(\004\022\031\n\021request_cancelled\030\002 \001(\010\022\027\n\017fo"
+    "rmation_state\030\003 \001(\r\022*\n\004auth\030\004 \001(\0132\034.comm"
+    "on.base.ServiceCallAuth\022\026\n\016request_diges"
+    "t\030\005 \001(\t\0227\n\021terminal_decision\030\006 \001(\0162\034.mat"
+    "ch.BattleOutcomeDecision\"\332\001\n\032CommitBattl"
+    "eOutcomeRequest\022\021\n\tbattle_id\030\001 \001(\004\022\036\n\026pl"
+    "acement_operation_id\030\002 \001(\t\022\032\n\022target_ins"
+    "tance_id\030\003 \001(\t\022\032\n\022raw_result_payload\030\004 \001"
+    "(\014\022*\n\004auth\030\005 \001(\0132\034.common.base.ServiceCa"
+    "llAuth\022%\n\006replay\030\006 \001(\0132\025.BattleReplayEnv"
+    "elope\"\221\001\n\033CommitBattleOutcomeResponse\022.\n"
+    "\010decision\030\001 \001(\0162\034.match.BattleOutcomeDec"
+    "ision\022\026\n\016request_digest\030\002 \001(\t\022*\n\004auth\030\003 "
+    "\001(\0132\034.common.base.ServiceCallAuth\"m\n\032Set"
+    "SpectateFeaturedRequest\022\021\n\tbattle_id\030\001 \001"
+    "(\004\022\020\n\010featured\030\002 \001(\010\022*\n\004auth\030\003 \001(\0132\034.com"
+    "mon.base.ServiceCallAuth\"j\n\033SetSpectateF"
+    "eaturedResponse\022-\n\006reject\030\001 \001(\0162\035.match."
+    "SpectateFeaturedReject\022\034\n\004tier\030\002 \001(\0162\016.e"
+    "SpectateTier\"P\n\022TrialOccupancyRole\022\021\n\tpl"
+    "ayer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_"
+    "revision\030\003 \001(\004\"\227\001\n\034AcquireTrialOccupancy"
+    "Request\022\020\n\010owner_id\030\001 \001(\004\022)\n\006roster\030\002 \003("
+    "\0132\031.match.TrialOccupancyRole\022\016\n\006ttl_ms\030\003"
+    " \001(\004\022*\n\004auth\030\004 \001(\0132\034.common.base.Service"
+    "CallAuth\"h\n\035AcquireTrialOccupancyRespons"
+    "e\022+\n\006reject\030\001 \001(\0162\033.match.TrialOccupancy"
+    "Reject\022\032\n\022offender_player_id\030\002 \001(\004\"p\n\034Re"
+    "leaseTrialOccupancyRequest\022\020\n\010owner_id\030\001"
+    " \001(\004\022\022\n\nplayer_ids\030\002 \003(\004\022*\n\004auth\030\003 \001(\0132\034"
+    ".common.base.ServiceCallAuth\"L\n\035ReleaseT"
+    "rialOccupancyResponse\022+\n\006reject\030\001 \001(\0162\033."
+    "match.TrialOccupancyReject\"[\n\032GetBattleC"
+    "ompletionRequest\022\021\n\tbattle_id\030\001 \001(\004\022*\n\004a"
+    "uth\030\002 \001(\0132\034.common.base.ServiceCallAuth\""
+    "\217\001\n\033GetBattleCompletionResponse\022+\n\006rejec"
+    "t\030\001 \001(\0162\033.match.TrialOccupancyReject\022.\n\010"
+    "decision\030\002 \001(\0162\034.match.BattleOutcomeDeci"
+    "sion\022\023\n\013raw_payload\030\003 \001(\014\"a\n GetBattleTe"
+    "rminalDecisionRequest\022\021\n\tbattle_id\030\001 \001(\004"
+    "\022*\n\004auth\030\002 \001(\0132\034.common.base.ServiceCall"
+    "Auth\"\301\001\n!GetBattleTerminalDecisionRespon"
+    "se\022.\n\010decision\030\001 \001(\0162\034.match.BattleOutco"
+    "meDecision\022\r\n\005retry\030\002 \001(\010\022\026\n\016request_dig"
+    "est\030\003 \001(\t\022*\n\004auth\030\004 \001(\0132\034.common.base.Se"
+    "rviceCallAuth\022\031\n\021terminal_expected\030\005 \001(\010"
+    "\"i\n\027StrandedFormationTicket\022\021\n\tplayer_id"
+    "\030\001 \001(\004\022\r\n\005state\030\002 \001(\r\022\024\n\014formation_id\030\003 "
+    "\001(\004\022\026\n\016owner_revision\030\004 \001(\004\"\205\007\n\021Stranded"
+    "Formation\022\021\n\tbattle_id\030\001 \001(\004\022\r\n\005state\030\002 "
+    "\001(\r\022\024\n\014operation_id\030\003 \001(\t\022\032\n\022target_inst"
+    "ance_id\030\004 \001(\t\022\035\n\025preflight_instance_id\030\005"
+    " \001(\t\022\022\n\nmatch_mode\030\006 \001(\r\022\021\n\tconfig_id\030\007 "
+    "\001(\r\022\024\n\014member_count\030\010 \001(\r\022\020\n\010activity\030\t "
+    "\001(\010\022\022\n\ncreated_ms\030\n \001(\004\022\023\n\013deadline_ms\030\013"
+    " \001(\004\022\023\n\013retry_at_ms\030\014 \001(\004\022 \n\030outcome_pro"
+    "tocol_version\030\r \001(\r\022#\n\033preflight_support"
+    "ed_version\030\016 \001(\r\022(\n adopted_outcome_prot"
+    "ocol_version\030\017 \001(\r\022 \n\030adopted_outcome_ob"
+    "served\030\020 \001(\010\022\034\n\024create_request_bytes\030\021 \001"
+    "(\r\022\030\n\020create_decodable\030\022 \001(\010\022\034\n\024create_c"
+    "reated_at_ms\030\023 \001(\004\022\032\n\022create_deadline_ms"
+    "\030\024 \001(\004\022\036\n\026create_admit_before_ms\030\025 \001(\004\022\033"
+    "\n\023create_player_count\030\026 \001(\r\0226\n\017formation"
+    "_class\030\027 \001(\0162\035.match.StrandedFormationCl"
+    "ass\022\024\n\014failed_check\030\030 \001(\t\022\035\n\025effective_d"
+    "eadline_ms\030\031 \001(\004\022\030\n\020has_terminal_row\030\032 \001"
+    "(\010\0227\n\021terminal_decision\030\033 \001(\0162\034.match.Ba"
+    "ttleOutcomeDecision\022\034\n\024terminal_source_k"
+    "ind\030\034 \001(\r\022\016\n\006digest\030\035 \001(\t\022\017\n\007refusal\030\036 \001"
+    "(\t\022/\n\007tickets\030\037 \003(\0132\036.match.StrandedForm"
+    "ationTicket\"\216\001\n\035ListStrandedFormationsRe"
+    "quest\022\031\n\021after_retry_at_ms\030\001 \001(\004\022\027\n\017afte"
+    "r_battle_id\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\022*\n\004auth"
+    "\030\004 \001(\0132\034.common.base.ServiceCallAuth\"\257\001\n"
+    "\036ListStrandedFormationsResponse\022\r\n\005retry"
+    "\030\001 \001(\010\022,\n\nformations\030\002 \003(\0132\030.match.Stran"
+    "dedFormation\022\030\n\020next_retry_at_ms\030\003 \001(\004\022\026"
+    "\n\016next_battle_id\030\004 \001(\004\022\016\n\006now_ms\030\005 \001(\004\022\016"
+    "\n\006target\030\006 \001(\t\"\341\001\n\037ResolveStrandedFormat"
+    "ionRequest\022\021\n\tbattle_id\030\001 \001(\004\022*\n\004mode\030\002 "
+    "\001(\0162\034.match.StrandedFormationMode\022\025\n\rexp"
+    "ect_digest\030\003 \001(\t\022\025\n\rexpect_target\030\004 \001(\t\022"
+    "\025\n\roperator_name\030\005 \001(\t\022\016\n\006reason\030\006 \001(\t\022*"
+    "\n\004auth\030\007 \001(\0132\034.common.base.ServiceCallAu"
+    "th\"\327\001\n ResolveStrandedFormationResponse\022"
+    "0\n\007verdict\030\001 \001(\0162\037.match.StrandedFormati"
+    "onVerdict\022+\n\tformation\030\002 \001(\0132\030.match.Str"
+    "andedFormation\022\016\n\006now_ms\030\003 \001(\004\022\016\n\006target"
+    "\030\004 \001(\t\022\017\n\007replica\030\005 \001(\t\022\017\n\007refusal\030\006 \001(\t"
+    "\022\022\n\naudit_line\030\007 \001(\t\"\\\n\037ListPendingBattl"
+    "eScriptsRequest\022\r\n\005limit\030\001 \001(\r\022*\n\004auth\030\002"
+    " \001(\0132\034.common.base.ServiceCallAuth\"\244\001\n\023P"
+    "endingBattleScript\022\021\n\tscript_id\030\001 \001(\004\022\027\n"
+    "\017owner_player_id\030\002 \001(\004\022\020\n\010revision\030\003 \001(\r"
+    "\022\036\n\007content\030\004 \001(\0132\r.BattleScript\022\024\n\014subm"
+    "itted_ms\030\005 \001(\004\022\031\n\021approved_revision\030\006 \001("
+    "\r\"\200\001\n ListPendingBattleScriptsResponse\022/"
+    "\n\006reject\030\001 \001(\0162\037.match.BattleScriptRevie"
+    "wReject\022+\n\007scripts\030\002 \003(\0132\032.match.Pending"
+    "BattleScript\"\237\001\n\031ReviewBattleScriptReque"
+    "st\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010revision\030\002 \001(\r\022"
+    "\017\n\007approve\030\003 \001(\010\022\020\n\010reviewer\030\004 \001(\t\022\016\n\006re"
+    "ason\030\005 \001(\t\022*\n\004auth\030\006 \001(\0132\034.common.base.S"
+    "erviceCallAuth\"M\n\032ReviewBattleScriptResp"
+    "onse\022/\n\006reject\030\001 \001(\0162\037.match.BattleScrip"
+    "tReviewReject*\271\002\n\024ActivityBattleReject\022\037"
+    "\n\033ACTIVITY_BATTLE_REJECT_NONE\020\000\022+\n\'ACTIV"
+    "ITY_BATTLE_REJECT_INVALID_ARGUMENT\020\001\022)\n%"
+    "ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE\020\002\022"
+    "+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATT"
+    "LE\020\003\022+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_NO"
+    "T_READY\020\004\022#\n\037ACTIVITY_BATTLE_REJECT_INTE"
+    "RNAL\020\005\022)\n%ACTIVITY_BATTLE_REJECT_OUTSIDE"
+    "_WINDOW\020\006*\205\001\n\025BattleOutcomeDecision\022#\n\037B"
+    "ATTLE_OUTCOME_DECISION_UNKNOWN\020\000\022$\n BATT"
+    "LE_OUTCOME_DECISION_COMPLETE\020\001\022!\n\035BATTLE"
+    "_OUTCOME_DECISION_ABORT\020\002*\325\001\n\026SpectateFe"
+    "aturedReject\022!\n\035SPECTATE_FEATURED_REJECT"
+    "_NONE\020\000\022&\n\"SPECTATE_FEATURED_REJECT_NOT_"
+    "FOUND\020\001\022$\n SPECTATE_FEATURED_REJECT_PRIV"
+    "ATE\020\002\022%\n!SPECTATE_FEATURED_REJECT_INTERN"
+    "AL\020\003\022#\n\037SPECTATE_FEATURED_REJECT_DENIED\020"
+    "\004*\302\001\n\024TrialOccupancyReject\022\037\n\033TRIAL_OCCU"
+    "PANCY_REJECT_NONE\020\000\022#\n\037TRIAL_OCCUPANCY_R"
+    "EJECT_OCCUPIED\020\001\022\037\n\033TRIAL_OCCUPANCY_REJE"
+    "CT_ROLE\020\002\022!\n\035TRIAL_OCCUPANCY_REJECT_DENI"
+    "ED\020\003\022 \n\034TRIAL_OCCUPANCY_REJECT_RETRY\020\004*\301"
+    "\001\n\026StrandedFormationClass\022(\n$STRANDED_FO"
+    "RMATION_CLASS_UNSPECIFIED\020\000\022!\n\035STRANDED_"
+    "FORMATION_CLASS_AUTO\020\001\022.\n*STRANDED_FORMA"
+    "TION_CLASS_ORIGINAL_MISMATCH\020\002\022*\n&STRAND"
+    "ED_FORMATION_CLASS_SHAPE_INVALID\020\003*\252\001\n\025S"
+    "trandedFormationMode\022\'\n#STRANDED_FORMATI"
+    "ON_MODE_UNSPECIFIED\020\000\022 \n\034STRANDED_FORMAT"
+    "ION_MODE_SHOW\020\001\022#\n\037STRANDED_FORMATION_MO"
+    "DE_DRY_RUN\020\002\022!\n\035STRANDED_FORMATION_MODE_"
+    "ABORT\020\003*\270\002\n\030StrandedFormationVerdict\022*\n&"
+    "STRANDED_FORMATION_VERDICT_UNSPECIFIED\020\000"
+    "\022\'\n#STRANDED_FORMATION_VERDICT_ELIGIBLE\020"
+    "\001\022&\n\"STRANDED_FORMATION_VERDICT_REFUSED\020"
+    "\002\022&\n\"STRANDED_FORMATION_VERDICT_CHANGED\020"
+    "\003\022\'\n#STRANDED_FORMATION_VERDICT_RESOLVED"
+    "\020\004\022(\n$STRANDED_FORMATION_VERDICT_NOT_FOU"
+    "ND\020\005\022$\n STRANDED_FORMATION_VERDICT_RETRY"
+    "\020\006*\342\001\n\030BattleScriptReviewReject\022$\n BATTL"
+    "E_SCRIPT_REVIEW_REJECT_NONE\020\000\022&\n\"BATTLE_"
+    "SCRIPT_REVIEW_REJECT_DENIED\020\001\022\'\n#BATTLE_"
+    "SCRIPT_REVIEW_REJECT_INVALID\020\002\022%\n!BATTLE"
+    "_SCRIPT_REVIEW_REJECT_STALE\020\003\022(\n$BATTLE_"
+    "SCRIPT_REVIEW_REJECT_INTERNAL\020\0042\274\t\n\rMatc"
+    "hInternal\022\\\n\023StartActivityBattle\022!.match"
+    ".StartActivityBattleRequest\032\".match.Star"
+    "tActivityBattleResponse\022_\n\024CancelActivit"
+    "yBattle\022\".match.CancelActivityBattleRequ"
+    "est\032#.match.CancelActivityBattleResponse"
+    "\022\\\n\023CommitBattleOutcome\022!.match.CommitBa"
+    "ttleOutcomeRequest\032\".match.CommitBattleO"
+    "utcomeResponse\022\\\n\023SetSpectateFeatured\022!."
+    "match.SetSpectateFeaturedRequest\032\".match"
+    ".SetSpectateFeaturedResponse\022b\n\025AcquireT"
+    "rialOccupancy\022#.match.AcquireTrialOccupa"
+    "ncyRequest\032$.match.AcquireTrialOccupancy"
+    "Response\022b\n\025ReleaseTrialOccupancy\022#.matc"
+    "h.ReleaseTrialOccupancyRequest\032$.match.R"
+    "eleaseTrialOccupancyResponse\022\\\n\023GetBattl"
+    "eCompletion\022!.match.GetBattleCompletionR"
+    "equest\032\".match.GetBattleCompletionRespon"
+    "se\022n\n\031GetBattleTerminalDecision\022\'.match."
+    "GetBattleTerminalDecisionRequest\032(.match"
+    ".GetBattleTerminalDecisionResponse\022e\n\026Li"
+    "stStrandedFormations\022$.match.ListStrande"
+    "dFormationsRequest\032%.match.ListStrandedF"
+    "ormationsResponse\022k\n\030ResolveStrandedForm"
+    "ation\022&.match.ResolveStrandedFormationRe"
+    "quest\032\'.match.ResolveStrandedFormationRe"
+    "sponse\022k\n\030ListPendingBattleScripts\022&.mat"
+    "ch.ListPendingBattleScriptsRequest\032\'.mat"
+    "ch.ListPendingBattleScriptsResponse\022Y\n\022R"
+    "eviewBattleScript\022 .match.ReviewBattleSc"
+    "riptRequest\032!.match.ReviewBattleScriptRe"
+    "sponseB\024Z\013match/match\200\001\000\230\324a\025b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps[5] = {
@@ -5683,7 +5713,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5finternal_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto = {
     false,
     false,
-    7966,
+    8076,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto,
     "proto/match/match_internal.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_once,
@@ -5703,7 +5733,7 @@ ActivityBattleReject_descriptor() {
   return file_level_enum_descriptors_proto_2fmatch_2fmatch_5finternal_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t ActivityBattleReject_internal_data_[] = {
-    393216u, 0u, };
+    458752u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 BattleOutcomeDecision_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto);
@@ -5903,7 +5933,7 @@ PROTOBUF_NOINLINE void StartActivityBattleRequest::Clear() {
       _impl_.auth_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
     ::memset(&_impl_.request_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.battle_config_id_) -
         reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.battle_config_id_));
@@ -5932,7 +5962,7 @@ PROTOBUF_NOINLINE void StartActivityBattleRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 battle_config_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_battle_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5974,6 +6004,24 @@ PROTOBUF_NOINLINE void StartActivityBattleRequest::Clear() {
         stream);
   }
 
+  // uint64 request_high = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_request_high() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_request_high(), target);
+    }
+  }
+
+  // uint64 request_low = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_request_low() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_request_low(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -5999,7 +6047,7 @@ PROTOBUF_NOINLINE void StartActivityBattleRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // repeated uint64 member_player_ids = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -6024,8 +6072,22 @@ PROTOBUF_NOINLINE void StartActivityBattleRequest::Clear() {
             this_._internal_request_id());
       }
     }
-    // uint32 battle_config_id = 1;
+    // uint64 request_high = 6;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_request_high() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_request_high());
+      }
+    }
+    // uint64 request_low = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_request_low() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_request_low());
+      }
+    }
+    // uint32 battle_config_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_battle_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_config_id());
@@ -6050,7 +6112,7 @@ void StartActivityBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_m
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_member_player_ids()->MergeFrom(from._internal_member_player_ids());
     }
@@ -6076,6 +6138,16 @@ void StartActivityBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_m
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_request_high() != 0) {
+        _this->_impl_.request_high_ = from._impl_.request_high_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_request_low() != 0) {
+        _this->_impl_.request_low_ = from._impl_.request_low_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_battle_config_id() != 0) {
         _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
       }
@@ -6142,9 +6214,9 @@ inline void StartActivityBattleResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLA
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, offender_player_id_),
            0,
-           offsetof(Impl_, battle_id_) -
+           offsetof(Impl_, admitted_at_ms_) -
                offsetof(Impl_, offender_player_id_) +
-               sizeof(Impl_::battle_id_));
+               sizeof(Impl_::admitted_at_ms_));
 }
 StartActivityBattleResponse::~StartActivityBattleResponse() {
   // @@protoc_insertion_point(destructor:match.StartActivityBattleResponse)
@@ -6194,10 +6266,10 @@ PROTOBUF_NOINLINE void StartActivityBattleResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     ::memset(&_impl_.offender_player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.battle_id_) -
-        reinterpret_cast<char*>(&_impl_.offender_player_id_)) + sizeof(_impl_.battle_id_));
+        reinterpret_cast<char*>(&_impl_.admitted_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.offender_player_id_)) + sizeof(_impl_.admitted_at_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6258,6 +6330,15 @@ PROTOBUF_NOINLINE void StartActivityBattleResponse::Clear() {
     }
   }
 
+  // uint64 admitted_at_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_admitted_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_admitted_at_ms(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6283,7 +6364,7 @@ PROTOBUF_NOINLINE void StartActivityBattleResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // uint64 offender_player_id = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_offender_player_id() != 0) {
@@ -6312,6 +6393,13 @@ PROTOBUF_NOINLINE void StartActivityBattleResponse::Clear() {
             this_._internal_battle_id());
       }
     }
+    // uint64 admitted_at_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_admitted_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_admitted_at_ms());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -6330,7 +6418,7 @@ void StartActivityBattleResponse::MergeImpl(::google::protobuf::MessageLite& to_
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_offender_player_id() != 0) {
         _this->_impl_.offender_player_id_ = from._impl_.offender_player_id_;
@@ -6349,6 +6437,11 @@ void StartActivityBattleResponse::MergeImpl(::google::protobuf::MessageLite& to_
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_admitted_at_ms() != 0) {
+        _this->_impl_.admitted_at_ms_ = from._impl_.admitted_at_ms_;
       }
     }
   }
@@ -6370,8 +6463,8 @@ void StartActivityBattleResponse::InternalSwap(StartActivityBattleResponse* PROT
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.battle_id_)
-      + sizeof(StartActivityBattleResponse::_impl_.battle_id_)
+      PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.admitted_at_ms_)
+      + sizeof(StartActivityBattleResponse::_impl_.admitted_at_ms_)
       - PROTOBUF_FIELD_OFFSET(StartActivityBattleResponse, _impl_.offender_player_id_)>(
           reinterpret_cast<char*>(&_impl_.offender_player_id_),
           reinterpret_cast<char*>(&other->_impl_.offender_player_id_));

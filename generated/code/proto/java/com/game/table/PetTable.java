@@ -342,6 +342,39 @@ private static final long serialVersionUID = 0L;
     return cultivationTier_;
   }
 
+  public static final int TRANSFER_POLICY_FIELD_NUMBER = 17;
+  private int transferPolicy_ = 0;
+  /**
+   * <code>uint32 transfer_policy = 17;</code>
+   * @return The transferPolicy.
+   */
+  @java.lang.Override
+  public int getTransferPolicy() {
+    return transferPolicy_;
+  }
+
+  public static final int EXCLUSIVE_GIFT_SLOTS_FIELD_NUMBER = 18;
+  private int exclusiveGiftSlots_ = 0;
+  /**
+   * <code>uint32 exclusive_gift_slots = 18;</code>
+   * @return The exclusiveGiftSlots.
+   */
+  @java.lang.Override
+  public int getExclusiveGiftSlots() {
+    return exclusiveGiftSlots_;
+  }
+
+  public static final int FIXED_INITIAL_APTITUDE_FIELD_NUMBER = 19;
+  private boolean fixedInitialAptitude_ = false;
+  /**
+   * <code>bool fixed_initial_aptitude = 19;</code>
+   * @return The fixedInitialAptitude.
+   */
+  @java.lang.Override
+  public boolean getFixedInitialAptitude() {
+    return fixedInitialAptitude_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -416,6 +449,15 @@ private static final long serialVersionUID = 0L;
     }
     if (cultivationTier_ != 0) {
       output.writeUInt32(16, cultivationTier_);
+    }
+    if (transferPolicy_ != 0) {
+      output.writeUInt32(17, transferPolicy_);
+    }
+    if (exclusiveGiftSlots_ != 0) {
+      output.writeUInt32(18, exclusiveGiftSlots_);
+    }
+    if (fixedInitialAptitude_ != false) {
+      output.writeBool(19, fixedInitialAptitude_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -513,6 +555,18 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(16, cultivationTier_);
     }
+    if (transferPolicy_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(17, transferPolicy_);
+    }
+    if (exclusiveGiftSlots_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(18, exclusiveGiftSlots_);
+    }
+    if (fixedInitialAptitude_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(19, fixedInitialAptitude_);
+    }
     return size;
   }
   @java.lang.Override
@@ -569,6 +623,12 @@ private static final long serialVersionUID = 0L;
         != other.getAcquisitionTier()) return false;
     if (getCultivationTier()
         != other.getCultivationTier()) return false;
+    if (getTransferPolicy()
+        != other.getTransferPolicy()) return false;
+    if (getExclusiveGiftSlots()
+        != other.getExclusiveGiftSlots()) return false;
+    if (getFixedInitialAptitude()
+        != other.getFixedInitialAptitude()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -622,6 +682,13 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getAcquisitionTier();
     hash = (37 * hash) + CULTIVATION_TIER_FIELD_NUMBER;
     hash = (53 * hash) + getCultivationTier();
+    hash = (37 * hash) + TRANSFER_POLICY_FIELD_NUMBER;
+    hash = (53 * hash) + getTransferPolicy();
+    hash = (37 * hash) + EXCLUSIVE_GIFT_SLOTS_FIELD_NUMBER;
+    hash = (53 * hash) + getExclusiveGiftSlots();
+    hash = (37 * hash) + FIXED_INITIAL_APTITUDE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getFixedInitialAptitude());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -769,6 +836,9 @@ private static final long serialVersionUID = 0L;
       shopPriceGold_ = 0L;
       acquisitionTier_ = 0;
       cultivationTier_ = 0;
+      transferPolicy_ = 0;
+      exclusiveGiftSlots_ = 0;
+      fixedInitialAptitude_ = false;
       return this;
     }
 
@@ -852,6 +922,15 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00008000) != 0)) {
         result.cultivationTier_ = cultivationTier_;
+      }
+      if (((from_bitField0_ & 0x00010000) != 0)) {
+        result.transferPolicy_ = transferPolicy_;
+      }
+      if (((from_bitField0_ & 0x00020000) != 0)) {
+        result.exclusiveGiftSlots_ = exclusiveGiftSlots_;
+      }
+      if (((from_bitField0_ & 0x00040000) != 0)) {
+        result.fixedInitialAptitude_ = fixedInitialAptitude_;
       }
     }
 
@@ -942,6 +1021,15 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getCultivationTier() != 0) {
         setCultivationTier(other.getCultivationTier());
+      }
+      if (other.getTransferPolicy() != 0) {
+        setTransferPolicy(other.getTransferPolicy());
+      }
+      if (other.getExclusiveGiftSlots() != 0) {
+        setExclusiveGiftSlots(other.getExclusiveGiftSlots());
+      }
+      if (other.getFixedInitialAptitude() != false) {
+        setFixedInitialAptitude(other.getFixedInitialAptitude());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1082,6 +1170,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00008000;
               break;
             } // case 128
+            case 136: {
+              transferPolicy_ = input.readUInt32();
+              bitField0_ |= 0x00010000;
+              break;
+            } // case 136
+            case 144: {
+              exclusiveGiftSlots_ = input.readUInt32();
+              bitField0_ |= 0x00020000;
+              break;
+            } // case 144
+            case 152: {
+              fixedInitialAptitude_ = input.readBool();
+              bitField0_ |= 0x00040000;
+              break;
+            } // case 152
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1843,6 +1946,102 @@ private static final long serialVersionUID = 0L;
     public Builder clearCultivationTier() {
       bitField0_ = (bitField0_ & ~0x00008000);
       cultivationTier_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int transferPolicy_ ;
+    /**
+     * <code>uint32 transfer_policy = 17;</code>
+     * @return The transferPolicy.
+     */
+    @java.lang.Override
+    public int getTransferPolicy() {
+      return transferPolicy_;
+    }
+    /**
+     * <code>uint32 transfer_policy = 17;</code>
+     * @param value The transferPolicy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTransferPolicy(int value) {
+
+      transferPolicy_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 transfer_policy = 17;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTransferPolicy() {
+      bitField0_ = (bitField0_ & ~0x00010000);
+      transferPolicy_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int exclusiveGiftSlots_ ;
+    /**
+     * <code>uint32 exclusive_gift_slots = 18;</code>
+     * @return The exclusiveGiftSlots.
+     */
+    @java.lang.Override
+    public int getExclusiveGiftSlots() {
+      return exclusiveGiftSlots_;
+    }
+    /**
+     * <code>uint32 exclusive_gift_slots = 18;</code>
+     * @param value The exclusiveGiftSlots to set.
+     * @return This builder for chaining.
+     */
+    public Builder setExclusiveGiftSlots(int value) {
+
+      exclusiveGiftSlots_ = value;
+      bitField0_ |= 0x00020000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 exclusive_gift_slots = 18;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearExclusiveGiftSlots() {
+      bitField0_ = (bitField0_ & ~0x00020000);
+      exclusiveGiftSlots_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private boolean fixedInitialAptitude_ ;
+    /**
+     * <code>bool fixed_initial_aptitude = 19;</code>
+     * @return The fixedInitialAptitude.
+     */
+    @java.lang.Override
+    public boolean getFixedInitialAptitude() {
+      return fixedInitialAptitude_;
+    }
+    /**
+     * <code>bool fixed_initial_aptitude = 19;</code>
+     * @param value The fixedInitialAptitude to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFixedInitialAptitude(boolean value) {
+
+      fixedInitialAptitude_ = value;
+      bitField0_ |= 0x00040000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool fixed_initial_aptitude = 19;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFixedInitialAptitude() {
+      bitField0_ = (bitField0_ & ~0x00040000);
+      fixedInitialAptitude_ = false;
       onChanged();
       return this;
     }

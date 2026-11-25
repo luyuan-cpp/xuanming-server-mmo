@@ -319,6 +319,17 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int MILESTONE_WIN_MATCHES_FIELD_NUMBER = 23;
+  private int milestoneWinMatches_ = 0;
+  /**
+   * <code>uint32 milestone_win_matches = 23;</code>
+   * @return The milestoneWinMatches.
+   */
+  @java.lang.Override
+  public int getMilestoneWinMatches() {
+    return milestoneWinMatches_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -398,6 +409,9 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 22, desc_);
+    }
+    if (milestoneWinMatches_ != 0) {
+      output.writeUInt32(23, milestoneWinMatches_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -490,6 +504,10 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(22, desc_);
     }
+    if (milestoneWinMatches_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(23, milestoneWinMatches_);
+    }
     return size;
   }
   @java.lang.Override
@@ -558,6 +576,8 @@ private static final long serialVersionUID = 0L;
         != other.getTierWushuangCenti()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getMilestoneWinMatches()
+        != other.getMilestoneWinMatches()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -613,6 +633,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getTierWushuangCenti();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + MILESTONE_WIN_MATCHES_FIELD_NUMBER;
+    hash = (53 * hash) + getMilestoneWinMatches();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -766,6 +788,7 @@ private static final long serialVersionUID = 0L;
       tierTianshuCenti_ = 0;
       tierWushuangCenti_ = 0;
       desc_ = "";
+      milestoneWinMatches_ = 0;
       return this;
     }
 
@@ -865,6 +888,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00200000) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00400000) != 0)) {
+        result.milestoneWinMatches_ = milestoneWinMatches_;
+      }
     }
 
     @java.lang.Override
@@ -946,6 +972,9 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00200000;
         onChanged();
+      }
+      if (other.getMilestoneWinMatches() != 0) {
+        setMilestoneWinMatches(other.getMilestoneWinMatches());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1083,6 +1112,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00200000;
               break;
             } // case 178
+            case 184: {
+              milestoneWinMatches_ = input.readUInt32();
+              bitField0_ |= 0x00400000;
+              break;
+            } // case 184
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1840,6 +1874,38 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+
+    private int milestoneWinMatches_ ;
+    /**
+     * <code>uint32 milestone_win_matches = 23;</code>
+     * @return The milestoneWinMatches.
+     */
+    @java.lang.Override
+    public int getMilestoneWinMatches() {
+      return milestoneWinMatches_;
+    }
+    /**
+     * <code>uint32 milestone_win_matches = 23;</code>
+     * @param value The milestoneWinMatches to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMilestoneWinMatches(int value) {
+
+      milestoneWinMatches_ = value;
+      bitField0_ |= 0x00400000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 milestone_win_matches = 23;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMilestoneWinMatches() {
+      bitField0_ = (bitField0_ & ~0x00400000);
+      milestoneWinMatches_ = 0;
       onChanged();
       return this;
     }

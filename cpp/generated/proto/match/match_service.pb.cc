@@ -2402,11 +2402,11 @@ constexpr RankedSeasonInfo::ParseTableT_ RankedSeasonInfo::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_._has_bits_),
       0, // no _extensions_
-      23, 248,  // max_field_number, fast_idx_mask
+      28, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4286578688,  // skipmap
+      4026531840,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      23,  // num_field_entries
+      28,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2509,11 +2509,26 @@ constexpr RankedSeasonInfo::ParseTableT_ RankedSeasonInfo::InternalGenerateParse
       {::_pbi::TcParser::FastV32P2,
        {442, 2, 0,
         PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.special_team_sizes_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 tier_qingfeng_centi = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_qingfeng_centi_)}},
+      // uint32 tier_yunzhang_centi = 25;
+      {::_pbi::TcParser::FastV32S2,
+       {456, 24, 0,
+        PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_yunzhang_centi_)}},
+      // uint32 tier_tianshu_centi = 26;
+      {::_pbi::TcParser::FastV32S2,
+       {464, 25, 0,
+        PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_tianshu_centi_)}},
+      // uint32 tier_wushuang_centi = 27;
+      {::_pbi::TcParser::FastV32S2,
+       {472, 26, 0,
+        PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_wushuang_centi_)}},
+      // uint32 milestone_win_matches = 28;
+      {::_pbi::TcParser::FastV32S2,
+       {480, 27, 0,
+        PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.milestone_win_matches_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -2566,10 +2581,20 @@ constexpr RankedSeasonInfo::ParseTableT_ RankedSeasonInfo::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.primary_team_sizes_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // repeated uint32 special_team_sizes = 23;
       {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.special_team_sizes_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint32 tier_qingfeng_centi = 24;
+      {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_qingfeng_centi_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tier_yunzhang_centi = 25;
+      {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_yunzhang_centi_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tier_tianshu_centi = 26;
+      {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_tianshu_centi_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tier_wushuang_centi = 27;
+      {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.tier_wushuang_centi_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 milestone_win_matches = 28;
+      {PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.milestone_win_matches_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\26\0\12\13\0\0\0\0\0\0\0\0\0\0\0\0\0\15\0\0\0\0\0\0"
+      "\26\0\12\13\0\0\0\0\0\0\0\0\0\0\0\0\0\15\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "match.RankedSeasonInfo"
       "season_key"
       "season_name"
@@ -2626,7 +2651,12 @@ inline constexpr RankedSeasonInfo::Impl_::Impl_(
         champion_player_id_{::uint64_t{0u}},
         champion_rating_centi_{::int64_t{0}},
         rank_board_sealed_{false},
-        uses_own_progression_{false} {}
+        uses_own_progression_{false},
+        tier_qingfeng_centi_{0u},
+        tier_yunzhang_centi_{0u},
+        tier_tianshu_centi_{0u},
+        tier_wushuang_centi_{0u},
+        milestone_win_matches_{0u} {}
 
 template <typename>
 constexpr RankedSeasonInfo::RankedSeasonInfo(::_pbi::ConstantInitialized,
@@ -14740,7 +14770,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_._has_bits_),
-        26, // hasbit index offset
+        31, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.season_id_),
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.season_key_),
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.season_name_),
@@ -14764,6 +14794,11 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.uses_own_progression_),
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.primary_team_sizes_),
         PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.special_team_sizes_),
+        PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.tier_qingfeng_centi_),
+        PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.tier_yunzhang_centi_),
+        PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.tier_tianshu_centi_),
+        PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.tier_wushuang_centi_),
+        PROTOBUF_FIELD_OFFSET(::match::RankedSeasonInfo, _impl_.milestone_win_matches_),
         6,
         3,
         4,
@@ -14787,6 +14822,11 @@ const ::uint32_t
         22,
         1,
         2,
+        23,
+        24,
+        25,
+        26,
+        27,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::RankedPlayerSeasonSummary, _impl_._has_bits_),
         18, // hasbit index offset
@@ -15366,46 +15406,46 @@ static const ::_pbi::MigrationSchema
         {386, sizeof(::match::RankedRewardEntitlement)},
         {399, sizeof(::match::RankedCosmeticLoadout)},
         {412, sizeof(::match::RankedSeasonInfo)},
-        {461, sizeof(::match::RankedPlayerSeasonSummary)},
-        {494, sizeof(::match::RankedBattleSettlementView)},
-        {537, sizeof(::match::GetRankedProfileRequest)},
-        {542, sizeof(::match::GetRankedProfileResponse)},
-        {565, sizeof(::match::SaveRankedPresetRequest)},
-        {574, sizeof(::match::SaveRankedPresetResponse)},
-        {583, sizeof(::match::UpdateRankedCosmeticRequest)},
-        {588, sizeof(::match::UpdateRankedCosmeticResponse)},
-        {595, sizeof(::match::GetRankedBattleResultRequest)},
-        {600, sizeof(::match::GetRankedBattleResultResponse)},
-        {607, sizeof(::match::TournamentSeasonView)},
-        {654, sizeof(::match::TournamentMemberView)},
-        {669, sizeof(::match::TournamentSquadView)},
-        {704, sizeof(::match::TournamentInviteView)},
-        {725, sizeof(::match::TournamentMatchView)},
-        {770, sizeof(::match::TournamentRewardItem)},
-        {777, sizeof(::match::TournamentRewardTierView)},
-        {798, sizeof(::match::TournamentPlayerRewardView)},
-        {825, sizeof(::match::GetTournamentOverviewRequest)},
-        {830, sizeof(::match::GetTournamentOverviewResponse)},
-        {857, sizeof(::match::CreateTournamentSquadRequest)},
-        {862, sizeof(::match::CreateTournamentSquadResponse)},
-        {869, sizeof(::match::InviteTournamentMemberRequest)},
-        {874, sizeof(::match::InviteTournamentMemberResponse)},
-        {881, sizeof(::match::RespondTournamentInviteRequest)},
-        {888, sizeof(::match::RespondTournamentInviteResponse)},
-        {895, sizeof(::match::LeaveTournamentSquadRequest)},
-        {900, sizeof(::match::LeaveTournamentSquadResponse)},
-        {909, sizeof(::match::UpdateTournamentLineupRequest)},
-        {914, sizeof(::match::UpdateTournamentLineupResponse)},
-        {921, sizeof(::match::RegisterTournamentSquadRequest)},
-        {922, sizeof(::match::RegisterTournamentSquadResponse)},
-        {929, sizeof(::match::ListTournamentStandingsRequest)},
-        {938, sizeof(::match::ListTournamentStandingsResponse)},
-        {955, sizeof(::match::StartTournamentMatchRequest)},
-        {962, sizeof(::match::StartTournamentMatchResponse)},
-        {971, sizeof(::match::CheerTournamentSquadRequest)},
-        {976, sizeof(::match::CheerTournamentSquadResponse)},
-        {985, sizeof(::match::ClaimTournamentRewardRequest)},
-        {990, sizeof(::match::ClaimTournamentRewardResponse)},
+        {471, sizeof(::match::RankedPlayerSeasonSummary)},
+        {504, sizeof(::match::RankedBattleSettlementView)},
+        {547, sizeof(::match::GetRankedProfileRequest)},
+        {552, sizeof(::match::GetRankedProfileResponse)},
+        {575, sizeof(::match::SaveRankedPresetRequest)},
+        {584, sizeof(::match::SaveRankedPresetResponse)},
+        {593, sizeof(::match::UpdateRankedCosmeticRequest)},
+        {598, sizeof(::match::UpdateRankedCosmeticResponse)},
+        {605, sizeof(::match::GetRankedBattleResultRequest)},
+        {610, sizeof(::match::GetRankedBattleResultResponse)},
+        {617, sizeof(::match::TournamentSeasonView)},
+        {664, sizeof(::match::TournamentMemberView)},
+        {679, sizeof(::match::TournamentSquadView)},
+        {714, sizeof(::match::TournamentInviteView)},
+        {735, sizeof(::match::TournamentMatchView)},
+        {780, sizeof(::match::TournamentRewardItem)},
+        {787, sizeof(::match::TournamentRewardTierView)},
+        {808, sizeof(::match::TournamentPlayerRewardView)},
+        {835, sizeof(::match::GetTournamentOverviewRequest)},
+        {840, sizeof(::match::GetTournamentOverviewResponse)},
+        {867, sizeof(::match::CreateTournamentSquadRequest)},
+        {872, sizeof(::match::CreateTournamentSquadResponse)},
+        {879, sizeof(::match::InviteTournamentMemberRequest)},
+        {884, sizeof(::match::InviteTournamentMemberResponse)},
+        {891, sizeof(::match::RespondTournamentInviteRequest)},
+        {898, sizeof(::match::RespondTournamentInviteResponse)},
+        {905, sizeof(::match::LeaveTournamentSquadRequest)},
+        {910, sizeof(::match::LeaveTournamentSquadResponse)},
+        {919, sizeof(::match::UpdateTournamentLineupRequest)},
+        {924, sizeof(::match::UpdateTournamentLineupResponse)},
+        {931, sizeof(::match::RegisterTournamentSquadRequest)},
+        {932, sizeof(::match::RegisterTournamentSquadResponse)},
+        {939, sizeof(::match::ListTournamentStandingsRequest)},
+        {948, sizeof(::match::ListTournamentStandingsResponse)},
+        {965, sizeof(::match::StartTournamentMatchRequest)},
+        {972, sizeof(::match::StartTournamentMatchResponse)},
+        {981, sizeof(::match::CheerTournamentSquadRequest)},
+        {986, sizeof(::match::CheerTournamentSquadResponse)},
+        {995, sizeof(::match::ClaimTournamentRewardRequest)},
+        {1000, sizeof(::match::ClaimTournamentRewardResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -15621,7 +15661,7 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] A
     "\036\n\026equipped_talisman_code\030\001 \001(\t\022$\n\034equip"
     "ped_avatar_pattern_code\030\002 \001(\t\022\035\n\025equippe"
     "d_card_bg_code\030\003 \001(\t\022\033\n\023equipped_title_c"
-    "ode\030\004 \001(\t\022\025\n\rhide_talisman\030\005 \001(\010\"\361\004\n\020Ran"
+    "ode\030\004 \001(\t\022\025\n\rhide_talisman\030\005 \001(\010\"\203\006\n\020Ran"
     "kedSeasonInfo\022\021\n\tseason_id\030\001 \001(\r\022\022\n\nseas"
     "on_key\030\002 \001(\t\022\023\n\013season_name\030\003 \001(\t\022\027\n\017ran"
     "k_generation\030\004 \001(\004\022\024\n\014rule_version\030\005 \001(\r"
@@ -15637,346 +15677,351 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] A
     "\031\n\021rank_board_sealed\030\023 \001(\010\022\032\n\022allowed_te"
     "am_sizes\030\024 \003(\r\022\034\n\024uses_own_progression\030\025"
     " \001(\010\022\032\n\022primary_team_sizes\030\026 \003(\r\022\032\n\022spec"
-    "ial_team_sizes\030\027 \003(\r\"\370\002\n\031RankedPlayerSea"
-    "sonSummary\022\021\n\tseason_id\030\001 \001(\r\022\022\n\nseason_"
-    "key\030\002 \001(\t\022\021\n\tqualified\030\003 \001(\010\022\024\n\014rating_c"
-    "enti\030\004 \001(\003\022\'\n\014current_tier\030\005 \001(\0162\021.match"
-    ".RankedTier\022\031\n\021peak_rating_centi\030\006 \001(\003\022$"
-    "\n\tpeak_tier\030\007 \001(\0162\021.match.RankedTier\022\025\n\r"
-    "valid_matches\030\010 \001(\r\022\014\n\004wins\030\t \001(\r\022\016\n\006los"
-    "ses\030\n \001(\r\022\r\n\005draws\030\013 \001(\r\022\027\n\017qualified_at"
-    "_ms\030\014 \001(\004\022\026\n\016milestone_bits\030\r \001(\r\022\022\n\nfin"
-    "al_rank\030\016 \001(\004\022\030\n\020champion_awarded\030\017 \001(\010\""
-    "\350\004\n\032RankedBattleSettlementView\022\021\n\tbattle"
-    "_id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001(\r\022\021\n\tteam_siz"
-    "e\030\003 \001(\r\022.\n\006status\030\004 \001(\0162\036.match.RankedMa"
-    "tchRatingStatus\022 \n\007outcome\030\005 \001(\0162\017.eBatt"
-    "leOutcome\022\031\n\021player_team_index\030\006 \001(\r\022\024\n\014"
-    "total_rounds\030\007 \001(\r\022\024\n\014participated\030\010 \001(\010"
-    "\022\014\n\004fled\030\t \001(\010\022\033\n\023rating_before_centi\030\n "
-    "\001(\003\022\032\n\022rating_after_centi\030\013 \001(\003\022\032\n\022ratin"
-    "g_delta_centi\030\014 \001(\022\022&\n\013tier_before\030\r \001(\016"
-    "2\021.match.RankedTier\022%\n\ntier_after\030\016 \001(\0162"
-    "\021.match.RankedTier\022\027\n\017newly_qualified\030\017 "
-    "\001(\010\022\"\n\032season_valid_matches_after\030\020 \001(\r\022"
-    ">\n\026newly_unlocked_rewards\030\021 \003(\0132\036.match."
-    "RankedRewardEntitlement\022\025\n\rsettled_at_ms"
-    "\030\022 \001(\004\022\033\n\023character_preset_id\030\023 \001(\r\022\025\n\rp"
-    "et_preset_id\030\024 \001(\r\"2\n\027GetRankedProfileRe"
-    "quest\022\027\n\017include_history\030\001 \001(\010\"\363\003\n\030GetRa"
-    "nkedProfileResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022/\n\016current_season\030\002 "
-    "\001(\0132\027.match.RankedSeasonInfo\022:\n\020current_"
-    "progress\030\003 \001(\0132 .match.RankedPlayerSeaso"
-    "nSummary\0220\n\020selected_presets\030\004 \001(\0132\026.Ran"
-    "kedPresetSelection\0226\n\020cosmetic_loadout\030\005"
-    " \001(\0132\034.match.RankedCosmeticLoadout\022(\n\007pr"
-    "esets\030\006 \003(\0132\027.match.RankedPresetView\0224\n\014"
-    "entitlements\030\007 \003(\0132\036.match.RankedRewardE"
-    "ntitlement\0221\n\007history\030\010 \003(\0132 .match.Rank"
-    "edPlayerSeasonSummary\022-\n\014past_seasons\030\t "
-    "\003(\0132\027.match.RankedSeasonInfo\022\026\n\016server_t"
-    "ime_ms\030\n \001(\004\"c\n\027SaveRankedPresetRequest\022"
-    "\033\n\023character_preset_id\030\001 \001(\r\022\025\n\rpet_pres"
-    "et_id\030\002 \001(\r\022\024\n\014rule_version\030\003 \001(\r\"\212\001\n\030Sa"
-    "veRankedPresetResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\0220\n\020selected_prese"
-    "ts\030\002 \001(\0132\026.RankedPresetSelection\022\024\n\014rule"
-    "_version\030\003 \001(\r\"L\n\033UpdateRankedCosmeticRe"
-    "quest\022-\n\007loadout\030\001 \001(\0132\034.match.RankedCos"
-    "meticLoadout\"u\n\034UpdateRankedCosmeticResp"
-    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022-\n\007loadout\030\002 \001(\0132\034.match.RankedCosm"
-    "eticLoadout\"1\n\034GetRankedBattleResultRequ"
-    "est\022\021\n\tbattle_id\030\001 \001(\004\"z\n\035GetRankedBattl"
-    "eResultResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\0221\n\006result\030\002 \001(\0132!.match."
-    "RankedBattleSettlementView\"\331\004\n\024Tournamen"
-    "tSeasonView\022\021\n\tseason_id\030\001 \001(\r\022\022\n\nseason"
-    "_key\030\002 \001(\t\022\023\n\013season_name\030\003 \001(\t\022\024\n\014rule_"
-    "version\030\004 \001(\r\022%\n\005stage\030\005 \001(\0162\026.match.Tou"
-    "rnamentStage\022\017\n\007enabled\030\006 \001(\010\022\030\n\020battle_"
-    "team_size\030\007 \001(\r\022\027\n\017roster_max_size\030\010 \001(\r"
-    "\022\021\n\tmin_level\030\t \001(\r\022\035\n\025qualifier_max_mat"
-    "ches\030\n \001(\r\022!\n\031participation_min_matches\030"
-    "\013 \001(\r\022\032\n\022knockout_max_teams\030\014 \001(\r\022\033\n\023kno"
-    "ckout_team_count\030\r \001(\r\022\036\n\026registered_squ"
-    "ad_count\030\016 \001(\r\022\035\n\025registration_start_ms\030"
-    "\017 \001(\004\022\032\n\022qualifier_start_ms\030\020 \001(\004\022\031\n\021kno"
-    "ckout_start_ms\030\021 \001(\004\022\027\n\017settle_start_ms\030"
-    "\022 \001(\004\022\016\n\006end_ms\030\023 \001(\004\022\031\n\021champion_squad_"
-    "id\030\024 \001(\004\022\033\n\023champion_squad_name\030\025 \001(\t\022\037\n"
-    "\027champion_member_summary\030\026 \001(\t\"\243\001\n\024Tourn"
-    "amentMemberView\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013pl"
-    "ayer_name\030\002 \001(\t\022\017\n\007zone_id\030\003 \001(\r\022)\n\004role"
-    "\030\004 \001(\0162\033.match.TournamentMemberRole\022\024\n\014s"
-    "tarter_slot\030\005 \001(\r\022\021\n\tjoined_ms\030\006 \001(\004\"\245\003\n"
-    "\023TournamentSquadView\022\020\n\010squad_id\030\001 \001(\004\022\021"
-    "\n\tseason_id\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\031\n\021capta"
-    "in_player_id\030\004 \001(\004\022*\n\005state\030\005 \001(\0162\033.matc"
-    "h.TournamentSquadState\022\024\n\014member_count\030\006"
-    " \001(\r\022\030\n\020qualifier_points\030\007 \001(\r\022\030\n\020qualif"
-    "ier_played\030\010 \001(\r\022\026\n\016qualifier_wins\030\t \001(\r"
-    "\022\030\n\020qualifier_losses\030\n \001(\r\022\027\n\017qualifier_"
-    "draws\030\013 \001(\r\022\021\n\tseed_rank\030\014 \001(\r\022\022\n\nfinal_"
-    "rank\030\r \001(\r\022\023\n\013cheer_count\030\016 \001(\r\022\025\n\rregis"
-    "tered_ms\030\017 \001(\004\022,\n\007members\030\020 \003(\0132\033.match."
-    "TournamentMemberView\"\337\001\n\024TournamentInvit"
-    "eView\022\020\n\010squad_id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001"
-    "(\r\022\022\n\nsquad_name\030\003 \001(\t\022\031\n\021inviter_player"
-    "_id\030\004 \001(\004\022\024\n\014inviter_name\030\005 \001(\t\022\034\n\024curre"
-    "nt_member_count\030\006 \001(\r\022\027\n\017roster_max_size"
-    "\030\007 \001(\r\022\022\n\ncreated_ms\030\010 \001(\004\022\022\n\nexpires_ms"
-    "\030\t \001(\004\"\214\004\n\023TournamentMatchView\022\020\n\010match_"
-    "id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001(\r\022*\n\005phase\030\003 \001"
-    "(\0162\033.match.TournamentMatchPhase\022\023\n\013round"
-    "_index\030\004 \001(\r\022\022\n\nslot_index\030\005 \001(\r\022\022\n\nsqua"
-    "d_a_id\030\006 \001(\004\022\024\n\014squad_a_name\030\007 \001(\t\022\024\n\014sq"
-    "uad_a_seed\030\010 \001(\r\022\022\n\nsquad_b_id\030\t \001(\004\022\024\n\014"
-    "squad_b_name\030\n \001(\t\022\024\n\014squad_b_seed\030\013 \001(\r"
-    "\022\017\n\007ready_a\030\014 \001(\010\022\017\n\007ready_b\030\r \001(\010\022*\n\005st"
-    "ate\030\016 \001(\0162\033.match.TournamentMatchState\022\021"
-    "\n\tbattle_id\030\017 \001(\004\022\027\n\017winner_squad_id\030\020 \001"
-    "(\004\022 \n\007outcome\030\021 \001(\0162\017.eBattleOutcome\022\031\n\021"
-    "featured_spectate\030\022 \001(\010\022\032\n\022scheduled_sta"
-    "rt_ms\030\023 \001(\004\022\023\n\013deadline_ms\030\024 \001(\004\022\023\n\013fini"
-    "shed_ms\030\025 \001(\004\"6\n\024TournamentRewardItem\022\017\n"
-    "\007item_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\"\372\001\n\030Tourna"
-    "mentRewardTierView\022\017\n\007tier_id\030\001 \001(\r\0222\n\tt"
-    "ier_kind\030\002 \001(\0162\037.match.TournamentRewardT"
-    "ierKind\022\020\n\010min_rank\030\003 \001(\r\022\020\n\010max_rank\030\004 "
-    "\001(\r\022\023\n\013gold_amount\030\005 \001(\004\022*\n\005items\030\006 \003(\0132"
-    "\033.match.TournamentRewardItem\022\022\n\ntitle_co"
-    "de\030\007 \001(\t\022\022\n\nbadge_code\030\010 \001(\t\022\014\n\004desc\030\t \001"
-    "(\t\"\347\002\n\032TournamentPlayerRewardView\022\021\n\trew"
-    "ard_id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001(\r\0222\n\ttier_"
-    "kind\030\003 \001(\0162\037.match.TournamentRewardTierK"
-    "ind\022\017\n\007tier_id\030\004 \001(\r\022\022\n\nfinal_rank\030\005 \001(\r"
-    "\022\023\n\013gold_amount\030\006 \001(\004\022*\n\005items\030\007 \003(\0132\033.m"
-    "atch.TournamentRewardItem\022\022\n\ntitle_code\030"
-    "\010 \001(\t\022\022\n\nbadge_code\030\t \001(\t\022<\n\016delivery_st"
-    "ate\030\n \001(\0162$.match.TournamentRewardDelive"
-    "ryState\022\017\n\007mail_id\030\013 \001(\004\022\022\n\nclaimed_ms\030\014"
-    " \001(\004\"7\n\034GetTournamentOverviewRequest\022\027\n\017"
-    "include_history\030\001 \001(\010\"\300\004\n\035GetTournamentO"
-    "verviewResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\0223\n\016current_season\030\002 \001(\0132"
-    "\033.match.TournamentSeasonView\022,\n\010my_squad"
-    "\030\003 \001(\0132\032.match.TournamentSquadView\0224\n\017pe"
-    "nding_invites\030\004 \003(\0132\033.match.TournamentIn"
-    "viteView\0223\n\017my_active_match\030\005 \001(\0132\032.matc"
-    "h.TournamentMatchView\0224\n\020featured_matche"
-    "s\030\006 \003(\0132\032.match.TournamentMatchView\022\033\n\023m"
-    "y_cheered_squad_id\030\007 \001(\004\022\035\n\025my_cheered_s"
-    "quad_name\030\010 \001(\t\0225\n\014reward_tiers\030\t \003(\0132\037."
-    "match.TournamentRewardTierView\0225\n\nmy_rew"
-    "ards\030\n \003(\0132!.match.TournamentPlayerRewar"
-    "dView\0221\n\014hall_of_fame\030\013 \003(\0132\033.match.Tour"
-    "namentSeasonView\022\026\n\016server_time_ms\030\014 \001(\004"
-    "\"2\n\034CreateTournamentSquadRequest\022\022\n\nsqua"
-    "d_name\030\001 \001(\t\"r\n\035CreateTournamentSquadRes"
+    "ial_team_sizes\030\027 \003(\r\022\033\n\023tier_qingfeng_ce"
+    "nti\030\030 \001(\r\022\033\n\023tier_yunzhang_centi\030\031 \001(\r\022\032"
+    "\n\022tier_tianshu_centi\030\032 \001(\r\022\033\n\023tier_wushu"
+    "ang_centi\030\033 \001(\r\022\035\n\025milestone_win_matches"
+    "\030\034 \001(\r\"\370\002\n\031RankedPlayerSeasonSummary\022\021\n\t"
+    "season_id\030\001 \001(\r\022\022\n\nseason_key\030\002 \001(\t\022\021\n\tq"
+    "ualified\030\003 \001(\010\022\024\n\014rating_centi\030\004 \001(\003\022\'\n\014"
+    "current_tier\030\005 \001(\0162\021.match.RankedTier\022\031\n"
+    "\021peak_rating_centi\030\006 \001(\003\022$\n\tpeak_tier\030\007 "
+    "\001(\0162\021.match.RankedTier\022\025\n\rvalid_matches\030"
+    "\010 \001(\r\022\014\n\004wins\030\t \001(\r\022\016\n\006losses\030\n \001(\r\022\r\n\005d"
+    "raws\030\013 \001(\r\022\027\n\017qualified_at_ms\030\014 \001(\004\022\026\n\016m"
+    "ilestone_bits\030\r \001(\r\022\022\n\nfinal_rank\030\016 \001(\004\022"
+    "\030\n\020champion_awarded\030\017 \001(\010\"\350\004\n\032RankedBatt"
+    "leSettlementView\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\ts"
+    "eason_id\030\002 \001(\r\022\021\n\tteam_size\030\003 \001(\r\022.\n\006sta"
+    "tus\030\004 \001(\0162\036.match.RankedMatchRatingStatu"
+    "s\022 \n\007outcome\030\005 \001(\0162\017.eBattleOutcome\022\031\n\021p"
+    "layer_team_index\030\006 \001(\r\022\024\n\014total_rounds\030\007"
+    " \001(\r\022\024\n\014participated\030\010 \001(\010\022\014\n\004fled\030\t \001(\010"
+    "\022\033\n\023rating_before_centi\030\n \001(\003\022\032\n\022rating_"
+    "after_centi\030\013 \001(\003\022\032\n\022rating_delta_centi\030"
+    "\014 \001(\022\022&\n\013tier_before\030\r \001(\0162\021.match.Ranke"
+    "dTier\022%\n\ntier_after\030\016 \001(\0162\021.match.Ranked"
+    "Tier\022\027\n\017newly_qualified\030\017 \001(\010\022\"\n\032season_"
+    "valid_matches_after\030\020 \001(\r\022>\n\026newly_unloc"
+    "ked_rewards\030\021 \003(\0132\036.match.RankedRewardEn"
+    "titlement\022\025\n\rsettled_at_ms\030\022 \001(\004\022\033\n\023char"
+    "acter_preset_id\030\023 \001(\r\022\025\n\rpet_preset_id\030\024"
+    " \001(\r\"2\n\027GetRankedProfileRequest\022\027\n\017inclu"
+    "de_history\030\001 \001(\010\"\363\003\n\030GetRankedProfileRes"
     "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
-    "ssage\022)\n\005squad\030\002 \001(\0132\032.match.TournamentS"
-    "quadView\"9\n\035InviteTournamentMemberReques"
-    "t\022\030\n\020target_player_id\030\001 \001(\004\"u\n\036InviteTou"
-    "rnamentMemberResponse\022&\n\rerror_message\030\001"
-    " \001(\0132\017.TipInfoMessage\022+\n\006invite\030\002 \001(\0132\033."
-    "match.TournamentInviteView\"B\n\036RespondTou"
-    "rnamentInviteRequest\022\020\n\010squad_id\030\001 \001(\004\022\016"
-    "\n\006accept\030\002 \001(\010\"t\n\037RespondTournamentInvit"
-    "eResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
-    "foMessage\022)\n\005squad\030\002 \001(\0132\032.match.Tournam"
-    "entSquadView\"7\n\033LeaveTournamentSquadRequ"
-    "est\022\030\n\020target_player_id\030\001 \001(\004\"\212\001\n\034LeaveT"
-    "ournamentSquadResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\022\027\n\017squad_disbande"
-    "d\030\002 \001(\010\022)\n\005squad\030\003 \001(\0132\032.match.Tournamen"
-    "tSquadView\";\n\035UpdateTournamentLineupRequ"
-    "est\022\032\n\022starter_player_ids\030\001 \003(\004\"s\n\036Updat"
-    "eTournamentLineupResponse\022&\n\rerror_messa"
-    "ge\030\001 \001(\0132\017.TipInfoMessage\022)\n\005squad\030\002 \001(\013"
-    "2\032.match.TournamentSquadView\" \n\036Register"
-    "TournamentSquadRequest\"t\n\037RegisterTourna"
-    "mentSquadResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022)\n\005squad\030\002 \001(\0132\032.match"
-    ".TournamentSquadView\"T\n\036ListTournamentSt"
-    "andingsRequest\022\021\n\tseason_id\030\001 \001(\r\022\014\n\004pag"
-    "e\030\002 \001(\r\022\021\n\tpage_size\030\003 \001(\r\"\267\002\n\037ListTourn"
-    "amentStandingsResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\022+\n\006season\030\002 \001(\0132\033"
-    ".match.TournamentSeasonView\022-\n\tstandings"
-    "\030\003 \003(\0132\032.match.TournamentSquadView\022,\n\010my"
-    "_squad\030\004 \001(\0132\032.match.TournamentSquadView"
-    "\022\024\n\014total_squads\030\005 \001(\r\0224\n\020knockout_brack"
-    "et\030\006 \003(\0132\032.match.TournamentMatchView\022\026\n\016"
-    "server_time_ms\030\007 \001(\004\"J\n\033StartTournamentM"
-    "atchRequest\022\020\n\010match_id\030\001 \001(\004\022\031\n\021lineup_"
-    "player_ids\030\002 \003(\004\"\204\001\n\034StartTournamentMatc"
-    "hResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
-    "foMessage\022)\n\005match\030\002 \001(\0132\032.match.Tournam"
-    "entMatchView\022\021\n\tbattle_id\030\003 \001(\004\"/\n\033Cheer"
-    "TournamentSquadRequest\022\020\n\010squad_id\030\001 \001(\004"
-    "\"s\n\034CheerTournamentSquadResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\020\n\010squa"
-    "d_id\030\002 \001(\004\022\031\n\021squad_cheer_count\030\003 \001(\r\"1\n"
-    "\034ClaimTournamentRewardRequest\022\021\n\tseason_"
-    "id\030\001 \001(\r\"\203\001\n\035ClaimTournamentRewardRespon"
-    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
-    "ge\022:\n\017claimed_rewards\030\002 \003(\0132!.match.Tour"
-    "namentPlayerRewardView*\213\002\n\tMatchMode\022\032\n\026"
-    "MATCH_MODE_UNSPECIFIED\020\000\022\022\n\016MATCH_MODE_5"
-    "V5\020\001\022\022\n\016MATCH_MODE_3V3\020\002\022\022\n\016MATCH_MODE_1"
-    "V1\020\003\022\027\n\023MATCH_MODE_PVE_SOLO\020\004\022\027\n\023MATCH_M"
-    "ODE_PVE_TEAM\020\005\022\034\n\030MATCH_MODE_PVP_CHALLEN"
-    "GE\020\006\022\027\n\023MATCH_MODE_PVP_TEAM\020\007\022\033\n\027MATCH_M"
-    "ODE_POLARITY_5V5\020\010\022 \n\034MATCH_MODE_SEASON_"
-    "TOURNAMENT\020\013*\247\001\n\nQueueState\022\033\n\027QUEUE_STA"
-    "TE_UNSPECIFIED\020\000\022\026\n\022QUEUE_STATE_QUEUED\020\001"
-    "\022\027\n\023QUEUE_STATE_MATCHED\020\002\022\025\n\021QUEUE_STATE"
-    "_READY\020\003\022\030\n\024QUEUE_STATE_ENTERING\020\004\022\032\n\026QU"
-    "EUE_STATE_NOT_QUEUED\020\005*j\n\021eSpectateDeliv"
-    "ery\022\032\n\026SPECTATE_DELIVERY_NONE\020\000\022\034\n\030SPECT"
-    "ATE_DELIVERY_DIRECT\020\001\022\033\n\027SPECTATE_DELIVE"
-    "RY_LOBBY\020\002*\247\001\n\027BattleScriptReviewState\022$"
-    "\n BATTLE_SCRIPT_REVIEW_UNSPECIFIED\020\000\022 \n\034"
-    "BATTLE_SCRIPT_REVIEW_PENDING\020\001\022!\n\035BATTLE"
-    "_SCRIPT_REVIEW_APPROVED\020\002\022!\n\035BATTLE_SCRI"
-    "PT_REVIEW_REJECTED\020\003*\250\001\n\nRankedTier\022\033\n\027R"
-    "ANKED_TIER_UNSPECIFIED\020\000\022\026\n\022RANKED_TIER_"
-    "CHUSHI\020\001\022\030\n\024RANKED_TIER_QINGFENG\020\002\022\030\n\024RA"
-    "NKED_TIER_YUNZHANG\020\003\022\027\n\023RANKED_TIER_TIAN"
-    "SHU\020\004\022\030\n\024RANKED_TIER_WUSHUANG\020\005*\232\001\n\021Rank"
-    "edSeasonState\022#\n\037RANKED_SEASON_STATE_UNS"
-    "PECIFIED\020\000\022\036\n\032RANKED_SEASON_STATE_ACTIVE"
-    "\020\001\022 \n\034RANKED_SEASON_STATE_SETTLING\020\002\022\036\n\032"
-    "RANKED_SEASON_STATE_CLOSED\020\003*\373\001\n\020RankedR"
-    "ewardKind\022\"\n\036RANKED_REWARD_KIND_UNSPECIF"
-    "IED\020\000\022 \n\034RANKED_REWARD_AVATAR_PATTERN\020\001\022"
-    "!\n\035RANKED_REWARD_CARD_BACKGROUND\020\002\022\032\n\026RA"
-    "NKED_REWARD_TALISMAN\020\003\022\034\n\030RANKED_REWARD_"
-    "TIER_BADGE\020\004\022\034\n\030RANKED_REWARD_TIER_TITLE"
-    "\020\005\022&\n\"RANKED_REWARD_CHAMPION_INSCRIPTION"
-    "\020\006*\304\001\n\027RankedMatchRatingStatus\022#\n\037RANKED"
-    "_MATCH_RATING_UNSPECIFIED\020\000\022\037\n\033RANKED_MA"
-    "TCH_RATING_PENDING\020\001\022!\n\035RANKED_MATCH_RAT"
-    "ING_CONFIRMED\020\002\022\034\n\030RANKED_MATCH_RATING_V"
-    "OID\020\003\022\"\n\036RANKED_MATCH_RATING_ZERO_ROUND\020"
-    "\004*\263\001\n\017TournamentStage\022 \n\034TOURNAMENT_STAG"
-    "E_UNSPECIFIED\020\000\022!\n\035TOURNAMENT_STAGE_REGI"
-    "STRATION\020\001\022\036\n\032TOURNAMENT_STAGE_QUALIFIER"
-    "\020\002\022\035\n\031TOURNAMENT_STAGE_KNOCKOUT\020\003\022\034\n\030TOU"
-    "RNAMENT_STAGE_SETTLED\020\004*\371\001\n\024TournamentSq"
-    "uadState\022&\n\"TOURNAMENT_SQUAD_STATE_UNSPE"
-    "CIFIED\020\000\022 \n\034TOURNAMENT_SQUAD_STATE_DRAFT"
-    "\020\001\022%\n!TOURNAMENT_SQUAD_STATE_REGISTERED\020"
-    "\002\022%\n!TOURNAMENT_SQUAD_STATE_ELIMINATED\020\003"
-    "\022#\n\037TOURNAMENT_SQUAD_STATE_CHAMPION\020\004\022$\n"
-    " TOURNAMENT_SQUAD_STATE_DISBANDED\020\005*\255\001\n\024"
-    "TournamentMemberRole\022&\n\"TOURNAMENT_MEMBE"
-    "R_ROLE_UNSPECIFIED\020\000\022\"\n\036TOURNAMENT_MEMBE"
-    "R_ROLE_CAPTAIN\020\001\022\"\n\036TOURNAMENT_MEMBER_RO"
-    "LE_STARTER\020\002\022%\n!TOURNAMENT_MEMBER_ROLE_S"
-    "UBSTITUTE\020\003*\211\001\n\024TournamentMatchPhase\022&\n\""
-    "TOURNAMENT_MATCH_PHASE_UNSPECIFIED\020\000\022$\n "
-    "TOURNAMENT_MATCH_PHASE_QUALIFIER\020\001\022#\n\037TO"
-    "URNAMENT_MATCH_PHASE_KNOCKOUT\020\002*\234\002\n\024Tour"
-    "namentMatchState\022&\n\"TOURNAMENT_MATCH_STA"
-    "TE_UNSPECIFIED\020\000\022+\n\'TOURNAMENT_MATCH_STA"
-    "TE_WAITING_OPPONENT\020\001\022 \n\034TOURNAMENT_MATC"
-    "H_STATE_READY\020\002\022$\n TOURNAMENT_MATCH_STAT"
-    "E_IN_BATTLE\020\003\022#\n\037TOURNAMENT_MATCH_STATE_"
-    "FINISHED\020\004\022\036\n\032TOURNAMENT_MATCH_STATE_BYE"
-    "\020\005\022\"\n\036TOURNAMENT_MATCH_STATE_FORFEIT\020\006*\273"
-    "\002\n\030TournamentRewardTierKind\022&\n\"TOURNAMEN"
-    "T_REWARD_TIER_UNSPECIFIED\020\000\022#\n\037TOURNAMEN"
-    "T_REWARD_TIER_CHAMPION\020\001\022$\n TOURNAMENT_R"
-    "EWARD_TIER_RUNNER_UP\020\002\022\037\n\033TOURNAMENT_REW"
-    "ARD_TIER_TOP4\020\003\022\037\n\033TOURNAMENT_REWARD_TIE"
-    "R_TOP8\020\004\022 \n\034TOURNAMENT_REWARD_TIER_TOP16"
-    "\020\005\022&\n\"TOURNAMENT_REWARD_TIER_PARTICIPANT"
-    "\020\006\022 \n\034TOURNAMENT_REWARD_TIER_CHEER\020\007*\307\001\n"
-    "\035TournamentRewardDeliveryState\022*\n&TOURNA"
-    "MENT_REWARD_DELIVERY_UNSPECIFIED\020\000\022(\n$TO"
-    "URNAMENT_REWARD_DELIVERY_CLAIMABLE\020\001\022&\n\""
-    "TOURNAMENT_REWARD_DELIVERY_CLAIMED\020\002\022(\n$"
-    "TOURNAMENT_REWARD_DELIVERY_ABANDONED\020\0032\334"
-    "\027\n\014MatchService\022^\n\023GetNetworkProbePlan\022!"
-    ".match.GetNetworkProbePlanRequest\032\".matc"
-    "h.GetNetworkProbePlanResponse\"\000\022[\n\022Commi"
-    "tNetworkProbe\022 .match.CommitNetworkProbe"
-    "Request\032!.match.CommitNetworkProbeRespon"
-    "se\"\000\022@\n\tJoinQueue\022\027.match.JoinQueueReque"
-    "st\032\030.match.JoinQueueResponse\"\000\0222\n\013Cancel"
-    "Queue\022\031.match.CancelQueueRequest\032\006.Empty"
-    "\"\000\022O\n\016GetQueueStatus\022\034.match.GetQueueSta"
-    "tusRequest\032\035.match.GetQueueStatusRespons"
-    "e\"\000\022R\n\017ChallengePlayer\022\035.match.Challenge"
-    "PlayerRequest\032\036.match.ChallengePlayerRes"
-    "ponse\"\000\022U\n\020RespondChallenge\022\036.match.Resp"
-    "ondChallengeRequest\032\037.match.RespondChall"
-    "engeResponse\"\000\022A\n\025NotifyChallengeInvite\022"
-    "\031.match.ChallengeInviteS2C\032\006.Empty\"\005\210\231\310\001"
-    "\002\022A\n\025NotifyChallengeResult\022\031.match.Chall"
-    "engeResultS2C\032\006.Empty\"\005\210\231\310\001\002\022F\n\013WatchBat"
-    "tle\022\031.match.WatchBattleRequest\032\032.match.W"
-    "atchBattleResponse\"\000\022R\n\023RequestBattleTic"
-    "ket\022\033.RequestBattleTicketRequest\032\034.Reque"
-    "stBattleTicketResponse\"\000\022a\n\024ListWatchabl"
-    "eBattles\022\".match.ListWatchableBattlesReq"
-    "uest\032#.match.ListWatchableBattlesRespons"
-    "e\"\000\022X\n\021ListBattleReports\022\037.match.ListBat"
-    "tleReportsRequest\032 .match.ListBattleRepo"
-    "rtsResponse\"\000\022R\n\017GetBattleReport\022\035.match"
-    ".GetBattleReportRequest\032\036.match.GetBattl"
-    "eReportResponse\"\000\022X\n\021ListBattleScripts\022\037"
-    ".match.ListBattleScriptsRequest\032 .match."
-    "ListBattleScriptsResponse\"\000\022[\n\022SubmitBat"
-    "tleScript\022 .match.SubmitBattleScriptRequ"
-    "est\032!.match.SubmitBattleScriptResponse\"\000"
-    "\022[\n\022DeleteBattleScript\022 .match.DeleteBat"
-    "tleScriptRequest\032!.match.DeleteBattleScr"
-    "iptResponse\"\000\022g\n\026SetBattleScriptLoadout\022"
-    "$.match.SetBattleScriptLoadoutRequest\032%."
-    "match.SetBattleScriptLoadoutResponse\"\000\022U"
-    "\n\020GetRankedProfile\022\036.match.GetRankedProf"
-    "ileRequest\032\037.match.GetRankedProfileRespo"
-    "nse\"\000\022U\n\020SaveRankedPreset\022\036.match.SaveRa"
-    "nkedPresetRequest\032\037.match.SaveRankedPres"
-    "etResponse\"\000\022a\n\024UpdateRankedCosmetic\022\".m"
-    "atch.UpdateRankedCosmeticRequest\032#.match"
-    ".UpdateRankedCosmeticResponse\"\000\022d\n\025GetRa"
-    "nkedBattleResult\022#.match.GetRankedBattle"
-    "ResultRequest\032$.match.GetRankedBattleRes"
-    "ultResponse\"\000\022d\n\025GetTournamentOverview\022#"
-    ".match.GetTournamentOverviewRequest\032$.ma"
-    "tch.GetTournamentOverviewResponse\"\000\022d\n\025C"
-    "reateTournamentSquad\022#.match.CreateTourn"
-    "amentSquadRequest\032$.match.CreateTourname"
-    "ntSquadResponse\"\000\022g\n\026InviteTournamentMem"
-    "ber\022$.match.InviteTournamentMemberReques"
-    "t\032%.match.InviteTournamentMemberResponse"
-    "\"\000\022j\n\027RespondTournamentInvite\022%.match.Re"
-    "spondTournamentInviteRequest\032&.match.Res"
-    "pondTournamentInviteResponse\"\000\022a\n\024LeaveT"
-    "ournamentSquad\022\".match.LeaveTournamentSq"
-    "uadRequest\032#.match.LeaveTournamentSquadR"
-    "esponse\"\000\022g\n\026UpdateTournamentLineup\022$.ma"
-    "tch.UpdateTournamentLineupRequest\032%.matc"
-    "h.UpdateTournamentLineupResponse\"\000\022j\n\027Re"
-    "gisterTournamentSquad\022%.match.RegisterTo"
-    "urnamentSquadRequest\032&.match.RegisterTou"
-    "rnamentSquadResponse\"\000\022j\n\027ListTournament"
-    "Standings\022%.match.ListTournamentStanding"
-    "sRequest\032&.match.ListTournamentStandings"
-    "Response\"\000\022a\n\024StartTournamentMatch\022\".mat"
-    "ch.StartTournamentMatchRequest\032#.match.S"
-    "tartTournamentMatchResponse\"\000\022a\n\024CheerTo"
-    "urnamentSquad\022\".match.CheerTournamentSqu"
-    "adRequest\032#.match.CheerTournamentSquadRe"
-    "sponse\"\000\022d\n\025ClaimTournamentReward\022#.matc"
-    "h.ClaimTournamentRewardRequest\032$.match.C"
-    "laimTournamentRewardResponse\"\000\032\005\210\250\303\001\001B\021Z"
-    "\013match/match\230\324a\025b\006proto3"
+    "ssage\022/\n\016current_season\030\002 \001(\0132\027.match.Ra"
+    "nkedSeasonInfo\022:\n\020current_progress\030\003 \001(\013"
+    "2 .match.RankedPlayerSeasonSummary\0220\n\020se"
+    "lected_presets\030\004 \001(\0132\026.RankedPresetSelec"
+    "tion\0226\n\020cosmetic_loadout\030\005 \001(\0132\034.match.R"
+    "ankedCosmeticLoadout\022(\n\007presets\030\006 \003(\0132\027."
+    "match.RankedPresetView\0224\n\014entitlements\030\007"
+    " \003(\0132\036.match.RankedRewardEntitlement\0221\n\007"
+    "history\030\010 \003(\0132 .match.RankedPlayerSeason"
+    "Summary\022-\n\014past_seasons\030\t \003(\0132\027.match.Ra"
+    "nkedSeasonInfo\022\026\n\016server_time_ms\030\n \001(\004\"c"
+    "\n\027SaveRankedPresetRequest\022\033\n\023character_p"
+    "reset_id\030\001 \001(\r\022\025\n\rpet_preset_id\030\002 \001(\r\022\024\n"
+    "\014rule_version\030\003 \001(\r\"\212\001\n\030SaveRankedPreset"
+    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
+    "oMessage\0220\n\020selected_presets\030\002 \001(\0132\026.Ran"
+    "kedPresetSelection\022\024\n\014rule_version\030\003 \001(\r"
+    "\"L\n\033UpdateRankedCosmeticRequest\022-\n\007loado"
+    "ut\030\001 \001(\0132\034.match.RankedCosmeticLoadout\"u"
+    "\n\034UpdateRankedCosmeticResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022-\n\007loadou"
+    "t\030\002 \001(\0132\034.match.RankedCosmeticLoadout\"1\n"
+    "\034GetRankedBattleResultRequest\022\021\n\tbattle_"
+    "id\030\001 \001(\004\"z\n\035GetRankedBattleResultRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\0221\n\006result\030\002 \001(\0132!.match.RankedBattleSe"
+    "ttlementView\"\331\004\n\024TournamentSeasonView\022\021\n"
+    "\tseason_id\030\001 \001(\r\022\022\n\nseason_key\030\002 \001(\t\022\023\n\013"
+    "season_name\030\003 \001(\t\022\024\n\014rule_version\030\004 \001(\r\022"
+    "%\n\005stage\030\005 \001(\0162\026.match.TournamentStage\022\017"
+    "\n\007enabled\030\006 \001(\010\022\030\n\020battle_team_size\030\007 \001("
+    "\r\022\027\n\017roster_max_size\030\010 \001(\r\022\021\n\tmin_level\030"
+    "\t \001(\r\022\035\n\025qualifier_max_matches\030\n \001(\r\022!\n\031"
+    "participation_min_matches\030\013 \001(\r\022\032\n\022knock"
+    "out_max_teams\030\014 \001(\r\022\033\n\023knockout_team_cou"
+    "nt\030\r \001(\r\022\036\n\026registered_squad_count\030\016 \001(\r"
+    "\022\035\n\025registration_start_ms\030\017 \001(\004\022\032\n\022quali"
+    "fier_start_ms\030\020 \001(\004\022\031\n\021knockout_start_ms"
+    "\030\021 \001(\004\022\027\n\017settle_start_ms\030\022 \001(\004\022\016\n\006end_m"
+    "s\030\023 \001(\004\022\031\n\021champion_squad_id\030\024 \001(\004\022\033\n\023ch"
+    "ampion_squad_name\030\025 \001(\t\022\037\n\027champion_memb"
+    "er_summary\030\026 \001(\t\"\243\001\n\024TournamentMemberVie"
+    "w\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013player_name\030\002 \001("
+    "\t\022\017\n\007zone_id\030\003 \001(\r\022)\n\004role\030\004 \001(\0162\033.match"
+    ".TournamentMemberRole\022\024\n\014starter_slot\030\005 "
+    "\001(\r\022\021\n\tjoined_ms\030\006 \001(\004\"\245\003\n\023TournamentSqu"
+    "adView\022\020\n\010squad_id\030\001 \001(\004\022\021\n\tseason_id\030\002 "
+    "\001(\r\022\014\n\004name\030\003 \001(\t\022\031\n\021captain_player_id\030\004"
+    " \001(\004\022*\n\005state\030\005 \001(\0162\033.match.TournamentSq"
+    "uadState\022\024\n\014member_count\030\006 \001(\r\022\030\n\020qualif"
+    "ier_points\030\007 \001(\r\022\030\n\020qualifier_played\030\010 \001"
+    "(\r\022\026\n\016qualifier_wins\030\t \001(\r\022\030\n\020qualifier_"
+    "losses\030\n \001(\r\022\027\n\017qualifier_draws\030\013 \001(\r\022\021\n"
+    "\tseed_rank\030\014 \001(\r\022\022\n\nfinal_rank\030\r \001(\r\022\023\n\013"
+    "cheer_count\030\016 \001(\r\022\025\n\rregistered_ms\030\017 \001(\004"
+    "\022,\n\007members\030\020 \003(\0132\033.match.TournamentMemb"
+    "erView\"\337\001\n\024TournamentInviteView\022\020\n\010squad"
+    "_id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001(\r\022\022\n\nsquad_na"
+    "me\030\003 \001(\t\022\031\n\021inviter_player_id\030\004 \001(\004\022\024\n\014i"
+    "nviter_name\030\005 \001(\t\022\034\n\024current_member_coun"
+    "t\030\006 \001(\r\022\027\n\017roster_max_size\030\007 \001(\r\022\022\n\ncrea"
+    "ted_ms\030\010 \001(\004\022\022\n\nexpires_ms\030\t \001(\004\"\214\004\n\023Tou"
+    "rnamentMatchView\022\020\n\010match_id\030\001 \001(\004\022\021\n\tse"
+    "ason_id\030\002 \001(\r\022*\n\005phase\030\003 \001(\0162\033.match.Tou"
+    "rnamentMatchPhase\022\023\n\013round_index\030\004 \001(\r\022\022"
+    "\n\nslot_index\030\005 \001(\r\022\022\n\nsquad_a_id\030\006 \001(\004\022\024"
+    "\n\014squad_a_name\030\007 \001(\t\022\024\n\014squad_a_seed\030\010 \001"
+    "(\r\022\022\n\nsquad_b_id\030\t \001(\004\022\024\n\014squad_b_name\030\n"
+    " \001(\t\022\024\n\014squad_b_seed\030\013 \001(\r\022\017\n\007ready_a\030\014 "
+    "\001(\010\022\017\n\007ready_b\030\r \001(\010\022*\n\005state\030\016 \001(\0162\033.ma"
+    "tch.TournamentMatchState\022\021\n\tbattle_id\030\017 "
+    "\001(\004\022\027\n\017winner_squad_id\030\020 \001(\004\022 \n\007outcome\030"
+    "\021 \001(\0162\017.eBattleOutcome\022\031\n\021featured_spect"
+    "ate\030\022 \001(\010\022\032\n\022scheduled_start_ms\030\023 \001(\004\022\023\n"
+    "\013deadline_ms\030\024 \001(\004\022\023\n\013finished_ms\030\025 \001(\004\""
+    "6\n\024TournamentRewardItem\022\017\n\007item_id\030\001 \001(\r"
+    "\022\r\n\005count\030\002 \001(\r\"\372\001\n\030TournamentRewardTier"
+    "View\022\017\n\007tier_id\030\001 \001(\r\0222\n\ttier_kind\030\002 \001(\016"
+    "2\037.match.TournamentRewardTierKind\022\020\n\010min"
+    "_rank\030\003 \001(\r\022\020\n\010max_rank\030\004 \001(\r\022\023\n\013gold_am"
+    "ount\030\005 \001(\004\022*\n\005items\030\006 \003(\0132\033.match.Tourna"
+    "mentRewardItem\022\022\n\ntitle_code\030\007 \001(\t\022\022\n\nba"
+    "dge_code\030\010 \001(\t\022\014\n\004desc\030\t \001(\t\"\347\002\n\032Tournam"
+    "entPlayerRewardView\022\021\n\treward_id\030\001 \001(\004\022\021"
+    "\n\tseason_id\030\002 \001(\r\0222\n\ttier_kind\030\003 \001(\0162\037.m"
+    "atch.TournamentRewardTierKind\022\017\n\007tier_id"
+    "\030\004 \001(\r\022\022\n\nfinal_rank\030\005 \001(\r\022\023\n\013gold_amoun"
+    "t\030\006 \001(\004\022*\n\005items\030\007 \003(\0132\033.match.Tournamen"
+    "tRewardItem\022\022\n\ntitle_code\030\010 \001(\t\022\022\n\nbadge"
+    "_code\030\t \001(\t\022<\n\016delivery_state\030\n \001(\0162$.ma"
+    "tch.TournamentRewardDeliveryState\022\017\n\007mai"
+    "l_id\030\013 \001(\004\022\022\n\nclaimed_ms\030\014 \001(\004\"7\n\034GetTou"
+    "rnamentOverviewRequest\022\027\n\017include_histor"
+    "y\030\001 \001(\010\"\300\004\n\035GetTournamentOverviewRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\0223\n\016current_season\030\002 \001(\0132\033.match.Tourna"
+    "mentSeasonView\022,\n\010my_squad\030\003 \001(\0132\032.match"
+    ".TournamentSquadView\0224\n\017pending_invites\030"
+    "\004 \003(\0132\033.match.TournamentInviteView\0223\n\017my"
+    "_active_match\030\005 \001(\0132\032.match.TournamentMa"
+    "tchView\0224\n\020featured_matches\030\006 \003(\0132\032.matc"
+    "h.TournamentMatchView\022\033\n\023my_cheered_squa"
+    "d_id\030\007 \001(\004\022\035\n\025my_cheered_squad_name\030\010 \001("
+    "\t\0225\n\014reward_tiers\030\t \003(\0132\037.match.Tourname"
+    "ntRewardTierView\0225\n\nmy_rewards\030\n \003(\0132!.m"
+    "atch.TournamentPlayerRewardView\0221\n\014hall_"
+    "of_fame\030\013 \003(\0132\033.match.TournamentSeasonVi"
+    "ew\022\026\n\016server_time_ms\030\014 \001(\004\"2\n\034CreateTour"
+    "namentSquadRequest\022\022\n\nsquad_name\030\001 \001(\t\"r"
+    "\n\035CreateTournamentSquadResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022)\n\005squad"
+    "\030\002 \001(\0132\032.match.TournamentSquadView\"9\n\035In"
+    "viteTournamentMemberRequest\022\030\n\020target_pl"
+    "ayer_id\030\001 \001(\004\"u\n\036InviteTournamentMemberR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022+\n\006invite\030\002 \001(\0132\033.match.Tourname"
+    "ntInviteView\"B\n\036RespondTournamentInviteR"
+    "equest\022\020\n\010squad_id\030\001 \001(\004\022\016\n\006accept\030\002 \001(\010"
+    "\"t\n\037RespondTournamentInviteResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022)\n\005s"
+    "quad\030\002 \001(\0132\032.match.TournamentSquadView\"7"
+    "\n\033LeaveTournamentSquadRequest\022\030\n\020target_"
+    "player_id\030\001 \001(\004\"\212\001\n\034LeaveTournamentSquad"
+    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
+    "oMessage\022\027\n\017squad_disbanded\030\002 \001(\010\022)\n\005squ"
+    "ad\030\003 \001(\0132\032.match.TournamentSquadView\";\n\035"
+    "UpdateTournamentLineupRequest\022\032\n\022starter"
+    "_player_ids\030\001 \003(\004\"s\n\036UpdateTournamentLin"
+    "eupResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
+    "InfoMessage\022)\n\005squad\030\002 \001(\0132\032.match.Tourn"
+    "amentSquadView\" \n\036RegisterTournamentSqua"
+    "dRequest\"t\n\037RegisterTournamentSquadRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\022)\n\005squad\030\002 \001(\0132\032.match.TournamentSqu"
+    "adView\"T\n\036ListTournamentStandingsRequest"
+    "\022\021\n\tseason_id\030\001 \001(\r\022\014\n\004page\030\002 \001(\r\022\021\n\tpag"
+    "e_size\030\003 \001(\r\"\267\002\n\037ListTournamentStandings"
+    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
+    "oMessage\022+\n\006season\030\002 \001(\0132\033.match.Tournam"
+    "entSeasonView\022-\n\tstandings\030\003 \003(\0132\032.match"
+    ".TournamentSquadView\022,\n\010my_squad\030\004 \001(\0132\032"
+    ".match.TournamentSquadView\022\024\n\014total_squa"
+    "ds\030\005 \001(\r\0224\n\020knockout_bracket\030\006 \003(\0132\032.mat"
+    "ch.TournamentMatchView\022\026\n\016server_time_ms"
+    "\030\007 \001(\004\"J\n\033StartTournamentMatchRequest\022\020\n"
+    "\010match_id\030\001 \001(\004\022\031\n\021lineup_player_ids\030\002 \003"
+    "(\004\"\204\001\n\034StartTournamentMatchResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022)\n\005m"
+    "atch\030\002 \001(\0132\032.match.TournamentMatchView\022\021"
+    "\n\tbattle_id\030\003 \001(\004\"/\n\033CheerTournamentSqua"
+    "dRequest\022\020\n\010squad_id\030\001 \001(\004\"s\n\034CheerTourn"
+    "amentSquadResponse\022&\n\rerror_message\030\001 \001("
+    "\0132\017.TipInfoMessage\022\020\n\010squad_id\030\002 \001(\004\022\031\n\021"
+    "squad_cheer_count\030\003 \001(\r\"1\n\034ClaimTourname"
+    "ntRewardRequest\022\021\n\tseason_id\030\001 \001(\r\"\203\001\n\035C"
+    "laimTournamentRewardResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\022:\n\017claimed_"
+    "rewards\030\002 \003(\0132!.match.TournamentPlayerRe"
+    "wardView*\213\002\n\tMatchMode\022\032\n\026MATCH_MODE_UNS"
+    "PECIFIED\020\000\022\022\n\016MATCH_MODE_5V5\020\001\022\022\n\016MATCH_"
+    "MODE_3V3\020\002\022\022\n\016MATCH_MODE_1V1\020\003\022\027\n\023MATCH_"
+    "MODE_PVE_SOLO\020\004\022\027\n\023MATCH_MODE_PVE_TEAM\020\005"
+    "\022\034\n\030MATCH_MODE_PVP_CHALLENGE\020\006\022\027\n\023MATCH_"
+    "MODE_PVP_TEAM\020\007\022\033\n\027MATCH_MODE_POLARITY_5"
+    "V5\020\010\022 \n\034MATCH_MODE_SEASON_TOURNAMENT\020\013*\247"
+    "\001\n\nQueueState\022\033\n\027QUEUE_STATE_UNSPECIFIED"
+    "\020\000\022\026\n\022QUEUE_STATE_QUEUED\020\001\022\027\n\023QUEUE_STAT"
+    "E_MATCHED\020\002\022\025\n\021QUEUE_STATE_READY\020\003\022\030\n\024QU"
+    "EUE_STATE_ENTERING\020\004\022\032\n\026QUEUE_STATE_NOT_"
+    "QUEUED\020\005*j\n\021eSpectateDelivery\022\032\n\026SPECTAT"
+    "E_DELIVERY_NONE\020\000\022\034\n\030SPECTATE_DELIVERY_D"
+    "IRECT\020\001\022\033\n\027SPECTATE_DELIVERY_LOBBY\020\002*\247\001\n"
+    "\027BattleScriptReviewState\022$\n BATTLE_SCRIP"
+    "T_REVIEW_UNSPECIFIED\020\000\022 \n\034BATTLE_SCRIPT_"
+    "REVIEW_PENDING\020\001\022!\n\035BATTLE_SCRIPT_REVIEW"
+    "_APPROVED\020\002\022!\n\035BATTLE_SCRIPT_REVIEW_REJE"
+    "CTED\020\003*\250\001\n\nRankedTier\022\033\n\027RANKED_TIER_UNS"
+    "PECIFIED\020\000\022\026\n\022RANKED_TIER_CHUSHI\020\001\022\030\n\024RA"
+    "NKED_TIER_QINGFENG\020\002\022\030\n\024RANKED_TIER_YUNZ"
+    "HANG\020\003\022\027\n\023RANKED_TIER_TIANSHU\020\004\022\030\n\024RANKE"
+    "D_TIER_WUSHUANG\020\005*\232\001\n\021RankedSeasonState\022"
+    "#\n\037RANKED_SEASON_STATE_UNSPECIFIED\020\000\022\036\n\032"
+    "RANKED_SEASON_STATE_ACTIVE\020\001\022 \n\034RANKED_S"
+    "EASON_STATE_SETTLING\020\002\022\036\n\032RANKED_SEASON_"
+    "STATE_CLOSED\020\003*\234\002\n\020RankedRewardKind\022\"\n\036R"
+    "ANKED_REWARD_KIND_UNSPECIFIED\020\000\022 \n\034RANKE"
+    "D_REWARD_AVATAR_PATTERN\020\001\022!\n\035RANKED_REWA"
+    "RD_CARD_BACKGROUND\020\002\022\032\n\026RANKED_REWARD_TA"
+    "LISMAN\020\003\022\034\n\030RANKED_REWARD_TIER_BADGE\020\004\022\034"
+    "\n\030RANKED_REWARD_TIER_TITLE\020\005\022&\n\"RANKED_R"
+    "EWARD_CHAMPION_INSCRIPTION\020\006\022\037\n\033RANKED_R"
+    "EWARD_WIN_MILESTONE\020\007*\304\001\n\027RankedMatchRat"
+    "ingStatus\022#\n\037RANKED_MATCH_RATING_UNSPECI"
+    "FIED\020\000\022\037\n\033RANKED_MATCH_RATING_PENDING\020\001\022"
+    "!\n\035RANKED_MATCH_RATING_CONFIRMED\020\002\022\034\n\030RA"
+    "NKED_MATCH_RATING_VOID\020\003\022\"\n\036RANKED_MATCH"
+    "_RATING_ZERO_ROUND\020\004*\263\001\n\017TournamentStage"
+    "\022 \n\034TOURNAMENT_STAGE_UNSPECIFIED\020\000\022!\n\035TO"
+    "URNAMENT_STAGE_REGISTRATION\020\001\022\036\n\032TOURNAM"
+    "ENT_STAGE_QUALIFIER\020\002\022\035\n\031TOURNAMENT_STAG"
+    "E_KNOCKOUT\020\003\022\034\n\030TOURNAMENT_STAGE_SETTLED"
+    "\020\004*\371\001\n\024TournamentSquadState\022&\n\"TOURNAMEN"
+    "T_SQUAD_STATE_UNSPECIFIED\020\000\022 \n\034TOURNAMEN"
+    "T_SQUAD_STATE_DRAFT\020\001\022%\n!TOURNAMENT_SQUA"
+    "D_STATE_REGISTERED\020\002\022%\n!TOURNAMENT_SQUAD"
+    "_STATE_ELIMINATED\020\003\022#\n\037TOURNAMENT_SQUAD_"
+    "STATE_CHAMPION\020\004\022$\n TOURNAMENT_SQUAD_STA"
+    "TE_DISBANDED\020\005*\255\001\n\024TournamentMemberRole\022"
+    "&\n\"TOURNAMENT_MEMBER_ROLE_UNSPECIFIED\020\000\022"
+    "\"\n\036TOURNAMENT_MEMBER_ROLE_CAPTAIN\020\001\022\"\n\036T"
+    "OURNAMENT_MEMBER_ROLE_STARTER\020\002\022%\n!TOURN"
+    "AMENT_MEMBER_ROLE_SUBSTITUTE\020\003*\211\001\n\024Tourn"
+    "amentMatchPhase\022&\n\"TOURNAMENT_MATCH_PHAS"
+    "E_UNSPECIFIED\020\000\022$\n TOURNAMENT_MATCH_PHAS"
+    "E_QUALIFIER\020\001\022#\n\037TOURNAMENT_MATCH_PHASE_"
+    "KNOCKOUT\020\002*\234\002\n\024TournamentMatchState\022&\n\"T"
+    "OURNAMENT_MATCH_STATE_UNSPECIFIED\020\000\022+\n\'T"
+    "OURNAMENT_MATCH_STATE_WAITING_OPPONENT\020\001"
+    "\022 \n\034TOURNAMENT_MATCH_STATE_READY\020\002\022$\n TO"
+    "URNAMENT_MATCH_STATE_IN_BATTLE\020\003\022#\n\037TOUR"
+    "NAMENT_MATCH_STATE_FINISHED\020\004\022\036\n\032TOURNAM"
+    "ENT_MATCH_STATE_BYE\020\005\022\"\n\036TOURNAMENT_MATC"
+    "H_STATE_FORFEIT\020\006*\273\002\n\030TournamentRewardTi"
+    "erKind\022&\n\"TOURNAMENT_REWARD_TIER_UNSPECI"
+    "FIED\020\000\022#\n\037TOURNAMENT_REWARD_TIER_CHAMPIO"
+    "N\020\001\022$\n TOURNAMENT_REWARD_TIER_RUNNER_UP\020"
+    "\002\022\037\n\033TOURNAMENT_REWARD_TIER_TOP4\020\003\022\037\n\033TO"
+    "URNAMENT_REWARD_TIER_TOP8\020\004\022 \n\034TOURNAMEN"
+    "T_REWARD_TIER_TOP16\020\005\022&\n\"TOURNAMENT_REWA"
+    "RD_TIER_PARTICIPANT\020\006\022 \n\034TOURNAMENT_REWA"
+    "RD_TIER_CHEER\020\007*\307\001\n\035TournamentRewardDeli"
+    "veryState\022*\n&TOURNAMENT_REWARD_DELIVERY_"
+    "UNSPECIFIED\020\000\022(\n$TOURNAMENT_REWARD_DELIV"
+    "ERY_CLAIMABLE\020\001\022&\n\"TOURNAMENT_REWARD_DEL"
+    "IVERY_CLAIMED\020\002\022(\n$TOURNAMENT_REWARD_DEL"
+    "IVERY_ABANDONED\020\0032\334\027\n\014MatchService\022^\n\023Ge"
+    "tNetworkProbePlan\022!.match.GetNetworkProb"
+    "ePlanRequest\032\".match.GetNetworkProbePlan"
+    "Response\"\000\022[\n\022CommitNetworkProbe\022 .match"
+    ".CommitNetworkProbeRequest\032!.match.Commi"
+    "tNetworkProbeResponse\"\000\022@\n\tJoinQueue\022\027.m"
+    "atch.JoinQueueRequest\032\030.match.JoinQueueR"
+    "esponse\"\000\0222\n\013CancelQueue\022\031.match.CancelQ"
+    "ueueRequest\032\006.Empty\"\000\022O\n\016GetQueueStatus\022"
+    "\034.match.GetQueueStatusRequest\032\035.match.Ge"
+    "tQueueStatusResponse\"\000\022R\n\017ChallengePlaye"
+    "r\022\035.match.ChallengePlayerRequest\032\036.match"
+    ".ChallengePlayerResponse\"\000\022U\n\020RespondCha"
+    "llenge\022\036.match.RespondChallengeRequest\032\037"
+    ".match.RespondChallengeResponse\"\000\022A\n\025Not"
+    "ifyChallengeInvite\022\031.match.ChallengeInvi"
+    "teS2C\032\006.Empty\"\005\210\231\310\001\002\022A\n\025NotifyChallengeR"
+    "esult\022\031.match.ChallengeResultS2C\032\006.Empty"
+    "\"\005\210\231\310\001\002\022F\n\013WatchBattle\022\031.match.WatchBatt"
+    "leRequest\032\032.match.WatchBattleResponse\"\000\022"
+    "R\n\023RequestBattleTicket\022\033.RequestBattleTi"
+    "cketRequest\032\034.RequestBattleTicketRespons"
+    "e\"\000\022a\n\024ListWatchableBattles\022\".match.List"
+    "WatchableBattlesRequest\032#.match.ListWatc"
+    "hableBattlesResponse\"\000\022X\n\021ListBattleRepo"
+    "rts\022\037.match.ListBattleReportsRequest\032 .m"
+    "atch.ListBattleReportsResponse\"\000\022R\n\017GetB"
+    "attleReport\022\035.match.GetBattleReportReque"
+    "st\032\036.match.GetBattleReportResponse\"\000\022X\n\021"
+    "ListBattleScripts\022\037.match.ListBattleScri"
+    "ptsRequest\032 .match.ListBattleScriptsResp"
+    "onse\"\000\022[\n\022SubmitBattleScript\022 .match.Sub"
+    "mitBattleScriptRequest\032!.match.SubmitBat"
+    "tleScriptResponse\"\000\022[\n\022DeleteBattleScrip"
+    "t\022 .match.DeleteBattleScriptRequest\032!.ma"
+    "tch.DeleteBattleScriptResponse\"\000\022g\n\026SetB"
+    "attleScriptLoadout\022$.match.SetBattleScri"
+    "ptLoadoutRequest\032%.match.SetBattleScript"
+    "LoadoutResponse\"\000\022U\n\020GetRankedProfile\022\036."
+    "match.GetRankedProfileRequest\032\037.match.Ge"
+    "tRankedProfileResponse\"\000\022U\n\020SaveRankedPr"
+    "eset\022\036.match.SaveRankedPresetRequest\032\037.m"
+    "atch.SaveRankedPresetResponse\"\000\022a\n\024Updat"
+    "eRankedCosmetic\022\".match.UpdateRankedCosm"
+    "eticRequest\032#.match.UpdateRankedCosmetic"
+    "Response\"\000\022d\n\025GetRankedBattleResult\022#.ma"
+    "tch.GetRankedBattleResultRequest\032$.match"
+    ".GetRankedBattleResultResponse\"\000\022d\n\025GetT"
+    "ournamentOverview\022#.match.GetTournamentO"
+    "verviewRequest\032$.match.GetTournamentOver"
+    "viewResponse\"\000\022d\n\025CreateTournamentSquad\022"
+    "#.match.CreateTournamentSquadRequest\032$.m"
+    "atch.CreateTournamentSquadResponse\"\000\022g\n\026"
+    "InviteTournamentMember\022$.match.InviteTou"
+    "rnamentMemberRequest\032%.match.InviteTourn"
+    "amentMemberResponse\"\000\022j\n\027RespondTourname"
+    "ntInvite\022%.match.RespondTournamentInvite"
+    "Request\032&.match.RespondTournamentInviteR"
+    "esponse\"\000\022a\n\024LeaveTournamentSquad\022\".matc"
+    "h.LeaveTournamentSquadRequest\032#.match.Le"
+    "aveTournamentSquadResponse\"\000\022g\n\026UpdateTo"
+    "urnamentLineup\022$.match.UpdateTournamentL"
+    "ineupRequest\032%.match.UpdateTournamentLin"
+    "eupResponse\"\000\022j\n\027RegisterTournamentSquad"
+    "\022%.match.RegisterTournamentSquadRequest\032"
+    "&.match.RegisterTournamentSquadResponse\""
+    "\000\022j\n\027ListTournamentStandings\022%.match.Lis"
+    "tTournamentStandingsRequest\032&.match.List"
+    "TournamentStandingsResponse\"\000\022a\n\024StartTo"
+    "urnamentMatch\022\".match.StartTournamentMat"
+    "chRequest\032#.match.StartTournamentMatchRe"
+    "sponse\"\000\022a\n\024CheerTournamentSquad\022\".match"
+    ".CheerTournamentSquadRequest\032#.match.Che"
+    "erTournamentSquadResponse\"\000\022d\n\025ClaimTour"
+    "namentReward\022#.match.ClaimTournamentRewa"
+    "rdRequest\032$.match.ClaimTournamentRewardR"
+    "esponse\"\000\032\005\210\250\303\001\001B\021Z\013match/match\230\324a\025b\006pro"
+    "to3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_deps[7] = {
@@ -15992,7 +16037,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fservice_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto = {
     false,
     false,
-    19424,
+    19603,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto,
     "proto/match/match_service.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_once,
@@ -16054,7 +16099,7 @@ RankedRewardKind_descriptor() {
   return file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[6];
 }
 PROTOBUF_CONSTINIT const uint32_t RankedRewardKind_internal_data_[] = {
-    458752u, 0u, };
+    524288u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 RankedMatchRatingStatus_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto);
@@ -27347,9 +27392,9 @@ RankedSeasonInfo::RankedSeasonInfo(
                offsetof(Impl_, season_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, season_id_),
-           offsetof(Impl_, uses_own_progression_) -
+           offsetof(Impl_, milestone_win_matches_) -
                offsetof(Impl_, season_id_) +
-               sizeof(Impl_::uses_own_progression_));
+               sizeof(Impl_::milestone_win_matches_));
 
   // @@protoc_insertion_point(copy_constructor:match.RankedSeasonInfo)
 }
@@ -27384,9 +27429,9 @@ inline void RankedSeasonInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, season_id_),
            0,
-           offsetof(Impl_, uses_own_progression_) -
+           offsetof(Impl_, milestone_win_matches_) -
                offsetof(Impl_, season_id_) +
-               sizeof(Impl_::uses_own_progression_));
+               sizeof(Impl_::milestone_win_matches_));
 }
 RankedSeasonInfo::~RankedSeasonInfo() {
   // @@protoc_insertion_point(destructor:match.RankedSeasonInfo)
@@ -27469,10 +27514,15 @@ PROTOBUF_NOINLINE void RankedSeasonInfo::Clear() {
         reinterpret_cast<char*>(&_impl_.spread_tier1_points_) -
         reinterpret_cast<char*>(&_impl_.rank_generation_)) + sizeof(_impl_.spread_tier1_points_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.spread_tier2_seconds_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.uses_own_progression_) -
-        reinterpret_cast<char*>(&_impl_.spread_tier2_seconds_)) + sizeof(_impl_.uses_own_progression_));
+        reinterpret_cast<char*>(&_impl_.tier_qingfeng_centi_) -
+        reinterpret_cast<char*>(&_impl_.spread_tier2_seconds_)) + sizeof(_impl_.tier_qingfeng_centi_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0f000000U)) {
+    ::memset(&_impl_.tier_yunzhang_centi_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.milestone_win_matches_) -
+        reinterpret_cast<char*>(&_impl_.tier_yunzhang_centi_)) + sizeof(_impl_.milestone_win_matches_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -27713,6 +27763,51 @@ PROTOBUF_NOINLINE void RankedSeasonInfo::Clear() {
     }
   }
 
+  // uint32 tier_qingfeng_centi = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_tier_qingfeng_centi() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_tier_qingfeng_centi(), target);
+    }
+  }
+
+  // uint32 tier_yunzhang_centi = 25;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_tier_yunzhang_centi() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          25, this_._internal_tier_yunzhang_centi(), target);
+    }
+  }
+
+  // uint32 tier_tianshu_centi = 26;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_tier_tianshu_centi() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          26, this_._internal_tier_tianshu_centi(), target);
+    }
+  }
+
+  // uint32 tier_wushuang_centi = 27;
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_tier_wushuang_centi() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          27, this_._internal_tier_wushuang_centi(), target);
+    }
+  }
+
+  // uint32 milestone_win_matches = 28;
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    if (this_._internal_milestone_win_matches() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          28, this_._internal_milestone_win_matches(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -27854,7 +27949,7 @@ PROTOBUF_NOINLINE void RankedSeasonInfo::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 spread_tier2_seconds = 13;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_spread_tier2_seconds() != 0) {
@@ -27900,6 +27995,43 @@ PROTOBUF_NOINLINE void RankedSeasonInfo::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (this_._internal_uses_own_progression() != 0) {
         total_size += 3;
+      }
+    }
+    // uint32 tier_qingfeng_centi = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_tier_qingfeng_centi() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tier_qingfeng_centi());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0f000000U)) {
+    // uint32 tier_yunzhang_centi = 25;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_tier_yunzhang_centi() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tier_yunzhang_centi());
+      }
+    }
+    // uint32 tier_tianshu_centi = 26;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_tier_tianshu_centi() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tier_tianshu_centi());
+      }
+    }
+    // uint32 tier_wushuang_centi = 27;
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_tier_wushuang_centi() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tier_wushuang_centi());
+      }
+    }
+    // uint32 milestone_win_matches = 28;
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (this_._internal_milestone_win_matches() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_milestone_win_matches());
       }
     }
   }
@@ -28010,7 +28142,7 @@ void RankedSeasonInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_spread_tier2_seconds() != 0) {
         _this->_impl_.spread_tier2_seconds_ = from._impl_.spread_tier2_seconds_;
@@ -28046,6 +28178,33 @@ void RankedSeasonInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.uses_own_progression_ = from._impl_.uses_own_progression_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_tier_qingfeng_centi() != 0) {
+        _this->_impl_.tier_qingfeng_centi_ = from._impl_.tier_qingfeng_centi_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0f000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_tier_yunzhang_centi() != 0) {
+        _this->_impl_.tier_yunzhang_centi_ = from._impl_.tier_yunzhang_centi_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_tier_tianshu_centi() != 0) {
+        _this->_impl_.tier_tianshu_centi_ = from._impl_.tier_tianshu_centi_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_tier_wushuang_centi() != 0) {
+        _this->_impl_.tier_wushuang_centi_ = from._impl_.tier_wushuang_centi_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (from._internal_milestone_win_matches() != 0) {
+        _this->_impl_.milestone_win_matches_ = from._impl_.milestone_win_matches_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -28073,8 +28232,8 @@ void RankedSeasonInfo::InternalSwap(RankedSeasonInfo* PROTOBUF_RESTRICT PROTOBUF
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.season_name_, &other->_impl_.season_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.champion_name_, &other->_impl_.champion_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.uses_own_progression_)
-      + sizeof(RankedSeasonInfo::_impl_.uses_own_progression_)
+      PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.milestone_win_matches_)
+      + sizeof(RankedSeasonInfo::_impl_.milestone_win_matches_)
       - PROTOBUF_FIELD_OFFSET(RankedSeasonInfo, _impl_.season_id_)>(
           reinterpret_cast<char*>(&_impl_.season_id_),
           reinterpret_cast<char*>(&other->_impl_.season_id_));

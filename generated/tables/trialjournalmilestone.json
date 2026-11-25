@@ -129,6 +129,22 @@
    "scope_chapter_id": 3,
    "season_id": 1,
    "title": "破阵奇谈"
+  },
+  {
+   "badge_key": "badge_trial_dual_guard",
+   "badge_name": "破阵双绝",
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 0,
+   "commentary_body": "灯下四人都凑过来看你带回的双卫战报。停云先拿红笔圈出你连环崩势再断回春的那两拍，说这才叫把对手的阵眼反过来当阶梯踩；砚生在夹页补录了一行「破阵双绝」，阿禾顺手多添了一碗热汤，听雨则悄悄把重劈落空时裂盾的声响记在了鸟谱背面。",
+   "commentary_key": "commentary_dual_guard_v2",
+   "commentary_title": "留灯院·双卫破阵记",
+   "desc": "卷一累计点亮 15 枚战法印（含困难·双卫同阵），获赠专属荣誉印戳「破阵双绝」与留灯院四人合评《留灯院·双卫破阵记》。",
+   "enabled": true,
+   "id": 105,
+   "required_seals": 15,
+   "scope_chapter_id": 1,
+   "season_id": 0,
+   "title": "破阵双绝"
   }
  ]
 }

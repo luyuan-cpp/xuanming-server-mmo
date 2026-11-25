@@ -1009,6 +1009,18 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		return resp, nil
 	}
 
+	// 6d. Optional linearizable SQL owner authority enforce gate (before Kafka route commit).
+	if ownerAuthorityMode(l.svcCtx) == "enforce" {
+		if oaErr := syncOwnerAuthorityEnter(l.ctx, l.svcCtx, l.Logger,
+			in.PlayerId, sceneId, nodeId, targetZoneId, placed.epoch, in.OwnerRevision, true); oaErr != nil {
+			resp := errResp(constants.ErrOwnerEpochConflict, fmt.Sprintf("owner authority rejected enter: %v", oaErr))
+			_, echo := l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, currentZoneID,
+				placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId, nodeId)
+			resp.OwnerEpochAfterRollback = echo
+			return resp, nil
+		}
+	}
+
 	// 7. Send Route Command to Gate. Broker ACK is the transaction commit
 	// point: only after it succeeds may the response be cached as successful.
 	// 托管落点(hosted_placement)没有 gate:路由直接发给目标 scene 节点(PlayerHostedPlacementEvent),
@@ -1088,6 +1100,12 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 凭标记放行的交接已提交:handoff_pending_no_marker 比值告警的分母(口径 B)。
 	if guard.requiredMarker != "" {
 		metrics.ObserveEnterSceneHandoffAdmitted(targetZoneId)
+	}
+
+	// 7c. Optional linearizable SQL owner authority shadow dual-write (non-blocking audit).
+	if ownerAuthorityMode(l.svcCtx) == "shadow" {
+		_ = syncOwnerAuthorityEnter(l.ctx, l.svcCtx, l.Logger,
+			in.PlayerId, sceneId, nodeId, targetZoneId, placed.epoch, in.OwnerRevision, false)
 	}
 
 	l.Logger.Infof("Player %d entered scene %d on node %s (zone %d, home_zone %d, owner_epoch %d)",

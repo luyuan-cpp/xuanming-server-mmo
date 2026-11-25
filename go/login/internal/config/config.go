@@ -8,6 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 
 	"shared/accountdirectory"
+	"shared/cellroute"
 	"shared/clusterredis"
 	"shared/contentguard"
 	"shared/idsegment"
@@ -124,6 +125,10 @@ type Config struct {
 	// (docs/design/player-data-tidb-scaling-plan.md §7.2)。必填:没配 StorageShards 拒绝启动(PlacementConf.Validate);
 	// 标成 optional 只是让缺席时报出点名的错误,而不是 go-zero 的通用缺键错误。
 	Placement PlacementConf `json:"Placement,optional"`
+
+	// CellRoute configures optional 4096-slot deterministic Region->Cell compute/ingress routing
+	// (docs/design/region-cell-routing-alignment.md). Empty Mode disables it.
+	CellRoute cellroute.Conf `json:"CellRoute,optional"`
 
 	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
 	// (NodeInfo.client_endpoint,集群外入口 D78/D79,规则见 shared/clientendpoint.Select)。

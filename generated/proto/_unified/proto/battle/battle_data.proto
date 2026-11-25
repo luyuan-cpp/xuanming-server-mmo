@@ -232,6 +232,7 @@ enum eBattleEventType {
   BATTLE_EVENT_PET_RETREAT = 19;
   BATTLE_EVENT_SHIELD = 20;
   BATTLE_EVENT_ARTIFACT = 21; // 法宝产生实际收益或消耗概率判定次数。
+  BATTLE_EVENT_BOSS_MECHANIC = 22; // 首领试炼 V2 破招/阶段/联防/蓄势演出事件（mechanic_kind 标明子类型）。
 }
 
 // 一段伤害 / 出手是怎么来的(equipment-attributes.md §4.5)。0 = 普通,老客户端不读也不影响演出。
@@ -272,6 +273,24 @@ message BattleEventItem {
   uint64 artifact_item_id = 22;
   uint32 artifact_effect_id = 23;
   uint32 season_seal_id = 24; // 非 0 表示本次 BATTLE_EVENT_ARTIFACT 由单槽赛季印触发（artifact_item_id 为 0）。
+  // BATTLE_EVENT_BOSS_MECHANIC 机制子类型：1=化劲破绽，2=断疗反噬，3=崩势破盾，4=阵脚震荡，
+  // 5=决战姿态(破釜)，6=护势蓄势，7=破军破甲，8=回春净益，9=断脉气馁。
+  uint32 mechanic_kind = 25;
+  bool is_splash_reduced = 26; // true = 本次直接伤害触发首领试炼副目标溅射减伤(60%)
+  bool is_primary_focus = 27;  // true = 竞技 PVP 多目标技能显式主目标触发凝锋(+20%)
+}
+
+// PVP 延迟投降投票状态（仅向投票所属队伍可见；对手与观众视图由 battle 节点清空）。
+message BattleSurrenderVoteState {
+  bool active = 1;                       // true = 当前回合存在进行中的本队投降投票
+  uint32 team_index = 2;                 // 发起队伍(0=A方, 1=B方)
+  uint64 initiator_player_id = 3;        // 本轮投票发起人
+  uint32 initiated_round = 4;            // 发起回合号
+  repeated uint64 agreed_player_ids = 5; // 已同意投降的同队玩家 ID（升序）
+  uint32 required_agrees = 6;            // 通过所需活跃同意数（自动排除连续 >=2 回合未手动挂机队友）
+  uint32 next_allowed_round = 7;         // 冷却中下一次允许发起投降的回合号（无冷却为 0）
+  bool rejected = 8;                     // true = 本次通知表示投票被否决或过期关闭
+  bool passed = 9;                       // true = 本次通知表示投票已通过、本方投降生效
 }
 
 // ---- 胜负 ----
@@ -365,6 +384,10 @@ message BattleSettlementData {
   uint32 boss_trial_kind = 29;
   // true = 本局由免费 3×3 预设驱动（仅限轮换娱乐场：护卫救援 / 物法易势 5V5），战后严格不回写场外资产。
   bool use_free_preset = 30;
+  // 瑞兽迎春限时活动开局冻结上下文（由 TurnBattleEngine::BuildSettlement 原样回传，供 scene 离线/跨期结算）。
+  FestivalBeastBattleContext festival_beast = 31;
+  // true = 本方通过第 5 回合起的 PVP 延迟投降结束本局（与 fled 逃跑区分：体面认输，满足有效对抗门槛照常计场次与绑定材料）。
+  bool surrendered = 32;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -381,8 +404,36 @@ message BattlePetSettlementData {
 // battle / scene 不解释其中任何业务字段(只看 kind 是否为 NONE 来决定是否走持久化结果通道,§6.19)。
 // 本段只在文件末尾追加(属性会话也在改本文件)。
 enum eBattleActivityKind {
-  BATTLE_ACTIVITY_KIND_NONE = 0;          // 普通对局:不回显上下文,结果事件照旧只发一次
-  BATTLE_ACTIVITY_KIND_GUILD_TRIAL = 1;   // 帮会同道历练:go/guild 以消费组 guild-trial 消费 match-results 结算
+  BATTLE_ACTIVITY_KIND_NONE = 0;            // 普通对局:不回显上下文,结果事件照旧只发一次
+  BATTLE_ACTIVITY_KIND_GUILD_TRIAL = 1;     // 帮会同道历练:go/guild 以消费组 guild-trial 消费 match-results 结算
+  BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST = 2;  // 瑞兽迎春限时单人神兽挑战:scene 发起、match 准入、battle 执行、scene 收件箱结算
+}
+
+// 瑞兽迎春开局冻结上下文（由 scene 组装、match 时间窗校验后随成局原件持久化并透传至 PrepareBattle / CreateBattle / Settlement）。
+message FestivalBeastBattleContext {
+  uint32 activity_instance_id = 1;
+  uint32 config_revision = 2;
+  string reward_identity = 3;
+  uint32 reward_definition_version = 4;
+  uint32 reward_pet_table_id = 5;
+  uint32 required_wins = 6;
+  uint64 locked_pet_id = 7;          // 开局意图锁定的出战宝宝 pet_id，PrepareBattle 强制复核
+  uint32 locked_owner_level = 8;     // 开局锁定的人物生效等级（选档唯一依据）
+  uint32 tier_id = 9;                // 匹配的固定等级档 ID
+  uint32 round_limit = 10;           // 冻结回合上限（默认 12）
+  uint32 cycle_rounds = 11;          // 行动周期（默认 3）
+  uint32 first_heavy_round = 12;     // 首次重击回合（默认 3）
+  uint32 telegraph_lead_rounds = 13; // 预告提前回合数（默认 1，即 R2/5/8/11）
+  uint32 heavy_damage_percent = 14;  // 重击倍率百分比（默认 180）
+  string boss_name = 15;             // 冻结首领展示名
+  uint64 boss_health = 16;           // 冻结档位首领气血上限
+  uint64 boss_physical_attack = 17;  // 冻结档位首领物理攻击
+  uint64 boss_defense = 18;          // 冻结档位首领防御
+  uint64 boss_resistance = 19;       // 冻结档位首领抗性%
+  uint64 boss_speed = 20;            // 冻结档位首领速度
+  uint64 effective_start_at_ms = 21; // 活动开放开始 UTC 毫秒（Match SQL 提交点复核）
+  uint64 effective_end_at_ms = 22;   // 活动开放结束 UTC 毫秒（Match SQL 提交点复核）
+  string client_request_id = 23;     // 客户端原请求 UUID
 }
 
 message BattleActivityContext {
@@ -393,6 +444,7 @@ message BattleActivityContext {
   uint64 initiator_player_id = 5;   // 发起人;match 校验它等于 StartActivityBattleRequest.member_player_ids[0]
   uint32 guild_period_key = 6;      // 确认开战时的帮会期键(activity.GuildPeriodKey;历练即游戏日),用于每日计资金胜场上限
   uint64 launch_request_id = 7;     // 同道历练开战前持久原件；match/battle原样复制回结果，不包含账号
+  FestivalBeastBattleContext festival_beast = 8; // kind == BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST 时必填
 }
 
 // 观战可见性(docs/design/battle-spectate-tiered-fanout.md §10 第 6 条 / §10.2):战斗创建时由 match 按
@@ -476,4 +528,9 @@ message BattleTrialJournalFacts {
   bool dealt_yang_bell_physical_damage = 18;   // 卷二碧渊水宫阳钟阶段物理击伤标记
   bool dealt_yin_drum_magic_damage = 19;       // 卷二碧渊水宫阴鼓阶段法术击伤标记
   bool finished_in_ebb_tide = 20;              // 卷二月汐湾退潮窗口终结标记
+  uint32 cleave_parry_count = 21;              // 首领试炼 V2：团队成功化解重劈（含控断）触发破绽次数
+  uint32 heal_interrupt_backlash_count = 22;   // 首领试炼 V2：触发回春断疗反噬次数
+  uint32 stance_break_count = 23;              // 首领试炼 V2：触发驱散/控断护势「崩势」次数
+  bool all_self_cleaves_parried = 24;          // 首领试炼 V2：本人及本人宝宝被重劈点名>=1次且100%合法化解(不含倒地/退出取消)
+  bool self_parried_cleave_at_least_once = 25; // 首领试炼 V2：本人或本人宝宝至少合法化解过 1 次重劈
 }

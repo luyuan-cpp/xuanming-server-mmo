@@ -22,19 +22,22 @@ public static partial class CharacterappearanceTableReflection {
   static CharacterappearanceTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Ch9jaGFyYWN0ZXJhcHBlYXJhbmNlX3RhYmxlLnByb3RvIsUBChhDaGFyYWN0",
+          "Ch9jaGFyYWN0ZXJhcHBlYXJhbmNlX3RhYmxlLnByb3RvIrECChhDaGFyYWN0",
           "ZXJBcHBlYXJhbmNlVGFibGUSCgoCaWQYASABKA0SFQoNYXBwZWFyYW5jZV9p",
           "ZBgCIAEoCRIMCgRuYW1lGAMgASgJEg8KB2VuYWJsZWQYBCABKA0SEgoKc29y",
           "dF9vcmRlchgFIAEoDRIMCgRkZXNjGAYgASgJEhkKEXN0YXJ0ZXJfY3JlYXRh",
           "YmxlGAcgASgNEhcKD2NhcmRfdW5sb2NrYWJsZRgIIAEoDRIRCglzZXJpZXNf",
-          "aWQYCSABKA0iRwocQ2hhcmFjdGVyQXBwZWFyYW5jZVRhYmxlRGF0YRInCgRk",
-          "YXRhGAEgAygLMhkuQ2hhcmFjdGVyQXBwZWFyYW5jZVRhYmxlQkoKDmNvbS5n",
-          "YW1lLnRhYmxlQiJDaGFyYWN0ZXJBcHBlYXJhbmNlVGFibGVPdXRlckNsYXNz",
-          "UAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
+          "aWQYCSABKA0SFAoMYXJjaGl2ZV9uYW1lGAogASgJEhAKCG5pY2tuYW1lGAsg",
+          "ASgJEhkKEWJpb2dyYXBoeV9zdW1tYXJ5GAwgASgJEhMKC3N0b3J5X3RpdGxl",
+          "GA0gASgJEhIKCnN0b3J5X2JvZHkYDiABKAkiRwocQ2hhcmFjdGVyQXBwZWFy",
+          "YW5jZVRhYmxlRGF0YRInCgRkYXRhGAEgAygLMhkuQ2hhcmFjdGVyQXBwZWFy",
+          "YW5jZVRhYmxlQkoKDmNvbS5nYW1lLnRhYmxlQiJDaGFyYWN0ZXJBcHBlYXJh",
+          "bmNlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJv",
+          "dG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::CharacterAppearanceTable), global::CharacterAppearanceTable.Parser, new[]{ "Id", "AppearanceId", "Name", "Enabled", "SortOrder", "Desc", "StarterCreatable", "CardUnlockable", "SeriesId" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::CharacterAppearanceTable), global::CharacterAppearanceTable.Parser, new[]{ "Id", "AppearanceId", "Name", "Enabled", "SortOrder", "Desc", "StarterCreatable", "CardUnlockable", "SeriesId", "ArchiveName", "Nickname", "BiographySummary", "StoryTitle", "StoryBody" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::CharacterAppearanceTableData), global::CharacterAppearanceTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -86,6 +89,11 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     starterCreatable_ = other.starterCreatable_;
     cardUnlockable_ = other.cardUnlockable_;
     seriesId_ = other.seriesId_;
+    archiveName_ = other.archiveName_;
+    nickname_ = other.nickname_;
+    biographySummary_ = other.biographySummary_;
+    storyTitle_ = other.storyTitle_;
+    storyBody_ = other.storyBody_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -203,6 +211,66 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     }
   }
 
+  /// <summary>Field number for the "archive_name" field.</summary>
+  public const int ArchiveNameFieldNumber = 10;
+  private string archiveName_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string ArchiveName {
+    get { return archiveName_; }
+    set {
+      archiveName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "nickname" field.</summary>
+  public const int NicknameFieldNumber = 11;
+  private string nickname_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string Nickname {
+    get { return nickname_; }
+    set {
+      nickname_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "biography_summary" field.</summary>
+  public const int BiographySummaryFieldNumber = 12;
+  private string biographySummary_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string BiographySummary {
+    get { return biographySummary_; }
+    set {
+      biographySummary_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "story_title" field.</summary>
+  public const int StoryTitleFieldNumber = 13;
+  private string storyTitle_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string StoryTitle {
+    get { return storyTitle_; }
+    set {
+      storyTitle_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "story_body" field.</summary>
+  public const int StoryBodyFieldNumber = 14;
+  private string storyBody_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string StoryBody {
+    get { return storyBody_; }
+    set {
+      storyBody_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -227,6 +295,11 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     if (StarterCreatable != other.StarterCreatable) return false;
     if (CardUnlockable != other.CardUnlockable) return false;
     if (SeriesId != other.SeriesId) return false;
+    if (ArchiveName != other.ArchiveName) return false;
+    if (Nickname != other.Nickname) return false;
+    if (BiographySummary != other.BiographySummary) return false;
+    if (StoryTitle != other.StoryTitle) return false;
+    if (StoryBody != other.StoryBody) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -243,6 +316,11 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     if (StarterCreatable != 0) hash ^= StarterCreatable.GetHashCode();
     if (CardUnlockable != 0) hash ^= CardUnlockable.GetHashCode();
     if (SeriesId != 0) hash ^= SeriesId.GetHashCode();
+    if (ArchiveName.Length != 0) hash ^= ArchiveName.GetHashCode();
+    if (Nickname.Length != 0) hash ^= Nickname.GetHashCode();
+    if (BiographySummary.Length != 0) hash ^= BiographySummary.GetHashCode();
+    if (StoryTitle.Length != 0) hash ^= StoryTitle.GetHashCode();
+    if (StoryBody.Length != 0) hash ^= StoryBody.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -297,6 +375,26 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
       output.WriteRawTag(72);
       output.WriteUInt32(SeriesId);
     }
+    if (ArchiveName.Length != 0) {
+      output.WriteRawTag(82);
+      output.WriteString(ArchiveName);
+    }
+    if (Nickname.Length != 0) {
+      output.WriteRawTag(90);
+      output.WriteString(Nickname);
+    }
+    if (BiographySummary.Length != 0) {
+      output.WriteRawTag(98);
+      output.WriteString(BiographySummary);
+    }
+    if (StoryTitle.Length != 0) {
+      output.WriteRawTag(106);
+      output.WriteString(StoryTitle);
+    }
+    if (StoryBody.Length != 0) {
+      output.WriteRawTag(114);
+      output.WriteString(StoryBody);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -343,6 +441,26 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
       output.WriteRawTag(72);
       output.WriteUInt32(SeriesId);
     }
+    if (ArchiveName.Length != 0) {
+      output.WriteRawTag(82);
+      output.WriteString(ArchiveName);
+    }
+    if (Nickname.Length != 0) {
+      output.WriteRawTag(90);
+      output.WriteString(Nickname);
+    }
+    if (BiographySummary.Length != 0) {
+      output.WriteRawTag(98);
+      output.WriteString(BiographySummary);
+    }
+    if (StoryTitle.Length != 0) {
+      output.WriteRawTag(106);
+      output.WriteString(StoryTitle);
+    }
+    if (StoryBody.Length != 0) {
+      output.WriteRawTag(114);
+      output.WriteString(StoryBody);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -379,6 +497,21 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     }
     if (SeriesId != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(SeriesId);
+    }
+    if (ArchiveName.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(ArchiveName);
+    }
+    if (Nickname.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(Nickname);
+    }
+    if (BiographySummary.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(BiographySummary);
+    }
+    if (StoryTitle.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(StoryTitle);
+    }
+    if (StoryBody.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(StoryBody);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -418,6 +551,21 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     }
     if (other.SeriesId != 0) {
       SeriesId = other.SeriesId;
+    }
+    if (other.ArchiveName.Length != 0) {
+      ArchiveName = other.ArchiveName;
+    }
+    if (other.Nickname.Length != 0) {
+      Nickname = other.Nickname;
+    }
+    if (other.BiographySummary.Length != 0) {
+      BiographySummary = other.BiographySummary;
+    }
+    if (other.StoryTitle.Length != 0) {
+      StoryTitle = other.StoryTitle;
+    }
+    if (other.StoryBody.Length != 0) {
+      StoryBody = other.StoryBody;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -474,6 +622,26 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
           SeriesId = input.ReadUInt32();
           break;
         }
+        case 82: {
+          ArchiveName = input.ReadString();
+          break;
+        }
+        case 90: {
+          Nickname = input.ReadString();
+          break;
+        }
+        case 98: {
+          BiographySummary = input.ReadString();
+          break;
+        }
+        case 106: {
+          StoryTitle = input.ReadString();
+          break;
+        }
+        case 114: {
+          StoryBody = input.ReadString();
+          break;
+        }
       }
     }
   #endif
@@ -527,6 +695,26 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
         }
         case 72: {
           SeriesId = input.ReadUInt32();
+          break;
+        }
+        case 82: {
+          ArchiveName = input.ReadString();
+          break;
+        }
+        case 90: {
+          Nickname = input.ReadString();
+          break;
+        }
+        case 98: {
+          BiographySummary = input.ReadString();
+          break;
+        }
+        case 106: {
+          StoryTitle = input.ReadString();
+          break;
+        }
+        case 114: {
+          StoryBody = input.ReadString();
           break;
         }
       }

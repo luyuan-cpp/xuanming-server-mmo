@@ -87,7 +87,9 @@ public final class TipFaults {
             new Fault(32004, "afk_pass_error", "AfkPassUnavailable"),
             new Fault(33006, "appearance_error", "AppearanceUnavailable"),
             new Fault(34011, "season_error", "SeasonUnavailable"),
-            new Fault(35000, "trial_journal_error", "TrialJournalUnavailable")
+            new Fault(35000, "trial_journal_error", "TrialJournalUnavailable"),
+            new Fault(36001, "festival_beast_error", "FestivalBeastConfigInvalid"),
+            new Fault(36013, "festival_beast_error", "FestivalBeastServiceUnavailable")
     );
 
     /** 由 FAULTS 派生,不单独生成第二份字面量。 */

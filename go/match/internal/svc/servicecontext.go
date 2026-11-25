@@ -86,6 +86,8 @@ type ServiceContext struct {
 	// guild 调 MatchInternal 的签名(开局、取消、占用、终局读)。仅main显式装配，缺失时这些入口拒绝；不复用网络探测或其它服务秘密。
 	GuildCallAuth       *serviceauth.Verifier
 	GuildCallSecret     string
+	// scene 调 MatchInternal.StartActivityBattle(瑞兽迎春单人活动开局)的独立调用方证明，与 guild 严格隔离。
+	SceneCallAuth       *serviceauth.Verifier
 	BattleOutcomeAuth   *serviceauth.Verifier
 	BattleOutcomeSecret string
 	// SpectateOpsAuth 校验运营工具调 SetSpectateFeatured 的调用证明。Spectate.OpsCallerSecret 为空时保持 nil,入口一律回 SPECTATE_FEATURED_REJECT_DENIED。

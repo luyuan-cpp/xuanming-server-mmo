@@ -150,4 +150,22 @@ public interface PetTableOrBuilder extends
    * @return The cultivationTier.
    */
   int getCultivationTier();
+
+  /**
+   * <code>uint32 transfer_policy = 17;</code>
+   * @return The transferPolicy.
+   */
+  int getTransferPolicy();
+
+  /**
+   * <code>uint32 exclusive_gift_slots = 18;</code>
+   * @return The exclusiveGiftSlots.
+   */
+  int getExclusiveGiftSlots();
+
+  /**
+   * <code>bool fixed_initial_aptitude = 19;</code>
+   * @return The fixedInitialAptitude.
+   */
+  boolean getFixedInitialAptitude();
 }

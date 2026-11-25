@@ -64,6 +64,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	EquipGemSocketTable = NewObject<UEquipGemSocketTable>(this);
 	EquipSlotTable = NewObject<UEquipSlotTable>(this);
 	EquipV1AffixTable = NewObject<UEquipV1AffixTable>(this);
+	FestivalBeastActivityTable = NewObject<UFestivalBeastActivityTable>(this);
+	FestivalBeastTierTable = NewObject<UFestivalBeastTierTable>(this);
 	GlobalVariableTable = NewObject<UGlobalVariableTable>(this);
 	GuildActivityTable = NewObject<UGuildActivityTable>(this);
 	GuildDonateTable = NewObject<UGuildDonateTable>(this);
@@ -136,6 +138,8 @@ void UConfigSubsystem::Deinitialize()
 	EquipGemSocketTable = nullptr;
 	EquipSlotTable = nullptr;
 	EquipV1AffixTable = nullptr;
+	FestivalBeastActivityTable = nullptr;
+	FestivalBeastTierTable = nullptr;
 	GlobalVariableTable = nullptr;
 	GuildActivityTable = nullptr;
 	GuildDonateTable = nullptr;
@@ -213,6 +217,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UEquipGemSocketTable::FileName(),
 		UEquipSlotTable::FileName(),
 		UEquipV1AffixTable::FileName(),
+		UFestivalBeastActivityTable::FileName(),
+		UFestivalBeastTierTable::FileName(),
 		UGlobalVariableTable::FileName(),
 		UGuildActivityTable::FileName(),
 		UGuildDonateTable::FileName(),
@@ -687,6 +693,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!EquipV1AffixTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (FestivalBeastActivityTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[FestivalBeastActivity] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!FestivalBeastActivityTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (FestivalBeastTierTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[FestivalBeastTier] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!FestivalBeastTierTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1858,6 +1892,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!EquipV1AffixTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (FestivalBeastActivityTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[FestivalBeastActivity] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UFestivalBeastActivityTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[FestivalBeastActivity] 取不到 %s"), UFestivalBeastActivityTable::FileName());
+		bAllOk = false;
+	}
+	else if (!FestivalBeastActivityTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (FestivalBeastTierTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[FestivalBeastTier] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UFestivalBeastTierTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[FestivalBeastTier] 取不到 %s"), UFestivalBeastTierTable::FileName());
+		bAllOk = false;
+	}
+	else if (!FestivalBeastTierTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

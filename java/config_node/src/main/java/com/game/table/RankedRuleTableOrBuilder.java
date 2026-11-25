@@ -147,4 +147,10 @@ public interface RankedRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 milestone_win_matches = 23;</code>
+   * @return The milestoneWinMatches.
+   */
+  int getMilestoneWinMatches();
 }

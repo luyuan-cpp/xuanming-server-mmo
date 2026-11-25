@@ -202,6 +202,12 @@ AuthProviders:
   Google:
     ClientId: "sandbox-client.apps.googleusercontent.com"
     Endpoint: "http://sandbox-mock:18090"
+  # 官方通行证(Casdoor OIDC,auth_type: passport)。离线栈指向 sandbox-mock;连真实 Casdoor 时改为
+  # Issuer/Endpoint 指向 deploy/passport 的 http://host.docker.internal:8000(或生产 https://passport.<domain>)。
+  Passport:
+    Issuer: "http://sandbox-mock:18090"
+    ClientId: "xuanming-game-client"
+    Endpoint: "http://sandbox-mock:18090"
 
 Kafka:
   Brokers:

@@ -158,8 +158,17 @@ type PlayerBattleResult struct {
 	TrialNewCoopBest           bool     `protobuf:"varint,24,opt,name=trial_new_coop_best,json=trialNewCoopBest,proto3" json:"trial_new_coop_best,omitempty"`                               // 本局是否刷新好友合战最快回合纪录
 	MaterialTradableUnitsAdded uint32   `protobuf:"varint,25,opt,name=material_tradable_units_added,json=materialTradableUnitsAdded,proto3" json:"material_tradable_units_added,omitempty"` // 本局实际新增材料中可交易份数（0 或 1；仅胜局且账号/阶段余量充足时为 1）
 	MaterialPvpLossIneligible  bool     `protobuf:"varint,26,opt,name=material_pvp_loss_ineligible,json=materialPvpLossIneligible,proto3" json:"material_pvp_loss_ineligible,omitempty"`    // true = 本局为未达防挂机有效对抗门槛的 PVP 负/平局（+0 且不扣永久 660 额度）
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	// 瑞兽迎春限时活动结算增量（非活动局全 0/空）。
+	FestivalActivityInstanceId     uint32 `protobuf:"varint,27,opt,name=festival_activity_instance_id,json=festivalActivityInstanceId,proto3" json:"festival_activity_instance_id,omitempty"`
+	FestivalRewardIdentity         string `protobuf:"bytes,28,opt,name=festival_reward_identity,json=festivalRewardIdentity,proto3" json:"festival_reward_identity,omitempty"`
+	FestivalWinsBefore             uint32 `protobuf:"varint,29,opt,name=festival_wins_before,json=festivalWinsBefore,proto3" json:"festival_wins_before,omitempty"`
+	FestivalWinsAfter              uint32 `protobuf:"varint,30,opt,name=festival_wins_after,json=festivalWinsAfter,proto3" json:"festival_wins_after,omitempty"`
+	FestivalRequiredWins           uint32 `protobuf:"varint,31,opt,name=festival_required_wins,json=festivalRequiredWins,proto3" json:"festival_required_wins,omitempty"`
+	FestivalNewlyEligible          bool   `protobuf:"varint,32,opt,name=festival_newly_eligible,json=festivalNewlyEligible,proto3" json:"festival_newly_eligible,omitempty"`
+	MaterialAvailableUnitsAfter    uint64 `protobuf:"varint,33,opt,name=material_available_units_after,json=materialAvailableUnitsAfter,proto3" json:"material_available_units_after,omitempty"`
+	MaterialEarnableRemainingAfter uint32 `protobuf:"varint,34,opt,name=material_earnable_remaining_after,json=materialEarnableRemainingAfter,proto3" json:"material_earnable_remaining_after,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *PlayerBattleResult) Reset() {
@@ -374,6 +383,62 @@ func (x *PlayerBattleResult) GetMaterialPvpLossIneligible() bool {
 	return false
 }
 
+func (x *PlayerBattleResult) GetFestivalActivityInstanceId() uint32 {
+	if x != nil {
+		return x.FestivalActivityInstanceId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalRewardIdentity() string {
+	if x != nil {
+		return x.FestivalRewardIdentity
+	}
+	return ""
+}
+
+func (x *PlayerBattleResult) GetFestivalWinsBefore() uint32 {
+	if x != nil {
+		return x.FestivalWinsBefore
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalWinsAfter() uint32 {
+	if x != nil {
+		return x.FestivalWinsAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalRequiredWins() uint32 {
+	if x != nil {
+		return x.FestivalRequiredWins
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalNewlyEligible() bool {
+	if x != nil {
+		return x.FestivalNewlyEligible
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetMaterialAvailableUnitsAfter() uint64 {
+	if x != nil {
+		return x.MaterialAvailableUnitsAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetMaterialEarnableRemainingAfter() uint32 {
+	if x != nil {
+		return x.MaterialEarnableRemainingAfter
+	}
+	return 0
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -436,7 +501,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xcb\b\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xa8\f\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -469,7 +534,15 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x13trial_new_solo_best\x18\x17 \x01(\bR\x10trialNewSoloBest\x12-\n" +
 	"\x13trial_new_coop_best\x18\x18 \x01(\bR\x10trialNewCoopBest\x12A\n" +
 	"\x1dmaterial_tradable_units_added\x18\x19 \x01(\rR\x1amaterialTradableUnitsAdded\x12?\n" +
-	"\x1cmaterial_pvp_loss_ineligible\x18\x1a \x01(\bR\x19materialPvpLossIneligible\"o\n" +
+	"\x1cmaterial_pvp_loss_ineligible\x18\x1a \x01(\bR\x19materialPvpLossIneligible\x12A\n" +
+	"\x1dfestival_activity_instance_id\x18\x1b \x01(\rR\x1afestivalActivityInstanceId\x128\n" +
+	"\x18festival_reward_identity\x18\x1c \x01(\tR\x16festivalRewardIdentity\x120\n" +
+	"\x14festival_wins_before\x18\x1d \x01(\rR\x12festivalWinsBefore\x12.\n" +
+	"\x13festival_wins_after\x18\x1e \x01(\rR\x11festivalWinsAfter\x124\n" +
+	"\x16festival_required_wins\x18\x1f \x01(\rR\x14festivalRequiredWins\x126\n" +
+	"\x17festival_newly_eligible\x18  \x01(\bR\x15festivalNewlyEligible\x12C\n" +
+	"\x1ematerial_available_units_after\x18! \x01(\x04R\x1bmaterialAvailableUnitsAfter\x12I\n" +
+	"!material_earnable_remaining_after\x18\" \x01(\rR\x1ematerialEarnableRemainingAfter\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"

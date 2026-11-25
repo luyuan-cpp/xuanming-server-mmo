@@ -102,6 +102,10 @@ struct RankedRuleDescComp {
     std::string_view value;
 };
 
+struct RankedRuleMilestone_win_matchesComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -172,4 +176,7 @@ inline RankedRuleTier_wushuang_centiComp MakeRankedRuleTier_wushuang_centiComp(c
 }
 inline RankedRuleDescComp MakeRankedRuleDescComp(const RankedRuleTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline RankedRuleMilestone_win_matchesComp MakeRankedRuleMilestone_win_matchesComp(const RankedRuleTable& row) {
+    return { row.milestone_win_matches() };
 }

@@ -111,7 +111,7 @@ func TestPreparePlayerFencedClassifiesFailures(t *testing.T) {
 	}
 	t.Cleanup(func() { prepareBattleFn = prev })
 	prepare := func(before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
-		return preparePlayerFenced(svcCtx, player, battle, 7, 5000, 4000, 1, uint32(matchpb.MatchMode_MATCH_MODE_PVE_SOLO), nil, before)
+		return preparePlayerFenced(svcCtx, player, battle, 7, 5000, 4000, 1, uint32(matchpb.MatchMode_MATCH_MODE_PVE_SOLO), nil, nil, before)
 	}
 
 	// 没有位置:玩家不在线或未进场,定罪,不发 RPC。

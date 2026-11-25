@@ -32,6 +32,11 @@ type CharacterAppearanceTable struct {
 	StarterCreatable uint32                 `protobuf:"varint,7,opt,name=starter_creatable,json=starterCreatable,proto3" json:"starter_creatable,omitempty"`
 	CardUnlockable   uint32                 `protobuf:"varint,8,opt,name=card_unlockable,json=cardUnlockable,proto3" json:"card_unlockable,omitempty"`
 	SeriesId         uint32                 `protobuf:"varint,9,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`
+	ArchiveName      string                 `protobuf:"bytes,10,opt,name=archive_name,json=archiveName,proto3" json:"archive_name,omitempty"`
+	Nickname         string                 `protobuf:"bytes,11,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	BiographySummary string                 `protobuf:"bytes,12,opt,name=biography_summary,json=biographySummary,proto3" json:"biography_summary,omitempty"`
+	StoryTitle       string                 `protobuf:"bytes,13,opt,name=story_title,json=storyTitle,proto3" json:"story_title,omitempty"`
+	StoryBody        string                 `protobuf:"bytes,14,opt,name=story_body,json=storyBody,proto3" json:"story_body,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -129,6 +134,41 @@ func (x *CharacterAppearanceTable) GetSeriesId() uint32 {
 	return 0
 }
 
+func (x *CharacterAppearanceTable) GetArchiveName() string {
+	if x != nil {
+		return x.ArchiveName
+	}
+	return ""
+}
+
+func (x *CharacterAppearanceTable) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *CharacterAppearanceTable) GetBiographySummary() string {
+	if x != nil {
+		return x.BiographySummary
+	}
+	return ""
+}
+
+func (x *CharacterAppearanceTable) GetStoryTitle() string {
+	if x != nil {
+		return x.StoryTitle
+	}
+	return ""
+}
+
+func (x *CharacterAppearanceTable) GetStoryBody() string {
+	if x != nil {
+		return x.StoryBody
+	}
+	return ""
+}
+
 type CharacterAppearanceTableData struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
 	Data          []*CharacterAppearanceTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -177,7 +217,7 @@ var File_characterappearance_table_proto protoreflect.FileDescriptor
 
 const file_characterappearance_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1fcharacterappearance_table.proto\"\xa3\x02\n" +
+	"\x1fcharacterappearance_table.proto\"\xcf\x03\n" +
 	"\x18CharacterAppearanceTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x12\n" +
@@ -188,7 +228,15 @@ const file_characterappearance_table_proto_rawDesc = "" +
 	"\x04desc\x18\x06 \x01(\tR\x04desc\x12+\n" +
 	"\x11starter_creatable\x18\a \x01(\rR\x10starterCreatable\x12'\n" +
 	"\x0fcard_unlockable\x18\b \x01(\rR\x0ecardUnlockable\x12\x1b\n" +
-	"\tseries_id\x18\t \x01(\rR\bseriesId\"M\n" +
+	"\tseries_id\x18\t \x01(\rR\bseriesId\x12!\n" +
+	"\farchive_name\x18\n" +
+	" \x01(\tR\varchiveName\x12\x1a\n" +
+	"\bnickname\x18\v \x01(\tR\bnickname\x12+\n" +
+	"\x11biography_summary\x18\f \x01(\tR\x10biographySummary\x12\x1f\n" +
+	"\vstory_title\x18\r \x01(\tR\n" +
+	"storyTitle\x12\x1d\n" +
+	"\n" +
+	"story_body\x18\x0e \x01(\tR\tstoryBody\"M\n" +
 	"\x1cCharacterAppearanceTableData\x12-\n" +
 	"\x04data\x18\x01 \x03(\v2\x19.CharacterAppearanceTableR\x04dataBJ\n" +
 	"\x0ecom.game.tableB\"CharacterAppearanceTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

@@ -143,7 +143,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	// 逐参与者冻结收快照。
 	var prepared []preparedMember
 	for i, playerId := range members {
-		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, func(endpoint string) error {
+		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, activityContext, func(endpoint string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			return svcCtx.Authority.Prepared(ctx, f, playerId, endpoint)
@@ -356,7 +356,7 @@ func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord
 // (快照非空且属于这名玩家;调用方另取 table_fingerprint)。返回的 endpoint 为空表示还没定位
 // 到对端(位置缺失/节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
 // before 在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
-func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
+func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, activityCtx *battlepb.BattleActivityContext, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
 	// player:{id}:location 由 scene_manager 写(protobuf PlayerLocation),
 	// 是玩家 scene 定位的共享契约(设计文档 §5.4 / go/scene_manager changesceneutil.go);
 	// 带 zone_id,所以任意 zone 的玩家都能定位到自己 zone 的 scene 节点。
@@ -387,6 +387,7 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 		RankedContext:     rankedCtx,
 		BattleConfigId:    battleConfigId,
 		MatchMode:         matchMode,
+		ActivityContext:   activityCtx,
 	})
 	if err != nil {
 		return endpoint, nil, fmt.Errorf("PrepareBattle RPC 失败: %w", err)

@@ -1,0 +1,40 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum festival_beast_error {
+  kFestival_beast_errorOK = 0;
+
+  kFestivalBeastNotOpen = 36000;
+
+  kFestivalBeastConfigInvalid = 36001;
+
+  kFestivalBeastConfigRevisionMismatch = 36002;
+
+  kFestivalBeastPetRequired = 36003;
+
+  kFestivalBeastPetDead = 36004;
+
+  kFestivalBeastPetChanged = 36005;
+
+  kFestivalBeastLaunchInFlight = 36006;
+
+  kFestivalBeastInBattle = 36007;
+
+  kFestivalBeastFrozen = 36008;
+
+  kFestivalBeastNotEligible = 36009;
+
+  kFestivalBeastAlreadyClaimed = 36010;
+
+  kFestivalBeastExclusiveSlotOccupied = 36011;
+
+  kFestivalBeastRequestConflict = 36012;
+
+  kFestivalBeastServiceUnavailable = 36013;
+
+};

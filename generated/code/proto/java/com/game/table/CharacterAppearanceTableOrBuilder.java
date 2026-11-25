@@ -81,4 +81,64 @@ public interface CharacterAppearanceTableOrBuilder extends
    * @return The seriesId.
    */
   int getSeriesId();
+
+  /**
+   * <code>string archive_name = 10;</code>
+   * @return The archiveName.
+   */
+  java.lang.String getArchiveName();
+  /**
+   * <code>string archive_name = 10;</code>
+   * @return The bytes for archiveName.
+   */
+  com.google.protobuf.ByteString
+      getArchiveNameBytes();
+
+  /**
+   * <code>string nickname = 11;</code>
+   * @return The nickname.
+   */
+  java.lang.String getNickname();
+  /**
+   * <code>string nickname = 11;</code>
+   * @return The bytes for nickname.
+   */
+  com.google.protobuf.ByteString
+      getNicknameBytes();
+
+  /**
+   * <code>string biography_summary = 12;</code>
+   * @return The biographySummary.
+   */
+  java.lang.String getBiographySummary();
+  /**
+   * <code>string biography_summary = 12;</code>
+   * @return The bytes for biographySummary.
+   */
+  com.google.protobuf.ByteString
+      getBiographySummaryBytes();
+
+  /**
+   * <code>string story_title = 13;</code>
+   * @return The storyTitle.
+   */
+  java.lang.String getStoryTitle();
+  /**
+   * <code>string story_title = 13;</code>
+   * @return The bytes for storyTitle.
+   */
+  com.google.protobuf.ByteString
+      getStoryTitleBytes();
+
+  /**
+   * <code>string story_body = 14;</code>
+   * @return The storyBody.
+   */
+  java.lang.String getStoryBody();
+  /**
+   * <code>string story_body = 14;</code>
+   * @return The bytes for storyBody.
+   */
+  com.google.protobuf.ByteString
+      getStoryBodyBytes();
 }

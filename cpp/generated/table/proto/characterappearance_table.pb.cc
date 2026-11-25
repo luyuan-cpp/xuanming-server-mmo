@@ -48,11 +48,11 @@ constexpr CharacterAppearanceTable::ParseTableT_ CharacterAppearanceTable::Inter
     {
       PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      14,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -64,8 +64,8 @@ constexpr CharacterAppearanceTable::ParseTableT_ CharacterAppearanceTable::Inter
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.id_), 8>(),
+       {8, 8, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.id_)}},
       // string appearance_id = 2;
       {::_pbi::TcParser::FastUS1,
@@ -76,64 +76,94 @@ constexpr CharacterAppearanceTable::ParseTableT_ CharacterAppearanceTable::Inter
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.name_)}},
       // uint32 enabled = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.enabled_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.enabled_), 9>(),
+       {32, 9, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.enabled_)}},
       // uint32 sort_order = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.sort_order_), 5>(),
-       {40, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.sort_order_), 10>(),
+       {40, 10, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.sort_order_)}},
       // string desc = 6;
       {::_pbi::TcParser::FastUS1,
        {50, 2, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.desc_)}},
       // uint32 starter_creatable = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.starter_creatable_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.starter_creatable_), 11>(),
+       {56, 11, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.starter_creatable_)}},
       // uint32 card_unlockable = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.card_unlockable_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.card_unlockable_), 12>(),
+       {64, 12, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.card_unlockable_)}},
       // uint32 series_id = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.series_id_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.series_id_), 13>(),
+       {72, 13, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string archive_name = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.archive_name_)}},
+      // string nickname = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.nickname_)}},
+      // string biography_summary = 12;
+      {::_pbi::TcParser::FastUS1,
+       {98, 5, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.biography_summary_)}},
+      // string story_title = 13;
+      {::_pbi::TcParser::FastUS1,
+       {106, 6, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.story_title_)}},
+      // string story_body = 14;
+      {::_pbi::TcParser::FastUS1,
+       {114, 7, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.story_body_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string appearance_id = 2;
       {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.appearance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string name = 3;
       {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 enabled = 4;
-      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.enabled_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.enabled_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 sort_order = 5;
-      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.sort_order_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.sort_order_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 6;
       {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.desc_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 starter_creatable = 7;
-      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.starter_creatable_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.starter_creatable_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 card_unlockable = 8;
-      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.card_unlockable_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.card_unlockable_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 series_id = 9;
-      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string archive_name = 10;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.archive_name_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string nickname = 11;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.nickname_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string biography_summary = 12;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.biography_summary_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string story_title = 13;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.story_title_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string story_body = 14;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.story_body_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\30\0\15\4\0\0\4\0\0\0\0\0\0\0\0\0"
+      "\30\0\15\4\0\0\4\0\0\0\14\10\21\13\12\0"
       "CharacterAppearanceTable"
       "appearance_id"
       "name"
       "desc"
+      "archive_name"
+      "nickname"
+      "biography_summary"
+      "story_title"
+      "story_body"
     }},
   };
 }
@@ -150,6 +180,21 @@ inline constexpr CharacterAppearanceTable::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         desc_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        archive_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        nickname_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        biography_summary_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        story_title_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        story_body_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         id_{0u},
@@ -411,7 +456,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_._has_bits_),
-        12, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.appearance_id_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.name_),
@@ -421,15 +466,25 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.starter_creatable_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.card_unlockable_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.series_id_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.archive_name_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.nickname_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.biography_summary_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.story_title_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.story_body_),
+        8,
         0,
         1,
+        9,
+        10,
+        2,
+        11,
+        12,
+        13,
+        3,
         4,
         5,
-        2,
         6,
         7,
-        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -440,7 +495,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::CharacterAppearanceTable)},
-        {21, sizeof(::CharacterAppearanceTableData)},
+        {31, sizeof(::CharacterAppearanceTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -449,22 +504,25 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_characterappearance_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\037characterappearance_table.proto\"\305\001\n\030Ch"
+    "\n\037characterappearance_table.proto\"\261\002\n\030Ch"
     "aracterAppearanceTable\022\n\n\002id\030\001 \001(\r\022\025\n\rap"
     "pearance_id\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\017\n\007enabl"
     "ed\030\004 \001(\r\022\022\n\nsort_order\030\005 \001(\r\022\014\n\004desc\030\006 \001"
     "(\t\022\031\n\021starter_creatable\030\007 \001(\r\022\027\n\017card_un"
-    "lockable\030\010 \001(\r\022\021\n\tseries_id\030\t \001(\r\"G\n\034Cha"
-    "racterAppearanceTableData\022\'\n\004data\030\001 \003(\0132"
-    "\031.CharacterAppearanceTableBJ\n\016com.game.t"
-    "ableB\"CharacterAppearanceTableOuterClass"
-    "P\001Z\022generated/pb/tableb\006proto3"
+    "lockable\030\010 \001(\r\022\021\n\tseries_id\030\t \001(\r\022\024\n\014arc"
+    "hive_name\030\n \001(\t\022\020\n\010nickname\030\013 \001(\t\022\031\n\021bio"
+    "graphy_summary\030\014 \001(\t\022\023\n\013story_title\030\r \001("
+    "\t\022\022\n\nstory_body\030\016 \001(\t\"G\n\034CharacterAppear"
+    "anceTableData\022\'\n\004data\030\001 \003(\0132\031.CharacterA"
+    "ppearanceTableBJ\n\016com.game.tableB\"Charac"
+    "terAppearanceTableOuterClassP\001Z\022generate"
+    "d/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_characterappearance_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_characterappearance_5ftable_2eproto = {
     false,
     false,
-    390,
+    498,
     descriptor_table_protodef_characterappearance_5ftable_2eproto,
     "characterappearance_table.proto",
     &descriptor_table_characterappearance_5ftable_2eproto_once,
@@ -496,7 +554,12 @@ PROTOBUF_NDEBUG_INLINE CharacterAppearanceTable::Impl_::Impl_(
         _cached_size_{0},
         appearance_id_(arena, from.appearance_id_),
         name_(arena, from.name_),
-        desc_(arena, from.desc_) {}
+        desc_(arena, from.desc_),
+        archive_name_(arena, from.archive_name_),
+        nickname_(arena, from.nickname_),
+        biography_summary_(arena, from.biography_summary_),
+        story_title_(arena, from.story_title_),
+        story_body_(arena, from.story_body_) {}
 
 CharacterAppearanceTable::CharacterAppearanceTable(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -528,7 +591,12 @@ PROTOBUF_NDEBUG_INLINE CharacterAppearanceTable::Impl_::Impl_(
       : _cached_size_{0},
         appearance_id_(arena),
         name_(arena),
-        desc_(arena) {}
+        desc_(arena),
+        archive_name_(arena),
+        nickname_(arena),
+        biography_summary_(arena),
+        story_title_(arena),
+        story_body_(arena) {}
 
 inline void CharacterAppearanceTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -553,6 +621,11 @@ inline void CharacterAppearanceTable::SharedDtor(MessageLite& self) {
   this_._impl_.appearance_id_.Destroy();
   this_._impl_.name_.Destroy();
   this_._impl_.desc_.Destroy();
+  this_._impl_.archive_name_.Destroy();
+  this_._impl_.nickname_.Destroy();
+  this_._impl_.biography_summary_.Destroy();
+  this_._impl_.story_title_.Destroy();
+  this_._impl_.story_body_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -590,7 +663,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.appearance_id_.ClearNonDefaultToEmpty();
     }
@@ -600,13 +673,27 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.desc_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.archive_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.nickname_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.biography_summary_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.story_title_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      _impl_.story_body_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.card_unlockable_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.card_unlockable_));
+        reinterpret_cast<char*>(&_impl_.series_id_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.series_id_));
   }
-  _impl_.series_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -631,7 +718,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -660,7 +747,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
   }
 
   // uint32 enabled = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_enabled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -669,7 +756,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
   }
 
   // uint32 sort_order = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_sort_order() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -688,7 +775,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
   }
 
   // uint32 starter_creatable = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_starter_creatable() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -697,7 +784,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
   }
 
   // uint32 card_unlockable = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_card_unlockable() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -706,11 +793,61 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
   }
 
   // uint32 series_id = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_series_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           9, this_._internal_series_id(), target);
+    }
+  }
+
+  // string archive_name = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_archive_name().empty()) {
+      const ::std::string& _s = this_._internal_archive_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "CharacterAppearanceTable.archive_name");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // string nickname = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_nickname().empty()) {
+      const ::std::string& _s = this_._internal_nickname();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "CharacterAppearanceTable.nickname");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // string biography_summary = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_biography_summary().empty()) {
+      const ::std::string& _s = this_._internal_biography_summary();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "CharacterAppearanceTable.biography_summary");
+      target = stream->WriteStringMaybeAliased(12, _s, target);
+    }
+  }
+
+  // string story_title = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_story_title().empty()) {
+      const ::std::string& _s = this_._internal_story_title();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "CharacterAppearanceTable.story_title");
+      target = stream->WriteStringMaybeAliased(13, _s, target);
+    }
+  }
+
+  // string story_body = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (!this_._internal_story_body().empty()) {
+      const ::std::string& _s = this_._internal_story_body();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "CharacterAppearanceTable.story_body");
+      target = stream->WriteStringMaybeAliased(14, _s, target);
     }
   }
 
@@ -761,45 +898,80 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
                                         this_._internal_desc());
       }
     }
-    // uint32 id = 1;
+    // string archive_name = 10;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_archive_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_archive_name());
+      }
+    }
+    // string nickname = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_nickname().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_nickname());
+      }
+    }
+    // string biography_summary = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_biography_summary().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_biography_summary());
+      }
+    }
+    // string story_title = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_story_title().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_story_title());
+      }
+    }
+    // string story_body = 14;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!this_._internal_story_body().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_story_body());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 enabled = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_enabled() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enabled());
       }
     }
     // uint32 sort_order = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_sort_order() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_sort_order());
       }
     }
     // uint32 starter_creatable = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_starter_creatable() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_starter_creatable());
       }
     }
     // uint32 card_unlockable = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_card_unlockable() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_card_unlockable());
       }
     }
-  }
-   {
     // uint32 series_id = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_series_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_series_id());
@@ -852,34 +1024,81 @@ void CharacterAppearanceTable::MergeImpl(::google::protobuf::MessageLite& to_msg
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_archive_name().empty()) {
+        _this->_internal_set_archive_name(from._internal_archive_name());
+      } else {
+        if (_this->_impl_.archive_name_.IsDefault()) {
+          _this->_internal_set_archive_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_nickname().empty()) {
+        _this->_internal_set_nickname(from._internal_nickname());
+      } else {
+        if (_this->_impl_.nickname_.IsDefault()) {
+          _this->_internal_set_nickname("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_biography_summary().empty()) {
+        _this->_internal_set_biography_summary(from._internal_biography_summary());
+      } else {
+        if (_this->_impl_.biography_summary_.IsDefault()) {
+          _this->_internal_set_biography_summary("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_story_title().empty()) {
+        _this->_internal_set_story_title(from._internal_story_title());
+      } else {
+        if (_this->_impl_.story_title_.IsDefault()) {
+          _this->_internal_set_story_title("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!from._internal_story_body().empty()) {
+        _this->_internal_set_story_body(from._internal_story_body());
+      } else {
+        if (_this->_impl_.story_body_.IsDefault()) {
+          _this->_internal_set_story_body("");
+        }
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_enabled() != 0) {
         _this->_impl_.enabled_ = from._impl_.enabled_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_sort_order() != 0) {
         _this->_impl_.sort_order_ = from._impl_.sort_order_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_starter_creatable() != 0) {
         _this->_impl_.starter_creatable_ = from._impl_.starter_creatable_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_card_unlockable() != 0) {
         _this->_impl_.card_unlockable_ = from._impl_.card_unlockable_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_series_id() != 0) {
-      _this->_impl_.series_id_ = from._impl_.series_id_;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_series_id() != 0) {
+        _this->_impl_.series_id_ = from._impl_.series_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -904,6 +1123,11 @@ void CharacterAppearanceTable::InternalSwap(CharacterAppearanceTable* PROTOBUF_R
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_id_, &other->_impl_.appearance_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.archive_name_, &other->_impl_.archive_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.nickname_, &other->_impl_.nickname_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.biography_summary_, &other->_impl_.biography_summary_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.story_title_, &other->_impl_.story_title_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.story_body_, &other->_impl_.story_body_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_)
       + sizeof(CharacterAppearanceTable::_impl_.series_id_)

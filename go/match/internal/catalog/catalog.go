@@ -270,6 +270,10 @@ func (c *Catalog) validate(row PlayModeRow) error {
 	if row.ConfigId != 0 && !hasDungeon {
 		return fmt.Errorf("模板 %d 不在 Dungeon 表", row.ConfigId)
 	}
+	// 瑞兽迎春(boss_trial_kind=7)仅允许经 scene -> MatchInternal.StartActivityBattle 准入，禁止进普通 PlayMode 队列。
+	if hasDungeon && dungeon.BossTrialKind == 7 {
+		return fmt.Errorf("瑞兽迎春模板 %d 禁止加入普通 PlayMode 白名单", row.ConfigId)
+	}
 	switch row.Mode {
 	case matchpb.MatchMode_MATCH_MODE_PVE_SOLO, matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
 		if !hasDungeon || dungeon.MonsterCount == 0 {
@@ -408,7 +412,7 @@ func (c *Catalog) AllowedTeamSizes(mode matchpb.MatchMode, configId uint32) []ui
 	return out
 }
 
-// BossTrialKind 返回 Dungeon 表中该模板的 boss_trial_kind（0=常规，1..4=首领试炼，5=护卫救援，6=物法易势）。
+// BossTrialKind 返回 Dungeon 表中该模板的 boss_trial_kind（0=常规，1..4/8=首领试炼，5=护卫救援，6=物法易势，7=瑞兽迎春）。
 func (c *Catalog) BossTrialKind(configId uint32) uint32 {
 	if c == nil {
 		return 0
@@ -490,6 +494,8 @@ func bossTrialVariant(bossTrialKind uint32) (uint32, string, bool) {
 		return 2, "rescue", true
 	case 6:
 		return 3, "polarity_5v5", true
+	case 8:
+		return 1, "dual_guard", true
 	default:
 		return 0, "", false
 	}

@@ -31,6 +31,11 @@ private static final long serialVersionUID = 0L;
     appearanceId_ = "";
     name_ = "";
     desc_ = "";
+    archiveName_ = "";
+    nickname_ = "";
+    biographySummary_ = "";
+    storyTitle_ = "";
+    storyBody_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -234,6 +239,201 @@ private static final long serialVersionUID = 0L;
     return seriesId_;
   }
 
+  public static final int ARCHIVE_NAME_FIELD_NUMBER = 10;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object archiveName_ = "";
+  /**
+   * <code>string archive_name = 10;</code>
+   * @return The archiveName.
+   */
+  @java.lang.Override
+  public java.lang.String getArchiveName() {
+    java.lang.Object ref = archiveName_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      archiveName_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string archive_name = 10;</code>
+   * @return The bytes for archiveName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getArchiveNameBytes() {
+    java.lang.Object ref = archiveName_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      archiveName_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int NICKNAME_FIELD_NUMBER = 11;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object nickname_ = "";
+  /**
+   * <code>string nickname = 11;</code>
+   * @return The nickname.
+   */
+  @java.lang.Override
+  public java.lang.String getNickname() {
+    java.lang.Object ref = nickname_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      nickname_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string nickname = 11;</code>
+   * @return The bytes for nickname.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNicknameBytes() {
+    java.lang.Object ref = nickname_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      nickname_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int BIOGRAPHY_SUMMARY_FIELD_NUMBER = 12;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object biographySummary_ = "";
+  /**
+   * <code>string biography_summary = 12;</code>
+   * @return The biographySummary.
+   */
+  @java.lang.Override
+  public java.lang.String getBiographySummary() {
+    java.lang.Object ref = biographySummary_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      biographySummary_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string biography_summary = 12;</code>
+   * @return The bytes for biographySummary.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBiographySummaryBytes() {
+    java.lang.Object ref = biographySummary_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      biographySummary_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int STORY_TITLE_FIELD_NUMBER = 13;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object storyTitle_ = "";
+  /**
+   * <code>string story_title = 13;</code>
+   * @return The storyTitle.
+   */
+  @java.lang.Override
+  public java.lang.String getStoryTitle() {
+    java.lang.Object ref = storyTitle_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      storyTitle_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string story_title = 13;</code>
+   * @return The bytes for storyTitle.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getStoryTitleBytes() {
+    java.lang.Object ref = storyTitle_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      storyTitle_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int STORY_BODY_FIELD_NUMBER = 14;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object storyBody_ = "";
+  /**
+   * <code>string story_body = 14;</code>
+   * @return The storyBody.
+   */
+  @java.lang.Override
+  public java.lang.String getStoryBody() {
+    java.lang.Object ref = storyBody_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      storyBody_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string story_body = 14;</code>
+   * @return The bytes for storyBody.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getStoryBodyBytes() {
+    java.lang.Object ref = storyBody_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      storyBody_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -275,6 +475,21 @@ private static final long serialVersionUID = 0L;
     if (seriesId_ != 0) {
       output.writeUInt32(9, seriesId_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(archiveName_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 10, archiveName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(nickname_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 11, nickname_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(biographySummary_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 12, biographySummary_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(storyTitle_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 13, storyTitle_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(storyBody_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 14, storyBody_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -311,6 +526,21 @@ private static final long serialVersionUID = 0L;
     if (seriesId_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(9, seriesId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(archiveName_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(10, archiveName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(nickname_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(11, nickname_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(biographySummary_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(12, biographySummary_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(storyTitle_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(13, storyTitle_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(storyBody_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(14, storyBody_);
     }
     return size;
   }
@@ -354,6 +584,16 @@ private static final long serialVersionUID = 0L;
         != other.getCardUnlockable()) return false;
     if (getSeriesId()
         != other.getSeriesId()) return false;
+    if (!getArchiveName()
+        .equals(other.getArchiveName())) return false;
+    if (!getNickname()
+        .equals(other.getNickname())) return false;
+    if (!getBiographySummary()
+        .equals(other.getBiographySummary())) return false;
+    if (!getStoryTitle()
+        .equals(other.getStoryTitle())) return false;
+    if (!getStoryBody()
+        .equals(other.getStoryBody())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -383,6 +623,16 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getCardUnlockable();
     hash = (37 * hash) + SERIES_ID_FIELD_NUMBER;
     hash = (53 * hash) + getSeriesId();
+    hash = (37 * hash) + ARCHIVE_NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getArchiveName().hashCode();
+    hash = (37 * hash) + NICKNAME_FIELD_NUMBER;
+    hash = (53 * hash) + getNickname().hashCode();
+    hash = (37 * hash) + BIOGRAPHY_SUMMARY_FIELD_NUMBER;
+    hash = (53 * hash) + getBiographySummary().hashCode();
+    hash = (37 * hash) + STORY_TITLE_FIELD_NUMBER;
+    hash = (53 * hash) + getStoryTitle().hashCode();
+    hash = (37 * hash) + STORY_BODY_FIELD_NUMBER;
+    hash = (53 * hash) + getStoryBody().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -523,6 +773,11 @@ private static final long serialVersionUID = 0L;
       starterCreatable_ = 0;
       cardUnlockable_ = 0;
       seriesId_ = 0;
+      archiveName_ = "";
+      nickname_ = "";
+      biographySummary_ = "";
+      storyTitle_ = "";
+      storyBody_ = "";
       return this;
     }
 
@@ -583,6 +838,21 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000100) != 0)) {
         result.seriesId_ = seriesId_;
       }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.archiveName_ = archiveName_;
+      }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.nickname_ = nickname_;
+      }
+      if (((from_bitField0_ & 0x00000800) != 0)) {
+        result.biographySummary_ = biographySummary_;
+      }
+      if (((from_bitField0_ & 0x00001000) != 0)) {
+        result.storyTitle_ = storyTitle_;
+      }
+      if (((from_bitField0_ & 0x00002000) != 0)) {
+        result.storyBody_ = storyBody_;
+      }
     }
 
     @java.lang.Override
@@ -629,6 +899,31 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getSeriesId() != 0) {
         setSeriesId(other.getSeriesId());
+      }
+      if (!other.getArchiveName().isEmpty()) {
+        archiveName_ = other.archiveName_;
+        bitField0_ |= 0x00000200;
+        onChanged();
+      }
+      if (!other.getNickname().isEmpty()) {
+        nickname_ = other.nickname_;
+        bitField0_ |= 0x00000400;
+        onChanged();
+      }
+      if (!other.getBiographySummary().isEmpty()) {
+        biographySummary_ = other.biographySummary_;
+        bitField0_ |= 0x00000800;
+        onChanged();
+      }
+      if (!other.getStoryTitle().isEmpty()) {
+        storyTitle_ = other.storyTitle_;
+        bitField0_ |= 0x00001000;
+        onChanged();
+      }
+      if (!other.getStoryBody().isEmpty()) {
+        storyBody_ = other.storyBody_;
+        bitField0_ |= 0x00002000;
+        onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -701,6 +996,31 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000100;
               break;
             } // case 72
+            case 82: {
+              archiveName_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 82
+            case 90: {
+              nickname_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 90
+            case 98: {
+              biographySummary_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000800;
+              break;
+            } // case 98
+            case 106: {
+              storyTitle_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00001000;
+              break;
+            } // case 106
+            case 114: {
+              storyBody_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00002000;
+              break;
+            } // case 114
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1122,6 +1442,366 @@ private static final long serialVersionUID = 0L;
     public Builder clearSeriesId() {
       bitField0_ = (bitField0_ & ~0x00000100);
       seriesId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object archiveName_ = "";
+    /**
+     * <code>string archive_name = 10;</code>
+     * @return The archiveName.
+     */
+    public java.lang.String getArchiveName() {
+      java.lang.Object ref = archiveName_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        archiveName_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string archive_name = 10;</code>
+     * @return The bytes for archiveName.
+     */
+    public com.google.protobuf.ByteString
+        getArchiveNameBytes() {
+      java.lang.Object ref = archiveName_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        archiveName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string archive_name = 10;</code>
+     * @param value The archiveName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setArchiveName(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      archiveName_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string archive_name = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearArchiveName() {
+      archiveName_ = getDefaultInstance().getArchiveName();
+      bitField0_ = (bitField0_ & ~0x00000200);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string archive_name = 10;</code>
+     * @param value The bytes for archiveName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setArchiveNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      archiveName_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object nickname_ = "";
+    /**
+     * <code>string nickname = 11;</code>
+     * @return The nickname.
+     */
+    public java.lang.String getNickname() {
+      java.lang.Object ref = nickname_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        nickname_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string nickname = 11;</code>
+     * @return The bytes for nickname.
+     */
+    public com.google.protobuf.ByteString
+        getNicknameBytes() {
+      java.lang.Object ref = nickname_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        nickname_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string nickname = 11;</code>
+     * @param value The nickname to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNickname(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      nickname_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string nickname = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNickname() {
+      nickname_ = getDefaultInstance().getNickname();
+      bitField0_ = (bitField0_ & ~0x00000400);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string nickname = 11;</code>
+     * @param value The bytes for nickname to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNicknameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      nickname_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object biographySummary_ = "";
+    /**
+     * <code>string biography_summary = 12;</code>
+     * @return The biographySummary.
+     */
+    public java.lang.String getBiographySummary() {
+      java.lang.Object ref = biographySummary_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        biographySummary_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string biography_summary = 12;</code>
+     * @return The bytes for biographySummary.
+     */
+    public com.google.protobuf.ByteString
+        getBiographySummaryBytes() {
+      java.lang.Object ref = biographySummary_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        biographySummary_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string biography_summary = 12;</code>
+     * @param value The biographySummary to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBiographySummary(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      biographySummary_ = value;
+      bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string biography_summary = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBiographySummary() {
+      biographySummary_ = getDefaultInstance().getBiographySummary();
+      bitField0_ = (bitField0_ & ~0x00000800);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string biography_summary = 12;</code>
+     * @param value The bytes for biographySummary to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBiographySummaryBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      biographySummary_ = value;
+      bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object storyTitle_ = "";
+    /**
+     * <code>string story_title = 13;</code>
+     * @return The storyTitle.
+     */
+    public java.lang.String getStoryTitle() {
+      java.lang.Object ref = storyTitle_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        storyTitle_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string story_title = 13;</code>
+     * @return The bytes for storyTitle.
+     */
+    public com.google.protobuf.ByteString
+        getStoryTitleBytes() {
+      java.lang.Object ref = storyTitle_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        storyTitle_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string story_title = 13;</code>
+     * @param value The storyTitle to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStoryTitle(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      storyTitle_ = value;
+      bitField0_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string story_title = 13;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStoryTitle() {
+      storyTitle_ = getDefaultInstance().getStoryTitle();
+      bitField0_ = (bitField0_ & ~0x00001000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string story_title = 13;</code>
+     * @param value The bytes for storyTitle to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStoryTitleBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      storyTitle_ = value;
+      bitField0_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object storyBody_ = "";
+    /**
+     * <code>string story_body = 14;</code>
+     * @return The storyBody.
+     */
+    public java.lang.String getStoryBody() {
+      java.lang.Object ref = storyBody_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        storyBody_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string story_body = 14;</code>
+     * @return The bytes for storyBody.
+     */
+    public com.google.protobuf.ByteString
+        getStoryBodyBytes() {
+      java.lang.Object ref = storyBody_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        storyBody_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string story_body = 14;</code>
+     * @param value The storyBody to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStoryBody(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      storyBody_ = value;
+      bitField0_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string story_body = 14;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStoryBody() {
+      storyBody_ = getDefaultInstance().getStoryBody();
+      bitField0_ = (bitField0_ & ~0x00002000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string story_body = 14;</code>
+     * @param value The bytes for storyBody to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStoryBodyBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      storyBody_ = value;
+      bitField0_ |= 0x00002000;
       onChanged();
       return this;
     }

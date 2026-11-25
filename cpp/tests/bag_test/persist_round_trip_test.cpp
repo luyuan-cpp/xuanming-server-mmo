@@ -681,6 +681,43 @@ protected:
         craftBook->set_crafter_name("宗师测试");
         craftBook->set_crafter_player_id(db.player_id());
 
+        // 瑞兽迎春限时活动持久状态：覆盖 PlayerFestivalBeastComp 全部子消息。
+        auto &festival = *db.mutable_festival_beast_component();
+        festival.set_state_revision(5);
+        auto *period = festival.add_period_progress();
+        period->set_activity_instance_id(202601);
+        period->set_wins(3);
+        period->set_required_wins(3);
+        period->set_last_win_at_ms(1795651200000);
+        period->set_reward_identity("festival_beast_chunxishou_v1");
+        auto *elig = festival.add_eligibilities();
+        elig->set_reward_identity("festival_beast_chunxishou_v1");
+        elig->set_reward_definition_version(1);
+        elig->set_reward_pet_table_id(101);
+        elig->set_source_activity_instance_id(202601);
+        elig->set_earned_at_ms(1795651200000);
+        elig->set_earned_battle_id(90001);
+        auto *fbReceipt = festival.add_claim_receipts();
+        fbReceipt->set_reward_identity("festival_beast_chunxishou_v1");
+        fbReceipt->set_request_id("7b64a021-8f2a-4c31-93ab-1a4d5c6e7f80");
+        fbReceipt->set_reward_definition_version(1);
+        fbReceipt->set_reward_pet_table_id(101);
+        fbReceipt->set_pet_id(77001);
+        fbReceipt->set_claimed_at_ms(1795651250000);
+        auto *pending = festival.mutable_pending_launch();
+        pending->set_request_id("3c8e72d4-9b11-4f9e-b1c2-998877665544");
+        pending->set_activity_instance_id(202601);
+        pending->set_config_revision(1);
+        pending->set_reward_identity("festival_beast_chunxishou_v1");
+        pending->set_locked_pet_id(77002);
+        pending->set_locked_owner_level(30);
+        pending->set_matched_tier_id(3);
+        pending->set_battle_config_id(111);
+        pending->set_launch_state(2);
+        pending->set_battle_id(90002);
+        pending->set_requested_at_ms(1795651300000);
+        pending->set_admitted_at_ms(1795651301000);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

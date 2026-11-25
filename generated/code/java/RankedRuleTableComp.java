@@ -149,4 +149,10 @@ public final class RankedRuleTableComp {
         }
     }
 
+    public record Milestone_win_matches(int value) {
+        public static Milestone_win_matches from(RankedRuleTable row) {
+            return new Milestone_win_matches(row.getMilestoneWinMatches());
+        }
+    }
+
 }

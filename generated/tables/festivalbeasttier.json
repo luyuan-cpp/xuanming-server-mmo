@@ -1,0 +1,84 @@
+{
+ "data": [
+  {
+   "boss_defense": 200,
+   "boss_health": 2000,
+   "boss_physical_attack": 140,
+   "boss_resistance": 5,
+   "boss_speed": 320,
+   "id": 1,
+   "max_level": 9,
+   "min_level": 1
+  },
+  {
+   "boss_defense": 700,
+   "boss_health": 14000,
+   "boss_physical_attack": 620,
+   "boss_resistance": 10,
+   "boss_speed": 520,
+   "id": 2,
+   "max_level": 19,
+   "min_level": 10
+  },
+  {
+   "boss_defense": 1300,
+   "boss_health": 26000,
+   "boss_physical_attack": 1100,
+   "boss_resistance": 12,
+   "boss_speed": 760,
+   "id": 3,
+   "max_level": 34,
+   "min_level": 20
+  },
+  {
+   "boss_defense": 2200,
+   "boss_health": 42000,
+   "boss_physical_attack": 1750,
+   "boss_resistance": 14,
+   "boss_speed": 1060,
+   "id": 4,
+   "max_level": 49,
+   "min_level": 35
+  },
+  {
+   "boss_defense": 3200,
+   "boss_health": 58000,
+   "boss_physical_attack": 2400,
+   "boss_resistance": 15,
+   "boss_speed": 1360,
+   "id": 5,
+   "max_level": 64,
+   "min_level": 50
+  },
+  {
+   "boss_defense": 4200,
+   "boss_health": 74000,
+   "boss_physical_attack": 3050,
+   "boss_resistance": 16,
+   "boss_speed": 1660,
+   "id": 6,
+   "max_level": 79,
+   "min_level": 65
+  },
+  {
+   "boss_defense": 5200,
+   "boss_health": 90000,
+   "boss_physical_attack": 3750,
+   "boss_resistance": 18,
+   "boss_speed": 1960,
+   "id": 7,
+   "max_level": 99,
+   "min_level": 80
+  },
+  {
+   "boss_defense": 6600,
+   "boss_health": 112000,
+   "boss_physical_attack": 4700,
+   "boss_resistance": 20,
+   "boss_speed": 2360,
+   "id": 8,
+   "max_level": 120,
+   "min_level": 100
+  }
+ ]
+}

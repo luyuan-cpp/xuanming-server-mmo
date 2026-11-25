@@ -3823,6 +3823,7 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<PlayerSeasonComp>(player); // 同上,赛季印持久状态(season-skills-and-seal-design.md)
     tlsEcs.actorRegistry.emplace<PlayerTrialJournalComp>(player); // 同上,五行试炼志持久状态(long-term-progression-v2.md)
     tlsEcs.actorRegistry.emplace<PlayerCraftComp>(player); // 同上,装备品相/技能制书与代打持久状态(equipment-quality-and-skill-crafting-v1.md)
+    tlsEcs.actorRegistry.emplace<PlayerFestivalBeastComp>(player); // 同上,瑞兽迎春限时活动持久状态
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);

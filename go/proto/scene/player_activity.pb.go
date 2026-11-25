@@ -138,6 +138,7 @@ const (
 	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_TAO         PlayerActivityRewardType = 2
 	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_ITEM        PlayerActivityRewardType = 3
 	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_EQUIPMENT   PlayerActivityRewardType = 4
+	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_PET         PlayerActivityRewardType = 5
 )
 
 // Enum value maps for PlayerActivityRewardType.
@@ -148,6 +149,7 @@ var (
 		2: "PLAYER_ACTIVITY_REWARD_TAO",
 		3: "PLAYER_ACTIVITY_REWARD_ITEM",
 		4: "PLAYER_ACTIVITY_REWARD_EQUIPMENT",
+		5: "PLAYER_ACTIVITY_REWARD_PET",
 	}
 	PlayerActivityRewardType_value = map[string]int32{
 		"PLAYER_ACTIVITY_REWARD_UNSPECIFIED": 0,
@@ -155,6 +157,7 @@ var (
 		"PLAYER_ACTIVITY_REWARD_TAO":         2,
 		"PLAYER_ACTIVITY_REWARD_ITEM":        3,
 		"PLAYER_ACTIVITY_REWARD_EQUIPMENT":   4,
+		"PLAYER_ACTIVITY_REWARD_PET":         5,
 	}
 )
 
@@ -188,8 +191,9 @@ func (PlayerActivityRewardType) EnumDescriptor() ([]byte, []int) {
 type PlayerActivityEntryKind int32
 
 const (
-	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_UNSPECIFIED PlayerActivityEntryKind = 0
-	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_MISSION     PlayerActivityEntryKind = 1
+	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_UNSPECIFIED    PlayerActivityEntryKind = 0
+	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_MISSION        PlayerActivityEntryKind = 1
+	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST PlayerActivityEntryKind = 2
 )
 
 // Enum value maps for PlayerActivityEntryKind.
@@ -197,10 +201,12 @@ var (
 	PlayerActivityEntryKind_name = map[int32]string{
 		0: "PLAYER_ACTIVITY_ENTRY_UNSPECIFIED",
 		1: "PLAYER_ACTIVITY_ENTRY_MISSION",
+		2: "PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST",
 	}
 	PlayerActivityEntryKind_value = map[string]int32{
-		"PLAYER_ACTIVITY_ENTRY_UNSPECIFIED": 0,
-		"PLAYER_ACTIVITY_ENTRY_MISSION":     1,
+		"PLAYER_ACTIVITY_ENTRY_UNSPECIFIED":    0,
+		"PLAYER_ACTIVITY_ENTRY_MISSION":        1,
+		"PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST": 2,
 	}
 )
 
@@ -229,6 +235,305 @@ func (x PlayerActivityEntryKind) Number() protoreflect.EnumNumber {
 // Deprecated: Use PlayerActivityEntryKind.Descriptor instead.
 func (PlayerActivityEntryKind) EnumDescriptor() ([]byte, []int) {
 	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{3}
+}
+
+type FestivalBeastPhase int32
+
+const (
+	FestivalBeastPhase_FESTIVAL_BEAST_PHASE_UNSPECIFIED    FestivalBeastPhase = 0
+	FestivalBeastPhase_FESTIVAL_BEAST_PHASE_UNSCHEDULED    FestivalBeastPhase = 1 // 未排期/未开启
+	FestivalBeastPhase_FESTIVAL_BEAST_PHASE_UPCOMING       FestivalBeastPhase = 2 // 已排期预告（未到 effective_start_at_ms）
+	FestivalBeastPhase_FESTIVAL_BEAST_PHASE_OPEN           FestivalBeastPhase = 3 // 开放挑战 [effective_start_at_ms, effective_end_at_ms)
+	FestivalBeastPhase_FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE FestivalBeastPhase = 4 // 结束后 7 天集中领奖展示 [end, end + 7d)
+	FestivalBeastPhase_FESTIVAL_BEAST_PHASE_HISTORY        FestivalBeastPhase = 5 // 超过 7 天展示期转入历史（已达成永久资格仍永远可领）
+)
+
+// Enum value maps for FestivalBeastPhase.
+var (
+	FestivalBeastPhase_name = map[int32]string{
+		0: "FESTIVAL_BEAST_PHASE_UNSPECIFIED",
+		1: "FESTIVAL_BEAST_PHASE_UNSCHEDULED",
+		2: "FESTIVAL_BEAST_PHASE_UPCOMING",
+		3: "FESTIVAL_BEAST_PHASE_OPEN",
+		4: "FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE",
+		5: "FESTIVAL_BEAST_PHASE_HISTORY",
+	}
+	FestivalBeastPhase_value = map[string]int32{
+		"FESTIVAL_BEAST_PHASE_UNSPECIFIED":    0,
+		"FESTIVAL_BEAST_PHASE_UNSCHEDULED":    1,
+		"FESTIVAL_BEAST_PHASE_UPCOMING":       2,
+		"FESTIVAL_BEAST_PHASE_OPEN":           3,
+		"FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE": 4,
+		"FESTIVAL_BEAST_PHASE_HISTORY":        5,
+	}
+)
+
+func (x FestivalBeastPhase) Enum() *FestivalBeastPhase {
+	p := new(FestivalBeastPhase)
+	*p = x
+	return p
+}
+
+func (x FestivalBeastPhase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FestivalBeastPhase) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[4].Descriptor()
+}
+
+func (FestivalBeastPhase) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[4]
+}
+
+func (x FestivalBeastPhase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FestivalBeastPhase.Descriptor instead.
+func (FestivalBeastPhase) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{4}
+}
+
+type FestivalBeastActionBlockCode int32
+
+const (
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_NONE                    FestivalBeastActionBlockCode = 0
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_NOT_OPEN                FestivalBeastActionBlockCode = 1
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_CONFIG_INVALID          FestivalBeastActionBlockCode = 2
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_FROZEN                  FestivalBeastActionBlockCode = 3
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_IN_BATTLE               FestivalBeastActionBlockCode = 4
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_PET_REQUIRED            FestivalBeastActionBlockCode = 5
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_PET_DEAD                FestivalBeastActionBlockCode = 6
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT        FestivalBeastActionBlockCode = 7
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE            FestivalBeastActionBlockCode = 8
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED         FestivalBeastActionBlockCode = 9
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING        FestivalBeastActionBlockCode = 10
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED FestivalBeastActionBlockCode = 11
+	FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILABLE     FestivalBeastActionBlockCode = 12
+)
+
+// Enum value maps for FestivalBeastActionBlockCode.
+var (
+	FestivalBeastActionBlockCode_name = map[int32]string{
+		0:  "FESTIVAL_BEAST_BLOCK_NONE",
+		1:  "FESTIVAL_BEAST_BLOCK_NOT_OPEN",
+		2:  "FESTIVAL_BEAST_BLOCK_CONFIG_INVALID",
+		3:  "FESTIVAL_BEAST_BLOCK_FROZEN",
+		4:  "FESTIVAL_BEAST_BLOCK_IN_BATTLE",
+		5:  "FESTIVAL_BEAST_BLOCK_PET_REQUIRED",
+		6:  "FESTIVAL_BEAST_BLOCK_PET_DEAD",
+		7:  "FESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT",
+		8:  "FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE",
+		9:  "FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED",
+		10: "FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING",
+		11: "FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED",
+		12: "FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILABLE",
+	}
+	FestivalBeastActionBlockCode_value = map[string]int32{
+		"FESTIVAL_BEAST_BLOCK_NONE":                    0,
+		"FESTIVAL_BEAST_BLOCK_NOT_OPEN":                1,
+		"FESTIVAL_BEAST_BLOCK_CONFIG_INVALID":          2,
+		"FESTIVAL_BEAST_BLOCK_FROZEN":                  3,
+		"FESTIVAL_BEAST_BLOCK_IN_BATTLE":               4,
+		"FESTIVAL_BEAST_BLOCK_PET_REQUIRED":            5,
+		"FESTIVAL_BEAST_BLOCK_PET_DEAD":                6,
+		"FESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT":        7,
+		"FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE":            8,
+		"FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED":         9,
+		"FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING":        10,
+		"FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED": 11,
+		"FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILABLE":     12,
+	}
+)
+
+func (x FestivalBeastActionBlockCode) Enum() *FestivalBeastActionBlockCode {
+	p := new(FestivalBeastActionBlockCode)
+	*p = x
+	return p
+}
+
+func (x FestivalBeastActionBlockCode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FestivalBeastActionBlockCode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[5].Descriptor()
+}
+
+func (FestivalBeastActionBlockCode) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[5]
+}
+
+func (x FestivalBeastActionBlockCode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FestivalBeastActionBlockCode.Descriptor instead.
+func (FestivalBeastActionBlockCode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{5}
+}
+
+type FestivalBeastLaunchState int32
+
+const (
+	FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_UNSPECIFIED FestivalBeastLaunchState = 0
+	FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_LAUNCHING   FestivalBeastLaunchState = 1
+	FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_ADMITTED    FestivalBeastLaunchState = 2
+	FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_REJECTED    FestivalBeastLaunchState = 3
+	FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_UNKNOWN     FestivalBeastLaunchState = 4
+)
+
+// Enum value maps for FestivalBeastLaunchState.
+var (
+	FestivalBeastLaunchState_name = map[int32]string{
+		0: "FESTIVAL_BEAST_LAUNCH_UNSPECIFIED",
+		1: "FESTIVAL_BEAST_LAUNCH_LAUNCHING",
+		2: "FESTIVAL_BEAST_LAUNCH_ADMITTED",
+		3: "FESTIVAL_BEAST_LAUNCH_REJECTED",
+		4: "FESTIVAL_BEAST_LAUNCH_UNKNOWN",
+	}
+	FestivalBeastLaunchState_value = map[string]int32{
+		"FESTIVAL_BEAST_LAUNCH_UNSPECIFIED": 0,
+		"FESTIVAL_BEAST_LAUNCH_LAUNCHING":   1,
+		"FESTIVAL_BEAST_LAUNCH_ADMITTED":    2,
+		"FESTIVAL_BEAST_LAUNCH_REJECTED":    3,
+		"FESTIVAL_BEAST_LAUNCH_UNKNOWN":     4,
+	}
+)
+
+func (x FestivalBeastLaunchState) Enum() *FestivalBeastLaunchState {
+	p := new(FestivalBeastLaunchState)
+	*p = x
+	return p
+}
+
+func (x FestivalBeastLaunchState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FestivalBeastLaunchState) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[6].Descriptor()
+}
+
+func (FestivalBeastLaunchState) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[6]
+}
+
+func (x FestivalBeastLaunchState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FestivalBeastLaunchState.Descriptor instead.
+func (FestivalBeastLaunchState) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{6}
+}
+
+type FestivalBeastClaimOutcome int32
+
+const (
+	FestivalBeastClaimOutcome_FESTIVAL_BEAST_CLAIM_UNSPECIFIED     FestivalBeastClaimOutcome = 0
+	FestivalBeastClaimOutcome_FESTIVAL_BEAST_CLAIM_APPLIED         FestivalBeastClaimOutcome = 1
+	FestivalBeastClaimOutcome_FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED FestivalBeastClaimOutcome = 2
+	FestivalBeastClaimOutcome_FESTIVAL_BEAST_CLAIM_REJECTED        FestivalBeastClaimOutcome = 3
+	FestivalBeastClaimOutcome_FESTIVAL_BEAST_CLAIM_UNKNOWN         FestivalBeastClaimOutcome = 4
+)
+
+// Enum value maps for FestivalBeastClaimOutcome.
+var (
+	FestivalBeastClaimOutcome_name = map[int32]string{
+		0: "FESTIVAL_BEAST_CLAIM_UNSPECIFIED",
+		1: "FESTIVAL_BEAST_CLAIM_APPLIED",
+		2: "FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED",
+		3: "FESTIVAL_BEAST_CLAIM_REJECTED",
+		4: "FESTIVAL_BEAST_CLAIM_UNKNOWN",
+	}
+	FestivalBeastClaimOutcome_value = map[string]int32{
+		"FESTIVAL_BEAST_CLAIM_UNSPECIFIED":     0,
+		"FESTIVAL_BEAST_CLAIM_APPLIED":         1,
+		"FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED": 2,
+		"FESTIVAL_BEAST_CLAIM_REJECTED":        3,
+		"FESTIVAL_BEAST_CLAIM_UNKNOWN":         4,
+	}
+)
+
+func (x FestivalBeastClaimOutcome) Enum() *FestivalBeastClaimOutcome {
+	p := new(FestivalBeastClaimOutcome)
+	*p = x
+	return p
+}
+
+func (x FestivalBeastClaimOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FestivalBeastClaimOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[7].Descriptor()
+}
+
+func (FestivalBeastClaimOutcome) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[7]
+}
+
+func (x FestivalBeastClaimOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FestivalBeastClaimOutcome.Descriptor instead.
+func (FestivalBeastClaimOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{7}
+}
+
+type FestivalBeastMaterialQuotaMode int32
+
+const (
+	FestivalBeastMaterialQuotaMode_FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED     FestivalBeastMaterialQuotaMode = 0
+	FestivalBeastMaterialQuotaMode_FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME FestivalBeastMaterialQuotaMode = 1 // 首套 660 份永久池（无日限）
+	FestivalBeastMaterialQuotaMode_FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY   FestivalBeastMaterialQuotaMode = 2 // 满 660 后每周 100 份全绑定（UTC+8 周一 05:00 重置）
+	FestivalBeastMaterialQuotaMode_FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY    FestivalBeastMaterialQuotaMode = 3 // 旧版每日 20 份（UTC+8 每日 05:00 重置）
+)
+
+// Enum value maps for FestivalBeastMaterialQuotaMode.
+var (
+	FestivalBeastMaterialQuotaMode_name = map[int32]string{
+		0: "FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED",
+		1: "FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME",
+		2: "FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY",
+		3: "FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY",
+	}
+	FestivalBeastMaterialQuotaMode_value = map[string]int32{
+		"FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED":     0,
+		"FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME": 1,
+		"FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY":   2,
+		"FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY":    3,
+	}
+)
+
+func (x FestivalBeastMaterialQuotaMode) Enum() *FestivalBeastMaterialQuotaMode {
+	p := new(FestivalBeastMaterialQuotaMode)
+	*p = x
+	return p
+}
+
+func (x FestivalBeastMaterialQuotaMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FestivalBeastMaterialQuotaMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[8].Descriptor()
+}
+
+func (FestivalBeastMaterialQuotaMode) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[8]
+}
+
+func (x FestivalBeastMaterialQuotaMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FestivalBeastMaterialQuotaMode.Descriptor instead.
+func (FestivalBeastMaterialQuotaMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{8}
 }
 
 type PlayerActivityRewardItem struct {
@@ -334,8 +639,10 @@ type PlayerActivityInfo struct {
 	CompletionPeriod      string                      `protobuf:"bytes,21,opt,name=completion_period,json=completionPeriod,proto3" json:"completion_period,omitempty"`
 	VitalityPoints        uint32                      `protobuf:"varint,22,opt,name=vitality_points,json=vitalityPoints,proto3" json:"vitality_points,omitempty"`
 	Rewards               []*PlayerActivityRewardItem `protobuf:"bytes,23,rep,name=rewards,proto3" json:"rewards,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// true 表示该活动入口当前有可立即领取的奖励（含活动结束后的永久神兽待领资格），UI 据此展示红点。
+	HasClaimableReward bool `protobuf:"varint,24,opt,name=has_claimable_reward,json=hasClaimableReward,proto3" json:"has_claimable_reward,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PlayerActivityInfo) Reset() {
@@ -527,6 +834,13 @@ func (x *PlayerActivityInfo) GetRewards() []*PlayerActivityRewardItem {
 		return x.Rewards
 	}
 	return nil
+}
+
+func (x *PlayerActivityInfo) GetHasClaimableReward() bool {
+	if x != nil {
+		return x.HasClaimableReward
+	}
+	return false
 }
 
 type PlayerActivityVitalityReward struct {
@@ -1012,6 +1326,1023 @@ func (x *ClaimActivityVitalityRewardResponse) GetReplayed() bool {
 	return false
 }
 
+type FestivalBeastPendingLaunchInfo struct {
+	state              protoimpl.MessageState   `protogen:"open.v1"`
+	ClientRequestId    string                   `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	ActivityInstanceId uint32                   `protobuf:"varint,2,opt,name=activity_instance_id,json=activityInstanceId,proto3" json:"activity_instance_id,omitempty"`
+	ConfigRevision     uint32                   `protobuf:"varint,3,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	LockedPetId        uint64                   `protobuf:"varint,4,opt,name=locked_pet_id,json=lockedPetId,proto3" json:"locked_pet_id,omitempty"`
+	MatchedTierId      uint32                   `protobuf:"varint,5,opt,name=matched_tier_id,json=matchedTierId,proto3" json:"matched_tier_id,omitempty"`
+	LaunchState        FestivalBeastLaunchState `protobuf:"varint,6,opt,name=launch_state,json=launchState,proto3,enum=FestivalBeastLaunchState" json:"launch_state,omitempty"`
+	BattleId           uint64                   `protobuf:"varint,7,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	RequestedAtMs      uint64                   `protobuf:"varint,8,opt,name=requested_at_ms,json=requestedAtMs,proto3" json:"requested_at_ms,omitempty"`
+	AdmittedAtMs       uint64                   `protobuf:"varint,9,opt,name=admitted_at_ms,json=admittedAtMs,proto3" json:"admitted_at_ms,omitempty"`
+	RejectTipId        uint32                   `protobuf:"varint,10,opt,name=reject_tip_id,json=rejectTipId,proto3" json:"reject_tip_id,omitempty"`
+	RejectReason       string                   `protobuf:"bytes,11,opt,name=reject_reason,json=rejectReason,proto3" json:"reject_reason,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *FestivalBeastPendingLaunchInfo) Reset() {
+	*x = FestivalBeastPendingLaunchInfo{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestivalBeastPendingLaunchInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestivalBeastPendingLaunchInfo) ProtoMessage() {}
+
+func (x *FestivalBeastPendingLaunchInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestivalBeastPendingLaunchInfo.ProtoReflect.Descriptor instead.
+func (*FestivalBeastPendingLaunchInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetActivityInstanceId() uint32 {
+	if x != nil {
+		return x.ActivityInstanceId
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetConfigRevision() uint32 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetLockedPetId() uint64 {
+	if x != nil {
+		return x.LockedPetId
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetMatchedTierId() uint32 {
+	if x != nil {
+		return x.MatchedTierId
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetLaunchState() FestivalBeastLaunchState {
+	if x != nil {
+		return x.LaunchState
+	}
+	return FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_UNSPECIFIED
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetRequestedAtMs() uint64 {
+	if x != nil {
+		return x.RequestedAtMs
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetAdmittedAtMs() uint64 {
+	if x != nil {
+		return x.AdmittedAtMs
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetRejectTipId() uint32 {
+	if x != nil {
+		return x.RejectTipId
+	}
+	return 0
+}
+
+func (x *FestivalBeastPendingLaunchInfo) GetRejectReason() string {
+	if x != nil {
+		return x.RejectReason
+	}
+	return ""
+}
+
+type FestivalBeastMaterialSummary struct {
+	state                  protoimpl.MessageState         `protogen:"open.v1"`
+	QuotaMode              FestivalBeastMaterialQuotaMode `protobuf:"varint,1,opt,name=quota_mode,json=quotaMode,proto3,enum=FestivalBeastMaterialQuotaMode" json:"quota_mode,omitempty"`
+	ExpectedWinUnits       uint32                         `protobuf:"varint,2,opt,name=expected_win_units,json=expectedWinUnits,proto3" json:"expected_win_units,omitempty"`                   // 本活动单场胜利预计新增份数（0..10）
+	EarnableRemainingUnits uint32                         `protobuf:"varint,3,opt,name=earnable_remaining_units,json=earnableRemainingUnits,proto3" json:"earnable_remaining_units,omitempty"` // 当前阶段/周期还可赚取的材料额度
+	AvailableUnits         uint64                         `protobuf:"varint,4,opt,name=available_units,json=availableUnits,proto3" json:"available_units,omitempty"`                           // 跨日/跨周累计待领取余额
+	AvailableTradableUnits uint64                         `protobuf:"varint,5,opt,name=available_tradable_units,json=availableTradableUnits,proto3" json:"available_tradable_units,omitempty"` // 待领取余额中可交易份数
+	EarnedToday            uint32                         `protobuf:"varint,6,opt,name=earned_today,json=earnedToday,proto3" json:"earned_today,omitempty"`                                    // 兼容字段：今日已赚
+	DailyLimit             uint32                         `protobuf:"varint,7,opt,name=daily_limit,json=dailyLimit,proto3" json:"daily_limit,omitempty"`                                       // 兼容字段：日限参考值
+	DayStartsAtMs          uint64                         `protobuf:"varint,8,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"`                          // 当前游戏日开始 UTC 毫秒（UTC+8 05:00）
+	NextDayResetAtMs       uint64                         `protobuf:"varint,9,opt,name=next_day_reset_at_ms,json=nextDayResetAtMs,proto3" json:"next_day_reset_at_ms,omitempty"`               // 下一游戏日切换 UTC 毫秒（UTC+8 05:00）
+	WeeklyPhaseActive      bool                           `protobuf:"varint,10,opt,name=weekly_phase_active,json=weeklyPhaseActive,proto3" json:"weekly_phase_active,omitempty"`               // 是否已进入第二阶段周限池
+	LifetimeEarned         uint32                         `protobuf:"varint,11,opt,name=lifetime_earned,json=lifetimeEarned,proto3" json:"lifetime_earned,omitempty"`                          // 阶段一累计已赚
+	LifetimeLimit          uint32                         `protobuf:"varint,12,opt,name=lifetime_limit,json=lifetimeLimit,proto3" json:"lifetime_limit,omitempty"`                             // 阶段一总池（660）
+	EarnedThisWeek         uint32                         `protobuf:"varint,13,opt,name=earned_this_week,json=earnedThisWeek,proto3" json:"earned_this_week,omitempty"`                        // 阶段二本周已赚
+	WeeklyLimit            uint32                         `protobuf:"varint,14,opt,name=weekly_limit,json=weeklyLimit,proto3" json:"weekly_limit,omitempty"`                                   // 阶段二周限（100）
+	WeekStartsAtMs         uint64                         `protobuf:"varint,15,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                      // 本周开始 UTC 毫秒（UTC+8 周一 05:00）
+	NextWeekResetAtMs      uint64                         `protobuf:"varint,16,opt,name=next_week_reset_at_ms,json=nextWeekResetAtMs,proto3" json:"next_week_reset_at_ms,omitempty"`           // 下周重置 UTC 毫秒
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *FestivalBeastMaterialSummary) Reset() {
+	*x = FestivalBeastMaterialSummary{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FestivalBeastMaterialSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FestivalBeastMaterialSummary) ProtoMessage() {}
+
+func (x *FestivalBeastMaterialSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FestivalBeastMaterialSummary.ProtoReflect.Descriptor instead.
+func (*FestivalBeastMaterialSummary) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *FestivalBeastMaterialSummary) GetQuotaMode() FestivalBeastMaterialQuotaMode {
+	if x != nil {
+		return x.QuotaMode
+	}
+	return FestivalBeastMaterialQuotaMode_FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED
+}
+
+func (x *FestivalBeastMaterialSummary) GetExpectedWinUnits() uint32 {
+	if x != nil {
+		return x.ExpectedWinUnits
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetEarnableRemainingUnits() uint32 {
+	if x != nil {
+		return x.EarnableRemainingUnits
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetAvailableUnits() uint64 {
+	if x != nil {
+		return x.AvailableUnits
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetAvailableTradableUnits() uint64 {
+	if x != nil {
+		return x.AvailableTradableUnits
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetEarnedToday() uint32 {
+	if x != nil {
+		return x.EarnedToday
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetDailyLimit() uint32 {
+	if x != nil {
+		return x.DailyLimit
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetDayStartsAtMs() uint64 {
+	if x != nil {
+		return x.DayStartsAtMs
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetNextDayResetAtMs() uint64 {
+	if x != nil {
+		return x.NextDayResetAtMs
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetWeeklyPhaseActive() bool {
+	if x != nil {
+		return x.WeeklyPhaseActive
+	}
+	return false
+}
+
+func (x *FestivalBeastMaterialSummary) GetLifetimeEarned() uint32 {
+	if x != nil {
+		return x.LifetimeEarned
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetLifetimeLimit() uint32 {
+	if x != nil {
+		return x.LifetimeLimit
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetEarnedThisWeek() uint32 {
+	if x != nil {
+		return x.EarnedThisWeek
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetWeeklyLimit() uint32 {
+	if x != nil {
+		return x.WeeklyLimit
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetWeekStartsAtMs() uint64 {
+	if x != nil {
+		return x.WeekStartsAtMs
+	}
+	return 0
+}
+
+func (x *FestivalBeastMaterialSummary) GetNextWeekResetAtMs() uint64 {
+	if x != nil {
+		return x.NextWeekResetAtMs
+	}
+	return 0
+}
+
+type GetFestivalBeastDetailRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 0 表示查询当前权威期次（无开放期次时返回最近有未领/已领记录的历史期次）。
+	ActivityInstanceId uint32 `protobuf:"varint,1,opt,name=activity_instance_id,json=activityInstanceId,proto3" json:"activity_instance_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetFestivalBeastDetailRequest) Reset() {
+	*x = GetFestivalBeastDetailRequest{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetFestivalBeastDetailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetFestivalBeastDetailRequest) ProtoMessage() {}
+
+func (x *GetFestivalBeastDetailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetFestivalBeastDetailRequest.ProtoReflect.Descriptor instead.
+func (*GetFestivalBeastDetailRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetFestivalBeastDetailRequest) GetActivityInstanceId() uint32 {
+	if x != nil {
+		return x.ActivityInstanceId
+	}
+	return 0
+}
+
+type GetFestivalBeastDetailResponse struct {
+	state                       protoimpl.MessageState          `protogen:"open.v1"`
+	ErrorMessage                *base.TipInfoMessage            `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ServerNowMs                 uint64                          `protobuf:"varint,2,opt,name=server_now_ms,json=serverNowMs,proto3" json:"server_now_ms,omitempty"`
+	Phase                       FestivalBeastPhase              `protobuf:"varint,3,opt,name=phase,proto3,enum=FestivalBeastPhase" json:"phase,omitempty"`
+	ActivityInstanceId          uint32                          `protobuf:"varint,4,opt,name=activity_instance_id,json=activityInstanceId,proto3" json:"activity_instance_id,omitempty"`
+	ConfigRevision              uint32                          `protobuf:"varint,5,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	ActivityName                string                          `protobuf:"bytes,6,opt,name=activity_name,json=activityName,proto3" json:"activity_name,omitempty"`
+	BossName                    string                          `protobuf:"bytes,7,opt,name=boss_name,json=bossName,proto3" json:"boss_name,omitempty"`
+	BannerAssetKey              string                          `protobuf:"bytes,8,opt,name=banner_asset_key,json=bannerAssetKey,proto3" json:"banner_asset_key,omitempty"`
+	IconKey                     string                          `protobuf:"bytes,9,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	EffectiveStartAtMs          uint64                          `protobuf:"varint,10,opt,name=effective_start_at_ms,json=effectiveStartAtMs,proto3" json:"effective_start_at_ms,omitempty"`
+	EffectiveEndAtMs            uint64                          `protobuf:"varint,11,opt,name=effective_end_at_ms,json=effectiveEndAtMs,proto3" json:"effective_end_at_ms,omitempty"`
+	ClaimShowcaseEndAtMs        uint64                          `protobuf:"varint,12,opt,name=claim_showcase_end_at_ms,json=claimShowcaseEndAtMs,proto3" json:"claim_showcase_end_at_ms,omitempty"`
+	CurrentWins                 uint32                          `protobuf:"varint,13,opt,name=current_wins,json=currentWins,proto3" json:"current_wins,omitempty"`
+	RequiredWins                uint32                          `protobuf:"varint,14,opt,name=required_wins,json=requiredWins,proto3" json:"required_wins,omitempty"`
+	RewardIdentity              string                          `protobuf:"bytes,15,opt,name=reward_identity,json=rewardIdentity,proto3" json:"reward_identity,omitempty"`
+	RewardDefinitionVersion     uint32                          `protobuf:"varint,16,opt,name=reward_definition_version,json=rewardDefinitionVersion,proto3" json:"reward_definition_version,omitempty"`
+	RewardPetTableId            uint32                          `protobuf:"varint,17,opt,name=reward_pet_table_id,json=rewardPetTableId,proto3" json:"reward_pet_table_id,omitempty"`
+	RewardPetModelId            uint32                          `protobuf:"varint,18,opt,name=reward_pet_model_id,json=rewardPetModelId,proto3" json:"reward_pet_model_id,omitempty"`
+	RewardPetName               string                          `protobuf:"bytes,19,opt,name=reward_pet_name,json=rewardPetName,proto3" json:"reward_pet_name,omitempty"`
+	HasPermanentEligibility     bool                            `protobuf:"varint,20,opt,name=has_permanent_eligibility,json=hasPermanentEligibility,proto3" json:"has_permanent_eligibility,omitempty"`
+	EligibilitySourceInstanceId uint32                          `protobuf:"varint,21,opt,name=eligibility_source_instance_id,json=eligibilitySourceInstanceId,proto3" json:"eligibility_source_instance_id,omitempty"`
+	EligibilityEarnedAtMs       uint64                          `protobuf:"varint,22,opt,name=eligibility_earned_at_ms,json=eligibilityEarnedAtMs,proto3" json:"eligibility_earned_at_ms,omitempty"`
+	RewardClaimed               bool                            `protobuf:"varint,23,opt,name=reward_claimed,json=rewardClaimed,proto3" json:"reward_claimed,omitempty"`
+	RewardClaimDurable          bool                            `protobuf:"varint,24,opt,name=reward_claim_durable,json=rewardClaimDurable,proto3" json:"reward_claim_durable,omitempty"`
+	ClaimedPetId                uint64                          `protobuf:"varint,25,opt,name=claimed_pet_id,json=claimedPetId,proto3" json:"claimed_pet_id,omitempty"`
+	ClaimedAtMs                 uint64                          `protobuf:"varint,26,opt,name=claimed_at_ms,json=claimedAtMs,proto3" json:"claimed_at_ms,omitempty"`
+	ClaimRequestId              string                          `protobuf:"bytes,27,opt,name=claim_request_id,json=claimRequestId,proto3" json:"claim_request_id,omitempty"`
+	CanStartChallenge           bool                            `protobuf:"varint,28,opt,name=can_start_challenge,json=canStartChallenge,proto3" json:"can_start_challenge,omitempty"`
+	StartBlockCode              FestivalBeastActionBlockCode    `protobuf:"varint,29,opt,name=start_block_code,json=startBlockCode,proto3,enum=FestivalBeastActionBlockCode" json:"start_block_code,omitempty"`
+	StartBlockReason            string                          `protobuf:"bytes,30,opt,name=start_block_reason,json=startBlockReason,proto3" json:"start_block_reason,omitempty"`
+	CanClaimReward              bool                            `protobuf:"varint,31,opt,name=can_claim_reward,json=canClaimReward,proto3" json:"can_claim_reward,omitempty"`
+	ClaimBlockCode              FestivalBeastActionBlockCode    `protobuf:"varint,32,opt,name=claim_block_code,json=claimBlockCode,proto3,enum=FestivalBeastActionBlockCode" json:"claim_block_code,omitempty"`
+	ClaimBlockReason            string                          `protobuf:"bytes,33,opt,name=claim_block_reason,json=claimBlockReason,proto3" json:"claim_block_reason,omitempty"`
+	PendingLaunch               *FestivalBeastPendingLaunchInfo `protobuf:"bytes,34,opt,name=pending_launch,json=pendingLaunch,proto3" json:"pending_launch,omitempty"`
+	MaterialSummary             *FestivalBeastMaterialSummary   `protobuf:"bytes,35,opt,name=material_summary,json=materialSummary,proto3" json:"material_summary,omitempty"`
+	MatchedTierId               uint32                          `protobuf:"varint,36,opt,name=matched_tier_id,json=matchedTierId,proto3" json:"matched_tier_id,omitempty"`
+	RoundLimit                  uint32                          `protobuf:"varint,37,opt,name=round_limit,json=roundLimit,proto3" json:"round_limit,omitempty"`
+	HeavyDamagePercent          uint32                          `protobuf:"varint,38,opt,name=heavy_damage_percent,json=heavyDamagePercent,proto3" json:"heavy_damage_percent,omitempty"`
+	StateRevision               uint64                          `protobuf:"varint,39,opt,name=state_revision,json=stateRevision,proto3" json:"state_revision,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *GetFestivalBeastDetailResponse) Reset() {
+	*x = GetFestivalBeastDetailResponse{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetFestivalBeastDetailResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetFestivalBeastDetailResponse) ProtoMessage() {}
+
+func (x *GetFestivalBeastDetailResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetFestivalBeastDetailResponse.ProtoReflect.Descriptor instead.
+func (*GetFestivalBeastDetailResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetFestivalBeastDetailResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetFestivalBeastDetailResponse) GetServerNowMs() uint64 {
+	if x != nil {
+		return x.ServerNowMs
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetPhase() FestivalBeastPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return FestivalBeastPhase_FESTIVAL_BEAST_PHASE_UNSPECIFIED
+}
+
+func (x *GetFestivalBeastDetailResponse) GetActivityInstanceId() uint32 {
+	if x != nil {
+		return x.ActivityInstanceId
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetConfigRevision() uint32 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetActivityName() string {
+	if x != nil {
+		return x.ActivityName
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetBossName() string {
+	if x != nil {
+		return x.BossName
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetBannerAssetKey() string {
+	if x != nil {
+		return x.BannerAssetKey
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetEffectiveStartAtMs() uint64 {
+	if x != nil {
+		return x.EffectiveStartAtMs
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetEffectiveEndAtMs() uint64 {
+	if x != nil {
+		return x.EffectiveEndAtMs
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetClaimShowcaseEndAtMs() uint64 {
+	if x != nil {
+		return x.ClaimShowcaseEndAtMs
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetCurrentWins() uint32 {
+	if x != nil {
+		return x.CurrentWins
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRequiredWins() uint32 {
+	if x != nil {
+		return x.RequiredWins
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardIdentity() string {
+	if x != nil {
+		return x.RewardIdentity
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardDefinitionVersion() uint32 {
+	if x != nil {
+		return x.RewardDefinitionVersion
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardPetTableId() uint32 {
+	if x != nil {
+		return x.RewardPetTableId
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardPetModelId() uint32 {
+	if x != nil {
+		return x.RewardPetModelId
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardPetName() string {
+	if x != nil {
+		return x.RewardPetName
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetHasPermanentEligibility() bool {
+	if x != nil {
+		return x.HasPermanentEligibility
+	}
+	return false
+}
+
+func (x *GetFestivalBeastDetailResponse) GetEligibilitySourceInstanceId() uint32 {
+	if x != nil {
+		return x.EligibilitySourceInstanceId
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetEligibilityEarnedAtMs() uint64 {
+	if x != nil {
+		return x.EligibilityEarnedAtMs
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardClaimed() bool {
+	if x != nil {
+		return x.RewardClaimed
+	}
+	return false
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRewardClaimDurable() bool {
+	if x != nil {
+		return x.RewardClaimDurable
+	}
+	return false
+}
+
+func (x *GetFestivalBeastDetailResponse) GetClaimedPetId() uint64 {
+	if x != nil {
+		return x.ClaimedPetId
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetClaimedAtMs() uint64 {
+	if x != nil {
+		return x.ClaimedAtMs
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetClaimRequestId() string {
+	if x != nil {
+		return x.ClaimRequestId
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetCanStartChallenge() bool {
+	if x != nil {
+		return x.CanStartChallenge
+	}
+	return false
+}
+
+func (x *GetFestivalBeastDetailResponse) GetStartBlockCode() FestivalBeastActionBlockCode {
+	if x != nil {
+		return x.StartBlockCode
+	}
+	return FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_NONE
+}
+
+func (x *GetFestivalBeastDetailResponse) GetStartBlockReason() string {
+	if x != nil {
+		return x.StartBlockReason
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetCanClaimReward() bool {
+	if x != nil {
+		return x.CanClaimReward
+	}
+	return false
+}
+
+func (x *GetFestivalBeastDetailResponse) GetClaimBlockCode() FestivalBeastActionBlockCode {
+	if x != nil {
+		return x.ClaimBlockCode
+	}
+	return FestivalBeastActionBlockCode_FESTIVAL_BEAST_BLOCK_NONE
+}
+
+func (x *GetFestivalBeastDetailResponse) GetClaimBlockReason() string {
+	if x != nil {
+		return x.ClaimBlockReason
+	}
+	return ""
+}
+
+func (x *GetFestivalBeastDetailResponse) GetPendingLaunch() *FestivalBeastPendingLaunchInfo {
+	if x != nil {
+		return x.PendingLaunch
+	}
+	return nil
+}
+
+func (x *GetFestivalBeastDetailResponse) GetMaterialSummary() *FestivalBeastMaterialSummary {
+	if x != nil {
+		return x.MaterialSummary
+	}
+	return nil
+}
+
+func (x *GetFestivalBeastDetailResponse) GetMatchedTierId() uint32 {
+	if x != nil {
+		return x.MatchedTierId
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetRoundLimit() uint32 {
+	if x != nil {
+		return x.RoundLimit
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetHeavyDamagePercent() uint32 {
+	if x != nil {
+		return x.HeavyDamagePercent
+	}
+	return 0
+}
+
+func (x *GetFestivalBeastDetailResponse) GetStateRevision() uint64 {
+	if x != nil {
+		return x.StateRevision
+	}
+	return 0
+}
+
+type StartFestivalBeastChallengeRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId    string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	ActivityInstanceId uint32                 `protobuf:"varint,2,opt,name=activity_instance_id,json=activityInstanceId,proto3" json:"activity_instance_id,omitempty"`
+	ConfigRevision     uint32                 `protobuf:"varint,3,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *StartFestivalBeastChallengeRequest) Reset() {
+	*x = StartFestivalBeastChallengeRequest{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartFestivalBeastChallengeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartFestivalBeastChallengeRequest) ProtoMessage() {}
+
+func (x *StartFestivalBeastChallengeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartFestivalBeastChallengeRequest.ProtoReflect.Descriptor instead.
+func (*StartFestivalBeastChallengeRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *StartFestivalBeastChallengeRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *StartFestivalBeastChallengeRequest) GetActivityInstanceId() uint32 {
+	if x != nil {
+		return x.ActivityInstanceId
+	}
+	return 0
+}
+
+func (x *StartFestivalBeastChallengeRequest) GetConfigRevision() uint32 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+type StartFestivalBeastChallengeResponse struct {
+	state           protoimpl.MessageState   `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage     `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	LaunchState     FestivalBeastLaunchState `protobuf:"varint,2,opt,name=launch_state,json=launchState,proto3,enum=FestivalBeastLaunchState" json:"launch_state,omitempty"`
+	Replayed        bool                     `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	ClientRequestId string                   `protobuf:"bytes,4,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	LockedPetId     uint64                   `protobuf:"varint,5,opt,name=locked_pet_id,json=lockedPetId,proto3" json:"locked_pet_id,omitempty"`
+	BattleId        uint64                   `protobuf:"varint,6,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	MatchedTierId   uint32                   `protobuf:"varint,7,opt,name=matched_tier_id,json=matchedTierId,proto3" json:"matched_tier_id,omitempty"`
+	AdmittedAtMs    uint64                   `protobuf:"varint,8,opt,name=admitted_at_ms,json=admittedAtMs,proto3" json:"admitted_at_ms,omitempty"`
+	RejectReason    string                   `protobuf:"bytes,9,opt,name=reject_reason,json=rejectReason,proto3" json:"reject_reason,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StartFestivalBeastChallengeResponse) Reset() {
+	*x = StartFestivalBeastChallengeResponse{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartFestivalBeastChallengeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartFestivalBeastChallengeResponse) ProtoMessage() {}
+
+func (x *StartFestivalBeastChallengeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartFestivalBeastChallengeResponse.ProtoReflect.Descriptor instead.
+func (*StartFestivalBeastChallengeResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetLaunchState() FestivalBeastLaunchState {
+	if x != nil {
+		return x.LaunchState
+	}
+	return FestivalBeastLaunchState_FESTIVAL_BEAST_LAUNCH_UNSPECIFIED
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetLockedPetId() uint64 {
+	if x != nil {
+		return x.LockedPetId
+	}
+	return 0
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetMatchedTierId() uint32 {
+	if x != nil {
+		return x.MatchedTierId
+	}
+	return 0
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetAdmittedAtMs() uint64 {
+	if x != nil {
+		return x.AdmittedAtMs
+	}
+	return 0
+}
+
+func (x *StartFestivalBeastChallengeResponse) GetRejectReason() string {
+	if x != nil {
+		return x.RejectReason
+	}
+	return ""
+}
+
+type ClaimFestivalBeastRewardRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId string                 `protobuf:"bytes,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	RewardIdentity  string                 `protobuf:"bytes,2,opt,name=reward_identity,json=rewardIdentity,proto3" json:"reward_identity,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ClaimFestivalBeastRewardRequest) Reset() {
+	*x = ClaimFestivalBeastRewardRequest{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimFestivalBeastRewardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimFestivalBeastRewardRequest) ProtoMessage() {}
+
+func (x *ClaimFestivalBeastRewardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimFestivalBeastRewardRequest.ProtoReflect.Descriptor instead.
+func (*ClaimFestivalBeastRewardRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ClaimFestivalBeastRewardRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *ClaimFestivalBeastRewardRequest) GetRewardIdentity() string {
+	if x != nil {
+		return x.RewardIdentity
+	}
+	return ""
+}
+
+type ClaimFestivalBeastRewardResponse struct {
+	state                   protoimpl.MessageState    `protogen:"open.v1"`
+	ErrorMessage            *base.TipInfoMessage      `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Outcome                 FestivalBeastClaimOutcome `protobuf:"varint,2,opt,name=outcome,proto3,enum=FestivalBeastClaimOutcome" json:"outcome,omitempty"`
+	Replayed                bool                      `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	Durable                 bool                      `protobuf:"varint,4,opt,name=durable,proto3" json:"durable,omitempty"`
+	ClientRequestId         string                    `protobuf:"bytes,5,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	RewardIdentity          string                    `protobuf:"bytes,6,opt,name=reward_identity,json=rewardIdentity,proto3" json:"reward_identity,omitempty"`
+	RewardDefinitionVersion uint32                    `protobuf:"varint,7,opt,name=reward_definition_version,json=rewardDefinitionVersion,proto3" json:"reward_definition_version,omitempty"`
+	RewardPetTableId        uint32                    `protobuf:"varint,8,opt,name=reward_pet_table_id,json=rewardPetTableId,proto3" json:"reward_pet_table_id,omitempty"`
+	PetId                   uint64                    `protobuf:"varint,9,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	ClaimedAtMs             uint64                    `protobuf:"varint,10,opt,name=claimed_at_ms,json=claimedAtMs,proto3" json:"claimed_at_ms,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *ClaimFestivalBeastRewardResponse) Reset() {
+	*x = ClaimFestivalBeastRewardResponse{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimFestivalBeastRewardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimFestivalBeastRewardResponse) ProtoMessage() {}
+
+func (x *ClaimFestivalBeastRewardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimFestivalBeastRewardResponse.ProtoReflect.Descriptor instead.
+func (*ClaimFestivalBeastRewardResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetOutcome() FestivalBeastClaimOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return FestivalBeastClaimOutcome_FESTIVAL_BEAST_CLAIM_UNSPECIFIED
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetRewardIdentity() string {
+	if x != nil {
+		return x.RewardIdentity
+	}
+	return ""
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetRewardDefinitionVersion() uint32 {
+	if x != nil {
+		return x.RewardDefinitionVersion
+	}
+	return 0
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetRewardPetTableId() uint32 {
+	if x != nil {
+		return x.RewardPetTableId
+	}
+	return 0
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
+func (x *ClaimFestivalBeastRewardResponse) GetClaimedAtMs() uint64 {
+	if x != nil {
+		return x.ClaimedAtMs
+	}
+	return 0
+}
+
 var File_proto_scene_player_activity_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_activity_proto_rawDesc = "" +
@@ -1022,7 +2353,7 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x19\n" +
 	"\bicon_key\x18\x04 \x01(\tR\aiconKey\x12/\n" +
-	"\x13binding_description\x18\x05 \x01(\tR\x12bindingDescription\"\xcd\a\n" +
+	"\x13binding_description\x18\x05 \x01(\tR\x12bindingDescription\"\xff\a\n" +
 	"\x12PlayerActivityInfo\x12\x1f\n" +
 	"\vactivity_id\x18\x01 \x01(\rR\n" +
 	"activityId\x12\x1d\n" +
@@ -1052,7 +2383,8 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x10completion_limit\x18\x14 \x01(\rR\x0fcompletionLimit\x12+\n" +
 	"\x11completion_period\x18\x15 \x01(\tR\x10completionPeriod\x12'\n" +
 	"\x0fvitality_points\x18\x16 \x01(\rR\x0evitalityPoints\x123\n" +
-	"\arewards\x18\x17 \x03(\v2\x19.PlayerActivityRewardItemR\arewards\"\xb8\x02\n" +
+	"\arewards\x18\x17 \x03(\v2\x19.PlayerActivityRewardItemR\arewards\x120\n" +
+	"\x14has_claimable_reward\x18\x18 \x01(\bR\x12hasClaimableReward\"\xb8\x02\n" +
 	"\x1cPlayerActivityVitalityReward\x12!\n" +
 	"\fthreshold_id\x18\x01 \x01(\rR\vthresholdId\x12'\n" +
 	"\x0frequired_points\x18\x02 \x01(\rR\x0erequiredPoints\x12\x1b\n" +
@@ -1096,7 +2428,113 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"request_id\x18\x03 \x01(\tR\trequestId\x12\x18\n" +
 	"\aclaimed\x18\x04 \x01(\bR\aclaimed\x12\x18\n" +
 	"\adurable\x18\x05 \x01(\bR\adurable\x12\x1a\n" +
-	"\breplayed\x18\x06 \x01(\bR\breplayed*\x8a\x01\n" +
+	"\breplayed\x18\x06 \x01(\bR\breplayed\"\xe5\x03\n" +
+	"\x1eFestivalBeastPendingLaunchInfo\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x120\n" +
+	"\x14activity_instance_id\x18\x02 \x01(\rR\x12activityInstanceId\x12'\n" +
+	"\x0fconfig_revision\x18\x03 \x01(\rR\x0econfigRevision\x12\"\n" +
+	"\rlocked_pet_id\x18\x04 \x01(\x04R\vlockedPetId\x12&\n" +
+	"\x0fmatched_tier_id\x18\x05 \x01(\rR\rmatchedTierId\x12<\n" +
+	"\flaunch_state\x18\x06 \x01(\x0e2\x19.FestivalBeastLaunchStateR\vlaunchState\x12\x1b\n" +
+	"\tbattle_id\x18\a \x01(\x04R\bbattleId\x12&\n" +
+	"\x0frequested_at_ms\x18\b \x01(\x04R\rrequestedAtMs\x12$\n" +
+	"\x0eadmitted_at_ms\x18\t \x01(\x04R\fadmittedAtMs\x12\"\n" +
+	"\rreject_tip_id\x18\n" +
+	" \x01(\rR\vrejectTipId\x12#\n" +
+	"\rreject_reason\x18\v \x01(\tR\frejectReason\"\xf0\x05\n" +
+	"\x1cFestivalBeastMaterialSummary\x12>\n" +
+	"\n" +
+	"quota_mode\x18\x01 \x01(\x0e2\x1f.FestivalBeastMaterialQuotaModeR\tquotaMode\x12,\n" +
+	"\x12expected_win_units\x18\x02 \x01(\rR\x10expectedWinUnits\x128\n" +
+	"\x18earnable_remaining_units\x18\x03 \x01(\rR\x16earnableRemainingUnits\x12'\n" +
+	"\x0favailable_units\x18\x04 \x01(\x04R\x0eavailableUnits\x128\n" +
+	"\x18available_tradable_units\x18\x05 \x01(\x04R\x16availableTradableUnits\x12!\n" +
+	"\fearned_today\x18\x06 \x01(\rR\vearnedToday\x12\x1f\n" +
+	"\vdaily_limit\x18\a \x01(\rR\n" +
+	"dailyLimit\x12'\n" +
+	"\x10day_starts_at_ms\x18\b \x01(\x04R\rdayStartsAtMs\x12.\n" +
+	"\x14next_day_reset_at_ms\x18\t \x01(\x04R\x10nextDayResetAtMs\x12.\n" +
+	"\x13weekly_phase_active\x18\n" +
+	" \x01(\bR\x11weeklyPhaseActive\x12'\n" +
+	"\x0flifetime_earned\x18\v \x01(\rR\x0elifetimeEarned\x12%\n" +
+	"\x0elifetime_limit\x18\f \x01(\rR\rlifetimeLimit\x12(\n" +
+	"\x10earned_this_week\x18\r \x01(\rR\x0eearnedThisWeek\x12!\n" +
+	"\fweekly_limit\x18\x0e \x01(\rR\vweeklyLimit\x12)\n" +
+	"\x11week_starts_at_ms\x18\x0f \x01(\x04R\x0eweekStartsAtMs\x120\n" +
+	"\x15next_week_reset_at_ms\x18\x10 \x01(\x04R\x11nextWeekResetAtMs\"Q\n" +
+	"\x1dGetFestivalBeastDetailRequest\x120\n" +
+	"\x14activity_instance_id\x18\x01 \x01(\rR\x12activityInstanceId\"\xd7\x0e\n" +
+	"\x1eGetFestivalBeastDetailResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
+	"\rserver_now_ms\x18\x02 \x01(\x04R\vserverNowMs\x12)\n" +
+	"\x05phase\x18\x03 \x01(\x0e2\x13.FestivalBeastPhaseR\x05phase\x120\n" +
+	"\x14activity_instance_id\x18\x04 \x01(\rR\x12activityInstanceId\x12'\n" +
+	"\x0fconfig_revision\x18\x05 \x01(\rR\x0econfigRevision\x12#\n" +
+	"\ractivity_name\x18\x06 \x01(\tR\factivityName\x12\x1b\n" +
+	"\tboss_name\x18\a \x01(\tR\bbossName\x12(\n" +
+	"\x10banner_asset_key\x18\b \x01(\tR\x0ebannerAssetKey\x12\x19\n" +
+	"\bicon_key\x18\t \x01(\tR\aiconKey\x121\n" +
+	"\x15effective_start_at_ms\x18\n" +
+	" \x01(\x04R\x12effectiveStartAtMs\x12-\n" +
+	"\x13effective_end_at_ms\x18\v \x01(\x04R\x10effectiveEndAtMs\x126\n" +
+	"\x18claim_showcase_end_at_ms\x18\f \x01(\x04R\x14claimShowcaseEndAtMs\x12!\n" +
+	"\fcurrent_wins\x18\r \x01(\rR\vcurrentWins\x12#\n" +
+	"\rrequired_wins\x18\x0e \x01(\rR\frequiredWins\x12'\n" +
+	"\x0freward_identity\x18\x0f \x01(\tR\x0erewardIdentity\x12:\n" +
+	"\x19reward_definition_version\x18\x10 \x01(\rR\x17rewardDefinitionVersion\x12-\n" +
+	"\x13reward_pet_table_id\x18\x11 \x01(\rR\x10rewardPetTableId\x12-\n" +
+	"\x13reward_pet_model_id\x18\x12 \x01(\rR\x10rewardPetModelId\x12&\n" +
+	"\x0freward_pet_name\x18\x13 \x01(\tR\rrewardPetName\x12:\n" +
+	"\x19has_permanent_eligibility\x18\x14 \x01(\bR\x17hasPermanentEligibility\x12C\n" +
+	"\x1eeligibility_source_instance_id\x18\x15 \x01(\rR\x1beligibilitySourceInstanceId\x127\n" +
+	"\x18eligibility_earned_at_ms\x18\x16 \x01(\x04R\x15eligibilityEarnedAtMs\x12%\n" +
+	"\x0ereward_claimed\x18\x17 \x01(\bR\rrewardClaimed\x120\n" +
+	"\x14reward_claim_durable\x18\x18 \x01(\bR\x12rewardClaimDurable\x12$\n" +
+	"\x0eclaimed_pet_id\x18\x19 \x01(\x04R\fclaimedPetId\x12\"\n" +
+	"\rclaimed_at_ms\x18\x1a \x01(\x04R\vclaimedAtMs\x12(\n" +
+	"\x10claim_request_id\x18\x1b \x01(\tR\x0eclaimRequestId\x12.\n" +
+	"\x13can_start_challenge\x18\x1c \x01(\bR\x11canStartChallenge\x12G\n" +
+	"\x10start_block_code\x18\x1d \x01(\x0e2\x1d.FestivalBeastActionBlockCodeR\x0estartBlockCode\x12,\n" +
+	"\x12start_block_reason\x18\x1e \x01(\tR\x10startBlockReason\x12(\n" +
+	"\x10can_claim_reward\x18\x1f \x01(\bR\x0ecanClaimReward\x12G\n" +
+	"\x10claim_block_code\x18  \x01(\x0e2\x1d.FestivalBeastActionBlockCodeR\x0eclaimBlockCode\x12,\n" +
+	"\x12claim_block_reason\x18! \x01(\tR\x10claimBlockReason\x12F\n" +
+	"\x0epending_launch\x18\" \x01(\v2\x1f.FestivalBeastPendingLaunchInfoR\rpendingLaunch\x12H\n" +
+	"\x10material_summary\x18# \x01(\v2\x1d.FestivalBeastMaterialSummaryR\x0fmaterialSummary\x12&\n" +
+	"\x0fmatched_tier_id\x18$ \x01(\rR\rmatchedTierId\x12\x1f\n" +
+	"\vround_limit\x18% \x01(\rR\n" +
+	"roundLimit\x120\n" +
+	"\x14heavy_damage_percent\x18& \x01(\rR\x12heavyDamagePercent\x12%\n" +
+	"\x0estate_revision\x18' \x01(\x04R\rstateRevision\"\xab\x01\n" +
+	"\"StartFestivalBeastChallengeRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x120\n" +
+	"\x14activity_instance_id\x18\x02 \x01(\rR\x12activityInstanceId\x12'\n" +
+	"\x0fconfig_revision\x18\x03 \x01(\rR\x0econfigRevision\"\x95\x03\n" +
+	"#StartFestivalBeastChallengeResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12<\n" +
+	"\flaunch_state\x18\x02 \x01(\x0e2\x19.FestivalBeastLaunchStateR\vlaunchState\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12*\n" +
+	"\x11client_request_id\x18\x04 \x01(\tR\x0fclientRequestId\x12\"\n" +
+	"\rlocked_pet_id\x18\x05 \x01(\x04R\vlockedPetId\x12\x1b\n" +
+	"\tbattle_id\x18\x06 \x01(\x04R\bbattleId\x12&\n" +
+	"\x0fmatched_tier_id\x18\a \x01(\rR\rmatchedTierId\x12$\n" +
+	"\x0eadmitted_at_ms\x18\b \x01(\x04R\fadmittedAtMs\x12#\n" +
+	"\rreject_reason\x18\t \x01(\tR\frejectReason\"v\n" +
+	"\x1fClaimFestivalBeastRewardRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\tR\x0fclientRequestId\x12'\n" +
+	"\x0freward_identity\x18\x02 \x01(\tR\x0erewardIdentity\"\xbf\x03\n" +
+	" ClaimFestivalBeastRewardResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x124\n" +
+	"\aoutcome\x18\x02 \x01(\x0e2\x1a.FestivalBeastClaimOutcomeR\aoutcome\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12\x18\n" +
+	"\adurable\x18\x04 \x01(\bR\adurable\x12*\n" +
+	"\x11client_request_id\x18\x05 \x01(\tR\x0fclientRequestId\x12'\n" +
+	"\x0freward_identity\x18\x06 \x01(\tR\x0erewardIdentity\x12:\n" +
+	"\x19reward_definition_version\x18\a \x01(\rR\x17rewardDefinitionVersion\x12-\n" +
+	"\x13reward_pet_table_id\x18\b \x01(\rR\x10rewardPetTableId\x12\x15\n" +
+	"\x06pet_id\x18\t \x01(\x04R\x05petId\x12\"\n" +
+	"\rclaimed_at_ms\x18\n" +
+	" \x01(\x04R\vclaimedAtMs*\x8a\x01\n" +
 	"\x14PlayerActivityStatus\x12\x1f\n" +
 	"\x1bPLAYER_ACTIVITY_UNSCHEDULED\x10\x00\x12\x1c\n" +
 	"\x18PLAYER_ACTIVITY_UPCOMING\x10\x01\x12\x18\n" +
@@ -1107,19 +2545,63 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x1ePLAYER_ACTIVITY_CATEGORY_DAILY\x10\x01\x12$\n" +
 	" PLAYER_ACTIVITY_CATEGORY_LIMITED\x10\x02\x12$\n" +
 	" PLAYER_ACTIVITY_CATEGORY_BENEFIT\x10\x03\x12\"\n" +
-	"\x1ePLAYER_ACTIVITY_CATEGORY_OTHER\x10\x04*\xd0\x01\n" +
+	"\x1ePLAYER_ACTIVITY_CATEGORY_OTHER\x10\x04*\xf0\x01\n" +
 	"\x18PlayerActivityRewardType\x12&\n" +
 	"\"PLAYER_ACTIVITY_REWARD_UNSPECIFIED\x10\x00\x12%\n" +
 	"!PLAYER_ACTIVITY_REWARD_EXPERIENCE\x10\x01\x12\x1e\n" +
 	"\x1aPLAYER_ACTIVITY_REWARD_TAO\x10\x02\x12\x1f\n" +
 	"\x1bPLAYER_ACTIVITY_REWARD_ITEM\x10\x03\x12$\n" +
-	" PLAYER_ACTIVITY_REWARD_EQUIPMENT\x10\x04*c\n" +
+	" PLAYER_ACTIVITY_REWARD_EQUIPMENT\x10\x04\x12\x1e\n" +
+	"\x1aPLAYER_ACTIVITY_REWARD_PET\x10\x05*\x8d\x01\n" +
 	"\x17PlayerActivityEntryKind\x12%\n" +
 	"!PLAYER_ACTIVITY_ENTRY_UNSPECIFIED\x10\x00\x12!\n" +
-	"\x1dPLAYER_ACTIVITY_ENTRY_MISSION\x10\x012\xd7\x01\n" +
+	"\x1dPLAYER_ACTIVITY_ENTRY_MISSION\x10\x01\x12(\n" +
+	"$PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST\x10\x02*\xed\x01\n" +
+	"\x12FestivalBeastPhase\x12$\n" +
+	" FESTIVAL_BEAST_PHASE_UNSPECIFIED\x10\x00\x12$\n" +
+	" FESTIVAL_BEAST_PHASE_UNSCHEDULED\x10\x01\x12!\n" +
+	"\x1dFESTIVAL_BEAST_PHASE_UPCOMING\x10\x02\x12\x1d\n" +
+	"\x19FESTIVAL_BEAST_PHASE_OPEN\x10\x03\x12'\n" +
+	"#FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE\x10\x04\x12 \n" +
+	"\x1cFESTIVAL_BEAST_PHASE_HISTORY\x10\x05*\x9f\x04\n" +
+	"\x1cFestivalBeastActionBlockCode\x12\x1d\n" +
+	"\x19FESTIVAL_BEAST_BLOCK_NONE\x10\x00\x12!\n" +
+	"\x1dFESTIVAL_BEAST_BLOCK_NOT_OPEN\x10\x01\x12'\n" +
+	"#FESTIVAL_BEAST_BLOCK_CONFIG_INVALID\x10\x02\x12\x1f\n" +
+	"\x1bFESTIVAL_BEAST_BLOCK_FROZEN\x10\x03\x12\"\n" +
+	"\x1eFESTIVAL_BEAST_BLOCK_IN_BATTLE\x10\x04\x12%\n" +
+	"!FESTIVAL_BEAST_BLOCK_PET_REQUIRED\x10\x05\x12!\n" +
+	"\x1dFESTIVAL_BEAST_BLOCK_PET_DEAD\x10\x06\x12)\n" +
+	"%FESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT\x10\a\x12%\n" +
+	"!FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE\x10\b\x12(\n" +
+	"$FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED\x10\t\x12)\n" +
+	"%FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING\x10\n" +
+	"\x120\n" +
+	",FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED\x10\v\x12,\n" +
+	"(FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILABLE\x10\f*\xd1\x01\n" +
+	"\x18FestivalBeastLaunchState\x12%\n" +
+	"!FESTIVAL_BEAST_LAUNCH_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fFESTIVAL_BEAST_LAUNCH_LAUNCHING\x10\x01\x12\"\n" +
+	"\x1eFESTIVAL_BEAST_LAUNCH_ADMITTED\x10\x02\x12\"\n" +
+	"\x1eFESTIVAL_BEAST_LAUNCH_REJECTED\x10\x03\x12!\n" +
+	"\x1dFESTIVAL_BEAST_LAUNCH_UNKNOWN\x10\x04*\xd2\x01\n" +
+	"\x19FestivalBeastClaimOutcome\x12$\n" +
+	" FESTIVAL_BEAST_CLAIM_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cFESTIVAL_BEAST_CLAIM_APPLIED\x10\x01\x12(\n" +
+	"$FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED\x10\x02\x12!\n" +
+	"\x1dFESTIVAL_BEAST_CLAIM_REJECTED\x10\x03\x12 \n" +
+	"\x1cFESTIVAL_BEAST_CLAIM_UNKNOWN\x10\x04*\xcb\x01\n" +
+	"\x1eFestivalBeastMaterialQuotaMode\x12'\n" +
+	"#FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED\x10\x00\x12+\n" +
+	"'FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME\x10\x01\x12)\n" +
+	"%FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY\x10\x02\x12(\n" +
+	"$FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY\x10\x032\xfd\x03\n" +
 	"\x19SceneActivityClientPlayer\x12D\n" +
 	"\x0fGetActivityList\x12\x17.GetActivityListRequest\x1a\x18.GetActivityListResponse\x12h\n" +
-	"\x1bClaimActivityVitalityReward\x12#.ClaimActivityVitalityRewardRequest\x1a$.ClaimActivityVitalityRewardResponse\x1a\n" +
+	"\x1bClaimActivityVitalityReward\x12#.ClaimActivityVitalityRewardRequest\x1a$.ClaimActivityVitalityRewardResponse\x12Y\n" +
+	"\x16GetFestivalBeastDetail\x12\x1e.GetFestivalBeastDetailRequest\x1a\x1f.GetFestivalBeastDetailResponse\x12h\n" +
+	"\x1bStartFestivalBeastChallenge\x12#.StartFestivalBeastChallengeRequest\x1a$.StartFestivalBeastChallengeResponse\x12_\n" +
+	"\x18ClaimFestivalBeastReward\x12 .ClaimFestivalBeastRewardRequest\x1a!.ClaimFestivalBeastRewardResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -1134,45 +2616,76 @@ func file_proto_scene_player_activity_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_activity_proto_rawDescData
 }
 
-var file_proto_scene_player_activity_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_scene_player_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_scene_player_activity_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
+var file_proto_scene_player_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_scene_player_activity_proto_goTypes = []any{
 	(PlayerActivityStatus)(0),                   // 0: PlayerActivityStatus
 	(PlayerActivityCategory)(0),                 // 1: PlayerActivityCategory
 	(PlayerActivityRewardType)(0),               // 2: PlayerActivityRewardType
 	(PlayerActivityEntryKind)(0),                // 3: PlayerActivityEntryKind
-	(*PlayerActivityRewardItem)(nil),            // 4: PlayerActivityRewardItem
-	(*PlayerActivityInfo)(nil),                  // 5: PlayerActivityInfo
-	(*PlayerActivityVitalityReward)(nil),        // 6: PlayerActivityVitalityReward
-	(*PlayerActivityVitalitySnapshot)(nil),      // 7: PlayerActivityVitalitySnapshot
-	(*GetActivityListRequest)(nil),              // 8: GetActivityListRequest
-	(*GetActivityListResponse)(nil),             // 9: GetActivityListResponse
-	(*ClaimActivityVitalityRewardRequest)(nil),  // 10: ClaimActivityVitalityRewardRequest
-	(*ClaimActivityVitalityRewardResponse)(nil), // 11: ClaimActivityVitalityRewardResponse
-	(*base.TipInfoMessage)(nil),                 // 12: TipInfoMessage
+	(FestivalBeastPhase)(0),                     // 4: FestivalBeastPhase
+	(FestivalBeastActionBlockCode)(0),           // 5: FestivalBeastActionBlockCode
+	(FestivalBeastLaunchState)(0),               // 6: FestivalBeastLaunchState
+	(FestivalBeastClaimOutcome)(0),              // 7: FestivalBeastClaimOutcome
+	(FestivalBeastMaterialQuotaMode)(0),         // 8: FestivalBeastMaterialQuotaMode
+	(*PlayerActivityRewardItem)(nil),            // 9: PlayerActivityRewardItem
+	(*PlayerActivityInfo)(nil),                  // 10: PlayerActivityInfo
+	(*PlayerActivityVitalityReward)(nil),        // 11: PlayerActivityVitalityReward
+	(*PlayerActivityVitalitySnapshot)(nil),      // 12: PlayerActivityVitalitySnapshot
+	(*GetActivityListRequest)(nil),              // 13: GetActivityListRequest
+	(*GetActivityListResponse)(nil),             // 14: GetActivityListResponse
+	(*ClaimActivityVitalityRewardRequest)(nil),  // 15: ClaimActivityVitalityRewardRequest
+	(*ClaimActivityVitalityRewardResponse)(nil), // 16: ClaimActivityVitalityRewardResponse
+	(*FestivalBeastPendingLaunchInfo)(nil),      // 17: FestivalBeastPendingLaunchInfo
+	(*FestivalBeastMaterialSummary)(nil),        // 18: FestivalBeastMaterialSummary
+	(*GetFestivalBeastDetailRequest)(nil),       // 19: GetFestivalBeastDetailRequest
+	(*GetFestivalBeastDetailResponse)(nil),      // 20: GetFestivalBeastDetailResponse
+	(*StartFestivalBeastChallengeRequest)(nil),  // 21: StartFestivalBeastChallengeRequest
+	(*StartFestivalBeastChallengeResponse)(nil), // 22: StartFestivalBeastChallengeResponse
+	(*ClaimFestivalBeastRewardRequest)(nil),     // 23: ClaimFestivalBeastRewardRequest
+	(*ClaimFestivalBeastRewardResponse)(nil),    // 24: ClaimFestivalBeastRewardResponse
+	(*base.TipInfoMessage)(nil),                 // 25: TipInfoMessage
 }
 var file_proto_scene_player_activity_proto_depIdxs = []int32{
 	0,  // 0: PlayerActivityInfo.status:type_name -> PlayerActivityStatus
 	1,  // 1: PlayerActivityInfo.category:type_name -> PlayerActivityCategory
 	2,  // 2: PlayerActivityInfo.reward_types:type_name -> PlayerActivityRewardType
 	3,  // 3: PlayerActivityInfo.entry_kind:type_name -> PlayerActivityEntryKind
-	4,  // 4: PlayerActivityInfo.rewards:type_name -> PlayerActivityRewardItem
-	4,  // 5: PlayerActivityVitalityReward.items:type_name -> PlayerActivityRewardItem
-	6,  // 6: PlayerActivityVitalitySnapshot.rewards:type_name -> PlayerActivityVitalityReward
-	12, // 7: GetActivityListResponse.error_message:type_name -> TipInfoMessage
-	5,  // 8: GetActivityListResponse.activities:type_name -> PlayerActivityInfo
-	7,  // 9: GetActivityListResponse.vitality:type_name -> PlayerActivityVitalitySnapshot
-	12, // 10: ClaimActivityVitalityRewardResponse.error_message:type_name -> TipInfoMessage
-	7,  // 11: ClaimActivityVitalityRewardResponse.snapshot:type_name -> PlayerActivityVitalitySnapshot
-	8,  // 12: SceneActivityClientPlayer.GetActivityList:input_type -> GetActivityListRequest
-	10, // 13: SceneActivityClientPlayer.ClaimActivityVitalityReward:input_type -> ClaimActivityVitalityRewardRequest
-	9,  // 14: SceneActivityClientPlayer.GetActivityList:output_type -> GetActivityListResponse
-	11, // 15: SceneActivityClientPlayer.ClaimActivityVitalityReward:output_type -> ClaimActivityVitalityRewardResponse
-	14, // [14:16] is the sub-list for method output_type
-	12, // [12:14] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	9,  // 4: PlayerActivityInfo.rewards:type_name -> PlayerActivityRewardItem
+	9,  // 5: PlayerActivityVitalityReward.items:type_name -> PlayerActivityRewardItem
+	11, // 6: PlayerActivityVitalitySnapshot.rewards:type_name -> PlayerActivityVitalityReward
+	25, // 7: GetActivityListResponse.error_message:type_name -> TipInfoMessage
+	10, // 8: GetActivityListResponse.activities:type_name -> PlayerActivityInfo
+	12, // 9: GetActivityListResponse.vitality:type_name -> PlayerActivityVitalitySnapshot
+	25, // 10: ClaimActivityVitalityRewardResponse.error_message:type_name -> TipInfoMessage
+	12, // 11: ClaimActivityVitalityRewardResponse.snapshot:type_name -> PlayerActivityVitalitySnapshot
+	6,  // 12: FestivalBeastPendingLaunchInfo.launch_state:type_name -> FestivalBeastLaunchState
+	8,  // 13: FestivalBeastMaterialSummary.quota_mode:type_name -> FestivalBeastMaterialQuotaMode
+	25, // 14: GetFestivalBeastDetailResponse.error_message:type_name -> TipInfoMessage
+	4,  // 15: GetFestivalBeastDetailResponse.phase:type_name -> FestivalBeastPhase
+	5,  // 16: GetFestivalBeastDetailResponse.start_block_code:type_name -> FestivalBeastActionBlockCode
+	5,  // 17: GetFestivalBeastDetailResponse.claim_block_code:type_name -> FestivalBeastActionBlockCode
+	17, // 18: GetFestivalBeastDetailResponse.pending_launch:type_name -> FestivalBeastPendingLaunchInfo
+	18, // 19: GetFestivalBeastDetailResponse.material_summary:type_name -> FestivalBeastMaterialSummary
+	25, // 20: StartFestivalBeastChallengeResponse.error_message:type_name -> TipInfoMessage
+	6,  // 21: StartFestivalBeastChallengeResponse.launch_state:type_name -> FestivalBeastLaunchState
+	25, // 22: ClaimFestivalBeastRewardResponse.error_message:type_name -> TipInfoMessage
+	7,  // 23: ClaimFestivalBeastRewardResponse.outcome:type_name -> FestivalBeastClaimOutcome
+	13, // 24: SceneActivityClientPlayer.GetActivityList:input_type -> GetActivityListRequest
+	15, // 25: SceneActivityClientPlayer.ClaimActivityVitalityReward:input_type -> ClaimActivityVitalityRewardRequest
+	19, // 26: SceneActivityClientPlayer.GetFestivalBeastDetail:input_type -> GetFestivalBeastDetailRequest
+	21, // 27: SceneActivityClientPlayer.StartFestivalBeastChallenge:input_type -> StartFestivalBeastChallengeRequest
+	23, // 28: SceneActivityClientPlayer.ClaimFestivalBeastReward:input_type -> ClaimFestivalBeastRewardRequest
+	14, // 29: SceneActivityClientPlayer.GetActivityList:output_type -> GetActivityListResponse
+	16, // 30: SceneActivityClientPlayer.ClaimActivityVitalityReward:output_type -> ClaimActivityVitalityRewardResponse
+	20, // 31: SceneActivityClientPlayer.GetFestivalBeastDetail:output_type -> GetFestivalBeastDetailResponse
+	22, // 32: SceneActivityClientPlayer.StartFestivalBeastChallenge:output_type -> StartFestivalBeastChallengeResponse
+	24, // 33: SceneActivityClientPlayer.ClaimFestivalBeastReward:output_type -> ClaimFestivalBeastRewardResponse
+	29, // [29:34] is the sub-list for method output_type
+	24, // [24:29] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_activity_proto_init() }
@@ -1185,8 +2698,8 @@ func file_proto_scene_player_activity_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_activity_proto_rawDesc), len(file_proto_scene_player_activity_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   8,
+			NumEnums:      9,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -63,3 +63,9 @@ services:
 
 volumes:
   passport_mysql_data:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${PASSPORT_SUBNET:-10.249.88.0/24}

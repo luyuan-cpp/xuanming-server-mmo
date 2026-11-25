@@ -111,11 +111,23 @@ struct FCfgPetRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
 	int64 shop_price_gold = 0;
 
-	/** 获取类别：0普通（银两/捕捉），1变异（令牌兑换），2神兽（充值抽奖）。 */
+	/** 获取类别：0普通（银两/捕捉），1变异（令牌兑换），2神兽（活动/专属获取）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
 	int32 acquisition_tier = 0;
 
 	/** 独立五阶身份：1普通/2变异/3灵兽/4神兽/5圣兽。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
 	int32 cultivation_tier = 0;
+
+	/** 流转策略：0普通可正常流转，1绑定角色（禁止玩家间交易、赠送、寄售或作为分解/合成材料，且普通发放/商店/捕捉禁用）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
+	int32 transfer_policy = 0;
+
+	/** 专属赠送容量：0占用普通 max_pets；>0表示该独占种类自带专属赠送位上限，不占普通携带容量，普通商店和捕捉不可占用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
+	int32 exclusive_gift_slots = 0;
+
+	/** true=固定首发资质模板（发放时按 aptitude_min 固定取值，且校验 aptitude_min == aptitude_max，不随机刷资质）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
+	bool fixed_initial_aptitude = false;
 };

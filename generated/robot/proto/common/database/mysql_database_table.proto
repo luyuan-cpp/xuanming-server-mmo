@@ -21,6 +21,7 @@ import "proto/common/component/player_mail_outbox_comp.proto";
 import "proto/common/component/player_season_comp.proto";
 import "proto/common/component/player_trial_journal_comp.proto";
 import "proto/common/component/player_craft_comp.proto";
+import "proto/common/component/player_festival_beast_comp.proto";
 import "proto/common/component/time_comp.proto";
 import "proto/common/component/buff_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
@@ -224,6 +225,9 @@ message player_database
   // 轻量化手艺熟练度（铸器/制卷）、未学技能书架、已书解锁技能与主城原子代打配置（docs/design/equipment-quality-and-skill-crafting-v1.md）。
   // 放 GROWTH 组：与技能、装备、账本同一次存盘同事务提交（满足 I3 原子性）。旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 32，后续从 33 起。
   PlayerCraftComp craft_component = 32 [(OptionPersistGroup) = 3];  // GROWTH
+  // 瑞兽迎春限时活动进度、永久资格、终身领奖回执与跨设备在途开局恢复（docs/design/battle-festival-beast-implementation-contract.md）。
+  // 放 GROWTH 组：与宠物、账本、战果同一次存盘同事务提交（满足 I3 原子性）。旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 33，后续从 34 起。
+  PlayerFestivalBeastComp festival_beast_component = 33 [(OptionPersistGroup) = 3];  // GROWTH
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:

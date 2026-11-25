@@ -12,6 +12,7 @@ import (
 	"login/internal/svc"
 	base "proto/common/base"
 	loginpb "proto/login"
+	"shared/cellroute"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -100,7 +101,7 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 				logx.Errorf("[loginqueue] hold reconnect slot zone=%d player=%d err=%v", in.ZoneId, playerID, err)
 			}
 			loginqueue.RecordAssign(in.ZoneId, loginqueue.AssignOutcomeReconnect)
-			return l.signFastPath(in.ZoneId)
+			return l.signFastPathForPlayer(in.ZoneId, playerID)
 		}
 	}
 
@@ -215,6 +216,10 @@ func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateRespon
 // the legacy AssignGate behavior used when Queue.Enabled=false or when the
 // queue is empty AND capacity is available.
 func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateResponse, error) {
+	return l.signFastPathForPlayer(zoneID, 0)
+}
+
+func (l *AssignGateLogic) signFastPathForPlayer(zoneID uint32, playerID uint64) (*loginpb.AssignGateResponse, error) {
 	candidates, err := l.svcCtx.QueueCapacityProvider().CandidatesForZone(l.ctx, zoneID)
 	if err != nil {
 		logx.Errorf("[loginqueue] fast-path candidates zone=%d err=%v", zoneID, err)
@@ -223,6 +228,7 @@ func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateRespon
 			Error:  "no gate available for requested zone",
 		}, nil
 	}
+	candidates = selectCellAffinityCandidates(l.svcCtx.CellRouter, playerID, candidates)
 	if len(candidates) == 0 {
 		logx.Errorf("[loginqueue] fast-path zone=%d has zero candidates", zoneID)
 		return &loginpb.AssignGateResponse{
@@ -245,6 +251,28 @@ func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateRespon
 		TokenSignature: admit.TokenSignature,
 		TokenDeadline:  admit.TokenDeadline,
 	}, nil
+}
+
+// selectCellAffinityCandidates prefers gates whose ZoneID matches the player's deterministic CellID
+// when CellRouter is enabled, falling back to the full candidate set if none advertise that cell.
+func selectCellAffinityCandidates(router *cellroute.Router, playerID uint64, candidates []loginqueue.GateCandidate) []loginqueue.GateCandidate {
+	if router == nil || playerID == 0 || len(candidates) == 0 {
+		return candidates
+	}
+	loc, err := router.Route(playerID)
+	if err != nil {
+		return candidates
+	}
+	matched := make([]loginqueue.GateCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		if c.ZoneID == loc.CellID {
+			matched = append(matched, c)
+		}
+	}
+	if len(matched) == 0 {
+		return candidates
+	}
+	return matched
 }
 
 // reconnectingPlayer 判断账号是不是已经在本区游戏里(重连 / 顶号),是就返回那个角色的 player_id。

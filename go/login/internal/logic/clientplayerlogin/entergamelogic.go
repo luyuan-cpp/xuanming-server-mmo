@@ -18,6 +18,7 @@ import (
 	login_proto "proto/login"
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
+	"shared/cellroute"
 	"shared/generated/pb/table"
 	"shared/redisslot"
 	"strconv"
@@ -106,6 +107,12 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	if holder := sessionDetails.GetTicketPlayerId(); holder != 0 && holder != in.PlayerId {
 		logx.Errorf("EnterGame rejected: redirect ticket holder mismatch ticket_player=%d request_player=%d session=%d",
 			holder, in.PlayerId, sessionDetails.SessionId)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginEnterGameGuid)}
+		return resp, nil
+	}
+
+	// 1c. Optional cellular ownership guard (docs/design/region-cell-routing-alignment.md).
+	if err := checkCellRouteOwnership(l.svcCtx.CellRouter, config.AppConfig.CellRoute, in.PlayerId); err != nil {
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginEnterGameGuid)}
 		return resp, nil
 	}
@@ -442,6 +449,31 @@ func notifyEnterGameFailed(ctx context.Context, pusher enterFailureTipPusher, st
 	failureNotifyCounter.Inc(stage, notifyOutcomeSent)
 	logx.Infof("EnterGame failure tip sent [PlayerId=%d session=%d stage=%s gate=%s tip=%d]",
 		state.playerID, state.sessionID, stage, state.gateID, tipID)
+}
+
+// checkCellRouteOwnership verifies deterministic 4096-slot cell ownership when CellRouter is enabled.
+// When EnforceOwnership is false it logs foreign-cell arrivals without blocking (safe shadow rollout).
+func checkCellRouteOwnership(router *cellroute.Router, cfg cellroute.Conf, playerID uint64) error {
+	if router == nil {
+		return nil
+	}
+	loc, err := router.Route(playerID)
+	if err != nil {
+		logx.Errorf("[cellroute] EnterGame route lookup failed player_id=%d err=%v", playerID, err)
+		if cfg.EnforceOwnership {
+			return err
+		}
+		return nil
+	}
+	if (cfg.SelfRegion != 0 || cfg.SelfCell != 0) && (loc.RegionID != cfg.SelfRegion || loc.CellID != cfg.SelfCell) {
+		logx.Errorf("[cellroute] foreign cell EnterGame detected player_id=%d self=(%d,%d) owner=(%d,%d) logical_cell=%d enforce=%v",
+			playerID, cfg.SelfRegion, cfg.SelfCell, loc.RegionID, loc.CellID, loc.LogicalCell, cfg.EnforceOwnership)
+		if cfg.EnforceOwnership {
+			return fmt.Errorf("player %d belongs to cell (%d,%d), not local cell (%d,%d)",
+				playerID, loc.RegionID, loc.CellID, cfg.SelfRegion, cfg.SelfCell)
+		}
+	}
+	return nil
 }
 
 func buildEnterGameSessionState(in *login_proto.EnterGameRequest, sessionDetails *login_proto_common.SessionDetails, account string) enterGameSessionState {

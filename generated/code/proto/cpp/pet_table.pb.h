@@ -244,6 +244,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
     kAcquisitionTierFieldNumber = 15,
     kShopPriceGoldFieldNumber = 14,
     kCultivationTierFieldNumber = 16,
+    kTransferPolicyFieldNumber = 17,
+    kExclusiveGiftSlotsFieldNumber = 18,
+    kFixedInitialAptitudeFieldNumber = 19,
   };
   // repeated uint32 aptitude_min = 11;
   [[nodiscard]] int aptitude_min_size()
@@ -445,11 +448,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
   void _internal_set_cultivation_tier(::uint32_t value);
 
   public:
+  // uint32 transfer_policy = 17;
+  void clear_transfer_policy() ;
+  [[nodiscard]] ::uint32_t transfer_policy() const;
+  void set_transfer_policy(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_transfer_policy() const;
+  void _internal_set_transfer_policy(::uint32_t value);
+
+  public:
+  // uint32 exclusive_gift_slots = 18;
+  void clear_exclusive_gift_slots() ;
+  [[nodiscard]] ::uint32_t exclusive_gift_slots() const;
+  void set_exclusive_gift_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_exclusive_gift_slots() const;
+  void _internal_set_exclusive_gift_slots(::uint32_t value);
+
+  public:
+  // bool fixed_initial_aptitude = 19;
+  void clear_fixed_initial_aptitude() ;
+  [[nodiscard]] bool fixed_initial_aptitude() const;
+  void set_fixed_initial_aptitude(bool value);
+
+  private:
+  bool _internal_fixed_initial_aptitude() const;
+  void _internal_set_fixed_initial_aptitude(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
+      ::google::protobuf::internal::TcParseTable<5, 19,
                           0, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -497,6 +530,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
     ::uint32_t acquisition_tier_;
     ::uint64_t shop_price_gold_;
     ::uint32_t cultivation_tier_;
+    ::uint32_t transfer_policy_;
+    ::uint32_t exclusive_gift_slots_;
+    bool fixed_initial_aptitude_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1274,6 +1310,78 @@ inline ::uint32_t PetTable::_internal_cultivation_tier() const {
 inline void PetTable::_internal_set_cultivation_tier(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cultivation_tier_ = value;
+}
+
+// uint32 transfer_policy = 17;
+inline void PetTable::clear_transfer_policy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.transfer_policy_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t PetTable::transfer_policy() const {
+  // @@protoc_insertion_point(field_get:PetTable.transfer_policy)
+  return _internal_transfer_policy();
+}
+inline void PetTable::set_transfer_policy(::uint32_t value) {
+  _internal_set_transfer_policy(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:PetTable.transfer_policy)
+}
+inline ::uint32_t PetTable::_internal_transfer_policy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.transfer_policy_;
+}
+inline void PetTable::_internal_set_transfer_policy(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.transfer_policy_ = value;
+}
+
+// uint32 exclusive_gift_slots = 18;
+inline void PetTable::clear_exclusive_gift_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exclusive_gift_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t PetTable::exclusive_gift_slots() const {
+  // @@protoc_insertion_point(field_get:PetTable.exclusive_gift_slots)
+  return _internal_exclusive_gift_slots();
+}
+inline void PetTable::set_exclusive_gift_slots(::uint32_t value) {
+  _internal_set_exclusive_gift_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:PetTable.exclusive_gift_slots)
+}
+inline ::uint32_t PetTable::_internal_exclusive_gift_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exclusive_gift_slots_;
+}
+inline void PetTable::_internal_set_exclusive_gift_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exclusive_gift_slots_ = value;
+}
+
+// bool fixed_initial_aptitude = 19;
+inline void PetTable::clear_fixed_initial_aptitude() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.fixed_initial_aptitude_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline bool PetTable::fixed_initial_aptitude() const {
+  // @@protoc_insertion_point(field_get:PetTable.fixed_initial_aptitude)
+  return _internal_fixed_initial_aptitude();
+}
+inline void PetTable::set_fixed_initial_aptitude(bool value) {
+  _internal_set_fixed_initial_aptitude(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:PetTable.fixed_initial_aptitude)
+}
+inline bool PetTable::_internal_fixed_initial_aptitude() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.fixed_initial_aptitude_;
+}
+inline void PetTable::_internal_set_fixed_initial_aptitude(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.fixed_initial_aptitude_ = value;
 }
 
 // -------------------------------------------------------------------

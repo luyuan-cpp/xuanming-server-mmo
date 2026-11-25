@@ -28,11 +28,13 @@ enum PlayerActivityRewardType {
   PLAYER_ACTIVITY_REWARD_TAO = 2;
   PLAYER_ACTIVITY_REWARD_ITEM = 3;
   PLAYER_ACTIVITY_REWARD_EQUIPMENT = 4;
+  PLAYER_ACTIVITY_REWARD_PET = 5;
 }
 
 enum PlayerActivityEntryKind {
   PLAYER_ACTIVITY_ENTRY_UNSPECIFIED = 0;
   PLAYER_ACTIVITY_ENTRY_MISSION = 1;
+  PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST = 2;
 }
 
 message PlayerActivityRewardItem {
@@ -69,6 +71,8 @@ message PlayerActivityInfo {
   string completion_period = 21;
   uint32 vitality_points = 22;
   repeated PlayerActivityRewardItem rewards = 23;
+  // true 表示该活动入口当前有可立即领取的奖励（含活动结束后的永久神兽待领资格），UI 据此展示红点。
+  bool has_claimable_reward = 24;
 }
 
 message PlayerActivityVitalityReward {
@@ -123,11 +127,183 @@ message ClaimActivityVitalityRewardResponse {
   bool replayed = 6;
 }
 
+// ---- 瑞兽迎春限时活动客户端契约（docs/design/battle-festival-beast-implementation-contract.md）----
+
+enum FestivalBeastPhase {
+  FESTIVAL_BEAST_PHASE_UNSPECIFIED = 0;
+  FESTIVAL_BEAST_PHASE_UNSCHEDULED = 1;    // 未排期/未开启
+  FESTIVAL_BEAST_PHASE_UPCOMING = 2;       // 已排期预告（未到 effective_start_at_ms）
+  FESTIVAL_BEAST_PHASE_OPEN = 3;           // 开放挑战 [effective_start_at_ms, effective_end_at_ms)
+  FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE = 4; // 结束后 7 天集中领奖展示 [end, end + 7d)
+  FESTIVAL_BEAST_PHASE_HISTORY = 5;        // 超过 7 天展示期转入历史（已达成永久资格仍永远可领）
+}
+
+enum FestivalBeastActionBlockCode {
+  FESTIVAL_BEAST_BLOCK_NONE = 0;
+  FESTIVAL_BEAST_BLOCK_NOT_OPEN = 1;
+  FESTIVAL_BEAST_BLOCK_CONFIG_INVALID = 2;
+  FESTIVAL_BEAST_BLOCK_FROZEN = 3;
+  FESTIVAL_BEAST_BLOCK_IN_BATTLE = 4;
+  FESTIVAL_BEAST_BLOCK_PET_REQUIRED = 5;
+  FESTIVAL_BEAST_BLOCK_PET_DEAD = 6;
+  FESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT = 7;
+  FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE = 8;
+  FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED = 9;
+  FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING = 10;
+  FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED = 11;
+  FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILABLE = 12;
+}
+
+enum FestivalBeastLaunchState {
+  FESTIVAL_BEAST_LAUNCH_UNSPECIFIED = 0;
+  FESTIVAL_BEAST_LAUNCH_LAUNCHING = 1;
+  FESTIVAL_BEAST_LAUNCH_ADMITTED = 2;
+  FESTIVAL_BEAST_LAUNCH_REJECTED = 3;
+  FESTIVAL_BEAST_LAUNCH_UNKNOWN = 4;
+}
+
+enum FestivalBeastClaimOutcome {
+  FESTIVAL_BEAST_CLAIM_UNSPECIFIED = 0;
+  FESTIVAL_BEAST_CLAIM_APPLIED = 1;
+  FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED = 2;
+  FESTIVAL_BEAST_CLAIM_REJECTED = 3;
+  FESTIVAL_BEAST_CLAIM_UNKNOWN = 4;
+}
+
+enum FestivalBeastMaterialQuotaMode {
+  FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED = 0;
+  FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME = 1; // 首套 660 份永久池（无日限）
+  FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY = 2;   // 满 660 后每周 100 份全绑定（UTC+8 周一 05:00 重置）
+  FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY = 3;    // 旧版每日 20 份（UTC+8 每日 05:00 重置）
+}
+
+message FestivalBeastPendingLaunchInfo {
+  string client_request_id = 1;
+  uint32 activity_instance_id = 2;
+  uint32 config_revision = 3;
+  uint64 locked_pet_id = 4;
+  uint32 matched_tier_id = 5;
+  FestivalBeastLaunchState launch_state = 6;
+  uint64 battle_id = 7;
+  uint64 requested_at_ms = 8;
+  uint64 admitted_at_ms = 9;
+  uint32 reject_tip_id = 10;
+  string reject_reason = 11;
+}
+
+message FestivalBeastMaterialSummary {
+  FestivalBeastMaterialQuotaMode quota_mode = 1;
+  uint32 expected_win_units = 2;        // 本活动单场胜利预计新增份数（0..10）
+  uint32 earnable_remaining_units = 3;  // 当前阶段/周期还可赚取的材料额度
+  uint64 available_units = 4;           // 跨日/跨周累计待领取余额
+  uint64 available_tradable_units = 5;  // 待领取余额中可交易份数
+  uint32 earned_today = 6;              // 兼容字段：今日已赚
+  uint32 daily_limit = 7;               // 兼容字段：日限参考值
+  uint64 day_starts_at_ms = 8;          // 当前游戏日开始 UTC 毫秒（UTC+8 05:00）
+  uint64 next_day_reset_at_ms = 9;      // 下一游戏日切换 UTC 毫秒（UTC+8 05:00）
+  bool weekly_phase_active = 10;        // 是否已进入第二阶段周限池
+  uint32 lifetime_earned = 11;          // 阶段一累计已赚
+  uint32 lifetime_limit = 12;           // 阶段一总池（660）
+  uint32 earned_this_week = 13;         // 阶段二本周已赚
+  uint32 weekly_limit = 14;             // 阶段二周限（100）
+  uint64 week_starts_at_ms = 15;        // 本周开始 UTC 毫秒（UTC+8 周一 05:00）
+  uint64 next_week_reset_at_ms = 16;    // 下周重置 UTC 毫秒
+}
+
+message GetFestivalBeastDetailRequest {
+  // 0 表示查询当前权威期次（无开放期次时返回最近有未领/已领记录的历史期次）。
+  uint32 activity_instance_id = 1;
+}
+
+message GetFestivalBeastDetailResponse {
+  TipInfoMessage error_message = 1;
+  uint64 server_now_ms = 2;
+  FestivalBeastPhase phase = 3;
+  uint32 activity_instance_id = 4;
+  uint32 config_revision = 5;
+  string activity_name = 6;
+  string boss_name = 7;
+  string banner_asset_key = 8;
+  string icon_key = 9;
+  uint64 effective_start_at_ms = 10;
+  uint64 effective_end_at_ms = 11;
+  uint64 claim_showcase_end_at_ms = 12;
+  uint32 current_wins = 13;
+  uint32 required_wins = 14;
+  string reward_identity = 15;
+  uint32 reward_definition_version = 16;
+  uint32 reward_pet_table_id = 17;
+  uint32 reward_pet_model_id = 18;
+  string reward_pet_name = 19;
+  bool has_permanent_eligibility = 20;
+  uint32 eligibility_source_instance_id = 21;
+  uint64 eligibility_earned_at_ms = 22;
+  bool reward_claimed = 23;
+  bool reward_claim_durable = 24;
+  uint64 claimed_pet_id = 25;
+  uint64 claimed_at_ms = 26;
+  string claim_request_id = 27;
+  bool can_start_challenge = 28;
+  FestivalBeastActionBlockCode start_block_code = 29;
+  string start_block_reason = 30;
+  bool can_claim_reward = 31;
+  FestivalBeastActionBlockCode claim_block_code = 32;
+  string claim_block_reason = 33;
+  FestivalBeastPendingLaunchInfo pending_launch = 34;
+  FestivalBeastMaterialSummary material_summary = 35;
+  uint32 matched_tier_id = 36;
+  uint32 round_limit = 37;
+  uint32 heavy_damage_percent = 38;
+  uint64 state_revision = 39;
+}
+
+message StartFestivalBeastChallengeRequest {
+  string client_request_id = 1;
+  uint32 activity_instance_id = 2;
+  uint32 config_revision = 3;
+}
+
+message StartFestivalBeastChallengeResponse {
+  TipInfoMessage error_message = 1;
+  FestivalBeastLaunchState launch_state = 2;
+  bool replayed = 3;
+  string client_request_id = 4;
+  uint64 locked_pet_id = 5;
+  uint64 battle_id = 6;
+  uint32 matched_tier_id = 7;
+  uint64 admitted_at_ms = 8;
+  string reject_reason = 9;
+}
+
+message ClaimFestivalBeastRewardRequest {
+  string client_request_id = 1;
+  string reward_identity = 2;
+}
+
+message ClaimFestivalBeastRewardResponse {
+  TipInfoMessage error_message = 1;
+  FestivalBeastClaimOutcome outcome = 2;
+  bool replayed = 3;
+  bool durable = 4;
+  string client_request_id = 5;
+  string reward_identity = 6;
+  uint32 reward_definition_version = 7;
+  uint32 reward_pet_table_id = 8;
+  uint64 pet_id = 9;
+  uint64 claimed_at_ms = 10;
+}
+
 service SceneActivityClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
-  // 目录只读取 MissionTable.mission_type=2；无运营时间配置时一律未排期。
+  // 目录只读取 MissionTable.mission_type=2 及限时瑞兽迎春入口；无运营时间配置时一律未排期（永久未领资格仍展示）。
   rpc GetActivityList (GetActivityListRequest) returns (GetActivityListResponse);
   // 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
   rpc ClaimActivityVitalityReward (ClaimActivityVitalityRewardRequest) returns (ClaimActivityVitalityRewardResponse);
+  // 查询瑞兽迎春详情、永久资格、材料摘要及跨设备在途开局/领奖恢复态。
+  rpc GetFestivalBeastDetail (GetFestivalBeastDetailRequest) returns (GetFestivalBeastDetailResponse);
+  // 发起瑞兽迎春单人挑战（锁定出战宝宝、持久化在途开局并走 Match 权威准入）。
+  rpc StartFestivalBeastChallenge (StartFestivalBeastChallengeRequest) returns (StartFestivalBeastChallengeResponse);
+  // 领取瑞兽迎春永久待领神兽奖励（同 UUID 重放，异 UUID 并发收敛至同一只宝宝，落盘确认后公开 durable=true）。
+  rpc ClaimFestivalBeastReward (ClaimFestivalBeastRewardRequest) returns (ClaimFestivalBeastRewardResponse);
 }

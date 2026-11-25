@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"login/internal/config"
 	"login/internal/kafka"
@@ -33,6 +34,7 @@ import (
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
+	"shared/cellroute"
 	"shared/clientendpoint"
 	"shared/clusterredis"
 	"shared/contentguard"
@@ -148,6 +150,9 @@ type ServiceContext struct {
 	accountDeletionStop context.CancelFunc
 	// authCleanup 只拥有生产口令的专用 Redis 池与只读 SQL 连接。
 	authCleanup func()
+	// CellRouter provides optional 4096-slot deterministic Region->Cell routing (nil when CellRoute.Mode is empty).
+	CellRouter    *cellroute.Router
+	cellRouteStop func()
 	// TableBundle 负责 login 配表启动校验与运行期两阶段热更。
 	TableBundle *tablebundle.Manager
 }
@@ -300,6 +305,12 @@ func NewServiceContext() *ServiceContext {
 	sc.AccountDirectory = directoryClient
 	sc.initAccountDeletion(directoryClient)
 	sc.initAntiAddiction()
+	cellRouter, cellStop, err := initCellRouter(ctx, config.AppConfig.CellRoute, etcdClient)
+	if err != nil {
+		panic(fmt.Errorf("login cellroute init failed: %w", err))
+	}
+	sc.CellRouter = cellRouter
+	sc.cellRouteStop = cellStop
 	initialized = true
 	return sc
 }
@@ -938,6 +949,9 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		if s.antiAddictionStop != nil {
 			s.antiAddictionStop()
 		}
+		if s.cellRouteStop != nil {
+			s.cellRouteStop()
+		}
 		if s.preloadStatsStop != nil {
 			close(s.preloadStatsStop)
 		}
@@ -1178,4 +1192,15 @@ func (s *ServiceContext) StartForDrain() {
 func (s *ServiceContext) BootInstance() []byte {
 	instance := s.bootInstance
 	return instance[:]
+}
+
+func initCellRouter(ctx context.Context, cfg cellroute.Conf, etcdClient *clientv3.Client) (*cellroute.Router, func(), error) {
+	router, stop, err := cellroute.BuildRouter(ctx, cfg, etcdClient)
+	if err != nil {
+		return nil, nil, err
+	}
+	if router != nil {
+		logx.Infof("[login] cellroute router ready: mode=%s cells=%d etcd_key=%q", cfg.Mode, len(cfg.Cells), cfg.EtcdKey)
+	}
+	return router, stop, nil
 }

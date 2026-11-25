@@ -34,6 +34,9 @@ const std::unordered_map<uint64_t, uint32_t> TrialJournalSealBitMap{
     { 3022, 27 },
     { 3031, 28 },
     { 3032, 29 },
+    { 1051, 30 },
+    { 1052, 31 },
+    { 1053, 32 },
 };
 
-constexpr uint32_t kTrialJournalSealBitmapCapacity = 30;
+constexpr uint32_t kTrialJournalSealBitmapCapacity = 33;

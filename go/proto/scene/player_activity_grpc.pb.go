@@ -21,16 +21,25 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	SceneActivityClientPlayer_GetActivityList_FullMethodName             = "/SceneActivityClientPlayer/GetActivityList"
 	SceneActivityClientPlayer_ClaimActivityVitalityReward_FullMethodName = "/SceneActivityClientPlayer/ClaimActivityVitalityReward"
+	SceneActivityClientPlayer_GetFestivalBeastDetail_FullMethodName      = "/SceneActivityClientPlayer/GetFestivalBeastDetail"
+	SceneActivityClientPlayer_StartFestivalBeastChallenge_FullMethodName = "/SceneActivityClientPlayer/StartFestivalBeastChallenge"
+	SceneActivityClientPlayer_ClaimFestivalBeastReward_FullMethodName    = "/SceneActivityClientPlayer/ClaimFestivalBeastReward"
 )
 
 // SceneActivityClientPlayerClient is the client API for SceneActivityClientPlayer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SceneActivityClientPlayerClient interface {
-	// 目录只读取 MissionTable.mission_type=2；无运营时间配置时一律未排期。
+	// 目录只读取 MissionTable.mission_type=2 及限时瑞兽迎春入口；无运营时间配置时一律未排期（永久未领资格仍展示）。
 	GetActivityList(ctx context.Context, in *GetActivityListRequest, opts ...grpc.CallOption) (*GetActivityListResponse, error)
 	// 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
 	ClaimActivityVitalityReward(ctx context.Context, in *ClaimActivityVitalityRewardRequest, opts ...grpc.CallOption) (*ClaimActivityVitalityRewardResponse, error)
+	// 查询瑞兽迎春详情、永久资格、材料摘要及跨设备在途开局/领奖恢复态。
+	GetFestivalBeastDetail(ctx context.Context, in *GetFestivalBeastDetailRequest, opts ...grpc.CallOption) (*GetFestivalBeastDetailResponse, error)
+	// 发起瑞兽迎春单人挑战（锁定出战宝宝、持久化在途开局并走 Match 权威准入）。
+	StartFestivalBeastChallenge(ctx context.Context, in *StartFestivalBeastChallengeRequest, opts ...grpc.CallOption) (*StartFestivalBeastChallengeResponse, error)
+	// 领取瑞兽迎春永久待领神兽奖励（同 UUID 重放，异 UUID 并发收敛至同一只宝宝，落盘确认后公开 durable=true）。
+	ClaimFestivalBeastReward(ctx context.Context, in *ClaimFestivalBeastRewardRequest, opts ...grpc.CallOption) (*ClaimFestivalBeastRewardResponse, error)
 }
 
 type sceneActivityClientPlayerClient struct {
@@ -61,14 +70,50 @@ func (c *sceneActivityClientPlayerClient) ClaimActivityVitalityReward(ctx contex
 	return out, nil
 }
 
+func (c *sceneActivityClientPlayerClient) GetFestivalBeastDetail(ctx context.Context, in *GetFestivalBeastDetailRequest, opts ...grpc.CallOption) (*GetFestivalBeastDetailResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFestivalBeastDetailResponse)
+	err := c.cc.Invoke(ctx, SceneActivityClientPlayer_GetFestivalBeastDetail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneActivityClientPlayerClient) StartFestivalBeastChallenge(ctx context.Context, in *StartFestivalBeastChallengeRequest, opts ...grpc.CallOption) (*StartFestivalBeastChallengeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartFestivalBeastChallengeResponse)
+	err := c.cc.Invoke(ctx, SceneActivityClientPlayer_StartFestivalBeastChallenge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneActivityClientPlayerClient) ClaimFestivalBeastReward(ctx context.Context, in *ClaimFestivalBeastRewardRequest, opts ...grpc.CallOption) (*ClaimFestivalBeastRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimFestivalBeastRewardResponse)
+	err := c.cc.Invoke(ctx, SceneActivityClientPlayer_ClaimFestivalBeastReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneActivityClientPlayerServer is the server API for SceneActivityClientPlayer service.
 // All implementations must embed UnimplementedSceneActivityClientPlayerServer
 // for forward compatibility.
 type SceneActivityClientPlayerServer interface {
-	// 目录只读取 MissionTable.mission_type=2；无运营时间配置时一律未排期。
+	// 目录只读取 MissionTable.mission_type=2 及限时瑞兽迎春入口；无运营时间配置时一律未排期（永久未领资格仍展示）。
 	GetActivityList(context.Context, *GetActivityListRequest) (*GetActivityListResponse, error)
 	// 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
 	ClaimActivityVitalityReward(context.Context, *ClaimActivityVitalityRewardRequest) (*ClaimActivityVitalityRewardResponse, error)
+	// 查询瑞兽迎春详情、永久资格、材料摘要及跨设备在途开局/领奖恢复态。
+	GetFestivalBeastDetail(context.Context, *GetFestivalBeastDetailRequest) (*GetFestivalBeastDetailResponse, error)
+	// 发起瑞兽迎春单人挑战（锁定出战宝宝、持久化在途开局并走 Match 权威准入）。
+	StartFestivalBeastChallenge(context.Context, *StartFestivalBeastChallengeRequest) (*StartFestivalBeastChallengeResponse, error)
+	// 领取瑞兽迎春永久待领神兽奖励（同 UUID 重放，异 UUID 并发收敛至同一只宝宝，落盘确认后公开 durable=true）。
+	ClaimFestivalBeastReward(context.Context, *ClaimFestivalBeastRewardRequest) (*ClaimFestivalBeastRewardResponse, error)
 	mustEmbedUnimplementedSceneActivityClientPlayerServer()
 }
 
@@ -84,6 +129,15 @@ func (UnimplementedSceneActivityClientPlayerServer) GetActivityList(context.Cont
 }
 func (UnimplementedSceneActivityClientPlayerServer) ClaimActivityVitalityReward(context.Context, *ClaimActivityVitalityRewardRequest) (*ClaimActivityVitalityRewardResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimActivityVitalityReward not implemented")
+}
+func (UnimplementedSceneActivityClientPlayerServer) GetFestivalBeastDetail(context.Context, *GetFestivalBeastDetailRequest) (*GetFestivalBeastDetailResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFestivalBeastDetail not implemented")
+}
+func (UnimplementedSceneActivityClientPlayerServer) StartFestivalBeastChallenge(context.Context, *StartFestivalBeastChallengeRequest) (*StartFestivalBeastChallengeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartFestivalBeastChallenge not implemented")
+}
+func (UnimplementedSceneActivityClientPlayerServer) ClaimFestivalBeastReward(context.Context, *ClaimFestivalBeastRewardRequest) (*ClaimFestivalBeastRewardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimFestivalBeastReward not implemented")
 }
 func (UnimplementedSceneActivityClientPlayerServer) mustEmbedUnimplementedSceneActivityClientPlayerServer() {
 }
@@ -143,6 +197,60 @@ func _SceneActivityClientPlayer_ClaimActivityVitalityReward_Handler(srv interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneActivityClientPlayer_GetFestivalBeastDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFestivalBeastDetailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneActivityClientPlayerServer).GetFestivalBeastDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneActivityClientPlayer_GetFestivalBeastDetail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneActivityClientPlayerServer).GetFestivalBeastDetail(ctx, req.(*GetFestivalBeastDetailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneActivityClientPlayer_StartFestivalBeastChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartFestivalBeastChallengeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneActivityClientPlayerServer).StartFestivalBeastChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneActivityClientPlayer_StartFestivalBeastChallenge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneActivityClientPlayerServer).StartFestivalBeastChallenge(ctx, req.(*StartFestivalBeastChallengeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneActivityClientPlayer_ClaimFestivalBeastReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimFestivalBeastRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneActivityClientPlayerServer).ClaimFestivalBeastReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneActivityClientPlayer_ClaimFestivalBeastReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneActivityClientPlayerServer).ClaimFestivalBeastReward(ctx, req.(*ClaimFestivalBeastRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneActivityClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneActivityClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -157,6 +265,18 @@ var SceneActivityClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimActivityVitalityReward",
 			Handler:    _SceneActivityClientPlayer_ClaimActivityVitalityReward_Handler,
+		},
+		{
+			MethodName: "GetFestivalBeastDetail",
+			Handler:    _SceneActivityClientPlayer_GetFestivalBeastDetail_Handler,
+		},
+		{
+			MethodName: "StartFestivalBeastChallenge",
+			Handler:    _SceneActivityClientPlayer_StartFestivalBeastChallenge_Handler,
+		},
+		{
+			MethodName: "ClaimFestivalBeastReward",
+			Handler:    _SceneActivityClientPlayer_ClaimFestivalBeastReward_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

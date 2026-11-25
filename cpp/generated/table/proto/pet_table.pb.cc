@@ -48,11 +48,11 @@ constexpr PetTable::ParseTableT_ PetTable::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(PetTable, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      19, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294443008,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      19,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,10 +62,7 @@ constexpr PetTable::ParseTableT_ PetTable::InternalGenerateParseTable_(const ::_
       ::_pbi::TcParser::GetTable<::PetTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 cultivation_tier = 16;
-      {::_pbi::TcParser::FastV32S2,
-       {384, 15, 0,
-        PROTOBUF_FIELD_OFFSET(PetTable, _impl_.cultivation_tier_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTable, _impl_.id_), 5>(),
        {8, 5, 0,
@@ -126,6 +123,34 @@ constexpr PetTable::ParseTableT_ PetTable::InternalGenerateParseTable_(const ::_
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTable, _impl_.acquisition_tier_), 13>(),
        {120, 13, 0,
         PROTOBUF_FIELD_OFFSET(PetTable, _impl_.acquisition_tier_)}},
+      // uint32 cultivation_tier = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(PetTable, _impl_.cultivation_tier_)}},
+      // uint32 transfer_policy = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(PetTable, _impl_.transfer_policy_)}},
+      // uint32 exclusive_gift_slots = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(PetTable, _impl_.exclusive_gift_slots_)}},
+      // bool fixed_initial_aptitude = 19;
+      {::_pbi::TcParser::FastV8S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(PetTable, _impl_.fixed_initial_aptitude_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -161,6 +186,12 @@ constexpr PetTable::ParseTableT_ PetTable::InternalGenerateParseTable_(const ::_
       {PROTOBUF_FIELD_OFFSET(PetTable, _impl_.acquisition_tier_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cultivation_tier = 16;
       {PROTOBUF_FIELD_OFFSET(PetTable, _impl_.cultivation_tier_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 transfer_policy = 17;
+      {PROTOBUF_FIELD_OFFSET(PetTable, _impl_.transfer_policy_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 exclusive_gift_slots = 18;
+      {PROTOBUF_FIELD_OFFSET(PetTable, _impl_.exclusive_gift_slots_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool fixed_initial_aptitude = 19;
+      {PROTOBUF_FIELD_OFFSET(PetTable, _impl_.fixed_initial_aptitude_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -211,7 +242,10 @@ inline constexpr PetTable::Impl_::Impl_(
         level_cap_{0u},
         acquisition_tier_{0u},
         shop_price_gold_{::uint64_t{0u}},
-        cultivation_tier_{0u} {}
+        cultivation_tier_{0u},
+        transfer_policy_{0u},
+        exclusive_gift_slots_{0u},
+        fixed_initial_aptitude_{false} {}
 
 template <typename>
 constexpr PetTable::PetTable(::_pbi::ConstantInitialized,
@@ -465,7 +499,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_._has_bits_),
-        19, // hasbit index offset
+        22, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.desc_),
@@ -482,6 +516,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.shop_price_gold_),
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.acquisition_tier_),
         PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.cultivation_tier_),
+        PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.transfer_policy_),
+        PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.exclusive_gift_slots_),
+        PROTOBUF_FIELD_OFFSET(::PetTable, _impl_.fixed_initial_aptitude_),
         5,
         3,
         4,
@@ -498,6 +535,9 @@ const ::uint32_t
         14,
         13,
         15,
+        16,
+        17,
+        18,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -508,7 +548,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PetTable)},
-        {35, sizeof(::PetTableData)},
+        {41, sizeof(::PetTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -517,7 +557,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_pet_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\017pet_table.proto\"\302\002\n\010PetTable\022\n\n\002id\030\001 \001"
+    "\n\017pet_table.proto\"\231\003\n\010PetTable\022\n\n\002id\030\001 \001"
     "(\r\022\014\n\004name\030\002 \001(\t\022\014\n\004desc\030\003 \001(\t\022\020\n\010model_"
     "id\030\004 \001(\r\022\017\n\007quality\030\005 \001(\r\022\024\n\014unlock_leve"
     "l\030\006 \001(\r\022\021\n\tlevel_cap\030\007 \001(\r\022\023\n\013init_healt"
@@ -525,16 +565,18 @@ const char descriptor_table_protodef_pet_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTIO
     "\030\n \001(\004\022\024\n\014aptitude_min\030\013 \003(\r\022\024\n\014aptitude"
     "_max\030\014 \003(\r\022\r\n\005skill\030\r \003(\r\022\027\n\017shop_price_"
     "gold\030\016 \001(\004\022\030\n\020acquisition_tier\030\017 \001(\r\022\030\n\020"
-    "cultivation_tier\030\020 \001(\r\"\'\n\014PetTableData\022\027"
-    "\n\004data\030\001 \003(\0132\t.PetTableB:\n\016com.game.tabl"
-    "eB\022PetTableOuterClassP\001Z\022generated/pb/ta"
-    "bleb\006proto3"
+    "cultivation_tier\030\020 \001(\r\022\027\n\017transfer_polic"
+    "y\030\021 \001(\r\022\034\n\024exclusive_gift_slots\030\022 \001(\r\022\036\n"
+    "\026fixed_initial_aptitude\030\023 \001(\010\"\'\n\014PetTabl"
+    "eData\022\027\n\004data\030\001 \003(\0132\t.PetTableB:\n\016com.ga"
+    "me.tableB\022PetTableOuterClassP\001Z\022generate"
+    "d/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_pet_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pet_5ftable_2eproto = {
     false,
     false,
-    451,
+    538,
     descriptor_table_protodef_pet_5ftable_2eproto,
     "pet_table.proto",
     &descriptor_table_pet_5ftable_2eproto_once,
@@ -609,9 +651,9 @@ PetTable::PetTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, cultivation_tier_) -
+           offsetof(Impl_, fixed_initial_aptitude_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::cultivation_tier_));
+               sizeof(Impl_::fixed_initial_aptitude_));
 
   // @@protoc_insertion_point(copy_constructor:PetTable)
 }
@@ -645,9 +687,9 @@ inline void PetTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, cultivation_tier_) -
+           offsetof(Impl_, fixed_initial_aptitude_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::cultivation_tier_));
+               sizeof(Impl_::fixed_initial_aptitude_));
 }
 PetTable::~PetTable() {
   // @@protoc_insertion_point(destructor:PetTable)
@@ -725,6 +767,11 @@ PROTOBUF_NOINLINE void PetTable::Clear() {
     ::memset(&_impl_.unlock_level_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.cultivation_tier_) -
         reinterpret_cast<char*>(&_impl_.unlock_level_)) + sizeof(_impl_.cultivation_tier_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    ::memset(&_impl_.transfer_policy_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.fixed_initial_aptitude_) -
+        reinterpret_cast<char*>(&_impl_.transfer_policy_)) + sizeof(_impl_.fixed_initial_aptitude_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -901,6 +948,33 @@ PROTOBUF_NOINLINE void PetTable::Clear() {
     }
   }
 
+  // uint32 transfer_policy = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_transfer_policy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_transfer_policy(), target);
+    }
+  }
+
+  // uint32 exclusive_gift_slots = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_exclusive_gift_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_exclusive_gift_slots(), target);
+    }
+  }
+
+  // bool fixed_initial_aptitude = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_fixed_initial_aptitude() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          19, this_._internal_fixed_initial_aptitude(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1042,6 +1116,28 @@ PROTOBUF_NOINLINE void PetTable::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    // uint32 transfer_policy = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_transfer_policy() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_transfer_policy());
+      }
+    }
+    // uint32 exclusive_gift_slots = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_exclusive_gift_slots() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_exclusive_gift_slots());
+      }
+    }
+    // bool fixed_initial_aptitude = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_fixed_initial_aptitude() != 0) {
+        total_size += 3;
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -1145,6 +1241,23 @@ void PetTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_transfer_policy() != 0) {
+        _this->_impl_.transfer_policy_ = from._impl_.transfer_policy_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_exclusive_gift_slots() != 0) {
+        _this->_impl_.exclusive_gift_slots_ = from._impl_.exclusive_gift_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_fixed_initial_aptitude() != 0) {
+        _this->_impl_.fixed_initial_aptitude_ = from._impl_.fixed_initial_aptitude_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -1170,8 +1283,8 @@ void PetTable::InternalSwap(PetTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PetTable, _impl_.cultivation_tier_)
-      + sizeof(PetTable::_impl_.cultivation_tier_)
+      PROTOBUF_FIELD_OFFSET(PetTable, _impl_.fixed_initial_aptitude_)
+      + sizeof(PetTable::_impl_.fixed_initial_aptitude_)
       - PROTOBUF_FIELD_OFFSET(PetTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

@@ -171,11 +171,11 @@ cd tools/data_table_exporter && py -m pytest -q
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
 | **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 98 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
-| **CharacterAppearance** | `CharacterAppearance.xlsx` | `characterappearance_table.proto` | 9 | 9 | 9 | — | — | `series_id` | `series_id→AppearanceSeries.id` | `id` | — | — |
+| **CharacterAppearance** | `CharacterAppearance.xlsx` | `characterappearance_table.proto` | 14 | 14 | 9 | — | — | `series_id` | `series_id→AppearanceSeries.id` | `id` | — | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |
-| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 11 | 9 | 15 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
+| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 11 | 9 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
 | **EquipAffixPool** | `EquipAffixPool.xlsx` | `equipaffixpool_table.proto` | 4 | 4 | 29 | — | — | `pool_id` `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
 | **EquipAffixQuality** | `EquipAffixQuality.xlsx` | `equipaffixquality_table.proto` | 6 | 6 | 5 | — | — | — | — | — | — | — |
 | **EquipAffixRule** | `EquipAffixRule.xlsx` | `equipaffixrule_table.proto` | 5 | 5 | 1 | — | — | — | — | — | — | — |
@@ -187,6 +187,8 @@ cd tools/data_table_exporter && py -m pytest -q
 | **EquipGemSocket** | `EquipGemSocket.xlsx` | `equipgemsocket_table.proto` | 5 | 5 | 6 | — | — | `equip_kind` | — | — | — | — |
 | **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 3 | 3 | 11 | — | — | — | — | — | — | — |
 | **EquipV1Affix** | `EquipV1Affix.xlsx` | `equipv1affix_table.proto` | 10 | 10 | 36 | — | — | `pool` `material_id` | `material_id→Item.id` | — | — | — |
+| **FestivalBeastActivity** | `FestivalBeastActivity.xlsx` | `festivalbeastactivity_table.proto` | 20 | 20 | 1 | — | — | `battle_config_id` `reward_pet_table_id` | `battle_config_id→Dungeon.id` `reward_pet_table_id→Pet.id` | — | — | — |
+| **FestivalBeastTier** | `FestivalBeastTier.xlsx` | `festivalbeasttier_table.proto` | 8 | 8 | 8 | — | — | — | — | — | — | — |
 | **GlobalVariable** | `GlobalVariable.xlsx` | `globalvariable_table.proto` | 8 | 1 | 16 | — | — | — | — | — | — | — |
 | **GuildActivity** | `GuildActivity.xlsx` | `guildactivity_table.proto` | 15 | 15 | 3 | — | — | `reward_id` `dungeon_id` | `reward_id→Reward.id` `dungeon_id→Dungeon.id` | — | — | — |
 | **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
@@ -197,11 +199,11 @@ cd tools/data_table_exporter && py -m pytest -q
 | **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 96 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
-| **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 23 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
+| **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 24 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
 | **MysteryMerchantGoods** | `MysteryMerchantGoods.xlsx` | `mysterymerchantgoods_table.proto` | 8 | 8 | 12 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **MysteryMerchantRule** | `MysteryMerchantRule.xlsx` | `mysterymerchantrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 12 | — | — | `scene_config_id` | — | — | — | — |
-| **Pet** | `Pet.xlsx` | `pet_table.proto` | 25 | 16 | 22 | — | — | — | — | — | — | — |
+| **Pet** | `Pet.xlsx` | `pet_table.proto` | 28 | 19 | 23 | — | — | — | — | — | — | — |
 | **PetEntry** | `PetEntry.xlsx` | `petentry_table.proto` | 10 | 10 | 21 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 4 | 4 | 5 | — | — | — | — | — | — | — |
@@ -225,6 +227,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **68** 张表、**832** 个物理列、**679** 个进产物的字段。
+合计 **70** 张表、**868** 个物理列、**715** 个进产物的字段。
 
 <!-- END GENERATED -->

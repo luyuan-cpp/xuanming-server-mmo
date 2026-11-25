@@ -11,6 +11,7 @@ var callable = map[string]struct{}{
 	"/BattleClientPlayer/SetAutoBattle":                 {},
 	"/BattleClientPlayer/StopWatchBattle":               {},
 	"/BattleClientPlayer/SubmitBattleAction":            {},
+	"/BattleClientPlayer/SurrenderBattle":               {},
 	"/chatpb.ClientPlayerChat/PullChatHistory":          {},
 	"/chatpb.ClientPlayerChat/ReportChat":               {},
 	"/chatpb.ClientPlayerChat/SendChat":                 {},

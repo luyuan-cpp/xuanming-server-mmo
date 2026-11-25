@@ -392,6 +392,37 @@ TEST_F(PlayerSeasonSystemTest, BattleCreditHonorsModeEligibilityAndCap) {
     ASSERT_TRUE(increased);
     EXPECT_EQ(next.records(0).progress_points(), 4u);
     EXPECT_EQ(next.records(0).battle_points(), 4u);
+    current = next;
+
+    // 正式排位败局防挂机：回合不足 / 手动回合不足 / 无有效贡献均不给点；达标败局 +1，1 回合速胜 +2
+    auto makeRanked = [&](eBattleOutcome outcome, uint32_t rounds, uint32_t manualRounds, bool contributed) {
+        auto s = makeSettlement(match::MATCH_MODE_PVP_TEAM, outcome, false, rounds);
+        s.set_competitive_ranked(true);
+        s.set_participated(true);
+        s.set_manual_action_rounds(manualRounds);
+        s.set_effective_combat_contribution(contributed);
+        return s;
+    };
+    ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(
+        current, makeRanked(BATTLE_OUTCOME_SIDE_B_WIN, 2, 2, true), nowMs, next, increased), kSuccess);
+    EXPECT_FALSE(increased);
+    ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(
+        current, makeRanked(BATTLE_OUTCOME_SIDE_B_WIN, 3, 1, true), nowMs, next, increased), kSuccess);
+    EXPECT_FALSE(increased);
+    ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(
+        current, makeRanked(BATTLE_OUTCOME_SIDE_B_WIN, 3, 2, false), nowMs, next, increased), kSuccess);
+    EXPECT_FALSE(increased);
+
+    ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(
+        current, makeRanked(BATTLE_OUTCOME_SIDE_B_WIN, 3, 2, true), nowMs, next, increased), kSuccess);
+    ASSERT_TRUE(increased);
+    EXPECT_EQ(next.records(0).progress_points(), 5u);
+    current = next;
+
+    ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(
+        current, makeRanked(BATTLE_OUTCOME_SIDE_A_WIN, 1, 1, true), nowMs, next, increased), kSuccess);
+    ASSERT_TRUE(increased);
+    EXPECT_EQ(next.records(0).progress_points(), 7u);
 }
 
 TEST_F(PlayerSeasonSystemTest, LightStatsAffectHealthAndDefenseOnlyNeverSpeedOrCrit) {

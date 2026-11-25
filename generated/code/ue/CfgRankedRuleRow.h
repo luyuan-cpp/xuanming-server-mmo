@@ -123,23 +123,27 @@ struct FCfgRankedRuleRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	int32 milestone_talisman_matches = 0;
 
-	/** 青锋段位下限(×100,首测=140000) */
+	/** 青锋段位下限(×100,V2=152000;新号1500起步落初试,净胜2场破冰升青锋) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	int32 tier_qingfeng_centi = 0;
 
-	/** 云章段位下限(×100,首测=155000) */
+	/** 云章段位下限(×100,V2=160000;封榜可留存云章徽章与称号) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	int32 tier_yunzhang_centi = 0;
 
-	/** 天枢段位下限(×100,首测=170000) */
+	/** 天枢段位下限(×100,V2=172000) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	int32 tier_tianshu_centi = 0;
 
-	/** 无双段位下限(×100,首测=185000) */
+	/** 无双段位下限(×100,V2=185000) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	int32 tier_wushuang_centi = 0;
 
 	/** 规则说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	FString desc;
+
+	/** 本季累计胜场锋芒称号门槛(V2=6) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
+	int32 milestone_win_matches = 0;
 };

@@ -128,6 +128,8 @@ message PrepareBattleRequest
   uint32 battle_config_id = 7;
   // 开局冻结的匹配模式(match.MatchMode 枚举值)；0 = 旧发送方未填。
   uint32 match_mode = 8;
+  // 活动对局冻结上下文（瑞兽迎春等，用于 scene 在 PrepareBattle 复核锁定出战宝宝与隔离快照）。
+  BattleActivityContext activity_context = 9;
 }
 
 message PrepareBattleResponse

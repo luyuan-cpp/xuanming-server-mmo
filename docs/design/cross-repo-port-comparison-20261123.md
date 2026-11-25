@@ -150,3 +150,18 @@
   python tools/scripts/check_log_text_english.py
   ```
 - **通过标准**：所有新增与回归单测 0 失败；`check_log_text_english.py` 对本次新增 Go 文件 0 违例；不执行 `git commit` / `git push`。
+
+---
+
+## 7. 第 3 批非战斗深化对齐（A / B / C / D，2026-11-24）
+
+本批完成非战斗服务端四条主线（纯后端/存储与单测，不含战斗逻辑与 UI）：
+
+- **A 线（`xuanming-server` → 本仓）：线性一致 SQL 玩家归属权威与重连状态机**（[linearizable-owner-authority.md](linearizable-owner-authority.md)）
+  - 新增 `go/shared/ownerauthority`：`owner_record` / `owner_instance_lease` / `owner_transition_log` MySQL & TiDB DDL、`Store`（固定锁序 `owner_record FOR UPDATE -> owner_instance_lease FOR UPDATE`、`expect_epoch` CAS、UUIDv4 `operation_id` 幂等、`admit_not_before` 屏障、`source_revision` 单调围栏、`MaxLeaseSeconds=30s` 租约钳制、迟到 `Release` 安全 no-op）与纯函数重连状态机 `ResolveResume`；
+  - 接线 `go/scene_manager`（可选 `OwnerAuthorityConfig` 经 `secretenv` + `authoritysql.ParseBackend` 解析并在 `ServiceContext.Stop()` 关闭；支持 `shadow` 非阻塞双写对账与 `enforce` Kafka 路由提交前 fail-closed 屏障/版本门禁，覆盖 `EnterScene` 与 `LeaveScene` 主路径并导出 `scene_manager_owner_authority_ops_total` 指标，默认空不启用）。
+- **D2 线（`xuanming-server` → 本仓）：4096 槽位 Region → Cell 确定性蜂窝路由**（[region-cell-routing-alignment.md](region-cell-routing-alignment.md)）
+  - 新增 `go/shared/cellroute`：`StaticTable`、`AtomicTable`、`Router`（拒绝 `player_id==0`）、`BuildBalancedEntries`、JSON 编解码及复用 `shared/etcdwatch` 的热更 `WatchEtcd`（坏表 fail-closed 保留旧表）；
+  - 接线 `go/login`（可选 `CellRoute cellroute.Conf` 与 `ServiceContext.CellRouter`，`CloseSource()` 统一停止 watch；在 `EnterGame` 接入归属守卫 `checkCellRouteOwnership`（观测 / `EnforceOwnership` 强制双档），在 `AssignGate` 接入 `selectCellAffinityCandidates` 单元亲和 Gate 筛选，默认关闭零回归）。
+- **反向移植至 `xuanming-server`（B / C / D1 / D3）**：已在该仓完成 `pkg/antiaddiction`、`pkg/inboxcontract` + `push` SQL 收件箱、`pkg/idsegment` + `login` 可选接管，以及 `pkg/errcode/parity_test.go` 零漂移门禁。
+- **Java 独立版（`xuanming-server-mmo`）状态**：本批新增能力均为服务端内部基础件（可选配置，默认关闭），未变更客户端可见 proto、帧格式或配表契约，暂无需同步 `xuanming-server-mmo`；后续在阶段 2 切换线上进场主链或暴露重连/蜂窝路由协议字段时再同步更新 `xuanming-server-mmo` 与 `PARITY.md`。

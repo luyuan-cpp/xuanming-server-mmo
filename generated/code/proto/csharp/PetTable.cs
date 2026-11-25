@@ -22,21 +22,22 @@ public static partial class PetTableReflection {
   static PetTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Cg9wZXRfdGFibGUucHJvdG8iwgIKCFBldFRhYmxlEgoKAmlkGAEgASgNEgwK",
+          "Cg9wZXRfdGFibGUucHJvdG8imQMKCFBldFRhYmxlEgoKAmlkGAEgASgNEgwK",
           "BG5hbWUYAiABKAkSDAoEZGVzYxgDIAEoCRIQCghtb2RlbF9pZBgEIAEoDRIP",
           "CgdxdWFsaXR5GAUgASgNEhQKDHVubG9ja19sZXZlbBgGIAEoDRIRCglsZXZl",
           "bF9jYXAYByABKA0SEwoLaW5pdF9oZWFsdGgYCCABKAQSEQoJaW5pdF9tYW5h",
           "GAkgASgEEhIKCmluaXRfc3BlZWQYCiABKAQSFAoMYXB0aXR1ZGVfbWluGAsg",
           "AygNEhQKDGFwdGl0dWRlX21heBgMIAMoDRINCgVza2lsbBgNIAMoDRIXCg9z",
           "aG9wX3ByaWNlX2dvbGQYDiABKAQSGAoQYWNxdWlzaXRpb25fdGllchgPIAEo",
-          "DRIYChBjdWx0aXZhdGlvbl90aWVyGBAgASgNIicKDFBldFRhYmxlRGF0YRIX",
-          "CgRkYXRhGAEgAygLMgkuUGV0VGFibGVCOgoOY29tLmdhbWUudGFibGVCElBl",
-          "dFRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
-          "Mw=="));
+          "DRIYChBjdWx0aXZhdGlvbl90aWVyGBAgASgNEhcKD3RyYW5zZmVyX3BvbGlj",
+          "eRgRIAEoDRIcChRleGNsdXNpdmVfZ2lmdF9zbG90cxgSIAEoDRIeChZmaXhl",
+          "ZF9pbml0aWFsX2FwdGl0dWRlGBMgASgIIicKDFBldFRhYmxlRGF0YRIXCgRk",
+          "YXRhGAEgAygLMgkuUGV0VGFibGVCOgoOY29tLmdhbWUudGFibGVCElBldFRh",
+          "YmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::PetTable), global::PetTable.Parser, new[]{ "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", "ShopPriceGold", "AcquisitionTier", "CultivationTier" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::PetTable), global::PetTable.Parser, new[]{ "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", "ShopPriceGold", "AcquisitionTier", "CultivationTier", "TransferPolicy", "ExclusiveGiftSlots", "FixedInitialAptitude" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::PetTableData), global::PetTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -95,6 +96,9 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     shopPriceGold_ = other.shopPriceGold_;
     acquisitionTier_ = other.acquisitionTier_;
     cultivationTier_ = other.cultivationTier_;
+    transferPolicy_ = other.transferPolicy_;
+    exclusiveGiftSlots_ = other.exclusiveGiftSlots_;
+    fixedInitialAptitude_ = other.fixedInitialAptitude_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -293,6 +297,42 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     }
   }
 
+  /// <summary>Field number for the "transfer_policy" field.</summary>
+  public const int TransferPolicyFieldNumber = 17;
+  private uint transferPolicy_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint TransferPolicy {
+    get { return transferPolicy_; }
+    set {
+      transferPolicy_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "exclusive_gift_slots" field.</summary>
+  public const int ExclusiveGiftSlotsFieldNumber = 18;
+  private uint exclusiveGiftSlots_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ExclusiveGiftSlots {
+    get { return exclusiveGiftSlots_; }
+    set {
+      exclusiveGiftSlots_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "fixed_initial_aptitude" field.</summary>
+  public const int FixedInitialAptitudeFieldNumber = 19;
+  private bool fixedInitialAptitude_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool FixedInitialAptitude {
+    get { return fixedInitialAptitude_; }
+    set {
+      fixedInitialAptitude_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -324,6 +364,9 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     if (ShopPriceGold != other.ShopPriceGold) return false;
     if (AcquisitionTier != other.AcquisitionTier) return false;
     if (CultivationTier != other.CultivationTier) return false;
+    if (TransferPolicy != other.TransferPolicy) return false;
+    if (ExclusiveGiftSlots != other.ExclusiveGiftSlots) return false;
+    if (FixedInitialAptitude != other.FixedInitialAptitude) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -347,6 +390,9 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     if (ShopPriceGold != 0UL) hash ^= ShopPriceGold.GetHashCode();
     if (AcquisitionTier != 0) hash ^= AcquisitionTier.GetHashCode();
     if (CultivationTier != 0) hash ^= CultivationTier.GetHashCode();
+    if (TransferPolicy != 0) hash ^= TransferPolicy.GetHashCode();
+    if (ExclusiveGiftSlots != 0) hash ^= ExclusiveGiftSlots.GetHashCode();
+    if (FixedInitialAptitude != false) hash ^= FixedInitialAptitude.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -420,6 +466,18 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
       output.WriteRawTag(128, 1);
       output.WriteUInt32(CultivationTier);
     }
+    if (TransferPolicy != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(TransferPolicy);
+    }
+    if (ExclusiveGiftSlots != 0) {
+      output.WriteRawTag(144, 1);
+      output.WriteUInt32(ExclusiveGiftSlots);
+    }
+    if (FixedInitialAptitude != false) {
+      output.WriteRawTag(152, 1);
+      output.WriteBool(FixedInitialAptitude);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -485,6 +543,18 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
       output.WriteRawTag(128, 1);
       output.WriteUInt32(CultivationTier);
     }
+    if (TransferPolicy != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(TransferPolicy);
+    }
+    if (ExclusiveGiftSlots != 0) {
+      output.WriteRawTag(144, 1);
+      output.WriteUInt32(ExclusiveGiftSlots);
+    }
+    if (FixedInitialAptitude != false) {
+      output.WriteRawTag(152, 1);
+      output.WriteBool(FixedInitialAptitude);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -536,6 +606,15 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     }
     if (CultivationTier != 0) {
       size += 2 + pb::CodedOutputStream.ComputeUInt32Size(CultivationTier);
+    }
+    if (TransferPolicy != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(TransferPolicy);
+    }
+    if (ExclusiveGiftSlots != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ExclusiveGiftSlots);
+    }
+    if (FixedInitialAptitude != false) {
+      size += 2 + 1;
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -590,6 +669,15 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     }
     if (other.CultivationTier != 0) {
       CultivationTier = other.CultivationTier;
+    }
+    if (other.TransferPolicy != 0) {
+      TransferPolicy = other.TransferPolicy;
+    }
+    if (other.ExclusiveGiftSlots != 0) {
+      ExclusiveGiftSlots = other.ExclusiveGiftSlots;
+    }
+    if (other.FixedInitialAptitude != false) {
+      FixedInitialAptitude = other.FixedInitialAptitude;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -677,6 +765,18 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
           CultivationTier = input.ReadUInt32();
           break;
         }
+        case 136: {
+          TransferPolicy = input.ReadUInt32();
+          break;
+        }
+        case 144: {
+          ExclusiveGiftSlots = input.ReadUInt32();
+          break;
+        }
+        case 152: {
+          FixedInitialAptitude = input.ReadBool();
+          break;
+        }
       }
     }
   #endif
@@ -761,6 +861,18 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
         }
         case 128: {
           CultivationTier = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          TransferPolicy = input.ReadUInt32();
+          break;
+        }
+        case 144: {
+          ExclusiveGiftSlots = input.ReadUInt32();
+          break;
+        }
+        case 152: {
+          FixedInitialAptitude = input.ReadBool();
           break;
         }
       }

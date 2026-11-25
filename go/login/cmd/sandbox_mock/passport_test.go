@@ -6,9 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/zeromicro/go-zero/core/conf"
+
+	"login/internal/config"
 	"login/internal/logic/pkg/auth"
 )
 
@@ -73,5 +77,33 @@ func TestPassportProviderAgainstSandboxMock(t *testing.T) {
 	_, err = p.Validate(ctx, mintSandboxPassportToken(t, base, "OVERSIZED_TTL", clientID, issuer))
 	if !errors.Is(err, auth.ErrProviderUnavailable) {
 		t.Fatalf("OVERSIZED_TTL should return ErrProviderUnavailable, got %v", err)
+	}
+}
+
+// linux 登录栈把 Passport 段也指向本 mock,Issuer 与 Endpoint 一致且过得了 login 的启动门禁。
+func TestLinuxLoginStackPassportSectionPointsAtSandbox(t *testing.T) {
+	raw, err := os.ReadFile("../../../../deploy/login-stack.linux/login.yaml")
+	if err != nil {
+		t.Fatalf("read linux login stack config: %v", err)
+	}
+	var probe struct {
+		AuthProviders config.AuthConfig `json:"AuthProviders,optional"`
+	}
+	if err := conf.LoadFromYamlBytes(raw, &probe); err != nil {
+		t.Fatalf("load linux login stack config: %v", err)
+	}
+	p := probe.AuthProviders.Passport
+	if p == nil || probe.AuthProviders.WeChat == nil {
+		t.Fatal("linux login stack config must configure AuthProviders.Passport alongside sandbox WeChat")
+	}
+	if p.Endpoint != probe.AuthProviders.WeChat.Endpoint {
+		t.Fatalf("Passport.Endpoint = %q, want sandbox mock %q", p.Endpoint, probe.AuthProviders.WeChat.Endpoint)
+	}
+	cfg := &config.Config{}
+	cfg.Mode = "dev"
+	cfg.Secrets.GateToken.Value = "a3f9c2e17b6d40f8a1c5e9b2d7f4038e"
+	cfg.AuthProviders = config.AuthConfig{Passport: p}
+	if _, _, err := config.ResolveSecrets(cfg, func(string) (string, bool) { return "", false }); err != nil {
+		t.Fatalf("linux stack Passport section failed startup gate: %v", err)
 	}
 }

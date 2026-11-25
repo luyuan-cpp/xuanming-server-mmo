@@ -17,6 +17,8 @@ inline constexpr uint64_t kRoundDurationMs = 6000;
 
 // 手动回合收集指令的等待上限,与技能/buff 的时间→回合换算独立。
 inline constexpr uint64_t kActionTimeoutMs = 25000;
+// 首领试炼 V2 手动指令窗收紧至 18 秒，减少多人干等（boss-trial-planning-ui.md §3.1）。
+inline constexpr uint64_t kBossTrialActionTimeoutMs = 18000;
 
 // DungeonTable.time_limit 为 0 时的回合上限缺省值
 inline constexpr uint32_t kDefaultMaxRounds = 300;
@@ -26,15 +28,79 @@ inline constexpr uint32_t kDefaultMaxRounds = 300;
 inline constexpr uint32_t kMatchModePveSolo = 4;
 inline constexpr uint32_t kMatchModePveTeam = 5;
 inline constexpr uint32_t kMatchModePolarity5v5 = 8;
+inline constexpr uint32_t kMatchModeSeasonTournament = 11;
+
+// 论剑 / 竞技 PVP V2 体验规则（docs/design/ranked-play-v2-overhaul.md）：
+// 1. 主目标凝锋：竞技 PVP 人物多目标直伤技在目标不足上限时，显式主目标伤害 +20%（恢复 1V1/残局集火博弈）；
+// 2. 战意渐盛：回合上限 >= 10 的竞技 PVP 自 maxRounds - 7 起每回合增伤 +10%、疗盾 -10%（下限 20%）；
+// 3. PVP 延迟投降：第 5 回合解锁，1V1 秒认输，多人需全部活跃队友同意（连续 >=2 回合未手动挂机者不阻挡）。
+inline constexpr uint64_t kPvpPrimaryFocusNum = 120;
+inline constexpr uint64_t kPvpPrimaryFocusDen = 100;
+inline constexpr uint32_t kPvpEscalationMinMaxRounds = 10;
+inline constexpr uint32_t kPvpEscalationLeadRounds = 7;
+inline constexpr uint32_t kPvpEscalationDamageStepPct = 10;
+inline constexpr uint32_t kPvpEscalationSupportStepPct = 10;
+inline constexpr uint32_t kPvpEscalationSupportFloorPct = 20;
+inline constexpr uint32_t kPvpSurrenderUnlockRound = 5;
+inline constexpr uint32_t kPvpSurrenderRejectCooldownRounds = 3;
+inline constexpr uint32_t kPvpSurrenderExpireCooldownRounds = 2;
+inline constexpr uint32_t kPvpSurrenderIdleExcludeRounds = 2;
 
 // 赛季首领试炼与轮换娱乐玩法类型（对应 DungeonTable.boss_trial_kind）
 inline constexpr uint32_t kBossTrialKindNone = 0;
-inline constexpr uint32_t kBossTrialKindBreakRejuv = 1;    // 破阵·回春（慢速重击 + 回春护卫）
-inline constexpr uint32_t kBossTrialKindBreakStance = 2;   // 破阵·护势（慢速重击 + 护势护卫）
-inline constexpr uint32_t kBossTrialKindBarrier = 3;       // 灵障首领（灵障护盾 + 强法重击）
-inline constexpr uint32_t kBossTrialKindVenom = 4;         // 玄毒首领（缚灵封控 + 群体玄毒）
-inline constexpr uint32_t kBossTrialKindGuardianRescue = 5;// 护卫救援（8回合保护友方护卫击败首领）
-inline constexpr uint32_t kBossTrialKindPolarity5v5 = 6;   // 物法易势 5V5（每2回合切换物理/法术+15%，16回合平局）
+inline constexpr uint32_t kBossTrialKindBreakRejuv = 1;      // 破阵·回春（慢速重击 + 回春护卫）
+inline constexpr uint32_t kBossTrialKindBreakStance = 2;     // 破阵·护势（慢速重击 + 护势护卫）
+inline constexpr uint32_t kBossTrialKindBarrier = 3;         // 灵障首领（灵障护盾 + 强法重击）
+inline constexpr uint32_t kBossTrialKindVenom = 4;           // 玄毒首领（缚灵封控 + 群体玄毒）
+inline constexpr uint32_t kBossTrialKindGuardianRescue = 5;  // 护卫救援（8回合保护友方护卫击败首领）
+inline constexpr uint32_t kBossTrialKindPolarity5v5 = 6;     // 物法易势 5V5（每2回合切换物理/法术+15%，16回合平局）
+inline constexpr uint32_t kBossTrialKindFestivalBeast = 7;   // 瑞兽迎春（单人携宠12回合，R2/5/8/11预告、R3/6/9/12慢速180%物理重击）
+inline constexpr uint32_t kBossTrialKindBreakDualGuard = 8;  // 破阵·双卫同阵（困难终极合阵：回春+护势同场交织）
+
+constexpr bool IsBossTrialKind(uint32_t kind) {
+    return (kind >= kBossTrialKindBreakRejuv && kind <= kBossTrialKindVenom) ||
+           kind == kBossTrialKindBreakDualGuard;
+}
+
+constexpr bool IsBossTrialOrRescueKind(uint32_t kind) {
+    return IsBossTrialKind(kind) || kind == kBossTrialKindGuardianRescue;
+}
+
+constexpr bool IsBossStanceTrialKind(uint32_t kind) {
+    return kind == kBossTrialKindBreakStance || kind == kBossTrialKindBreakDualGuard;
+}
+
+constexpr bool IsBossRejuvTrialKind(uint32_t kind) {
+    return kind == kBossTrialKindBreakRejuv || kind == kBossTrialKindBreakDualGuard;
+}
+
+// 首领试炼 V2 怪物表角色定位 ID（对应 data/Monster.xlsx，不修改既有 101..108）
+inline constexpr uint32_t kBossTrialMonsterGuardRejuv = 102;
+inline constexpr uint32_t kBossTrialMonsterGuardStance = 103;
+inline constexpr uint32_t kBossTrialMonsterSupportBreaker = 109; // 策应卫·破军
+inline constexpr uint32_t kBossTrialMonsterSupportDrummer = 110; // 策应卫·鼓噪
+
+// 首领试炼 V2 核心数值标尺（整数百分点，全平台确定性）
+inline constexpr uint64_t kBossTrialSplashKeepPct = 60;      // 多目标直伤副目标溅射保留 60%（减伤 40%）
+inline constexpr uint32_t kBossExposedFullPct = 35;          // 完整破绽易伤 +35%
+inline constexpr uint32_t kBossExposedPartialPct = 20;       // 裂地双劈半化解轻破绽 +20%
+inline constexpr uint32_t kBossPhaseTwoVulnPct = 15;         // 二阶段决战姿态自身易伤 +15%（与破绽加算）
+inline constexpr uint32_t kBossMomentumMaxStacks = 3;        // 蓄势上限 3 层
+inline constexpr uint32_t kBossMomentumPerStackPct = 12;     // 每层蓄势使重劈增伤 +12%
+inline constexpr uint64_t kBossHealBacklashPct = 6;          // 断疗反噬扣除首领 6% 最大气血
+inline constexpr uint64_t kBossDrummerDeathShockPct = 4;     // 鼓噪卫阵亡震荡扣除首领 4% 最大气血
+inline constexpr uint64_t kBossDualGuardHpKeepPct = 75;      // 双卫同阵两位核心护卫气血压缩至 75%
+
+// BATTLE_EVENT_BOSS_MECHANIC 机制子事件（对应 BattleEventItem.mechanic_kind）
+inline constexpr uint32_t kBossMechanicCleaveParryExpose = 1; // 化劲破绽（value=35 或 20）
+inline constexpr uint32_t kBossMechanicHealBacklash = 2;      // 断疗反噬（value=反噬扣血）
+inline constexpr uint32_t kBossMechanicStanceBreak = 3;       // 崩势破盾（value=35）
+inline constexpr uint32_t kBossMechanicSupportShock = 4;      // 阵脚震荡（value=清蓄势数或震荡扣血）
+inline constexpr uint32_t kBossMechanicPhaseTwoEnrage = 5;    // 决战姿态切换（value=2）
+inline constexpr uint32_t kBossMechanicMomentumGain = 6;      // 蓄势叠加（value=当前层数）
+inline constexpr uint32_t kBossMechanicBreakerSunder = 7;     // 破军破甲（value=20）
+inline constexpr uint32_t kBossMechanicRejuvCleanse = 8;      // 困难回春净益（value=清除项数）
+inline constexpr uint32_t kBossMechanicAntiHealDishearten = 9;// 断脉压制气馁（value=15）
 
 // 预告动作种类（对应 BattleTelegraphEntry.intent_kind）
 inline constexpr uint32_t kTelegraphKindSlowCleave = 1;
@@ -45,10 +111,14 @@ inline constexpr uint32_t kTelegraphKindGuardShield = 5;
 inline constexpr uint32_t kTelegraphKindGuardBind = 6;
 inline constexpr uint32_t kTelegraphKindBossMagicStrike = 7;
 inline constexpr uint32_t kTelegraphKindBossVenomAoe = 8;
+inline constexpr uint32_t kTelegraphKindFestivalHeavyStrike = 9;
 
 // 预告状态（对应 BattleTelegraphEntry.status）
 inline constexpr uint32_t kTelegraphStatusUpcoming = 1;
 inline constexpr uint32_t kTelegraphStatusExecuting = 2;
+inline constexpr uint32_t kTelegraphStatusExecuted = 3;
+inline constexpr uint32_t kTelegraphStatusCancelledByControl = 4;
+inline constexpr uint32_t kTelegraphStatusCancelledTargetInvalid = 5;
 
 // 物法易势默认回合上限与同系直接主伤害放大比例（+15%，整数向下取整一次）
 inline constexpr uint32_t kPolarityDefaultMaxRounds = 16;

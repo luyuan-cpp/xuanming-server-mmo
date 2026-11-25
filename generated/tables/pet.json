@@ -16,6 +16,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "灵狐:身法轻捷,出手快、法伤高。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 1,
    "init_health": 400,
    "init_mana": 800,
@@ -28,6 +30,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -46,6 +49,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "石灵:皮糙肉厚,气血与防御出众。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 2,
    "init_health": 700,
    "init_mana": 320,
@@ -59,6 +64,7 @@
     10014,
     12004
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -77,6 +83,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "金猊:力量型战宠,物伤最高。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 3,
    "init_health": 550,
    "init_mana": 400,
@@ -90,6 +98,7 @@
     10002,
     13001
    ],
+   "transfer_policy": 0,
    "unlock_level": 10
   },
   {
@@ -108,6 +117,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "云鹤:法系战宠,法伤与法力出众。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 4,
    "init_health": 450,
    "init_mana": 1200,
@@ -120,6 +131,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 10
   },
   {
@@ -138,6 +150,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "烛翎：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 5,
    "init_health": 400,
    "init_mana": 800,
@@ -150,6 +164,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -168,6 +183,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "绛铃：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 6,
    "init_health": 400,
    "init_mana": 800,
@@ -180,6 +197,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -198,6 +216,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "霜团貂：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 7,
    "init_health": 400,
    "init_mana": 800,
@@ -210,6 +230,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -228,6 +249,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "桂灯童：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 8,
    "init_health": 400,
    "init_mana": 800,
@@ -240,6 +263,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -258,6 +282,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "砚羽灵：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 9,
    "init_health": 400,
    "init_mana": 800,
@@ -270,6 +296,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -288,6 +315,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "岚铎仙：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 10,
    "init_health": 400,
    "init_mana": 800,
@@ -300,6 +329,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -318,6 +348,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "汐螺：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 11,
    "init_health": 400,
    "init_mana": 800,
@@ -330,6 +362,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -348,6 +381,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "苍嶂麟：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 12,
    "init_health": 400,
    "init_mana": 800,
@@ -360,6 +395,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -378,6 +414,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "竹风狸：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 13,
    "init_health": 400,
    "init_mana": 800,
@@ -390,6 +428,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -408,6 +447,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "赤砂魁：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 14,
    "init_health": 400,
    "init_mana": 800,
@@ -420,6 +461,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -438,6 +480,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "玄潮龟：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 15,
    "init_health": 400,
    "init_mana": 800,
@@ -450,6 +494,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -468,6 +513,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "月弦师：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 16,
    "init_health": 400,
    "init_mana": 800,
@@ -480,6 +527,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -498,6 +546,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "露华灵：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 17,
    "init_health": 400,
    "init_mana": 800,
@@ -510,6 +560,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -528,6 +579,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "绯耳灵：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 18,
    "init_health": 400,
    "init_mana": 800,
@@ -540,6 +593,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -558,6 +612,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "霞角鹿：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 19,
    "init_health": 400,
    "init_mana": 800,
@@ -570,6 +626,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -588,6 +645,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "芽铃童：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 20,
    "init_health": 400,
    "init_mana": 800,
@@ -600,6 +659,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -618,6 +678,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "葫团团：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 21,
    "init_health": 400,
    "init_mana": 800,
@@ -630,6 +692,7 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
    "unlock_level": 1
   },
   {
@@ -648,6 +711,8 @@
    ],
    "cultivation_tier": 1,
    "desc": "符小虎：随行战斗伙伴。",
+   "exclusive_gift_slots": 0,
+   "fixed_initial_aptitude": false,
    "id": 22,
    "init_health": 400,
    "init_mana": 800,
@@ -660,6 +725,40 @@
    "skill": [
     10006
    ],
+   "transfer_policy": 0,
+   "unlock_level": 1
+  },
+  {
+   "acquisition_tier": 2,
+   "aptitude_max": [
+    12500,
+    12500,
+    12500,
+    12500
+   ],
+   "aptitude_min": [
+    12500,
+    12500,
+    12500,
+    12500
+   ],
+   "cultivation_tier": 4,
+   "desc": "春禧兽：瑞兽迎春限时活动专属神兽，固定首发资质，绑定角色。",
+   "exclusive_gift_slots": 1,
+   "fixed_initial_aptitude": true,
+   "id": 101,
+   "init_health": 620,
+   "init_mana": 900,
+   "init_speed": 156,
+   "level_cap": 120,
+   "model_id": 1012,
+   "name": "春禧兽",
+   "quality": 4,
+   "shop_price_gold": 0,
+   "skill": [
+    10006
+   ],
+   "transfer_policy": 1,
    "unlock_level": 1
   }
  ]

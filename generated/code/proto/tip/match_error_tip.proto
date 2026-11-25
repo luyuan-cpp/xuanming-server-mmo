@@ -113,4 +113,12 @@ enum match_error {
 
   kMatchTournamentRewardUnavailable = 16051;
 
+  kMatchBattleSurrenderNotAllowed = 16052;
+
+  kMatchBattleSurrenderTooEarly = 16053;
+
+  kMatchBattleSurrenderCooldown = 16054;
+
+  kMatchBattleSurrenderAlreadyVoted = 16055;
+
 };

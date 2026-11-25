@@ -25,6 +25,9 @@ message PetTable {
 	uint64 shop_price_gold = 14;
 	uint32 acquisition_tier = 15;
 	uint32 cultivation_tier = 16;
+	uint32 transfer_policy = 17;
+	uint32 exclusive_gift_slots = 18;
+	bool fixed_initial_aptitude = 19;
 }
 
 message PetTableData {

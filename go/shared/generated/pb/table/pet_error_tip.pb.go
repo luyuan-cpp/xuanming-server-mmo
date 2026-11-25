@@ -43,6 +43,7 @@ const (
 	PetError_kPetNothingToChange      PetError = 26015
 	PetError_kPetIdGenerateFailed     PetError = 26016
 	PetError_kPetNameSensitive        PetError = 26017
+	PetError_kPetNotTransferable      PetError = 26018
 )
 
 // Enum value maps for PetError.
@@ -67,6 +68,7 @@ var (
 		26015: "kPetNothingToChange",
 		26016: "kPetIdGenerateFailed",
 		26017: "kPetNameSensitive",
+		26018: "kPetNotTransferable",
 	}
 	PetError_value = map[string]int32{
 		"kPet_errorOK":             0,
@@ -88,6 +90,7 @@ var (
 		"kPetNothingToChange":      26015,
 		"kPetIdGenerateFailed":     26016,
 		"kPetNameSensitive":        26017,
+		"kPetNotTransferable":      26018,
 	}
 )
 
@@ -122,7 +125,7 @@ var File_pet_error_tip_proto protoreflect.FileDescriptor
 
 const file_pet_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x13pet_error_tip.proto*\xe9\x03\n" +
+	"\x13pet_error_tip.proto*\x84\x04\n" +
 	"\tpet_error\x12\x10\n" +
 	"\fkPet_errorOK\x10\x00\x12\x12\n" +
 	"\fkPetNotFound\x10\x90\xcb\x01\x12\x19\n" +
@@ -142,7 +145,8 @@ const file_pet_error_tip_proto_rawDesc = "" +
 	"\x0ekPetNoAutoPlan\x10\x9e\xcb\x01\x12\x19\n" +
 	"\x13kPetNothingToChange\x10\x9f\xcb\x01\x12\x1a\n" +
 	"\x14kPetIdGenerateFailed\x10\xa0\xcb\x01\x12\x17\n" +
-	"\x11kPetNameSensitive\x10\xa1\xcb\x01B$\n" +
+	"\x11kPetNameSensitive\x10\xa1\xcb\x01\x12\x19\n" +
+	"\x13kPetNotTransferable\x10\xa2\xcb\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

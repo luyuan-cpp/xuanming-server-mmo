@@ -11,3 +11,5 @@
 �� 2polarity_5v58B首测规则HPZ物法易势 5V5b卷三 · 季游奇谈jUI/TrialJournal/season_polarityzpolarity_5v5:110��当季 5V5 物法易势娱乐团战：每 2 回合交替物势/法势增伤 15%，非计分零掉分，适合试练双系配队。
 �� 2
 ranked_pvp8B首测规则HPZ人宠会武b卷三 · 季游奇谈jUI/TrialJournal/season_rankedzranked_pvp:5��正式人宠会武：在合格 PVP 对局中施展破盾法宝、清心抗控、净化或本季免费赛季技即可点亮印记。
+�i (2
+dual_guard8B首测规则HPZ困难·双卫同阵b卷一 · 破阵试炼jUI/TrialJournal/guard_dualpzboss_trial:hard:dual_guard��困难破阵终极合阵：回春护卫与护势护卫同场联防错峰，驱散崩势、断疗反噬与化劲破绽环环相扣。

@@ -58,6 +58,16 @@ struct TableStruct_proto_2fscene_2fplayer_5factivity_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto;
 }  // extern "C"
+enum FestivalBeastActionBlockCode : int;
+extern const uint32_t FestivalBeastActionBlockCode_internal_data_[];
+enum FestivalBeastClaimOutcome : int;
+extern const uint32_t FestivalBeastClaimOutcome_internal_data_[];
+enum FestivalBeastLaunchState : int;
+extern const uint32_t FestivalBeastLaunchState_internal_data_[];
+enum FestivalBeastMaterialQuotaMode : int;
+extern const uint32_t FestivalBeastMaterialQuotaMode_internal_data_[];
+enum FestivalBeastPhase : int;
+extern const uint32_t FestivalBeastPhase_internal_data_[];
 enum PlayerActivityCategory : int;
 extern const uint32_t PlayerActivityCategory_internal_data_[];
 enum PlayerActivityEntryKind : int;
@@ -82,6 +92,38 @@ extern const ::google::protobuf::internal::ClassDataFull ClaimActivityVitalityRe
 #else
 extern const ClaimActivityVitalityRewardResponseGlobalsTypeInternal ClaimActivityVitalityRewardResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimFestivalBeastRewardRequest;
+struct ClaimFestivalBeastRewardRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimFestivalBeastRewardRequestGlobalsTypeInternal ClaimFestivalBeastRewardRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimFestivalBeastRewardRequest_class_data_;
+#else
+extern const ClaimFestivalBeastRewardRequestGlobalsTypeInternal ClaimFestivalBeastRewardRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimFestivalBeastRewardResponse;
+struct ClaimFestivalBeastRewardResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimFestivalBeastRewardResponseGlobalsTypeInternal ClaimFestivalBeastRewardResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimFestivalBeastRewardResponse_class_data_;
+#else
+extern const ClaimFestivalBeastRewardResponseGlobalsTypeInternal ClaimFestivalBeastRewardResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class FestivalBeastMaterialSummary;
+struct FestivalBeastMaterialSummaryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern FestivalBeastMaterialSummaryGlobalsTypeInternal FestivalBeastMaterialSummary_globals_;
+extern const ::google::protobuf::internal::ClassDataFull FestivalBeastMaterialSummary_class_data_;
+#else
+extern const FestivalBeastMaterialSummaryGlobalsTypeInternal FestivalBeastMaterialSummary_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class FestivalBeastPendingLaunchInfo;
+struct FestivalBeastPendingLaunchInfoGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern FestivalBeastPendingLaunchInfoGlobalsTypeInternal FestivalBeastPendingLaunchInfo_globals_;
+extern const ::google::protobuf::internal::ClassDataFull FestivalBeastPendingLaunchInfo_class_data_;
+#else
+extern const FestivalBeastPendingLaunchInfoGlobalsTypeInternal FestivalBeastPendingLaunchInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetActivityListRequest;
 struct GetActivityListRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -97,6 +139,22 @@ extern GetActivityListResponseGlobalsTypeInternal GetActivityListResponse_global
 extern const ::google::protobuf::internal::ClassDataFull GetActivityListResponse_class_data_;
 #else
 extern const GetActivityListResponseGlobalsTypeInternal GetActivityListResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetFestivalBeastDetailRequest;
+struct GetFestivalBeastDetailRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetFestivalBeastDetailRequestGlobalsTypeInternal GetFestivalBeastDetailRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetFestivalBeastDetailRequest_class_data_;
+#else
+extern const GetFestivalBeastDetailRequestGlobalsTypeInternal GetFestivalBeastDetailRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetFestivalBeastDetailResponse;
+struct GetFestivalBeastDetailResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetFestivalBeastDetailResponseGlobalsTypeInternal GetFestivalBeastDetailResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetFestivalBeastDetailResponse_class_data_;
+#else
+extern const GetFestivalBeastDetailResponseGlobalsTypeInternal GetFestivalBeastDetailResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerActivityInfo;
 struct PlayerActivityInfoGlobalsTypeInternal;
@@ -130,8 +188,39 @@ extern const ::google::protobuf::internal::ClassDataFull PlayerActivityVitalityS
 #else
 extern const PlayerActivityVitalitySnapshotGlobalsTypeInternal PlayerActivityVitalitySnapshot_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartFestivalBeastChallengeRequest;
+struct StartFestivalBeastChallengeRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartFestivalBeastChallengeRequestGlobalsTypeInternal StartFestivalBeastChallengeRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartFestivalBeastChallengeRequest_class_data_;
+#else
+extern const StartFestivalBeastChallengeRequestGlobalsTypeInternal StartFestivalBeastChallengeRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartFestivalBeastChallengeResponse;
+struct StartFestivalBeastChallengeResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartFestivalBeastChallengeResponseGlobalsTypeInternal StartFestivalBeastChallengeResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartFestivalBeastChallengeResponse_class_data_;
+#else
+extern const StartFestivalBeastChallengeResponseGlobalsTypeInternal StartFestivalBeastChallengeResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::FestivalBeastActionBlockCode_internal_data_>
+    internal::EnumTraitsImpl::value<::FestivalBeastActionBlockCode>;
+template <>
+internal::EnumTraitsT<::FestivalBeastClaimOutcome_internal_data_>
+    internal::EnumTraitsImpl::value<::FestivalBeastClaimOutcome>;
+template <>
+internal::EnumTraitsT<::FestivalBeastLaunchState_internal_data_>
+    internal::EnumTraitsImpl::value<::FestivalBeastLaunchState>;
+template <>
+internal::EnumTraitsT<::FestivalBeastMaterialQuotaMode_internal_data_>
+    internal::EnumTraitsImpl::value<::FestivalBeastMaterialQuotaMode>;
+template <>
+internal::EnumTraitsT<::FestivalBeastPhase_internal_data_>
+    internal::EnumTraitsImpl::value<::FestivalBeastPhase>;
 template <>
 internal::EnumTraitsT<::PlayerActivityCategory_internal_data_>
     internal::EnumTraitsImpl::value<::PlayerActivityCategory>;
@@ -238,6 +327,7 @@ enum PlayerActivityRewardType : int {
   PLAYER_ACTIVITY_REWARD_TAO = 2,
   PLAYER_ACTIVITY_REWARD_ITEM = 3,
   PLAYER_ACTIVITY_REWARD_EQUIPMENT = 4,
+  PLAYER_ACTIVITY_REWARD_PET = 5,
   PlayerActivityRewardType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerActivityRewardType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -248,11 +338,11 @@ extern const uint32_t PlayerActivityRewardType_internal_data_[];
 inline constexpr PlayerActivityRewardType PlayerActivityRewardType_MIN =
     static_cast<PlayerActivityRewardType>(0);
 inline constexpr PlayerActivityRewardType PlayerActivityRewardType_MAX =
-    static_cast<PlayerActivityRewardType>(4);
+    static_cast<PlayerActivityRewardType>(5);
 [[nodiscard]] inline bool PlayerActivityRewardType_IsValid(int value) {
-  return 0 <= value && value <= 4;
+  return 0 <= value && value <= 5;
 }
-inline constexpr int PlayerActivityRewardType_ARRAYSIZE = 4 + 1;
+inline constexpr int PlayerActivityRewardType_ARRAYSIZE = 5 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerActivityRewardType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerActivityRewardType) {
@@ -267,7 +357,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerActivityRewardType_Name(PlayerActivityRewardType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerActivityRewardType_descriptor, 0, 4>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerActivityRewardType_descriptor, 0, 5>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerActivityRewardType_Parse(
@@ -278,6 +368,7 @@ template <>
 enum PlayerActivityEntryKind : int {
   PLAYER_ACTIVITY_ENTRY_UNSPECIFIED = 0,
   PLAYER_ACTIVITY_ENTRY_MISSION = 1,
+  PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST = 2,
   PlayerActivityEntryKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerActivityEntryKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -288,11 +379,11 @@ extern const uint32_t PlayerActivityEntryKind_internal_data_[];
 inline constexpr PlayerActivityEntryKind PlayerActivityEntryKind_MIN =
     static_cast<PlayerActivityEntryKind>(0);
 inline constexpr PlayerActivityEntryKind PlayerActivityEntryKind_MAX =
-    static_cast<PlayerActivityEntryKind>(1);
+    static_cast<PlayerActivityEntryKind>(2);
 [[nodiscard]] inline bool PlayerActivityEntryKind_IsValid(int value) {
-  return 0 <= value && value <= 1;
+  return 0 <= value && value <= 2;
 }
-inline constexpr int PlayerActivityEntryKind_ARRAYSIZE = 1 + 1;
+inline constexpr int PlayerActivityEntryKind_ARRAYSIZE = 2 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerActivityEntryKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerActivityEntryKind) {
@@ -307,12 +398,235 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerActivityEntryKind_Name(PlayerActivityEntryKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerActivityEntryKind_descriptor, 0, 1>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerActivityEntryKind_descriptor, 0, 2>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerActivityEntryKind_Parse(
     ::absl::string_view name, PlayerActivityEntryKind* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<PlayerActivityEntryKind>(PlayerActivityEntryKind_descriptor(), name,
+                                           value);
+}
+enum FestivalBeastPhase : int {
+  FESTIVAL_BEAST_PHASE_UNSPECIFIED = 0,
+  FESTIVAL_BEAST_PHASE_UNSCHEDULED = 1,
+  FESTIVAL_BEAST_PHASE_UPCOMING = 2,
+  FESTIVAL_BEAST_PHASE_OPEN = 3,
+  FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE = 4,
+  FESTIVAL_BEAST_PHASE_HISTORY = 5,
+  FestivalBeastPhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  FestivalBeastPhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t FestivalBeastPhase_internal_data_[];
+inline constexpr FestivalBeastPhase FestivalBeastPhase_MIN =
+    static_cast<FestivalBeastPhase>(0);
+inline constexpr FestivalBeastPhase FestivalBeastPhase_MAX =
+    static_cast<FestivalBeastPhase>(5);
+[[nodiscard]] inline bool FestivalBeastPhase_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int FestivalBeastPhase_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FestivalBeastPhase_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(FestivalBeastPhase) {
+  return FestivalBeastPhase_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& FestivalBeastPhase_Name(T value) {
+  static_assert(::std::is_same<T, FestivalBeastPhase>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to FestivalBeastPhase_Name().");
+  return FestivalBeastPhase_Name(static_cast<FestivalBeastPhase>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& FestivalBeastPhase_Name(FestivalBeastPhase value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<FestivalBeastPhase_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool FestivalBeastPhase_Parse(
+    ::absl::string_view name, FestivalBeastPhase* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<FestivalBeastPhase>(FestivalBeastPhase_descriptor(), name,
+                                           value);
+}
+enum FestivalBeastActionBlockCode : int {
+  FESTIVAL_BEAST_BLOCK_NONE = 0,
+  FESTIVAL_BEAST_BLOCK_NOT_OPEN = 1,
+  FESTIVAL_BEAST_BLOCK_CONFIG_INVALID = 2,
+  FESTIVAL_BEAST_BLOCK_FROZEN = 3,
+  FESTIVAL_BEAST_BLOCK_IN_BATTLE = 4,
+  FESTIVAL_BEAST_BLOCK_PET_REQUIRED = 5,
+  FESTIVAL_BEAST_BLOCK_PET_DEAD = 6,
+  FESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT = 7,
+  FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE = 8,
+  FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED = 9,
+  FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING = 10,
+  FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED = 11,
+  FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILABLE = 12,
+  FestivalBeastActionBlockCode_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  FestivalBeastActionBlockCode_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t FestivalBeastActionBlockCode_internal_data_[];
+inline constexpr FestivalBeastActionBlockCode FestivalBeastActionBlockCode_MIN =
+    static_cast<FestivalBeastActionBlockCode>(0);
+inline constexpr FestivalBeastActionBlockCode FestivalBeastActionBlockCode_MAX =
+    static_cast<FestivalBeastActionBlockCode>(12);
+[[nodiscard]] inline bool FestivalBeastActionBlockCode_IsValid(int value) {
+  return 0 <= value && value <= 12;
+}
+inline constexpr int FestivalBeastActionBlockCode_ARRAYSIZE = 12 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FestivalBeastActionBlockCode_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(FestivalBeastActionBlockCode) {
+  return FestivalBeastActionBlockCode_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& FestivalBeastActionBlockCode_Name(T value) {
+  static_assert(::std::is_same<T, FestivalBeastActionBlockCode>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to FestivalBeastActionBlockCode_Name().");
+  return FestivalBeastActionBlockCode_Name(static_cast<FestivalBeastActionBlockCode>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& FestivalBeastActionBlockCode_Name(FestivalBeastActionBlockCode value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<FestivalBeastActionBlockCode_descriptor, 0, 12>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool FestivalBeastActionBlockCode_Parse(
+    ::absl::string_view name, FestivalBeastActionBlockCode* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<FestivalBeastActionBlockCode>(FestivalBeastActionBlockCode_descriptor(), name,
+                                           value);
+}
+enum FestivalBeastLaunchState : int {
+  FESTIVAL_BEAST_LAUNCH_UNSPECIFIED = 0,
+  FESTIVAL_BEAST_LAUNCH_LAUNCHING = 1,
+  FESTIVAL_BEAST_LAUNCH_ADMITTED = 2,
+  FESTIVAL_BEAST_LAUNCH_REJECTED = 3,
+  FESTIVAL_BEAST_LAUNCH_UNKNOWN = 4,
+  FestivalBeastLaunchState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  FestivalBeastLaunchState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t FestivalBeastLaunchState_internal_data_[];
+inline constexpr FestivalBeastLaunchState FestivalBeastLaunchState_MIN =
+    static_cast<FestivalBeastLaunchState>(0);
+inline constexpr FestivalBeastLaunchState FestivalBeastLaunchState_MAX =
+    static_cast<FestivalBeastLaunchState>(4);
+[[nodiscard]] inline bool FestivalBeastLaunchState_IsValid(int value) {
+  return 0 <= value && value <= 4;
+}
+inline constexpr int FestivalBeastLaunchState_ARRAYSIZE = 4 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FestivalBeastLaunchState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(FestivalBeastLaunchState) {
+  return FestivalBeastLaunchState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& FestivalBeastLaunchState_Name(T value) {
+  static_assert(::std::is_same<T, FestivalBeastLaunchState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to FestivalBeastLaunchState_Name().");
+  return FestivalBeastLaunchState_Name(static_cast<FestivalBeastLaunchState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& FestivalBeastLaunchState_Name(FestivalBeastLaunchState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<FestivalBeastLaunchState_descriptor, 0, 4>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool FestivalBeastLaunchState_Parse(
+    ::absl::string_view name, FestivalBeastLaunchState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<FestivalBeastLaunchState>(FestivalBeastLaunchState_descriptor(), name,
+                                           value);
+}
+enum FestivalBeastClaimOutcome : int {
+  FESTIVAL_BEAST_CLAIM_UNSPECIFIED = 0,
+  FESTIVAL_BEAST_CLAIM_APPLIED = 1,
+  FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED = 2,
+  FESTIVAL_BEAST_CLAIM_REJECTED = 3,
+  FESTIVAL_BEAST_CLAIM_UNKNOWN = 4,
+  FestivalBeastClaimOutcome_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  FestivalBeastClaimOutcome_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t FestivalBeastClaimOutcome_internal_data_[];
+inline constexpr FestivalBeastClaimOutcome FestivalBeastClaimOutcome_MIN =
+    static_cast<FestivalBeastClaimOutcome>(0);
+inline constexpr FestivalBeastClaimOutcome FestivalBeastClaimOutcome_MAX =
+    static_cast<FestivalBeastClaimOutcome>(4);
+[[nodiscard]] inline bool FestivalBeastClaimOutcome_IsValid(int value) {
+  return 0 <= value && value <= 4;
+}
+inline constexpr int FestivalBeastClaimOutcome_ARRAYSIZE = 4 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FestivalBeastClaimOutcome_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(FestivalBeastClaimOutcome) {
+  return FestivalBeastClaimOutcome_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& FestivalBeastClaimOutcome_Name(T value) {
+  static_assert(::std::is_same<T, FestivalBeastClaimOutcome>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to FestivalBeastClaimOutcome_Name().");
+  return FestivalBeastClaimOutcome_Name(static_cast<FestivalBeastClaimOutcome>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& FestivalBeastClaimOutcome_Name(FestivalBeastClaimOutcome value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<FestivalBeastClaimOutcome_descriptor, 0, 4>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool FestivalBeastClaimOutcome_Parse(
+    ::absl::string_view name, FestivalBeastClaimOutcome* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<FestivalBeastClaimOutcome>(FestivalBeastClaimOutcome_descriptor(), name,
+                                           value);
+}
+enum FestivalBeastMaterialQuotaMode : int {
+  FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED = 0,
+  FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME = 1,
+  FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY = 2,
+  FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY = 3,
+  FestivalBeastMaterialQuotaMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  FestivalBeastMaterialQuotaMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t FestivalBeastMaterialQuotaMode_internal_data_[];
+inline constexpr FestivalBeastMaterialQuotaMode FestivalBeastMaterialQuotaMode_MIN =
+    static_cast<FestivalBeastMaterialQuotaMode>(0);
+inline constexpr FestivalBeastMaterialQuotaMode FestivalBeastMaterialQuotaMode_MAX =
+    static_cast<FestivalBeastMaterialQuotaMode>(3);
+[[nodiscard]] inline bool FestivalBeastMaterialQuotaMode_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int FestivalBeastMaterialQuotaMode_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FestivalBeastMaterialQuotaMode_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(FestivalBeastMaterialQuotaMode) {
+  return FestivalBeastMaterialQuotaMode_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& FestivalBeastMaterialQuotaMode_Name(T value) {
+  static_assert(::std::is_same<T, FestivalBeastMaterialQuotaMode>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to FestivalBeastMaterialQuotaMode_Name().");
+  return FestivalBeastMaterialQuotaMode_Name(static_cast<FestivalBeastMaterialQuotaMode>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& FestivalBeastMaterialQuotaMode_Name(FestivalBeastMaterialQuotaMode value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<FestivalBeastMaterialQuotaMode_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool FestivalBeastMaterialQuotaMode_Parse(
+    ::absl::string_view name, FestivalBeastMaterialQuotaMode* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<FestivalBeastMaterialQuotaMode>(FestivalBeastMaterialQuotaMode_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -321,6 +635,236 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartFestivalBeastChallengeRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:StartFestivalBeastChallengeRequest) */ {
+ public:
+  inline StartFestivalBeastChallengeRequest() : StartFestivalBeastChallengeRequest(nullptr) {}
+  ~StartFestivalBeastChallengeRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartFestivalBeastChallengeRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartFestivalBeastChallengeRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartFestivalBeastChallengeRequest(const StartFestivalBeastChallengeRequest& from) : StartFestivalBeastChallengeRequest(nullptr, from) {}
+  inline StartFestivalBeastChallengeRequest(StartFestivalBeastChallengeRequest&& from) noexcept : StartFestivalBeastChallengeRequest(nullptr, ::std::move(from)) {}
+  inline StartFestivalBeastChallengeRequest& operator=(const StartFestivalBeastChallengeRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartFestivalBeastChallengeRequest& operator=(StartFestivalBeastChallengeRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartFestivalBeastChallengeRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartFestivalBeastChallengeRequest>(&StartFestivalBeastChallengeRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(StartFestivalBeastChallengeRequest& a, StartFestivalBeastChallengeRequest& b) { a.Swap(&b); }
+  inline void Swap(StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartFestivalBeastChallengeRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartFestivalBeastChallengeRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartFestivalBeastChallengeRequest& from) { StartFestivalBeastChallengeRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "StartFestivalBeastChallengeRequest"; }
+
+  explicit StartFestivalBeastChallengeRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartFestivalBeastChallengeRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartFestivalBeastChallengeRequest& from);
+  StartFestivalBeastChallengeRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartFestivalBeastChallengeRequest&& from) noexcept
+      : StartFestivalBeastChallengeRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kActivityInstanceIdFieldNumber = 2,
+    kConfigRevisionFieldNumber = 3,
+  };
+  // string client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // uint32 activity_instance_id = 2;
+  void clear_activity_instance_id() ;
+  [[nodiscard]] ::uint32_t activity_instance_id() const;
+  void set_activity_instance_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_activity_instance_id() const;
+  void _internal_set_activity_instance_id(::uint32_t value);
+
+  public:
+  // uint32 config_revision = 3;
+  void clear_config_revision() ;
+  [[nodiscard]] ::uint32_t config_revision() const;
+  void set_config_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_config_revision() const;
+  void _internal_set_config_revision(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:StartFestivalBeastChallengeRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 60,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartFestivalBeastChallengeRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::uint32_t activity_instance_id_;
+    ::uint32_t config_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityRewardItem final : public ::google::protobuf::Message
@@ -587,6 +1131,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityRewardItem final : pu
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetFestivalBeastDetailRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetFestivalBeastDetailRequest) */ {
+ public:
+  inline GetFestivalBeastDetailRequest() : GetFestivalBeastDetailRequest(nullptr) {}
+  ~GetFestivalBeastDetailRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetFestivalBeastDetailRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetFestivalBeastDetailRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetFestivalBeastDetailRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetFestivalBeastDetailRequest(const GetFestivalBeastDetailRequest& from) : GetFestivalBeastDetailRequest(nullptr, from) {}
+  inline GetFestivalBeastDetailRequest(GetFestivalBeastDetailRequest&& from) noexcept : GetFestivalBeastDetailRequest(nullptr, ::std::move(from)) {}
+  inline GetFestivalBeastDetailRequest& operator=(const GetFestivalBeastDetailRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetFestivalBeastDetailRequest& operator=(GetFestivalBeastDetailRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetFestivalBeastDetailRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetFestivalBeastDetailRequest>(&GetFestivalBeastDetailRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(GetFestivalBeastDetailRequest& a, GetFestivalBeastDetailRequest& b) { a.Swap(&b); }
+  inline void Swap(GetFestivalBeastDetailRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetFestivalBeastDetailRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetFestivalBeastDetailRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetFestivalBeastDetailRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetFestivalBeastDetailRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetFestivalBeastDetailRequest& from) { GetFestivalBeastDetailRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetFestivalBeastDetailRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetFestivalBeastDetailRequest"; }
+
+  explicit GetFestivalBeastDetailRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetFestivalBeastDetailRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetFestivalBeastDetailRequest& from);
+  GetFestivalBeastDetailRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetFestivalBeastDetailRequest&& from) noexcept
+      : GetFestivalBeastDetailRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kActivityInstanceIdFieldNumber = 1,
+  };
+  // uint32 activity_instance_id = 1;
+  void clear_activity_instance_id() ;
+  [[nodiscard]] ::uint32_t activity_instance_id() const;
+  void set_activity_instance_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_activity_instance_id() const;
+  void _internal_set_activity_instance_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetFestivalBeastDetailRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetFestivalBeastDetailRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t activity_instance_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetActivityListRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:GetActivityListRequest) */ {
  public:
@@ -721,6 +1466,941 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetActivityListRequest final : publ
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FestivalBeastPendingLaunchInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:FestivalBeastPendingLaunchInfo) */ {
+ public:
+  inline FestivalBeastPendingLaunchInfo() : FestivalBeastPendingLaunchInfo(nullptr) {}
+  ~FestivalBeastPendingLaunchInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(FestivalBeastPendingLaunchInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr FestivalBeastPendingLaunchInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline FestivalBeastPendingLaunchInfo(const FestivalBeastPendingLaunchInfo& from) : FestivalBeastPendingLaunchInfo(nullptr, from) {}
+  inline FestivalBeastPendingLaunchInfo(FestivalBeastPendingLaunchInfo&& from) noexcept : FestivalBeastPendingLaunchInfo(nullptr, ::std::move(from)) {}
+  inline FestivalBeastPendingLaunchInfo& operator=(const FestivalBeastPendingLaunchInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FestivalBeastPendingLaunchInfo& operator=(FestivalBeastPendingLaunchInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const FestivalBeastPendingLaunchInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FestivalBeastPendingLaunchInfo>(&FestivalBeastPendingLaunchInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(FestivalBeastPendingLaunchInfo& a, FestivalBeastPendingLaunchInfo& b) { a.Swap(&b); }
+  inline void Swap(FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<FestivalBeastPendingLaunchInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const FestivalBeastPendingLaunchInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const FestivalBeastPendingLaunchInfo& from) { FestivalBeastPendingLaunchInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "FestivalBeastPendingLaunchInfo"; }
+
+  explicit FestivalBeastPendingLaunchInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  FestivalBeastPendingLaunchInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FestivalBeastPendingLaunchInfo& from);
+  FestivalBeastPendingLaunchInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, FestivalBeastPendingLaunchInfo&& from) noexcept
+      : FestivalBeastPendingLaunchInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kRejectReasonFieldNumber = 11,
+    kActivityInstanceIdFieldNumber = 2,
+    kConfigRevisionFieldNumber = 3,
+    kLockedPetIdFieldNumber = 4,
+    kMatchedTierIdFieldNumber = 5,
+    kLaunchStateFieldNumber = 6,
+    kBattleIdFieldNumber = 7,
+    kRequestedAtMsFieldNumber = 8,
+    kAdmittedAtMsFieldNumber = 9,
+    kRejectTipIdFieldNumber = 10,
+  };
+  // string client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // string reject_reason = 11;
+  void clear_reject_reason() ;
+  [[nodiscard]] const ::std::string& reject_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reject_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reject_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reject_reason();
+  void set_allocated_reject_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reject_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reject_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reject_reason();
+
+  public:
+  // uint32 activity_instance_id = 2;
+  void clear_activity_instance_id() ;
+  [[nodiscard]] ::uint32_t activity_instance_id() const;
+  void set_activity_instance_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_activity_instance_id() const;
+  void _internal_set_activity_instance_id(::uint32_t value);
+
+  public:
+  // uint32 config_revision = 3;
+  void clear_config_revision() ;
+  [[nodiscard]] ::uint32_t config_revision() const;
+  void set_config_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_config_revision() const;
+  void _internal_set_config_revision(::uint32_t value);
+
+  public:
+  // uint64 locked_pet_id = 4;
+  void clear_locked_pet_id() ;
+  [[nodiscard]] ::uint64_t locked_pet_id() const;
+  void set_locked_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_locked_pet_id() const;
+  void _internal_set_locked_pet_id(::uint64_t value);
+
+  public:
+  // uint32 matched_tier_id = 5;
+  void clear_matched_tier_id() ;
+  [[nodiscard]] ::uint32_t matched_tier_id() const;
+  void set_matched_tier_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_matched_tier_id() const;
+  void _internal_set_matched_tier_id(::uint32_t value);
+
+  public:
+  // .FestivalBeastLaunchState launch_state = 6;
+  void clear_launch_state() ;
+  [[nodiscard]] ::FestivalBeastLaunchState launch_state() const;
+  void set_launch_state(::FestivalBeastLaunchState value);
+
+  private:
+  ::FestivalBeastLaunchState _internal_launch_state() const;
+  void _internal_set_launch_state(::FestivalBeastLaunchState value);
+
+  public:
+  // uint64 battle_id = 7;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 requested_at_ms = 8;
+  void clear_requested_at_ms() ;
+  [[nodiscard]] ::uint64_t requested_at_ms() const;
+  void set_requested_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_requested_at_ms() const;
+  void _internal_set_requested_at_ms(::uint64_t value);
+
+  public:
+  // uint64 admitted_at_ms = 9;
+  void clear_admitted_at_ms() ;
+  [[nodiscard]] ::uint64_t admitted_at_ms() const;
+  void set_admitted_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_admitted_at_ms() const;
+  void _internal_set_admitted_at_ms(::uint64_t value);
+
+  public:
+  // uint32 reject_tip_id = 10;
+  void clear_reject_tip_id() ;
+  [[nodiscard]] ::uint32_t reject_tip_id() const;
+  void set_reject_tip_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reject_tip_id() const;
+  void _internal_set_reject_tip_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:FestivalBeastPendingLaunchInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          0, 77,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const FestivalBeastPendingLaunchInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::google::protobuf::internal::ArenaStringPtr reject_reason_;
+    ::uint32_t activity_instance_id_;
+    ::uint32_t config_revision_;
+    ::uint64_t locked_pet_id_;
+    ::uint32_t matched_tier_id_;
+    int launch_state_;
+    ::uint64_t battle_id_;
+    ::uint64_t requested_at_ms_;
+    ::uint64_t admitted_at_ms_;
+    ::uint32_t reject_tip_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FestivalBeastMaterialSummary final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:FestivalBeastMaterialSummary) */ {
+ public:
+  inline FestivalBeastMaterialSummary() : FestivalBeastMaterialSummary(nullptr) {}
+  ~FestivalBeastMaterialSummary() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(FestivalBeastMaterialSummary* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(FestivalBeastMaterialSummary));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr FestivalBeastMaterialSummary(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline FestivalBeastMaterialSummary(const FestivalBeastMaterialSummary& from) : FestivalBeastMaterialSummary(nullptr, from) {}
+  inline FestivalBeastMaterialSummary(FestivalBeastMaterialSummary&& from) noexcept : FestivalBeastMaterialSummary(nullptr, ::std::move(from)) {}
+  inline FestivalBeastMaterialSummary& operator=(const FestivalBeastMaterialSummary& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FestivalBeastMaterialSummary& operator=(FestivalBeastMaterialSummary&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const FestivalBeastMaterialSummary& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FestivalBeastMaterialSummary>(&FestivalBeastMaterialSummary_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(FestivalBeastMaterialSummary& a, FestivalBeastMaterialSummary& b) { a.Swap(&b); }
+  inline void Swap(FestivalBeastMaterialSummary* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FestivalBeastMaterialSummary* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] FestivalBeastMaterialSummary* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<FestivalBeastMaterialSummary>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const FestivalBeastMaterialSummary& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const FestivalBeastMaterialSummary& from) { FestivalBeastMaterialSummary::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(FestivalBeastMaterialSummary* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "FestivalBeastMaterialSummary"; }
+
+  explicit FestivalBeastMaterialSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  FestivalBeastMaterialSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FestivalBeastMaterialSummary& from);
+  FestivalBeastMaterialSummary(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, FestivalBeastMaterialSummary&& from) noexcept
+      : FestivalBeastMaterialSummary(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kQuotaModeFieldNumber = 1,
+    kExpectedWinUnitsFieldNumber = 2,
+    kAvailableUnitsFieldNumber = 4,
+    kEarnableRemainingUnitsFieldNumber = 3,
+    kEarnedTodayFieldNumber = 6,
+    kAvailableTradableUnitsFieldNumber = 5,
+    kDayStartsAtMsFieldNumber = 8,
+    kDailyLimitFieldNumber = 7,
+    kWeeklyPhaseActiveFieldNumber = 10,
+    kNextDayResetAtMsFieldNumber = 9,
+    kLifetimeEarnedFieldNumber = 11,
+    kLifetimeLimitFieldNumber = 12,
+    kEarnedThisWeekFieldNumber = 13,
+    kWeeklyLimitFieldNumber = 14,
+    kWeekStartsAtMsFieldNumber = 15,
+    kNextWeekResetAtMsFieldNumber = 16,
+  };
+  // .FestivalBeastMaterialQuotaMode quota_mode = 1;
+  void clear_quota_mode() ;
+  [[nodiscard]] ::FestivalBeastMaterialQuotaMode quota_mode() const;
+  void set_quota_mode(::FestivalBeastMaterialQuotaMode value);
+
+  private:
+  ::FestivalBeastMaterialQuotaMode _internal_quota_mode() const;
+  void _internal_set_quota_mode(::FestivalBeastMaterialQuotaMode value);
+
+  public:
+  // uint32 expected_win_units = 2;
+  void clear_expected_win_units() ;
+  [[nodiscard]] ::uint32_t expected_win_units() const;
+  void set_expected_win_units(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_expected_win_units() const;
+  void _internal_set_expected_win_units(::uint32_t value);
+
+  public:
+  // uint64 available_units = 4;
+  void clear_available_units() ;
+  [[nodiscard]] ::uint64_t available_units() const;
+  void set_available_units(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_available_units() const;
+  void _internal_set_available_units(::uint64_t value);
+
+  public:
+  // uint32 earnable_remaining_units = 3;
+  void clear_earnable_remaining_units() ;
+  [[nodiscard]] ::uint32_t earnable_remaining_units() const;
+  void set_earnable_remaining_units(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_earnable_remaining_units() const;
+  void _internal_set_earnable_remaining_units(::uint32_t value);
+
+  public:
+  // uint32 earned_today = 6;
+  void clear_earned_today() ;
+  [[nodiscard]] ::uint32_t earned_today() const;
+  void set_earned_today(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_earned_today() const;
+  void _internal_set_earned_today(::uint32_t value);
+
+  public:
+  // uint64 available_tradable_units = 5;
+  void clear_available_tradable_units() ;
+  [[nodiscard]] ::uint64_t available_tradable_units() const;
+  void set_available_tradable_units(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_available_tradable_units() const;
+  void _internal_set_available_tradable_units(::uint64_t value);
+
+  public:
+  // uint64 day_starts_at_ms = 8;
+  void clear_day_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t day_starts_at_ms() const;
+  void set_day_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_day_starts_at_ms() const;
+  void _internal_set_day_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint32 daily_limit = 7;
+  void clear_daily_limit() ;
+  [[nodiscard]] ::uint32_t daily_limit() const;
+  void set_daily_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_daily_limit() const;
+  void _internal_set_daily_limit(::uint32_t value);
+
+  public:
+  // bool weekly_phase_active = 10;
+  void clear_weekly_phase_active() ;
+  [[nodiscard]] bool weekly_phase_active() const;
+  void set_weekly_phase_active(bool value);
+
+  private:
+  bool _internal_weekly_phase_active() const;
+  void _internal_set_weekly_phase_active(bool value);
+
+  public:
+  // uint64 next_day_reset_at_ms = 9;
+  void clear_next_day_reset_at_ms() ;
+  [[nodiscard]] ::uint64_t next_day_reset_at_ms() const;
+  void set_next_day_reset_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_day_reset_at_ms() const;
+  void _internal_set_next_day_reset_at_ms(::uint64_t value);
+
+  public:
+  // uint32 lifetime_earned = 11;
+  void clear_lifetime_earned() ;
+  [[nodiscard]] ::uint32_t lifetime_earned() const;
+  void set_lifetime_earned(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_lifetime_earned() const;
+  void _internal_set_lifetime_earned(::uint32_t value);
+
+  public:
+  // uint32 lifetime_limit = 12;
+  void clear_lifetime_limit() ;
+  [[nodiscard]] ::uint32_t lifetime_limit() const;
+  void set_lifetime_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_lifetime_limit() const;
+  void _internal_set_lifetime_limit(::uint32_t value);
+
+  public:
+  // uint32 earned_this_week = 13;
+  void clear_earned_this_week() ;
+  [[nodiscard]] ::uint32_t earned_this_week() const;
+  void set_earned_this_week(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_earned_this_week() const;
+  void _internal_set_earned_this_week(::uint32_t value);
+
+  public:
+  // uint32 weekly_limit = 14;
+  void clear_weekly_limit() ;
+  [[nodiscard]] ::uint32_t weekly_limit() const;
+  void set_weekly_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_limit() const;
+  void _internal_set_weekly_limit(::uint32_t value);
+
+  public:
+  // uint64 week_starts_at_ms = 15;
+  void clear_week_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t week_starts_at_ms() const;
+  void set_week_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_week_starts_at_ms() const;
+  void _internal_set_week_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint64 next_week_reset_at_ms = 16;
+  void clear_next_week_reset_at_ms() ;
+  [[nodiscard]] ::uint64_t next_week_reset_at_ms() const;
+  void set_next_week_reset_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_week_reset_at_ms() const;
+  void _internal_set_next_week_reset_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:FestivalBeastMaterialSummary)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const FestivalBeastMaterialSummary& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int quota_mode_;
+    ::uint32_t expected_win_units_;
+    ::uint64_t available_units_;
+    ::uint32_t earnable_remaining_units_;
+    ::uint32_t earned_today_;
+    ::uint64_t available_tradable_units_;
+    ::uint64_t day_starts_at_ms_;
+    ::uint32_t daily_limit_;
+    bool weekly_phase_active_;
+    ::uint64_t next_day_reset_at_ms_;
+    ::uint32_t lifetime_earned_;
+    ::uint32_t lifetime_limit_;
+    ::uint32_t earned_this_week_;
+    ::uint32_t weekly_limit_;
+    ::uint64_t week_starts_at_ms_;
+    ::uint64_t next_week_reset_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimFestivalBeastRewardRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClaimFestivalBeastRewardRequest) */ {
+ public:
+  inline ClaimFestivalBeastRewardRequest() : ClaimFestivalBeastRewardRequest(nullptr) {}
+  ~ClaimFestivalBeastRewardRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimFestivalBeastRewardRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimFestivalBeastRewardRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimFestivalBeastRewardRequest(const ClaimFestivalBeastRewardRequest& from) : ClaimFestivalBeastRewardRequest(nullptr, from) {}
+  inline ClaimFestivalBeastRewardRequest(ClaimFestivalBeastRewardRequest&& from) noexcept : ClaimFestivalBeastRewardRequest(nullptr, ::std::move(from)) {}
+  inline ClaimFestivalBeastRewardRequest& operator=(const ClaimFestivalBeastRewardRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimFestivalBeastRewardRequest& operator=(ClaimFestivalBeastRewardRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimFestivalBeastRewardRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimFestivalBeastRewardRequest>(&ClaimFestivalBeastRewardRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(ClaimFestivalBeastRewardRequest& a, ClaimFestivalBeastRewardRequest& b) { a.Swap(&b); }
+  inline void Swap(ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimFestivalBeastRewardRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimFestivalBeastRewardRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimFestivalBeastRewardRequest& from) { ClaimFestivalBeastRewardRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClaimFestivalBeastRewardRequest"; }
+
+  explicit ClaimFestivalBeastRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimFestivalBeastRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimFestivalBeastRewardRequest& from);
+  ClaimFestivalBeastRewardRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimFestivalBeastRewardRequest&& from) noexcept
+      : ClaimFestivalBeastRewardRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kRewardIdentityFieldNumber = 2,
+  };
+  // string client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // string reward_identity = 2;
+  void clear_reward_identity() ;
+  [[nodiscard]] const ::std::string& reward_identity() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reward_identity(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reward_identity();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reward_identity();
+  void set_allocated_reward_identity(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reward_identity() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reward_identity(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reward_identity();
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClaimFestivalBeastRewardRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 72,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimFestivalBeastRewardRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::google::protobuf::internal::ArenaStringPtr reward_identity_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
 };
 // -------------------------------------------------------------------
@@ -972,6 +2652,319 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimActivityVitalityRewardRequest 
     ::uint32_t rule_id_;
     ::uint32_t threshold_id_;
     ::uint64_t period_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartFestivalBeastChallengeResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:StartFestivalBeastChallengeResponse) */ {
+ public:
+  inline StartFestivalBeastChallengeResponse() : StartFestivalBeastChallengeResponse(nullptr) {}
+  ~StartFestivalBeastChallengeResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartFestivalBeastChallengeResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartFestivalBeastChallengeResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartFestivalBeastChallengeResponse(const StartFestivalBeastChallengeResponse& from) : StartFestivalBeastChallengeResponse(nullptr, from) {}
+  inline StartFestivalBeastChallengeResponse(StartFestivalBeastChallengeResponse&& from) noexcept : StartFestivalBeastChallengeResponse(nullptr, ::std::move(from)) {}
+  inline StartFestivalBeastChallengeResponse& operator=(const StartFestivalBeastChallengeResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartFestivalBeastChallengeResponse& operator=(StartFestivalBeastChallengeResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartFestivalBeastChallengeResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartFestivalBeastChallengeResponse>(&StartFestivalBeastChallengeResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(StartFestivalBeastChallengeResponse& a, StartFestivalBeastChallengeResponse& b) { a.Swap(&b); }
+  inline void Swap(StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartFestivalBeastChallengeResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartFestivalBeastChallengeResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartFestivalBeastChallengeResponse& from) { StartFestivalBeastChallengeResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "StartFestivalBeastChallengeResponse"; }
+
+  explicit StartFestivalBeastChallengeResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartFestivalBeastChallengeResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartFestivalBeastChallengeResponse& from);
+  StartFestivalBeastChallengeResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartFestivalBeastChallengeResponse&& from) noexcept
+      : StartFestivalBeastChallengeResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 4,
+    kRejectReasonFieldNumber = 9,
+    kErrorMessageFieldNumber = 1,
+    kLaunchStateFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kLockedPetIdFieldNumber = 5,
+    kBattleIdFieldNumber = 6,
+    kAdmittedAtMsFieldNumber = 8,
+    kMatchedTierIdFieldNumber = 7,
+  };
+  // string client_request_id = 4;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // string reject_reason = 9;
+  void clear_reject_reason() ;
+  [[nodiscard]] const ::std::string& reject_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reject_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reject_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reject_reason();
+  void set_allocated_reject_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reject_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reject_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reject_reason();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .FestivalBeastLaunchState launch_state = 2;
+  void clear_launch_state() ;
+  [[nodiscard]] ::FestivalBeastLaunchState launch_state() const;
+  void set_launch_state(::FestivalBeastLaunchState value);
+
+  private:
+  ::FestivalBeastLaunchState _internal_launch_state() const;
+  void _internal_set_launch_state(::FestivalBeastLaunchState value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint64 locked_pet_id = 5;
+  void clear_locked_pet_id() ;
+  [[nodiscard]] ::uint64_t locked_pet_id() const;
+  void set_locked_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_locked_pet_id() const;
+  void _internal_set_locked_pet_id(::uint64_t value);
+
+  public:
+  // uint64 battle_id = 6;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 admitted_at_ms = 8;
+  void clear_admitted_at_ms() ;
+  [[nodiscard]] ::uint64_t admitted_at_ms() const;
+  void set_admitted_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_admitted_at_ms() const;
+  void _internal_set_admitted_at_ms(::uint64_t value);
+
+  public:
+  // uint32 matched_tier_id = 7;
+  void clear_matched_tier_id() ;
+  [[nodiscard]] ::uint32_t matched_tier_id() const;
+  void set_matched_tier_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_matched_tier_id() const;
+  void _internal_set_matched_tier_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:StartFestivalBeastChallengeResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          1, 82,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartFestivalBeastChallengeResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::google::protobuf::internal::ArenaStringPtr reject_reason_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    int launch_state_;
+    bool replayed_;
+    ::uint64_t locked_pet_id_;
+    ::uint64_t battle_id_;
+    ::uint64_t admitted_at_ms_;
+    ::uint32_t matched_tier_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1443,11 +3436,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityInfo final : public :
     kStatusFieldNumber = 6,
     kRewardIdFieldNumber = 11,
     kConfigurationRevisionFieldNumber = 13,
-    kCanParticipateFieldNumber = 9,
-    kCompletionCountKnownFieldNumber = 18,
     kCategoryFieldNumber = 14,
     kEntryKindFieldNumber = 16,
     kMissionScopeFieldNumber = 17,
+    kCanParticipateFieldNumber = 9,
+    kCompletionCountKnownFieldNumber = 18,
+    kHasClaimableRewardFieldNumber = 24,
     kCompletedCountFieldNumber = 19,
     kCompletionLimitFieldNumber = 20,
     kVitalityPointsFieldNumber = 22,
@@ -1654,26 +3648,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityInfo final : public :
   void _internal_set_configuration_revision(::uint64_t value);
 
   public:
-  // bool can_participate = 9;
-  void clear_can_participate() ;
-  [[nodiscard]] bool can_participate() const;
-  void set_can_participate(bool value);
-
-  private:
-  bool _internal_can_participate() const;
-  void _internal_set_can_participate(bool value);
-
-  public:
-  // bool completion_count_known = 18;
-  void clear_completion_count_known() ;
-  [[nodiscard]] bool completion_count_known() const;
-  void set_completion_count_known(bool value);
-
-  private:
-  bool _internal_completion_count_known() const;
-  void _internal_set_completion_count_known(bool value);
-
-  public:
   // .PlayerActivityCategory category = 14;
   void clear_category() ;
   [[nodiscard]] ::PlayerActivityCategory category() const;
@@ -1702,6 +3676,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityInfo final : public :
   private:
   ::uint32_t _internal_mission_scope() const;
   void _internal_set_mission_scope(::uint32_t value);
+
+  public:
+  // bool can_participate = 9;
+  void clear_can_participate() ;
+  [[nodiscard]] bool can_participate() const;
+  void set_can_participate(bool value);
+
+  private:
+  bool _internal_can_participate() const;
+  void _internal_set_can_participate(bool value);
+
+  public:
+  // bool completion_count_known = 18;
+  void clear_completion_count_known() ;
+  [[nodiscard]] bool completion_count_known() const;
+  void set_completion_count_known(bool value);
+
+  private:
+  bool _internal_completion_count_known() const;
+  void _internal_set_completion_count_known(bool value);
+
+  public:
+  // bool has_claimable_reward = 24;
+  void clear_has_claimable_reward() ;
+  [[nodiscard]] bool has_claimable_reward() const;
+  void set_has_claimable_reward(bool value);
+
+  private:
+  bool _internal_has_claimable_reward() const;
+  void _internal_set_has_claimable_reward(bool value);
 
   public:
   // uint32 completed_count = 19;
@@ -1738,8 +3742,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityInfo final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          1, 115,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          1, 123,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1783,14 +3787,1060 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityInfo final : public :
     int status_;
     ::uint32_t reward_id_;
     ::uint64_t configuration_revision_;
-    bool can_participate_;
-    bool completion_count_known_;
     int category_;
     int entry_kind_;
     ::uint32_t mission_scope_;
+    bool can_participate_;
+    bool completion_count_known_;
+    bool has_claimable_reward_;
     ::uint32_t completed_count_;
     ::uint32_t completion_limit_;
     ::uint32_t vitality_points_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetFestivalBeastDetailResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetFestivalBeastDetailResponse) */ {
+ public:
+  inline GetFestivalBeastDetailResponse() : GetFestivalBeastDetailResponse(nullptr) {}
+  ~GetFestivalBeastDetailResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetFestivalBeastDetailResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetFestivalBeastDetailResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetFestivalBeastDetailResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetFestivalBeastDetailResponse(const GetFestivalBeastDetailResponse& from) : GetFestivalBeastDetailResponse(nullptr, from) {}
+  inline GetFestivalBeastDetailResponse(GetFestivalBeastDetailResponse&& from) noexcept : GetFestivalBeastDetailResponse(nullptr, ::std::move(from)) {}
+  inline GetFestivalBeastDetailResponse& operator=(const GetFestivalBeastDetailResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetFestivalBeastDetailResponse& operator=(GetFestivalBeastDetailResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetFestivalBeastDetailResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetFestivalBeastDetailResponse>(&GetFestivalBeastDetailResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(GetFestivalBeastDetailResponse& a, GetFestivalBeastDetailResponse& b) { a.Swap(&b); }
+  inline void Swap(GetFestivalBeastDetailResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetFestivalBeastDetailResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetFestivalBeastDetailResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetFestivalBeastDetailResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetFestivalBeastDetailResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetFestivalBeastDetailResponse& from) { GetFestivalBeastDetailResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetFestivalBeastDetailResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetFestivalBeastDetailResponse"; }
+
+  explicit GetFestivalBeastDetailResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetFestivalBeastDetailResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetFestivalBeastDetailResponse& from);
+  GetFestivalBeastDetailResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetFestivalBeastDetailResponse&& from) noexcept
+      : GetFestivalBeastDetailResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kActivityNameFieldNumber = 6,
+    kBossNameFieldNumber = 7,
+    kBannerAssetKeyFieldNumber = 8,
+    kIconKeyFieldNumber = 9,
+    kRewardIdentityFieldNumber = 15,
+    kRewardPetNameFieldNumber = 19,
+    kClaimRequestIdFieldNumber = 27,
+    kStartBlockReasonFieldNumber = 30,
+    kErrorMessageFieldNumber = 1,
+    kServerNowMsFieldNumber = 2,
+    kPhaseFieldNumber = 3,
+    kActivityInstanceIdFieldNumber = 4,
+    kConfigRevisionFieldNumber = 5,
+    kCurrentWinsFieldNumber = 13,
+    kEffectiveStartAtMsFieldNumber = 10,
+    kEffectiveEndAtMsFieldNumber = 11,
+    kClaimShowcaseEndAtMsFieldNumber = 12,
+    kRequiredWinsFieldNumber = 14,
+    kRewardDefinitionVersionFieldNumber = 16,
+    kRewardPetTableIdFieldNumber = 17,
+    kRewardPetModelIdFieldNumber = 18,
+    kEligibilityEarnedAtMsFieldNumber = 22,
+    kEligibilitySourceInstanceIdFieldNumber = 21,
+    kHasPermanentEligibilityFieldNumber = 20,
+    kRewardClaimedFieldNumber = 23,
+    kRewardClaimDurableFieldNumber = 24,
+    kCanStartChallengeFieldNumber = 28,
+    kClaimedPetIdFieldNumber = 25,
+    kClaimedAtMsFieldNumber = 26,
+    kStartBlockCodeFieldNumber = 29,
+    kCanClaimRewardFieldNumber = 31,
+    kClaimBlockReasonFieldNumber = 33,
+    kPendingLaunchFieldNumber = 34,
+    kMaterialSummaryFieldNumber = 35,
+    kClaimBlockCodeFieldNumber = 32,
+    kMatchedTierIdFieldNumber = 36,
+    kRoundLimitFieldNumber = 37,
+    kHeavyDamagePercentFieldNumber = 38,
+    kStateRevisionFieldNumber = 39,
+  };
+  // string activity_name = 6;
+  void clear_activity_name() ;
+  [[nodiscard]] const ::std::string& activity_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_activity_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_activity_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_activity_name();
+  void set_allocated_activity_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_activity_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_activity_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_activity_name();
+
+  public:
+  // string boss_name = 7;
+  void clear_boss_name() ;
+  [[nodiscard]] const ::std::string& boss_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_boss_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_boss_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_boss_name();
+  void set_allocated_boss_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_boss_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_boss_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_boss_name();
+
+  public:
+  // string banner_asset_key = 8;
+  void clear_banner_asset_key() ;
+  [[nodiscard]] const ::std::string& banner_asset_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_banner_asset_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_banner_asset_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_banner_asset_key();
+  void set_allocated_banner_asset_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_banner_asset_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_banner_asset_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_banner_asset_key();
+
+  public:
+  // string icon_key = 9;
+  void clear_icon_key() ;
+  [[nodiscard]] const ::std::string& icon_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_icon_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_icon_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_icon_key();
+  void set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_icon_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_icon_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_icon_key();
+
+  public:
+  // string reward_identity = 15;
+  void clear_reward_identity() ;
+  [[nodiscard]] const ::std::string& reward_identity() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reward_identity(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reward_identity();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reward_identity();
+  void set_allocated_reward_identity(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reward_identity() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reward_identity(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reward_identity();
+
+  public:
+  // string reward_pet_name = 19;
+  void clear_reward_pet_name() ;
+  [[nodiscard]] const ::std::string& reward_pet_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reward_pet_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reward_pet_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reward_pet_name();
+  void set_allocated_reward_pet_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reward_pet_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reward_pet_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reward_pet_name();
+
+  public:
+  // string claim_request_id = 27;
+  void clear_claim_request_id() ;
+  [[nodiscard]] const ::std::string& claim_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_claim_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_claim_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_claim_request_id();
+  void set_allocated_claim_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_claim_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_claim_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_claim_request_id();
+
+  public:
+  // string start_block_reason = 30;
+  void clear_start_block_reason() ;
+  [[nodiscard]] const ::std::string& start_block_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_start_block_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_start_block_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_start_block_reason();
+  void set_allocated_start_block_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_start_block_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_start_block_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_start_block_reason();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 server_now_ms = 2;
+  void clear_server_now_ms() ;
+  [[nodiscard]] ::uint64_t server_now_ms() const;
+  void set_server_now_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_now_ms() const;
+  void _internal_set_server_now_ms(::uint64_t value);
+
+  public:
+  // .FestivalBeastPhase phase = 3;
+  void clear_phase() ;
+  [[nodiscard]] ::FestivalBeastPhase phase() const;
+  void set_phase(::FestivalBeastPhase value);
+
+  private:
+  ::FestivalBeastPhase _internal_phase() const;
+  void _internal_set_phase(::FestivalBeastPhase value);
+
+  public:
+  // uint32 activity_instance_id = 4;
+  void clear_activity_instance_id() ;
+  [[nodiscard]] ::uint32_t activity_instance_id() const;
+  void set_activity_instance_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_activity_instance_id() const;
+  void _internal_set_activity_instance_id(::uint32_t value);
+
+  public:
+  // uint32 config_revision = 5;
+  void clear_config_revision() ;
+  [[nodiscard]] ::uint32_t config_revision() const;
+  void set_config_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_config_revision() const;
+  void _internal_set_config_revision(::uint32_t value);
+
+  public:
+  // uint32 current_wins = 13;
+  void clear_current_wins() ;
+  [[nodiscard]] ::uint32_t current_wins() const;
+  void set_current_wins(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_wins() const;
+  void _internal_set_current_wins(::uint32_t value);
+
+  public:
+  // uint64 effective_start_at_ms = 10;
+  void clear_effective_start_at_ms() ;
+  [[nodiscard]] ::uint64_t effective_start_at_ms() const;
+  void set_effective_start_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_effective_start_at_ms() const;
+  void _internal_set_effective_start_at_ms(::uint64_t value);
+
+  public:
+  // uint64 effective_end_at_ms = 11;
+  void clear_effective_end_at_ms() ;
+  [[nodiscard]] ::uint64_t effective_end_at_ms() const;
+  void set_effective_end_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_effective_end_at_ms() const;
+  void _internal_set_effective_end_at_ms(::uint64_t value);
+
+  public:
+  // uint64 claim_showcase_end_at_ms = 12;
+  void clear_claim_showcase_end_at_ms() ;
+  [[nodiscard]] ::uint64_t claim_showcase_end_at_ms() const;
+  void set_claim_showcase_end_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_claim_showcase_end_at_ms() const;
+  void _internal_set_claim_showcase_end_at_ms(::uint64_t value);
+
+  public:
+  // uint32 required_wins = 14;
+  void clear_required_wins() ;
+  [[nodiscard]] ::uint32_t required_wins() const;
+  void set_required_wins(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_required_wins() const;
+  void _internal_set_required_wins(::uint32_t value);
+
+  public:
+  // uint32 reward_definition_version = 16;
+  void clear_reward_definition_version() ;
+  [[nodiscard]] ::uint32_t reward_definition_version() const;
+  void set_reward_definition_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_definition_version() const;
+  void _internal_set_reward_definition_version(::uint32_t value);
+
+  public:
+  // uint32 reward_pet_table_id = 17;
+  void clear_reward_pet_table_id() ;
+  [[nodiscard]] ::uint32_t reward_pet_table_id() const;
+  void set_reward_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_pet_table_id() const;
+  void _internal_set_reward_pet_table_id(::uint32_t value);
+
+  public:
+  // uint32 reward_pet_model_id = 18;
+  void clear_reward_pet_model_id() ;
+  [[nodiscard]] ::uint32_t reward_pet_model_id() const;
+  void set_reward_pet_model_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_pet_model_id() const;
+  void _internal_set_reward_pet_model_id(::uint32_t value);
+
+  public:
+  // uint64 eligibility_earned_at_ms = 22;
+  void clear_eligibility_earned_at_ms() ;
+  [[nodiscard]] ::uint64_t eligibility_earned_at_ms() const;
+  void set_eligibility_earned_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_eligibility_earned_at_ms() const;
+  void _internal_set_eligibility_earned_at_ms(::uint64_t value);
+
+  public:
+  // uint32 eligibility_source_instance_id = 21;
+  void clear_eligibility_source_instance_id() ;
+  [[nodiscard]] ::uint32_t eligibility_source_instance_id() const;
+  void set_eligibility_source_instance_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_eligibility_source_instance_id() const;
+  void _internal_set_eligibility_source_instance_id(::uint32_t value);
+
+  public:
+  // bool has_permanent_eligibility = 20;
+  void clear_has_permanent_eligibility() ;
+  [[nodiscard]] bool has_permanent_eligibility() const;
+  void set_has_permanent_eligibility(bool value);
+
+  private:
+  bool _internal_has_permanent_eligibility() const;
+  void _internal_set_has_permanent_eligibility(bool value);
+
+  public:
+  // bool reward_claimed = 23;
+  void clear_reward_claimed() ;
+  [[nodiscard]] bool reward_claimed() const;
+  void set_reward_claimed(bool value);
+
+  private:
+  bool _internal_reward_claimed() const;
+  void _internal_set_reward_claimed(bool value);
+
+  public:
+  // bool reward_claim_durable = 24;
+  void clear_reward_claim_durable() ;
+  [[nodiscard]] bool reward_claim_durable() const;
+  void set_reward_claim_durable(bool value);
+
+  private:
+  bool _internal_reward_claim_durable() const;
+  void _internal_set_reward_claim_durable(bool value);
+
+  public:
+  // bool can_start_challenge = 28;
+  void clear_can_start_challenge() ;
+  [[nodiscard]] bool can_start_challenge() const;
+  void set_can_start_challenge(bool value);
+
+  private:
+  bool _internal_can_start_challenge() const;
+  void _internal_set_can_start_challenge(bool value);
+
+  public:
+  // uint64 claimed_pet_id = 25;
+  void clear_claimed_pet_id() ;
+  [[nodiscard]] ::uint64_t claimed_pet_id() const;
+  void set_claimed_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_claimed_pet_id() const;
+  void _internal_set_claimed_pet_id(::uint64_t value);
+
+  public:
+  // uint64 claimed_at_ms = 26;
+  void clear_claimed_at_ms() ;
+  [[nodiscard]] ::uint64_t claimed_at_ms() const;
+  void set_claimed_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_claimed_at_ms() const;
+  void _internal_set_claimed_at_ms(::uint64_t value);
+
+  public:
+  // .FestivalBeastActionBlockCode start_block_code = 29;
+  void clear_start_block_code() ;
+  [[nodiscard]] ::FestivalBeastActionBlockCode start_block_code() const;
+  void set_start_block_code(::FestivalBeastActionBlockCode value);
+
+  private:
+  ::FestivalBeastActionBlockCode _internal_start_block_code() const;
+  void _internal_set_start_block_code(::FestivalBeastActionBlockCode value);
+
+  public:
+  // bool can_claim_reward = 31;
+  void clear_can_claim_reward() ;
+  [[nodiscard]] bool can_claim_reward() const;
+  void set_can_claim_reward(bool value);
+
+  private:
+  bool _internal_can_claim_reward() const;
+  void _internal_set_can_claim_reward(bool value);
+
+  public:
+  // string claim_block_reason = 33;
+  void clear_claim_block_reason() ;
+  [[nodiscard]] const ::std::string& claim_block_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_claim_block_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_claim_block_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_claim_block_reason();
+  void set_allocated_claim_block_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_claim_block_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_claim_block_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_claim_block_reason();
+
+  public:
+  // .FestivalBeastPendingLaunchInfo pending_launch = 34;
+  [[nodiscard]] bool has_pending_launch()
+      const;
+  void clear_pending_launch() ;
+  [[nodiscard]] const ::FestivalBeastPendingLaunchInfo& pending_launch() const;
+  [[nodiscard]] ::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE release_pending_launch();
+  ::FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL mutable_pending_launch();
+  void set_allocated_pending_launch(::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pending_launch(::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE value);
+  ::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE unsafe_arena_release_pending_launch();
+
+  private:
+  const ::FestivalBeastPendingLaunchInfo& _internal_pending_launch() const;
+  ::FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL _internal_mutable_pending_launch();
+
+  public:
+  // .FestivalBeastMaterialSummary material_summary = 35;
+  [[nodiscard]] bool has_material_summary()
+      const;
+  void clear_material_summary() ;
+  [[nodiscard]] const ::FestivalBeastMaterialSummary& material_summary() const;
+  [[nodiscard]] ::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE release_material_summary();
+  ::FestivalBeastMaterialSummary* PROTOBUF_NONNULL mutable_material_summary();
+  void set_allocated_material_summary(::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_material_summary(::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE value);
+  ::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE unsafe_arena_release_material_summary();
+
+  private:
+  const ::FestivalBeastMaterialSummary& _internal_material_summary() const;
+  ::FestivalBeastMaterialSummary* PROTOBUF_NONNULL _internal_mutable_material_summary();
+
+  public:
+  // .FestivalBeastActionBlockCode claim_block_code = 32;
+  void clear_claim_block_code() ;
+  [[nodiscard]] ::FestivalBeastActionBlockCode claim_block_code() const;
+  void set_claim_block_code(::FestivalBeastActionBlockCode value);
+
+  private:
+  ::FestivalBeastActionBlockCode _internal_claim_block_code() const;
+  void _internal_set_claim_block_code(::FestivalBeastActionBlockCode value);
+
+  public:
+  // uint32 matched_tier_id = 36;
+  void clear_matched_tier_id() ;
+  [[nodiscard]] ::uint32_t matched_tier_id() const;
+  void set_matched_tier_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_matched_tier_id() const;
+  void _internal_set_matched_tier_id(::uint32_t value);
+
+  public:
+  // uint32 round_limit = 37;
+  void clear_round_limit() ;
+  [[nodiscard]] ::uint32_t round_limit() const;
+  void set_round_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_round_limit() const;
+  void _internal_set_round_limit(::uint32_t value);
+
+  public:
+  // uint32 heavy_damage_percent = 38;
+  void clear_heavy_damage_percent() ;
+  [[nodiscard]] ::uint32_t heavy_damage_percent() const;
+  void set_heavy_damage_percent(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_heavy_damage_percent() const;
+  void _internal_set_heavy_damage_percent(::uint32_t value);
+
+  public:
+  // uint64 state_revision = 39;
+  void clear_state_revision() ;
+  [[nodiscard]] ::uint64_t state_revision() const;
+  void set_state_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_state_revision() const;
+  void _internal_set_state_revision(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetFestivalBeastDetailResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 39,
+                          3, 199,
+                          7>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetFestivalBeastDetailResponse& from_msg);
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr activity_name_;
+    ::google::protobuf::internal::ArenaStringPtr boss_name_;
+    ::google::protobuf::internal::ArenaStringPtr banner_asset_key_;
+    ::google::protobuf::internal::ArenaStringPtr icon_key_;
+    ::google::protobuf::internal::ArenaStringPtr reward_identity_;
+    ::google::protobuf::internal::ArenaStringPtr reward_pet_name_;
+    ::google::protobuf::internal::ArenaStringPtr claim_request_id_;
+    ::google::protobuf::internal::ArenaStringPtr start_block_reason_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t server_now_ms_;
+    int phase_;
+    ::uint32_t activity_instance_id_;
+    ::uint32_t config_revision_;
+    ::uint32_t current_wins_;
+    ::uint64_t effective_start_at_ms_;
+    ::uint64_t effective_end_at_ms_;
+    ::uint64_t claim_showcase_end_at_ms_;
+    ::uint32_t required_wins_;
+    ::uint32_t reward_definition_version_;
+    ::uint32_t reward_pet_table_id_;
+    ::uint32_t reward_pet_model_id_;
+    ::uint64_t eligibility_earned_at_ms_;
+    ::uint32_t eligibility_source_instance_id_;
+    bool has_permanent_eligibility_;
+    bool reward_claimed_;
+    bool reward_claim_durable_;
+    bool can_start_challenge_;
+    ::uint64_t claimed_pet_id_;
+    ::uint64_t claimed_at_ms_;
+    int start_block_code_;
+    bool can_claim_reward_;
+    ::google::protobuf::internal::ArenaStringPtr claim_block_reason_;
+    ::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE pending_launch_;
+    ::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE material_summary_;
+    int claim_block_code_;
+    ::uint32_t matched_tier_id_;
+    ::uint32_t round_limit_;
+    ::uint32_t heavy_damage_percent_;
+    ::uint64_t state_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimFestivalBeastRewardResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClaimFestivalBeastRewardResponse) */ {
+ public:
+  inline ClaimFestivalBeastRewardResponse() : ClaimFestivalBeastRewardResponse(nullptr) {}
+  ~ClaimFestivalBeastRewardResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimFestivalBeastRewardResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimFestivalBeastRewardResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimFestivalBeastRewardResponse(const ClaimFestivalBeastRewardResponse& from) : ClaimFestivalBeastRewardResponse(nullptr, from) {}
+  inline ClaimFestivalBeastRewardResponse(ClaimFestivalBeastRewardResponse&& from) noexcept : ClaimFestivalBeastRewardResponse(nullptr, ::std::move(from)) {}
+  inline ClaimFestivalBeastRewardResponse& operator=(const ClaimFestivalBeastRewardResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimFestivalBeastRewardResponse& operator=(ClaimFestivalBeastRewardResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimFestivalBeastRewardResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimFestivalBeastRewardResponse>(&ClaimFestivalBeastRewardResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(ClaimFestivalBeastRewardResponse& a, ClaimFestivalBeastRewardResponse& b) { a.Swap(&b); }
+  inline void Swap(ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimFestivalBeastRewardResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimFestivalBeastRewardResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimFestivalBeastRewardResponse& from) { ClaimFestivalBeastRewardResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClaimFestivalBeastRewardResponse"; }
+
+  explicit ClaimFestivalBeastRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimFestivalBeastRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimFestivalBeastRewardResponse& from);
+  ClaimFestivalBeastRewardResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimFestivalBeastRewardResponse&& from) noexcept
+      : ClaimFestivalBeastRewardResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 5,
+    kRewardIdentityFieldNumber = 6,
+    kErrorMessageFieldNumber = 1,
+    kOutcomeFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kDurableFieldNumber = 4,
+    kRewardDefinitionVersionFieldNumber = 7,
+    kRewardPetTableIdFieldNumber = 8,
+    kPetIdFieldNumber = 9,
+    kClaimedAtMsFieldNumber = 10,
+  };
+  // string client_request_id = 5;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // string reward_identity = 6;
+  void clear_reward_identity() ;
+  [[nodiscard]] const ::std::string& reward_identity() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reward_identity(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reward_identity();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reward_identity();
+  void set_allocated_reward_identity(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reward_identity() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reward_identity(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reward_identity();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .FestivalBeastClaimOutcome outcome = 2;
+  void clear_outcome() ;
+  [[nodiscard]] ::FestivalBeastClaimOutcome outcome() const;
+  void set_outcome(::FestivalBeastClaimOutcome value);
+
+  private:
+  ::FestivalBeastClaimOutcome _internal_outcome() const;
+  void _internal_set_outcome(::FestivalBeastClaimOutcome value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // bool durable = 4;
+  void clear_durable() ;
+  [[nodiscard]] bool durable() const;
+  void set_durable(bool value);
+
+  private:
+  bool _internal_durable() const;
+  void _internal_set_durable(bool value);
+
+  public:
+  // uint32 reward_definition_version = 7;
+  void clear_reward_definition_version() ;
+  [[nodiscard]] ::uint32_t reward_definition_version() const;
+  void set_reward_definition_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_definition_version() const;
+  void _internal_set_reward_definition_version(::uint32_t value);
+
+  public:
+  // uint32 reward_pet_table_id = 8;
+  void clear_reward_pet_table_id() ;
+  [[nodiscard]] ::uint32_t reward_pet_table_id() const;
+  void set_reward_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_pet_table_id() const;
+  void _internal_set_reward_pet_table_id(::uint32_t value);
+
+  public:
+  // uint64 pet_id = 9;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // uint64 claimed_at_ms = 10;
+  void clear_claimed_at_ms() ;
+  [[nodiscard]] ::uint64_t claimed_at_ms() const;
+  void set_claimed_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_claimed_at_ms() const;
+  void _internal_set_claimed_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClaimFestivalBeastRewardResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          1, 81,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimFestivalBeastRewardResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::google::protobuf::internal::ArenaStringPtr reward_identity_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    int outcome_;
+    bool replayed_;
+    bool durable_;
+    ::uint32_t reward_definition_version_;
+    ::uint32_t reward_pet_table_id_;
+    ::uint64_t pet_id_;
+    ::uint64_t claimed_at_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2687,6 +5737,18 @@ class SceneActivityClientPlayer : public ::google::protobuf::Service {
                         const ::ClaimActivityVitalityRewardRequest* PROTOBUF_NONNULL request,
                         ::ClaimActivityVitalityRewardResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void GetFestivalBeastDetail(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetFestivalBeastDetailRequest* PROTOBUF_NONNULL request,
+                        ::GetFestivalBeastDetailResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void StartFestivalBeastChallenge(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL request,
+                        ::StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void ClaimFestivalBeastReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL request,
+                        ::ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -2726,6 +5788,18 @@ class SceneActivityClientPlayer_Stub final : public SceneActivityClientPlayer {
   void ClaimActivityVitalityReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::ClaimActivityVitalityRewardRequest* PROTOBUF_NONNULL request,
                         ::ClaimActivityVitalityRewardResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void GetFestivalBeastDetail(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetFestivalBeastDetailRequest* PROTOBUF_NONNULL request,
+                        ::GetFestivalBeastDetailResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void StartFestivalBeastChallenge(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::StartFestivalBeastChallengeRequest* PROTOBUF_NONNULL request,
+                        ::StartFestivalBeastChallengeResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void ClaimFestivalBeastReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL request,
+                        ::ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -3307,7 +6381,7 @@ inline void PlayerActivityInfo::_internal_set_ends_at_ms(::uint64_t value) {
 inline void PlayerActivityInfo::clear_can_participate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.can_participate_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline bool PlayerActivityInfo::can_participate() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.can_participate)
@@ -3315,7 +6389,7 @@ inline bool PlayerActivityInfo::can_participate() const {
 }
 inline void PlayerActivityInfo::set_can_participate(bool value) {
   _internal_set_can_participate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.can_participate)
 }
 inline bool PlayerActivityInfo::_internal_can_participate() const {
@@ -3507,7 +6581,7 @@ inline void PlayerActivityInfo::_internal_set_configuration_revision(::uint64_t 
 inline void PlayerActivityInfo::clear_category() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.category_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::PlayerActivityCategory PlayerActivityInfo::category() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.category)
@@ -3515,7 +6589,7 @@ inline ::PlayerActivityCategory PlayerActivityInfo::category() const {
 }
 inline void PlayerActivityInfo::set_category(::PlayerActivityCategory value) {
   _internal_set_category(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.category)
 }
 inline ::PlayerActivityCategory PlayerActivityInfo::_internal_category() const {
@@ -3582,7 +6656,7 @@ PlayerActivityInfo::_internal_mutable_reward_types() {
 inline void PlayerActivityInfo::clear_entry_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::PlayerActivityEntryKind PlayerActivityInfo::entry_kind() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.entry_kind)
@@ -3590,7 +6664,7 @@ inline ::PlayerActivityEntryKind PlayerActivityInfo::entry_kind() const {
 }
 inline void PlayerActivityInfo::set_entry_kind(::PlayerActivityEntryKind value) {
   _internal_set_entry_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.entry_kind)
 }
 inline ::PlayerActivityEntryKind PlayerActivityInfo::_internal_entry_kind() const {
@@ -3606,7 +6680,7 @@ inline void PlayerActivityInfo::_internal_set_entry_kind(::PlayerActivityEntryKi
 inline void PlayerActivityInfo::clear_mission_scope() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mission_scope_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t PlayerActivityInfo::mission_scope() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.mission_scope)
@@ -3614,7 +6688,7 @@ inline ::uint32_t PlayerActivityInfo::mission_scope() const {
 }
 inline void PlayerActivityInfo::set_mission_scope(::uint32_t value) {
   _internal_set_mission_scope(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.mission_scope)
 }
 inline ::uint32_t PlayerActivityInfo::_internal_mission_scope() const {
@@ -3630,7 +6704,7 @@ inline void PlayerActivityInfo::_internal_set_mission_scope(::uint32_t value) {
 inline void PlayerActivityInfo::clear_completion_count_known() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.completion_count_known_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline bool PlayerActivityInfo::completion_count_known() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.completion_count_known)
@@ -3638,7 +6712,7 @@ inline bool PlayerActivityInfo::completion_count_known() const {
 }
 inline void PlayerActivityInfo::set_completion_count_known(bool value) {
   _internal_set_completion_count_known(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.completion_count_known)
 }
 inline bool PlayerActivityInfo::_internal_completion_count_known() const {
@@ -3654,7 +6728,7 @@ inline void PlayerActivityInfo::_internal_set_completion_count_known(bool value)
 inline void PlayerActivityInfo::clear_completed_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.completed_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t PlayerActivityInfo::completed_count() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.completed_count)
@@ -3662,7 +6736,7 @@ inline ::uint32_t PlayerActivityInfo::completed_count() const {
 }
 inline void PlayerActivityInfo::set_completed_count(::uint32_t value) {
   _internal_set_completed_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.completed_count)
 }
 inline ::uint32_t PlayerActivityInfo::_internal_completed_count() const {
@@ -3678,7 +6752,7 @@ inline void PlayerActivityInfo::_internal_set_completed_count(::uint32_t value) 
 inline void PlayerActivityInfo::clear_completion_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.completion_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t PlayerActivityInfo::completion_limit() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.completion_limit)
@@ -3686,7 +6760,7 @@ inline ::uint32_t PlayerActivityInfo::completion_limit() const {
 }
 inline void PlayerActivityInfo::set_completion_limit(::uint32_t value) {
   _internal_set_completion_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.completion_limit)
 }
 inline ::uint32_t PlayerActivityInfo::_internal_completion_limit() const {
@@ -3766,7 +6840,7 @@ inline void PlayerActivityInfo::set_allocated_completion_period(::std::string* P
 inline void PlayerActivityInfo::clear_vitality_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.vitality_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t PlayerActivityInfo::vitality_points() const {
   // @@protoc_insertion_point(field_get:PlayerActivityInfo.vitality_points)
@@ -3774,7 +6848,7 @@ inline ::uint32_t PlayerActivityInfo::vitality_points() const {
 }
 inline void PlayerActivityInfo::set_vitality_points(::uint32_t value) {
   _internal_set_vitality_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:PlayerActivityInfo.vitality_points)
 }
 inline ::uint32_t PlayerActivityInfo::_internal_vitality_points() const {
@@ -3839,6 +6913,30 @@ inline ::google::protobuf::RepeatedPtrField<::PlayerActivityRewardItem>* PROTOBU
 PlayerActivityInfo::_internal_mutable_rewards() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.rewards_;
+}
+
+// bool has_claimable_reward = 24;
+inline void PlayerActivityInfo::clear_has_claimable_reward() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_claimable_reward_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline bool PlayerActivityInfo::has_claimable_reward() const {
+  // @@protoc_insertion_point(field_get:PlayerActivityInfo.has_claimable_reward)
+  return _internal_has_claimable_reward();
+}
+inline void PlayerActivityInfo::set_has_claimable_reward(bool value) {
+  _internal_set_has_claimable_reward(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:PlayerActivityInfo.has_claimable_reward)
+}
+inline bool PlayerActivityInfo::_internal_has_claimable_reward() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_claimable_reward_;
+}
+inline void PlayerActivityInfo::_internal_set_has_claimable_reward(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_claimable_reward_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -5196,6 +8294,3297 @@ inline void ClaimActivityVitalityRewardResponse::_internal_set_replayed(bool val
   _impl_.replayed_ = value;
 }
 
+// -------------------------------------------------------------------
+
+// FestivalBeastPendingLaunchInfo
+
+// string client_request_id = 1;
+inline void FestivalBeastPendingLaunchInfo::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& FestivalBeastPendingLaunchInfo::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void FestivalBeastPendingLaunchInfo::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL FestivalBeastPendingLaunchInfo::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:FestivalBeastPendingLaunchInfo.client_request_id)
+  return _s;
+}
+inline const ::std::string& FestivalBeastPendingLaunchInfo::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL FestivalBeastPendingLaunchInfo::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE FestivalBeastPendingLaunchInfo::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:FestivalBeastPendingLaunchInfo.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void FestivalBeastPendingLaunchInfo::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:FestivalBeastPendingLaunchInfo.client_request_id)
+}
+
+// uint32 activity_instance_id = 2;
+inline void FestivalBeastPendingLaunchInfo::clear_activity_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::activity_instance_id() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.activity_instance_id)
+  return _internal_activity_instance_id();
+}
+inline void FestivalBeastPendingLaunchInfo::set_activity_instance_id(::uint32_t value) {
+  _internal_set_activity_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.activity_instance_id)
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::_internal_activity_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_instance_id_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_activity_instance_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = value;
+}
+
+// uint32 config_revision = 3;
+inline void FestivalBeastPendingLaunchInfo::clear_config_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::config_revision() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.config_revision)
+  return _internal_config_revision();
+}
+inline void FestivalBeastPendingLaunchInfo::set_config_revision(::uint32_t value) {
+  _internal_set_config_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.config_revision)
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::_internal_config_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_revision_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_config_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_revision_ = value;
+}
+
+// uint64 locked_pet_id = 4;
+inline void FestivalBeastPendingLaunchInfo::clear_locked_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.locked_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::locked_pet_id() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.locked_pet_id)
+  return _internal_locked_pet_id();
+}
+inline void FestivalBeastPendingLaunchInfo::set_locked_pet_id(::uint64_t value) {
+  _internal_set_locked_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.locked_pet_id)
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::_internal_locked_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.locked_pet_id_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_locked_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.locked_pet_id_ = value;
+}
+
+// uint32 matched_tier_id = 5;
+inline void FestivalBeastPendingLaunchInfo::clear_matched_tier_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.matched_tier_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::matched_tier_id() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.matched_tier_id)
+  return _internal_matched_tier_id();
+}
+inline void FestivalBeastPendingLaunchInfo::set_matched_tier_id(::uint32_t value) {
+  _internal_set_matched_tier_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.matched_tier_id)
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::_internal_matched_tier_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.matched_tier_id_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_matched_tier_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.matched_tier_id_ = value;
+}
+
+// .FestivalBeastLaunchState launch_state = 6;
+inline void FestivalBeastPendingLaunchInfo::clear_launch_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.launch_state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::FestivalBeastLaunchState FestivalBeastPendingLaunchInfo::launch_state() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.launch_state)
+  return _internal_launch_state();
+}
+inline void FestivalBeastPendingLaunchInfo::set_launch_state(::FestivalBeastLaunchState value) {
+  _internal_set_launch_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.launch_state)
+}
+inline ::FestivalBeastLaunchState FestivalBeastPendingLaunchInfo::_internal_launch_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastLaunchState>(_impl_.launch_state_);
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_launch_state(::FestivalBeastLaunchState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.launch_state_ = value;
+}
+
+// uint64 battle_id = 7;
+inline void FestivalBeastPendingLaunchInfo::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::battle_id() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.battle_id)
+  return _internal_battle_id();
+}
+inline void FestivalBeastPendingLaunchInfo::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.battle_id)
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint64 requested_at_ms = 8;
+inline void FestivalBeastPendingLaunchInfo::clear_requested_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.requested_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::requested_at_ms() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.requested_at_ms)
+  return _internal_requested_at_ms();
+}
+inline void FestivalBeastPendingLaunchInfo::set_requested_at_ms(::uint64_t value) {
+  _internal_set_requested_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.requested_at_ms)
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::_internal_requested_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.requested_at_ms_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_requested_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.requested_at_ms_ = value;
+}
+
+// uint64 admitted_at_ms = 9;
+inline void FestivalBeastPendingLaunchInfo::clear_admitted_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admitted_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::admitted_at_ms() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.admitted_at_ms)
+  return _internal_admitted_at_ms();
+}
+inline void FestivalBeastPendingLaunchInfo::set_admitted_at_ms(::uint64_t value) {
+  _internal_set_admitted_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.admitted_at_ms)
+}
+inline ::uint64_t FestivalBeastPendingLaunchInfo::_internal_admitted_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admitted_at_ms_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_admitted_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admitted_at_ms_ = value;
+}
+
+// uint32 reject_tip_id = 10;
+inline void FestivalBeastPendingLaunchInfo::clear_reject_tip_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_tip_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::reject_tip_id() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.reject_tip_id)
+  return _internal_reject_tip_id();
+}
+inline void FestivalBeastPendingLaunchInfo::set_reject_tip_id(::uint32_t value) {
+  _internal_set_reject_tip_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.reject_tip_id)
+}
+inline ::uint32_t FestivalBeastPendingLaunchInfo::_internal_reject_tip_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reject_tip_id_;
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_reject_tip_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_tip_id_ = value;
+}
+
+// string reject_reason = 11;
+inline void FestivalBeastPendingLaunchInfo::clear_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& FestivalBeastPendingLaunchInfo::reject_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:FestivalBeastPendingLaunchInfo.reject_reason)
+  return _internal_reject_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void FestivalBeastPendingLaunchInfo::set_reject_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.reject_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:FestivalBeastPendingLaunchInfo.reject_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL FestivalBeastPendingLaunchInfo::mutable_reject_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_reject_reason();
+  // @@protoc_insertion_point(field_mutable:FestivalBeastPendingLaunchInfo.reject_reason)
+  return _s;
+}
+inline const ::std::string& FestivalBeastPendingLaunchInfo::_internal_reject_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reject_reason_.Get();
+}
+inline void FestivalBeastPendingLaunchInfo::_internal_set_reject_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL FestivalBeastPendingLaunchInfo::_internal_mutable_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reject_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE FestivalBeastPendingLaunchInfo::release_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:FestivalBeastPendingLaunchInfo.reject_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.reject_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reject_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void FestivalBeastPendingLaunchInfo::set_allocated_reject_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.reject_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reject_reason_.IsDefault()) {
+    _impl_.reject_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:FestivalBeastPendingLaunchInfo.reject_reason)
+}
+
+// -------------------------------------------------------------------
+
+// FestivalBeastMaterialSummary
+
+// .FestivalBeastMaterialQuotaMode quota_mode = 1;
+inline void FestivalBeastMaterialSummary::clear_quota_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.quota_mode_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::FestivalBeastMaterialQuotaMode FestivalBeastMaterialSummary::quota_mode() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.quota_mode)
+  return _internal_quota_mode();
+}
+inline void FestivalBeastMaterialSummary::set_quota_mode(::FestivalBeastMaterialQuotaMode value) {
+  _internal_set_quota_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.quota_mode)
+}
+inline ::FestivalBeastMaterialQuotaMode FestivalBeastMaterialSummary::_internal_quota_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastMaterialQuotaMode>(_impl_.quota_mode_);
+}
+inline void FestivalBeastMaterialSummary::_internal_set_quota_mode(::FestivalBeastMaterialQuotaMode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.quota_mode_ = value;
+}
+
+// uint32 expected_win_units = 2;
+inline void FestivalBeastMaterialSummary::clear_expected_win_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_win_units_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::expected_win_units() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.expected_win_units)
+  return _internal_expected_win_units();
+}
+inline void FestivalBeastMaterialSummary::set_expected_win_units(::uint32_t value) {
+  _internal_set_expected_win_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.expected_win_units)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_expected_win_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_win_units_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_expected_win_units(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_win_units_ = value;
+}
+
+// uint32 earnable_remaining_units = 3;
+inline void FestivalBeastMaterialSummary::clear_earnable_remaining_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earnable_remaining_units_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::earnable_remaining_units() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.earnable_remaining_units)
+  return _internal_earnable_remaining_units();
+}
+inline void FestivalBeastMaterialSummary::set_earnable_remaining_units(::uint32_t value) {
+  _internal_set_earnable_remaining_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.earnable_remaining_units)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_earnable_remaining_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.earnable_remaining_units_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_earnable_remaining_units(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earnable_remaining_units_ = value;
+}
+
+// uint64 available_units = 4;
+inline void FestivalBeastMaterialSummary::clear_available_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_units_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t FestivalBeastMaterialSummary::available_units() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.available_units)
+  return _internal_available_units();
+}
+inline void FestivalBeastMaterialSummary::set_available_units(::uint64_t value) {
+  _internal_set_available_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.available_units)
+}
+inline ::uint64_t FestivalBeastMaterialSummary::_internal_available_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_units_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_available_units(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_units_ = value;
+}
+
+// uint64 available_tradable_units = 5;
+inline void FestivalBeastMaterialSummary::clear_available_tradable_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_tradable_units_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t FestivalBeastMaterialSummary::available_tradable_units() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.available_tradable_units)
+  return _internal_available_tradable_units();
+}
+inline void FestivalBeastMaterialSummary::set_available_tradable_units(::uint64_t value) {
+  _internal_set_available_tradable_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.available_tradable_units)
+}
+inline ::uint64_t FestivalBeastMaterialSummary::_internal_available_tradable_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_tradable_units_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_available_tradable_units(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_tradable_units_ = value;
+}
+
+// uint32 earned_today = 6;
+inline void FestivalBeastMaterialSummary::clear_earned_today() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_today_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::earned_today() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.earned_today)
+  return _internal_earned_today();
+}
+inline void FestivalBeastMaterialSummary::set_earned_today(::uint32_t value) {
+  _internal_set_earned_today(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.earned_today)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_earned_today() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.earned_today_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_earned_today(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_today_ = value;
+}
+
+// uint32 daily_limit = 7;
+inline void FestivalBeastMaterialSummary::clear_daily_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::daily_limit() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.daily_limit)
+  return _internal_daily_limit();
+}
+inline void FestivalBeastMaterialSummary::set_daily_limit(::uint32_t value) {
+  _internal_set_daily_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.daily_limit)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_daily_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.daily_limit_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_daily_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_limit_ = value;
+}
+
+// uint64 day_starts_at_ms = 8;
+inline void FestivalBeastMaterialSummary::clear_day_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t FestivalBeastMaterialSummary::day_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.day_starts_at_ms)
+  return _internal_day_starts_at_ms();
+}
+inline void FestivalBeastMaterialSummary::set_day_starts_at_ms(::uint64_t value) {
+  _internal_set_day_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.day_starts_at_ms)
+}
+inline ::uint64_t FestivalBeastMaterialSummary::_internal_day_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.day_starts_at_ms_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_day_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = value;
+}
+
+// uint64 next_day_reset_at_ms = 9;
+inline void FestivalBeastMaterialSummary::clear_next_day_reset_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_day_reset_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t FestivalBeastMaterialSummary::next_day_reset_at_ms() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.next_day_reset_at_ms)
+  return _internal_next_day_reset_at_ms();
+}
+inline void FestivalBeastMaterialSummary::set_next_day_reset_at_ms(::uint64_t value) {
+  _internal_set_next_day_reset_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.next_day_reset_at_ms)
+}
+inline ::uint64_t FestivalBeastMaterialSummary::_internal_next_day_reset_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_day_reset_at_ms_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_next_day_reset_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_day_reset_at_ms_ = value;
+}
+
+// bool weekly_phase_active = 10;
+inline void FestivalBeastMaterialSummary::clear_weekly_phase_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_phase_active_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool FestivalBeastMaterialSummary::weekly_phase_active() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.weekly_phase_active)
+  return _internal_weekly_phase_active();
+}
+inline void FestivalBeastMaterialSummary::set_weekly_phase_active(bool value) {
+  _internal_set_weekly_phase_active(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.weekly_phase_active)
+}
+inline bool FestivalBeastMaterialSummary::_internal_weekly_phase_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_phase_active_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_weekly_phase_active(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_phase_active_ = value;
+}
+
+// uint32 lifetime_earned = 11;
+inline void FestivalBeastMaterialSummary::clear_lifetime_earned() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lifetime_earned_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::lifetime_earned() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.lifetime_earned)
+  return _internal_lifetime_earned();
+}
+inline void FestivalBeastMaterialSummary::set_lifetime_earned(::uint32_t value) {
+  _internal_set_lifetime_earned(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.lifetime_earned)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_lifetime_earned() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lifetime_earned_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_lifetime_earned(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lifetime_earned_ = value;
+}
+
+// uint32 lifetime_limit = 12;
+inline void FestivalBeastMaterialSummary::clear_lifetime_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lifetime_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::lifetime_limit() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.lifetime_limit)
+  return _internal_lifetime_limit();
+}
+inline void FestivalBeastMaterialSummary::set_lifetime_limit(::uint32_t value) {
+  _internal_set_lifetime_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.lifetime_limit)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_lifetime_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lifetime_limit_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_lifetime_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lifetime_limit_ = value;
+}
+
+// uint32 earned_this_week = 13;
+inline void FestivalBeastMaterialSummary::clear_earned_this_week() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_this_week_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::earned_this_week() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.earned_this_week)
+  return _internal_earned_this_week();
+}
+inline void FestivalBeastMaterialSummary::set_earned_this_week(::uint32_t value) {
+  _internal_set_earned_this_week(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.earned_this_week)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_earned_this_week() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.earned_this_week_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_earned_this_week(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_this_week_ = value;
+}
+
+// uint32 weekly_limit = 14;
+inline void FestivalBeastMaterialSummary::clear_weekly_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t FestivalBeastMaterialSummary::weekly_limit() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.weekly_limit)
+  return _internal_weekly_limit();
+}
+inline void FestivalBeastMaterialSummary::set_weekly_limit(::uint32_t value) {
+  _internal_set_weekly_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.weekly_limit)
+}
+inline ::uint32_t FestivalBeastMaterialSummary::_internal_weekly_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_limit_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_weekly_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_limit_ = value;
+}
+
+// uint64 week_starts_at_ms = 15;
+inline void FestivalBeastMaterialSummary::clear_week_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t FestivalBeastMaterialSummary::week_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.week_starts_at_ms)
+  return _internal_week_starts_at_ms();
+}
+inline void FestivalBeastMaterialSummary::set_week_starts_at_ms(::uint64_t value) {
+  _internal_set_week_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.week_starts_at_ms)
+}
+inline ::uint64_t FestivalBeastMaterialSummary::_internal_week_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.week_starts_at_ms_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_week_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_starts_at_ms_ = value;
+}
+
+// uint64 next_week_reset_at_ms = 16;
+inline void FestivalBeastMaterialSummary::clear_next_week_reset_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_week_reset_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t FestivalBeastMaterialSummary::next_week_reset_at_ms() const {
+  // @@protoc_insertion_point(field_get:FestivalBeastMaterialSummary.next_week_reset_at_ms)
+  return _internal_next_week_reset_at_ms();
+}
+inline void FestivalBeastMaterialSummary::set_next_week_reset_at_ms(::uint64_t value) {
+  _internal_set_next_week_reset_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:FestivalBeastMaterialSummary.next_week_reset_at_ms)
+}
+inline ::uint64_t FestivalBeastMaterialSummary::_internal_next_week_reset_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_week_reset_at_ms_;
+}
+inline void FestivalBeastMaterialSummary::_internal_set_next_week_reset_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_week_reset_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetFestivalBeastDetailRequest
+
+// uint32 activity_instance_id = 1;
+inline void GetFestivalBeastDetailRequest::clear_activity_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t GetFestivalBeastDetailRequest::activity_instance_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailRequest.activity_instance_id)
+  return _internal_activity_instance_id();
+}
+inline void GetFestivalBeastDetailRequest::set_activity_instance_id(::uint32_t value) {
+  _internal_set_activity_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailRequest.activity_instance_id)
+}
+inline ::uint32_t GetFestivalBeastDetailRequest::_internal_activity_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_instance_id_;
+}
+inline void GetFestivalBeastDetailRequest::_internal_set_activity_instance_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetFestivalBeastDetailResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetFestivalBeastDetailResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetFestivalBeastDetailResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetFestivalBeastDetailResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetFestivalBeastDetailResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetFestivalBeastDetailResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.error_message)
+  return _msg;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.error_message)
+}
+
+// uint64 server_now_ms = 2;
+inline void GetFestivalBeastDetailResponse::clear_server_now_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::server_now_ms() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.server_now_ms)
+  return _internal_server_now_ms();
+}
+inline void GetFestivalBeastDetailResponse::set_server_now_ms(::uint64_t value) {
+  _internal_set_server_now_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.server_now_ms)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_server_now_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_now_ms_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_server_now_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_ms_ = value;
+}
+
+// .FestivalBeastPhase phase = 3;
+inline void GetFestivalBeastDetailResponse::clear_phase() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::FestivalBeastPhase GetFestivalBeastDetailResponse::phase() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.phase)
+  return _internal_phase();
+}
+inline void GetFestivalBeastDetailResponse::set_phase(::FestivalBeastPhase value) {
+  _internal_set_phase(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.phase)
+}
+inline ::FestivalBeastPhase GetFestivalBeastDetailResponse::_internal_phase() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastPhase>(_impl_.phase_);
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_phase(::FestivalBeastPhase value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = value;
+}
+
+// uint32 activity_instance_id = 4;
+inline void GetFestivalBeastDetailResponse::clear_activity_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::activity_instance_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.activity_instance_id)
+  return _internal_activity_instance_id();
+}
+inline void GetFestivalBeastDetailResponse::set_activity_instance_id(::uint32_t value) {
+  _internal_set_activity_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.activity_instance_id)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_activity_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_instance_id_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_activity_instance_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = value;
+}
+
+// uint32 config_revision = 5;
+inline void GetFestivalBeastDetailResponse::clear_config_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::config_revision() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.config_revision)
+  return _internal_config_revision();
+}
+inline void GetFestivalBeastDetailResponse::set_config_revision(::uint32_t value) {
+  _internal_set_config_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.config_revision)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_config_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_revision_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_config_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_revision_ = value;
+}
+
+// string activity_name = 6;
+inline void GetFestivalBeastDetailResponse::clear_activity_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::activity_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.activity_name)
+  return _internal_activity_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_activity_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.activity_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.activity_name)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_activity_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_activity_name();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.activity_name)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_activity_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_name_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_activity_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_activity_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.activity_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_activity_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.activity_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.activity_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.activity_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_activity_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.activity_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.activity_name_.IsDefault()) {
+    _impl_.activity_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.activity_name)
+}
+
+// string boss_name = 7;
+inline void GetFestivalBeastDetailResponse::clear_boss_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::boss_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.boss_name)
+  return _internal_boss_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_boss_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.boss_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.boss_name)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_boss_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_boss_name();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.boss_name)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_boss_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.boss_name_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_boss_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_boss_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.boss_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_boss_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.boss_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.boss_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.boss_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_boss_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.boss_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.boss_name_.IsDefault()) {
+    _impl_.boss_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.boss_name)
+}
+
+// string banner_asset_key = 8;
+inline void GetFestivalBeastDetailResponse::clear_banner_asset_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banner_asset_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::banner_asset_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.banner_asset_key)
+  return _internal_banner_asset_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_banner_asset_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.banner_asset_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.banner_asset_key)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_banner_asset_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_banner_asset_key();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.banner_asset_key)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_banner_asset_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.banner_asset_key_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_banner_asset_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banner_asset_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_banner_asset_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.banner_asset_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_banner_asset_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.banner_asset_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.banner_asset_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.banner_asset_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_banner_asset_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.banner_asset_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.banner_asset_key_.IsDefault()) {
+    _impl_.banner_asset_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.banner_asset_key)
+}
+
+// string icon_key = 9;
+inline void GetFestivalBeastDetailResponse::clear_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::icon_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.icon_key)
+  return _internal_icon_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_icon_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.icon_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.icon_key)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_icon_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_icon_key();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.icon_key)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_icon_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.icon_key_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_icon_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.icon_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.icon_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.icon_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.icon_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.icon_key_.IsDefault()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.icon_key)
+}
+
+// uint64 effective_start_at_ms = 10;
+inline void GetFestivalBeastDetailResponse::clear_effective_start_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_start_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::effective_start_at_ms() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.effective_start_at_ms)
+  return _internal_effective_start_at_ms();
+}
+inline void GetFestivalBeastDetailResponse::set_effective_start_at_ms(::uint64_t value) {
+  _internal_set_effective_start_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.effective_start_at_ms)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_effective_start_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effective_start_at_ms_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_effective_start_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_start_at_ms_ = value;
+}
+
+// uint64 effective_end_at_ms = 11;
+inline void GetFestivalBeastDetailResponse::clear_effective_end_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_end_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::effective_end_at_ms() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.effective_end_at_ms)
+  return _internal_effective_end_at_ms();
+}
+inline void GetFestivalBeastDetailResponse::set_effective_end_at_ms(::uint64_t value) {
+  _internal_set_effective_end_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.effective_end_at_ms)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_effective_end_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effective_end_at_ms_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_effective_end_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_end_at_ms_ = value;
+}
+
+// uint64 claim_showcase_end_at_ms = 12;
+inline void GetFestivalBeastDetailResponse::clear_claim_showcase_end_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_showcase_end_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::claim_showcase_end_at_ms() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.claim_showcase_end_at_ms)
+  return _internal_claim_showcase_end_at_ms();
+}
+inline void GetFestivalBeastDetailResponse::set_claim_showcase_end_at_ms(::uint64_t value) {
+  _internal_set_claim_showcase_end_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.claim_showcase_end_at_ms)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_claim_showcase_end_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claim_showcase_end_at_ms_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_claim_showcase_end_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_showcase_end_at_ms_ = value;
+}
+
+// uint32 current_wins = 13;
+inline void GetFestivalBeastDetailResponse::clear_current_wins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_wins_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::current_wins() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.current_wins)
+  return _internal_current_wins();
+}
+inline void GetFestivalBeastDetailResponse::set_current_wins(::uint32_t value) {
+  _internal_set_current_wins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.current_wins)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_current_wins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_wins_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_current_wins(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_wins_ = value;
+}
+
+// uint32 required_wins = 14;
+inline void GetFestivalBeastDetailResponse::clear_required_wins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_wins_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::required_wins() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.required_wins)
+  return _internal_required_wins();
+}
+inline void GetFestivalBeastDetailResponse::set_required_wins(::uint32_t value) {
+  _internal_set_required_wins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.required_wins)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_required_wins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.required_wins_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_required_wins(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_wins_ = value;
+}
+
+// string reward_identity = 15;
+inline void GetFestivalBeastDetailResponse::clear_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_identity_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::reward_identity() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_identity)
+  return _internal_reward_identity();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_reward_identity(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.reward_identity_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_identity)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_reward_identity()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_reward_identity();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.reward_identity)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_reward_identity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_identity_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_identity(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_identity_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reward_identity_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.reward_identity)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.reward_identity_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reward_identity_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_reward_identity(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.reward_identity_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reward_identity_.IsDefault()) {
+    _impl_.reward_identity_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.reward_identity)
+}
+
+// uint32 reward_definition_version = 16;
+inline void GetFestivalBeastDetailResponse::clear_reward_definition_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_definition_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::reward_definition_version() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_definition_version)
+  return _internal_reward_definition_version();
+}
+inline void GetFestivalBeastDetailResponse::set_reward_definition_version(::uint32_t value) {
+  _internal_set_reward_definition_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_definition_version)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_reward_definition_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_definition_version_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_definition_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_definition_version_ = value;
+}
+
+// uint32 reward_pet_table_id = 17;
+inline void GetFestivalBeastDetailResponse::clear_reward_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::reward_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_pet_table_id)
+  return _internal_reward_pet_table_id();
+}
+inline void GetFestivalBeastDetailResponse::set_reward_pet_table_id(::uint32_t value) {
+  _internal_set_reward_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_pet_table_id)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_reward_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_pet_table_id_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_table_id_ = value;
+}
+
+// uint32 reward_pet_model_id = 18;
+inline void GetFestivalBeastDetailResponse::clear_reward_pet_model_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_model_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::reward_pet_model_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_pet_model_id)
+  return _internal_reward_pet_model_id();
+}
+inline void GetFestivalBeastDetailResponse::set_reward_pet_model_id(::uint32_t value) {
+  _internal_set_reward_pet_model_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_pet_model_id)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_reward_pet_model_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_pet_model_id_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_pet_model_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_model_id_ = value;
+}
+
+// string reward_pet_name = 19;
+inline void GetFestivalBeastDetailResponse::clear_reward_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::reward_pet_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_pet_name)
+  return _internal_reward_pet_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_reward_pet_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.reward_pet_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_pet_name)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_reward_pet_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_reward_pet_name();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.reward_pet_name)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_reward_pet_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_pet_name_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_pet_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_reward_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reward_pet_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_reward_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.reward_pet_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.reward_pet_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reward_pet_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_reward_pet_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.reward_pet_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reward_pet_name_.IsDefault()) {
+    _impl_.reward_pet_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.reward_pet_name)
+}
+
+// bool has_permanent_eligibility = 20;
+inline void GetFestivalBeastDetailResponse::clear_has_permanent_eligibility() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_permanent_eligibility_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline bool GetFestivalBeastDetailResponse::has_permanent_eligibility() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.has_permanent_eligibility)
+  return _internal_has_permanent_eligibility();
+}
+inline void GetFestivalBeastDetailResponse::set_has_permanent_eligibility(bool value) {
+  _internal_set_has_permanent_eligibility(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.has_permanent_eligibility)
+}
+inline bool GetFestivalBeastDetailResponse::_internal_has_permanent_eligibility() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_permanent_eligibility_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_has_permanent_eligibility(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_permanent_eligibility_ = value;
+}
+
+// uint32 eligibility_source_instance_id = 21;
+inline void GetFestivalBeastDetailResponse::clear_eligibility_source_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.eligibility_source_instance_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::eligibility_source_instance_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.eligibility_source_instance_id)
+  return _internal_eligibility_source_instance_id();
+}
+inline void GetFestivalBeastDetailResponse::set_eligibility_source_instance_id(::uint32_t value) {
+  _internal_set_eligibility_source_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.eligibility_source_instance_id)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_eligibility_source_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.eligibility_source_instance_id_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_eligibility_source_instance_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.eligibility_source_instance_id_ = value;
+}
+
+// uint64 eligibility_earned_at_ms = 22;
+inline void GetFestivalBeastDetailResponse::clear_eligibility_earned_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.eligibility_earned_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::eligibility_earned_at_ms() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.eligibility_earned_at_ms)
+  return _internal_eligibility_earned_at_ms();
+}
+inline void GetFestivalBeastDetailResponse::set_eligibility_earned_at_ms(::uint64_t value) {
+  _internal_set_eligibility_earned_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.eligibility_earned_at_ms)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_eligibility_earned_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.eligibility_earned_at_ms_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_eligibility_earned_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.eligibility_earned_at_ms_ = value;
+}
+
+// bool reward_claimed = 23;
+inline void GetFestivalBeastDetailResponse::clear_reward_claimed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_claimed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline bool GetFestivalBeastDetailResponse::reward_claimed() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_claimed)
+  return _internal_reward_claimed();
+}
+inline void GetFestivalBeastDetailResponse::set_reward_claimed(bool value) {
+  _internal_set_reward_claimed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_claimed)
+}
+inline bool GetFestivalBeastDetailResponse::_internal_reward_claimed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_claimed_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_claimed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_claimed_ = value;
+}
+
+// bool reward_claim_durable = 24;
+inline void GetFestivalBeastDetailResponse::clear_reward_claim_durable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_claim_durable_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline bool GetFestivalBeastDetailResponse::reward_claim_durable() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.reward_claim_durable)
+  return _internal_reward_claim_durable();
+}
+inline void GetFestivalBeastDetailResponse::set_reward_claim_durable(bool value) {
+  _internal_set_reward_claim_durable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.reward_claim_durable)
+}
+inline bool GetFestivalBeastDetailResponse::_internal_reward_claim_durable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_claim_durable_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_reward_claim_durable(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_claim_durable_ = value;
+}
+
+// uint64 claimed_pet_id = 25;
+inline void GetFestivalBeastDetailResponse::clear_claimed_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::claimed_pet_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.claimed_pet_id)
+  return _internal_claimed_pet_id();
+}
+inline void GetFestivalBeastDetailResponse::set_claimed_pet_id(::uint64_t value) {
+  _internal_set_claimed_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.claimed_pet_id)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_claimed_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_pet_id_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_claimed_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_pet_id_ = value;
+}
+
+// uint64 claimed_at_ms = 26;
+inline void GetFestivalBeastDetailResponse::clear_claimed_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::claimed_at_ms() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.claimed_at_ms)
+  return _internal_claimed_at_ms();
+}
+inline void GetFestivalBeastDetailResponse::set_claimed_at_ms(::uint64_t value) {
+  _internal_set_claimed_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.claimed_at_ms)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_claimed_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_at_ms_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_claimed_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_at_ms_ = value;
+}
+
+// string claim_request_id = 27;
+inline void GetFestivalBeastDetailResponse::clear_claim_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::claim_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.claim_request_id)
+  return _internal_claim_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_claim_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.claim_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.claim_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_claim_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_claim_request_id();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.claim_request_id)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_claim_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claim_request_id_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_claim_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_claim_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.claim_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_claim_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.claim_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.claim_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.claim_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_claim_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.claim_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.claim_request_id_.IsDefault()) {
+    _impl_.claim_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.claim_request_id)
+}
+
+// bool can_start_challenge = 28;
+inline void GetFestivalBeastDetailResponse::clear_can_start_challenge() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.can_start_challenge_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline bool GetFestivalBeastDetailResponse::can_start_challenge() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.can_start_challenge)
+  return _internal_can_start_challenge();
+}
+inline void GetFestivalBeastDetailResponse::set_can_start_challenge(bool value) {
+  _internal_set_can_start_challenge(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.can_start_challenge)
+}
+inline bool GetFestivalBeastDetailResponse::_internal_can_start_challenge() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.can_start_challenge_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_can_start_challenge(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.can_start_challenge_ = value;
+}
+
+// .FestivalBeastActionBlockCode start_block_code = 29;
+inline void GetFestivalBeastDetailResponse::clear_start_block_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_block_code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+}
+inline ::FestivalBeastActionBlockCode GetFestivalBeastDetailResponse::start_block_code() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.start_block_code)
+  return _internal_start_block_code();
+}
+inline void GetFestivalBeastDetailResponse::set_start_block_code(::FestivalBeastActionBlockCode value) {
+  _internal_set_start_block_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.start_block_code)
+}
+inline ::FestivalBeastActionBlockCode GetFestivalBeastDetailResponse::_internal_start_block_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastActionBlockCode>(_impl_.start_block_code_);
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_start_block_code(::FestivalBeastActionBlockCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_block_code_ = value;
+}
+
+// string start_block_reason = 30;
+inline void GetFestivalBeastDetailResponse::clear_start_block_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_block_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::start_block_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.start_block_reason)
+  return _internal_start_block_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_start_block_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.start_block_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.start_block_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_start_block_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_start_block_reason();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.start_block_reason)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_start_block_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.start_block_reason_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_start_block_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_block_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_start_block_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.start_block_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_start_block_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.start_block_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.start_block_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.start_block_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_start_block_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.start_block_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.start_block_reason_.IsDefault()) {
+    _impl_.start_block_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.start_block_reason)
+}
+
+// bool can_claim_reward = 31;
+inline void GetFestivalBeastDetailResponse::clear_can_claim_reward() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.can_claim_reward_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline bool GetFestivalBeastDetailResponse::can_claim_reward() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.can_claim_reward)
+  return _internal_can_claim_reward();
+}
+inline void GetFestivalBeastDetailResponse::set_can_claim_reward(bool value) {
+  _internal_set_can_claim_reward(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.can_claim_reward)
+}
+inline bool GetFestivalBeastDetailResponse::_internal_can_claim_reward() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.can_claim_reward_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_can_claim_reward(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.can_claim_reward_ = value;
+}
+
+// .FestivalBeastActionBlockCode claim_block_code = 32;
+inline void GetFestivalBeastDetailResponse::clear_claim_block_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_block_code_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline ::FestivalBeastActionBlockCode GetFestivalBeastDetailResponse::claim_block_code() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.claim_block_code)
+  return _internal_claim_block_code();
+}
+inline void GetFestivalBeastDetailResponse::set_claim_block_code(::FestivalBeastActionBlockCode value) {
+  _internal_set_claim_block_code(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.claim_block_code)
+}
+inline ::FestivalBeastActionBlockCode GetFestivalBeastDetailResponse::_internal_claim_block_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastActionBlockCode>(_impl_.claim_block_code_);
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_claim_block_code(::FestivalBeastActionBlockCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_block_code_ = value;
+}
+
+// string claim_block_reason = 33;
+inline void GetFestivalBeastDetailResponse::clear_claim_block_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_block_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::claim_block_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.claim_block_reason)
+  return _internal_claim_block_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetFestivalBeastDetailResponse::set_claim_block_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  _impl_.claim_block_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.claim_block_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_claim_block_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ::std::string* _s = _internal_mutable_claim_block_reason();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.claim_block_reason)
+  return _s;
+}
+inline const ::std::string& GetFestivalBeastDetailResponse::_internal_claim_block_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claim_block_reason_.Get();
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_claim_block_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claim_block_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_claim_block_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.claim_block_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_claim_block_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.claim_block_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x80000000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  auto* released = _impl_.claim_block_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.claim_block_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_claim_block_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  }
+  _impl_.claim_block_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.claim_block_reason_.IsDefault()) {
+    _impl_.claim_block_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.claim_block_reason)
+}
+
+// .FestivalBeastPendingLaunchInfo pending_launch = 34;
+inline bool GetFestivalBeastDetailResponse::has_pending_launch() const {
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.pending_launch_ != nullptr);
+  return value;
+}
+inline void GetFestivalBeastDetailResponse::clear_pending_launch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pending_launch_ != nullptr) _impl_.pending_launch_->Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+}
+inline const ::FestivalBeastPendingLaunchInfo& GetFestivalBeastDetailResponse::_internal_pending_launch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::FestivalBeastPendingLaunchInfo* p = _impl_.pending_launch_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::FestivalBeastPendingLaunchInfo>(&::FestivalBeastPendingLaunchInfo_globals_);
+}
+inline const ::FestivalBeastPendingLaunchInfo& GetFestivalBeastDetailResponse::pending_launch() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.pending_launch)
+  return _internal_pending_launch();
+}
+inline void GetFestivalBeastDetailResponse::unsafe_arena_set_allocated_pending_launch(
+    ::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pending_launch_);
+  }
+  _impl_.pending_launch_ = reinterpret_cast<::FestivalBeastPendingLaunchInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetFestivalBeastDetailResponse.pending_launch)
+}
+inline ::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_pending_launch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ::FestivalBeastPendingLaunchInfo* released = _impl_.pending_launch_;
+  _impl_.pending_launch_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::unsafe_arena_release_pending_launch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.pending_launch)
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ::FestivalBeastPendingLaunchInfo* temp = _impl_.pending_launch_;
+  _impl_.pending_launch_ = nullptr;
+  return temp;
+}
+inline ::FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_pending_launch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pending_launch_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::FestivalBeastPendingLaunchInfo>(GetArena());
+    _impl_.pending_launch_ = reinterpret_cast<::FestivalBeastPendingLaunchInfo*>(p);
+  }
+  return _impl_.pending_launch_;
+}
+inline ::FestivalBeastPendingLaunchInfo* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_pending_launch()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ::FestivalBeastPendingLaunchInfo* _msg = _internal_mutable_pending_launch();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.pending_launch)
+  return _msg;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_pending_launch(::FestivalBeastPendingLaunchInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pending_launch_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  }
+
+  _impl_.pending_launch_ = reinterpret_cast<::FestivalBeastPendingLaunchInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.pending_launch)
+}
+
+// .FestivalBeastMaterialSummary material_summary = 35;
+inline bool GetFestivalBeastDetailResponse::has_material_summary() const {
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.material_summary_ != nullptr);
+  return value;
+}
+inline void GetFestivalBeastDetailResponse::clear_material_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.material_summary_ != nullptr) _impl_.material_summary_->Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline const ::FestivalBeastMaterialSummary& GetFestivalBeastDetailResponse::_internal_material_summary() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::FestivalBeastMaterialSummary* p = _impl_.material_summary_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::FestivalBeastMaterialSummary>(&::FestivalBeastMaterialSummary_globals_);
+}
+inline const ::FestivalBeastMaterialSummary& GetFestivalBeastDetailResponse::material_summary() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.material_summary)
+  return _internal_material_summary();
+}
+inline void GetFestivalBeastDetailResponse::unsafe_arena_set_allocated_material_summary(
+    ::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.material_summary_);
+  }
+  _impl_.material_summary_ = reinterpret_cast<::FestivalBeastMaterialSummary*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetFestivalBeastDetailResponse.material_summary)
+}
+inline ::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::release_material_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ::FestivalBeastMaterialSummary* released = _impl_.material_summary_;
+  _impl_.material_summary_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE GetFestivalBeastDetailResponse::unsafe_arena_release_material_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetFestivalBeastDetailResponse.material_summary)
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ::FestivalBeastMaterialSummary* temp = _impl_.material_summary_;
+  _impl_.material_summary_ = nullptr;
+  return temp;
+}
+inline ::FestivalBeastMaterialSummary* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::_internal_mutable_material_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.material_summary_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::FestivalBeastMaterialSummary>(GetArena());
+    _impl_.material_summary_ = reinterpret_cast<::FestivalBeastMaterialSummary*>(p);
+  }
+  return _impl_.material_summary_;
+}
+inline ::FestivalBeastMaterialSummary* PROTOBUF_NONNULL GetFestivalBeastDetailResponse::mutable_material_summary()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ::FestivalBeastMaterialSummary* _msg = _internal_mutable_material_summary();
+  // @@protoc_insertion_point(field_mutable:GetFestivalBeastDetailResponse.material_summary)
+  return _msg;
+}
+inline void GetFestivalBeastDetailResponse::set_allocated_material_summary(::FestivalBeastMaterialSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.material_summary_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  }
+
+  _impl_.material_summary_ = reinterpret_cast<::FestivalBeastMaterialSummary*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetFestivalBeastDetailResponse.material_summary)
+}
+
+// uint32 matched_tier_id = 36;
+inline void GetFestivalBeastDetailResponse::clear_matched_tier_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.matched_tier_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::matched_tier_id() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.matched_tier_id)
+  return _internal_matched_tier_id();
+}
+inline void GetFestivalBeastDetailResponse::set_matched_tier_id(::uint32_t value) {
+  _internal_set_matched_tier_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.matched_tier_id)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_matched_tier_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.matched_tier_id_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_matched_tier_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.matched_tier_id_ = value;
+}
+
+// uint32 round_limit = 37;
+inline void GetFestivalBeastDetailResponse::clear_round_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::round_limit() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.round_limit)
+  return _internal_round_limit();
+}
+inline void GetFestivalBeastDetailResponse::set_round_limit(::uint32_t value) {
+  _internal_set_round_limit(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.round_limit)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_round_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.round_limit_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_round_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_limit_ = value;
+}
+
+// uint32 heavy_damage_percent = 38;
+inline void GetFestivalBeastDetailResponse::clear_heavy_damage_percent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heavy_damage_percent_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::heavy_damage_percent() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.heavy_damage_percent)
+  return _internal_heavy_damage_percent();
+}
+inline void GetFestivalBeastDetailResponse::set_heavy_damage_percent(::uint32_t value) {
+  _internal_set_heavy_damage_percent(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.heavy_damage_percent)
+}
+inline ::uint32_t GetFestivalBeastDetailResponse::_internal_heavy_damage_percent() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.heavy_damage_percent_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_heavy_damage_percent(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heavy_damage_percent_ = value;
+}
+
+// uint64 state_revision = 39;
+inline void GetFestivalBeastDetailResponse::clear_state_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::state_revision() const {
+  // @@protoc_insertion_point(field_get:GetFestivalBeastDetailResponse.state_revision)
+  return _internal_state_revision();
+}
+inline void GetFestivalBeastDetailResponse::set_state_revision(::uint64_t value) {
+  _internal_set_state_revision(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  // @@protoc_insertion_point(field_set:GetFestivalBeastDetailResponse.state_revision)
+}
+inline ::uint64_t GetFestivalBeastDetailResponse::_internal_state_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_revision_;
+}
+inline void GetFestivalBeastDetailResponse::_internal_set_state_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_revision_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// StartFestivalBeastChallengeRequest
+
+// string client_request_id = 1;
+inline void StartFestivalBeastChallengeRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& StartFestivalBeastChallengeRequest::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeRequest.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void StartFestivalBeastChallengeRequest::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeRequest.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL StartFestivalBeastChallengeRequest::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:StartFestivalBeastChallengeRequest.client_request_id)
+  return _s;
+}
+inline const ::std::string& StartFestivalBeastChallengeRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void StartFestivalBeastChallengeRequest::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL StartFestivalBeastChallengeRequest::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE StartFestivalBeastChallengeRequest::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:StartFestivalBeastChallengeRequest.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void StartFestivalBeastChallengeRequest::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:StartFestivalBeastChallengeRequest.client_request_id)
+}
+
+// uint32 activity_instance_id = 2;
+inline void StartFestivalBeastChallengeRequest::clear_activity_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t StartFestivalBeastChallengeRequest::activity_instance_id() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeRequest.activity_instance_id)
+  return _internal_activity_instance_id();
+}
+inline void StartFestivalBeastChallengeRequest::set_activity_instance_id(::uint32_t value) {
+  _internal_set_activity_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeRequest.activity_instance_id)
+}
+inline ::uint32_t StartFestivalBeastChallengeRequest::_internal_activity_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_instance_id_;
+}
+inline void StartFestivalBeastChallengeRequest::_internal_set_activity_instance_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = value;
+}
+
+// uint32 config_revision = 3;
+inline void StartFestivalBeastChallengeRequest::clear_config_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t StartFestivalBeastChallengeRequest::config_revision() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeRequest.config_revision)
+  return _internal_config_revision();
+}
+inline void StartFestivalBeastChallengeRequest::set_config_revision(::uint32_t value) {
+  _internal_set_config_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeRequest.config_revision)
+}
+inline ::uint32_t StartFestivalBeastChallengeRequest::_internal_config_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_revision_;
+}
+inline void StartFestivalBeastChallengeRequest::_internal_set_config_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_revision_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// StartFestivalBeastChallengeResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool StartFestivalBeastChallengeResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& StartFestivalBeastChallengeResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& StartFestivalBeastChallengeResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.error_message)
+  return _internal_error_message();
+}
+inline void StartFestivalBeastChallengeResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:StartFestivalBeastChallengeResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartFestivalBeastChallengeResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartFestivalBeastChallengeResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:StartFestivalBeastChallengeResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartFestivalBeastChallengeResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartFestivalBeastChallengeResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:StartFestivalBeastChallengeResponse.error_message)
+  return _msg;
+}
+inline void StartFestivalBeastChallengeResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:StartFestivalBeastChallengeResponse.error_message)
+}
+
+// .FestivalBeastLaunchState launch_state = 2;
+inline void StartFestivalBeastChallengeResponse::clear_launch_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.launch_state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::FestivalBeastLaunchState StartFestivalBeastChallengeResponse::launch_state() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.launch_state)
+  return _internal_launch_state();
+}
+inline void StartFestivalBeastChallengeResponse::set_launch_state(::FestivalBeastLaunchState value) {
+  _internal_set_launch_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.launch_state)
+}
+inline ::FestivalBeastLaunchState StartFestivalBeastChallengeResponse::_internal_launch_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastLaunchState>(_impl_.launch_state_);
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_launch_state(::FestivalBeastLaunchState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.launch_state_ = value;
+}
+
+// bool replayed = 3;
+inline void StartFestivalBeastChallengeResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool StartFestivalBeastChallengeResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.replayed)
+  return _internal_replayed();
+}
+inline void StartFestivalBeastChallengeResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.replayed)
+}
+inline bool StartFestivalBeastChallengeResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
+}
+
+// string client_request_id = 4;
+inline void StartFestivalBeastChallengeResponse::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& StartFestivalBeastChallengeResponse::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void StartFestivalBeastChallengeResponse::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL StartFestivalBeastChallengeResponse::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:StartFestivalBeastChallengeResponse.client_request_id)
+  return _s;
+}
+inline const ::std::string& StartFestivalBeastChallengeResponse::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL StartFestivalBeastChallengeResponse::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE StartFestivalBeastChallengeResponse::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:StartFestivalBeastChallengeResponse.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void StartFestivalBeastChallengeResponse::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:StartFestivalBeastChallengeResponse.client_request_id)
+}
+
+// uint64 locked_pet_id = 5;
+inline void StartFestivalBeastChallengeResponse::clear_locked_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.locked_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t StartFestivalBeastChallengeResponse::locked_pet_id() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.locked_pet_id)
+  return _internal_locked_pet_id();
+}
+inline void StartFestivalBeastChallengeResponse::set_locked_pet_id(::uint64_t value) {
+  _internal_set_locked_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.locked_pet_id)
+}
+inline ::uint64_t StartFestivalBeastChallengeResponse::_internal_locked_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.locked_pet_id_;
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_locked_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.locked_pet_id_ = value;
+}
+
+// uint64 battle_id = 6;
+inline void StartFestivalBeastChallengeResponse::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t StartFestivalBeastChallengeResponse::battle_id() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.battle_id)
+  return _internal_battle_id();
+}
+inline void StartFestivalBeastChallengeResponse::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.battle_id)
+}
+inline ::uint64_t StartFestivalBeastChallengeResponse::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint32 matched_tier_id = 7;
+inline void StartFestivalBeastChallengeResponse::clear_matched_tier_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.matched_tier_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t StartFestivalBeastChallengeResponse::matched_tier_id() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.matched_tier_id)
+  return _internal_matched_tier_id();
+}
+inline void StartFestivalBeastChallengeResponse::set_matched_tier_id(::uint32_t value) {
+  _internal_set_matched_tier_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.matched_tier_id)
+}
+inline ::uint32_t StartFestivalBeastChallengeResponse::_internal_matched_tier_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.matched_tier_id_;
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_matched_tier_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.matched_tier_id_ = value;
+}
+
+// uint64 admitted_at_ms = 8;
+inline void StartFestivalBeastChallengeResponse::clear_admitted_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admitted_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t StartFestivalBeastChallengeResponse::admitted_at_ms() const {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.admitted_at_ms)
+  return _internal_admitted_at_ms();
+}
+inline void StartFestivalBeastChallengeResponse::set_admitted_at_ms(::uint64_t value) {
+  _internal_set_admitted_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.admitted_at_ms)
+}
+inline ::uint64_t StartFestivalBeastChallengeResponse::_internal_admitted_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admitted_at_ms_;
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_admitted_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admitted_at_ms_ = value;
+}
+
+// string reject_reason = 9;
+inline void StartFestivalBeastChallengeResponse::clear_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& StartFestivalBeastChallengeResponse::reject_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:StartFestivalBeastChallengeResponse.reject_reason)
+  return _internal_reject_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void StartFestivalBeastChallengeResponse::set_reject_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.reject_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:StartFestivalBeastChallengeResponse.reject_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL StartFestivalBeastChallengeResponse::mutable_reject_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_reject_reason();
+  // @@protoc_insertion_point(field_mutable:StartFestivalBeastChallengeResponse.reject_reason)
+  return _s;
+}
+inline const ::std::string& StartFestivalBeastChallengeResponse::_internal_reject_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reject_reason_.Get();
+}
+inline void StartFestivalBeastChallengeResponse::_internal_set_reject_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL StartFestivalBeastChallengeResponse::_internal_mutable_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reject_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE StartFestivalBeastChallengeResponse::release_reject_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:StartFestivalBeastChallengeResponse.reject_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.reject_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reject_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void StartFestivalBeastChallengeResponse::set_allocated_reject_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.reject_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reject_reason_.IsDefault()) {
+    _impl_.reject_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:StartFestivalBeastChallengeResponse.reject_reason)
+}
+
+// -------------------------------------------------------------------
+
+// ClaimFestivalBeastRewardRequest
+
+// string client_request_id = 1;
+inline void ClaimFestivalBeastRewardRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ClaimFestivalBeastRewardRequest::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardRequest.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimFestivalBeastRewardRequest::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardRequest.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardRequest::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:ClaimFestivalBeastRewardRequest.client_request_id)
+  return _s;
+}
+inline const ::std::string& ClaimFestivalBeastRewardRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void ClaimFestivalBeastRewardRequest::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardRequest::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimFestivalBeastRewardRequest::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimFestivalBeastRewardRequest.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimFestivalBeastRewardRequest::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ClaimFestivalBeastRewardRequest.client_request_id)
+}
+
+// string reward_identity = 2;
+inline void ClaimFestivalBeastRewardRequest::clear_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_identity_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ClaimFestivalBeastRewardRequest::reward_identity() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardRequest.reward_identity)
+  return _internal_reward_identity();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimFestivalBeastRewardRequest::set_reward_identity(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.reward_identity_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardRequest.reward_identity)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardRequest::mutable_reward_identity()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_reward_identity();
+  // @@protoc_insertion_point(field_mutable:ClaimFestivalBeastRewardRequest.reward_identity)
+  return _s;
+}
+inline const ::std::string& ClaimFestivalBeastRewardRequest::_internal_reward_identity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_identity_.Get();
+}
+inline void ClaimFestivalBeastRewardRequest::_internal_set_reward_identity(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_identity_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardRequest::_internal_mutable_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reward_identity_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimFestivalBeastRewardRequest::release_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimFestivalBeastRewardRequest.reward_identity)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.reward_identity_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reward_identity_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimFestivalBeastRewardRequest::set_allocated_reward_identity(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.reward_identity_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reward_identity_.IsDefault()) {
+    _impl_.reward_identity_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ClaimFestivalBeastRewardRequest.reward_identity)
+}
+
+// -------------------------------------------------------------------
+
+// ClaimFestivalBeastRewardResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ClaimFestivalBeastRewardResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ClaimFestivalBeastRewardResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ClaimFestivalBeastRewardResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.error_message)
+  return _internal_error_message();
+}
+inline void ClaimFestivalBeastRewardResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClaimFestivalBeastRewardResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimFestivalBeastRewardResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimFestivalBeastRewardResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimFestivalBeastRewardResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimFestivalBeastRewardResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimFestivalBeastRewardResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:ClaimFestivalBeastRewardResponse.error_message)
+  return _msg;
+}
+inline void ClaimFestivalBeastRewardResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClaimFestivalBeastRewardResponse.error_message)
+}
+
+// .FestivalBeastClaimOutcome outcome = 2;
+inline void ClaimFestivalBeastRewardResponse::clear_outcome() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::FestivalBeastClaimOutcome ClaimFestivalBeastRewardResponse::outcome() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.outcome)
+  return _internal_outcome();
+}
+inline void ClaimFestivalBeastRewardResponse::set_outcome(::FestivalBeastClaimOutcome value) {
+  _internal_set_outcome(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.outcome)
+}
+inline ::FestivalBeastClaimOutcome ClaimFestivalBeastRewardResponse::_internal_outcome() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::FestivalBeastClaimOutcome>(_impl_.outcome_);
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_outcome(::FestivalBeastClaimOutcome value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = value;
+}
+
+// bool replayed = 3;
+inline void ClaimFestivalBeastRewardResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool ClaimFestivalBeastRewardResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.replayed)
+  return _internal_replayed();
+}
+inline void ClaimFestivalBeastRewardResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.replayed)
+}
+inline bool ClaimFestivalBeastRewardResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
+}
+
+// bool durable = 4;
+inline void ClaimFestivalBeastRewardResponse::clear_durable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.durable_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool ClaimFestivalBeastRewardResponse::durable() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.durable)
+  return _internal_durable();
+}
+inline void ClaimFestivalBeastRewardResponse::set_durable(bool value) {
+  _internal_set_durable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.durable)
+}
+inline bool ClaimFestivalBeastRewardResponse::_internal_durable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.durable_;
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_durable(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.durable_ = value;
+}
+
+// string client_request_id = 5;
+inline void ClaimFestivalBeastRewardResponse::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ClaimFestivalBeastRewardResponse::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimFestivalBeastRewardResponse::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardResponse::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:ClaimFestivalBeastRewardResponse.client_request_id)
+  return _s;
+}
+inline const ::std::string& ClaimFestivalBeastRewardResponse::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardResponse::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimFestivalBeastRewardResponse::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimFestivalBeastRewardResponse.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimFestivalBeastRewardResponse::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ClaimFestivalBeastRewardResponse.client_request_id)
+}
+
+// string reward_identity = 6;
+inline void ClaimFestivalBeastRewardResponse::clear_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_identity_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ClaimFestivalBeastRewardResponse::reward_identity() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.reward_identity)
+  return _internal_reward_identity();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimFestivalBeastRewardResponse::set_reward_identity(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.reward_identity_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.reward_identity)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardResponse::mutable_reward_identity()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_reward_identity();
+  // @@protoc_insertion_point(field_mutable:ClaimFestivalBeastRewardResponse.reward_identity)
+  return _s;
+}
+inline const ::std::string& ClaimFestivalBeastRewardResponse::_internal_reward_identity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_identity_.Get();
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_reward_identity(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_identity_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimFestivalBeastRewardResponse::_internal_mutable_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reward_identity_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimFestivalBeastRewardResponse::release_reward_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimFestivalBeastRewardResponse.reward_identity)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.reward_identity_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reward_identity_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimFestivalBeastRewardResponse::set_allocated_reward_identity(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.reward_identity_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reward_identity_.IsDefault()) {
+    _impl_.reward_identity_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ClaimFestivalBeastRewardResponse.reward_identity)
+}
+
+// uint32 reward_definition_version = 7;
+inline void ClaimFestivalBeastRewardResponse::clear_reward_definition_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_definition_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t ClaimFestivalBeastRewardResponse::reward_definition_version() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.reward_definition_version)
+  return _internal_reward_definition_version();
+}
+inline void ClaimFestivalBeastRewardResponse::set_reward_definition_version(::uint32_t value) {
+  _internal_set_reward_definition_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.reward_definition_version)
+}
+inline ::uint32_t ClaimFestivalBeastRewardResponse::_internal_reward_definition_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_definition_version_;
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_reward_definition_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_definition_version_ = value;
+}
+
+// uint32 reward_pet_table_id = 8;
+inline void ClaimFestivalBeastRewardResponse::clear_reward_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t ClaimFestivalBeastRewardResponse::reward_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.reward_pet_table_id)
+  return _internal_reward_pet_table_id();
+}
+inline void ClaimFestivalBeastRewardResponse::set_reward_pet_table_id(::uint32_t value) {
+  _internal_set_reward_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.reward_pet_table_id)
+}
+inline ::uint32_t ClaimFestivalBeastRewardResponse::_internal_reward_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_pet_table_id_;
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_reward_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_pet_table_id_ = value;
+}
+
+// uint64 pet_id = 9;
+inline void ClaimFestivalBeastRewardResponse::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t ClaimFestivalBeastRewardResponse::pet_id() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.pet_id)
+  return _internal_pet_id();
+}
+inline void ClaimFestivalBeastRewardResponse::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.pet_id)
+}
+inline ::uint64_t ClaimFestivalBeastRewardResponse::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// uint64 claimed_at_ms = 10;
+inline void ClaimFestivalBeastRewardResponse::clear_claimed_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t ClaimFestivalBeastRewardResponse::claimed_at_ms() const {
+  // @@protoc_insertion_point(field_get:ClaimFestivalBeastRewardResponse.claimed_at_ms)
+  return _internal_claimed_at_ms();
+}
+inline void ClaimFestivalBeastRewardResponse::set_claimed_at_ms(::uint64_t value) {
+  _internal_set_claimed_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:ClaimFestivalBeastRewardResponse.claimed_at_ms)
+}
+inline ::uint64_t ClaimFestivalBeastRewardResponse::_internal_claimed_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_at_ms_;
+}
+inline void ClaimFestivalBeastRewardResponse::_internal_set_claimed_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_at_ms_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -5229,6 +11618,36 @@ struct is_proto_enum<::PlayerActivityEntryKind> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::PlayerActivityEntryKind>() {
   return ::PlayerActivityEntryKind_descriptor();
+}
+template <>
+struct is_proto_enum<::FestivalBeastPhase> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::FestivalBeastPhase>() {
+  return ::FestivalBeastPhase_descriptor();
+}
+template <>
+struct is_proto_enum<::FestivalBeastActionBlockCode> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::FestivalBeastActionBlockCode>() {
+  return ::FestivalBeastActionBlockCode_descriptor();
+}
+template <>
+struct is_proto_enum<::FestivalBeastLaunchState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::FestivalBeastLaunchState>() {
+  return ::FestivalBeastLaunchState_descriptor();
+}
+template <>
+struct is_proto_enum<::FestivalBeastClaimOutcome> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::FestivalBeastClaimOutcome>() {
+  return ::FestivalBeastClaimOutcome_descriptor();
+}
+template <>
+struct is_proto_enum<::FestivalBeastMaterialQuotaMode> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::FestivalBeastMaterialQuotaMode>() {
+  return ::FestivalBeastMaterialQuotaMode_descriptor();
 }
 
 }  // namespace protobuf

@@ -123,3 +123,26 @@ func (battleClientPlayerRpc) decodeSetAutoBattle(reply *base.MessageContent, err
 	}
 	return resp, nil
 }
+
+// SurrenderBattle 异步调用 BattleClientPlayer.SurrenderBattle(REQUEST),done 的契约见 BattleClientPlayer。
+func (r battleClientPlayerRpc) SurrenderBattle(c *pkg.GameClient, req *battle.SurrenderBattleRequest, timeout time.Duration, done func(*battle.SurrenderBattleResponse, error)) {
+	c.Call(game.BattleClientPlayerSurrenderBattleMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSurrenderBattle(reply, err))
+	})
+}
+
+// SurrenderBattleSync 同步调用 BattleClientPlayer.SurrenderBattle(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r battleClientPlayerRpc) SurrenderBattleSync(ctx context.Context, c *pkg.GameClient, req *battle.SurrenderBattleRequest, timeout time.Duration) (*battle.SurrenderBattleResponse, error) {
+	return r.decodeSurrenderBattle(c.CallSync(ctx, game.BattleClientPlayerSurrenderBattleMessageId, req, timeout))
+}
+
+func (battleClientPlayerRpc) decodeSurrenderBattle(reply *base.MessageContent, err error) (*battle.SurrenderBattleResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &battle.SurrenderBattleResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode BattleClientPlayer.SurrenderBattle reply: %w", err)
+	}
+	return resp, nil
+}

@@ -67,7 +67,7 @@ V2 核心循环升级为：**「看预告 → 聚火 / 拆招 → 破招出破�
 | **T02 普通·护势** | 普通 | `2`（既有 `BreakStance`, `diff=1`） | 护势护卫 ×1 | R1/4/7 物/法联防阵固定交替（35% 减伤 + 轻反制蓄势）；学会 `A34` 驱散崩势、主目标聚火、普攻/毒火/换系绕盾 | **10 份**（满额胜含至多 1 可交易） |
 | **T03 困难·回春进阶**（方案 B1） | 困难 | `1`（既有 `BreakRejuv`, `diff=2`） | 回春护卫（进阶）×1 | 重劈与回春**同轮重叠**（R2/5/8，回血 10%）；**进阶变招：治疗若成功生效，顺手净化首领身上 1 项有害状态（优先毒/破甲/减疗）**；逼迫控场断疗或 `A35` 断脉压制 | **15 份**（10 基础 + 5 绑定困难奖） |
 | **T04 困难·护势进阶**（方案 B2） | 困难 | `2`（既有 `BreakStance`, `diff=2`） | 护势护卫（进阶）×1 | 联防减伤 40%；**进阶变招「顺势应变」：R4/7/10…切阵不再死板交替，而是针对前 2 回合敌方承受更高的直伤类型（物/法）动态开阵，且切阵瞬间给首领叠 1 层「蓄势」**；考驱散破势、双系人宠轮切或毒火流 | **15 份**（10 基础 + 5 绑定困难奖） |
-| **T05 困难·双卫同阵**（方案 A） | 困难 | **`7`（新增 `BreakDualGuard`, `diff=2`）** | **回春护卫 ×1 + 护势护卫 ×1** | **双卫同场交织**：护势联防（35%）同时庇护首领与回春护卫；R1/4/7 护势动态切阵、R2/5/8 首领重劈、R3/6/9 回春进阶治疗（10% + 净 1 减益），每轮一个清晰焦点、三套机制连锁拆解 | **15 份（与困难单卫完全一致）** + 专属「双卫合阵」战法印/称号/人物志评语 |
+| **T05 困难·双卫同阵**（方案 A） | 困难 | **`8`（新增 `BreakDualGuard`, `diff=2`，`Dungeon id=112`；注：`7 / id=111` 已由瑞兽迎春占用）** | **回春护卫 ×1 + 护势护卫 ×1** | **双卫同场交织**：护势联防（35%）同时庇护首领与回春护卫；R1/4/7 护势动态切阵、R2/5/8 首领重劈、R3/6/9 回春进阶治疗（10% + 净 1 减益），每轮一个清晰焦点、三套机制连锁拆解 | **15 份（与困难单卫完全一致）** + 专属「双卫合阵」战法印/称号/人物志评语 |
 
 ### 2.3 队伍与准备
 
@@ -390,9 +390,9 @@ U03  顶部：胜利 ／ 未能通关 ／ 已退出 ／ 本次作废
 
 | 能力模块 | 2026-11-24 代码真实状态 | V2 升级需要补齐的内容 |
 |---|---|---|
-| 慢动作重劈与基础护卫 | `turn_battle_engine.cpp` Slice C 已实现 `kBossTrialKindBreakRejuv(1)`、`BreakStance(2)`、`Barrier(3)`、`Venom(4)`、`ExecuteBossTrialSlowAndGuardianActions` 与 `BattleTelegraphEntry` | 扩展 `kBossTrialKindBreakDualGuard(7)`；补齐**聚火溅射 -40%**、**统一「破绽」状态**、**断疗反噬/崩势/蓄势**、**困难进阶（净益回春/顺势应变动态护势）**、**二阶段决战姿态**、**裂地双劈多目标**与**策应卫** |
+| 慢动作重劈与基础护卫 | `turn_battle_engine.cpp` Slice C 已实现 `kBossTrialKindBreakRejuv(1)`、`BreakStance(2)`、`Barrier(3)`、`Venom(4)`、`FestivalBeast(7)`、`ExecuteBossTrialSlowAndGuardianActions` 与 `BattleTelegraphEntry` | 扩展 `kBossTrialKindBreakDualGuard(8)`（`Dungeon id=112`）；补齐**聚火溅射 -40%**、**统一「破绽」状态**、**断疗反噬/崩势/蓄势**、**困难进阶（净益回春/顺势应变动态护势）**、**二阶段决战姿态**、**裂地双劈多目标**与**策应卫（`Monster 109/110`）** |
 | 主目标识别钩子 | `TurnBattleEngine::ApplyClassSkillToTarget` 已将 `primaryTargetId` 传入 `EffectContext`（见 `turn_battle_engine.cpp:2295`、`2318`） | 将 `isPrimaryTarget` 透传进 `ApplyEncounterDamageModifiers`（并对无 configured buff 分支与 configured 分支统一生效），实现首领试炼非主目标直伤 ×60% |
-| 两阶段材料总账 | `player_equipment_material_reward.{h,cpp}` 与 `player_battle.cpp` 已落地阶段一 660 + 阶段二周 100、普通 10 / 困难 15、绑定分堆隔离及 `BattleEndS2C` 实增字段 | 直接复用，无需改写经济账本；只需保证新 `Dungeon` 行 `id=111`（双卫同阵）配 `difficulty = 2`，自动享有 15 份且无额外加码 |
+| 两阶段材料总账 | `player_equipment_material_reward.{h,cpp}` 与 `player_battle.cpp` 已落地阶段一 660 + 阶段二周 100、普通 10 / 困难 15、绑定分堆隔离及 `BattleEndS2C` 实增字段 | 直接复用，无需改写经济账本；只需保证新 `Dungeon` 行 `id=112`（双卫同阵）配 `difficulty = 2`，自动享有 15 份且无额外加码 |
 | 五行试炼志判定 | `trial_journal_rules.h` 与 `BattleTrialJournalFacts` 已落地卷一 4 格 12 印判定及 `PlayerAppearanceSystem::GrantAppearance` | 末尾追加卷一第 5 格（困难·双卫同阵 3 印）与「化劲宗师」高光判定字段，不触动既有 `bit_index` |
 | 准备房、确定退出与临时状态隔离 | 通用逃跑 `ExecuteFlee` 仍偏随机；试炼专用准备快照/版本化开局、确定退出（人物+宝宝原子离场）与资源/冷却全链路隔离仍需补齐收口 | 按本稿 §2.3、§6.1～6.2 补全试炼策略隔离、确定退出与幂等准备开局 |
 | 独立 Java 服务端 | `xuanming-server-mmo/PARITY.md` 已登记 11-24 Slice C 为 `Java 待做` | 本 V2 升级同步列入双服对账范围，C++ 与 Java 遵循同一 proto、配表与确定性规则 |
@@ -409,7 +409,7 @@ U03  顶部：胜利 ／ 未能通关 ／ 已退出 ／ 本次作废
 | **V6** | **「副目标溅射 -40%」污染野外刷怪、PVP 论剑或破坏既有战斗回归测试** | 溅射减伤严格以 `IsBossTrialEncounter() && target.team_index() == 1 && isMultiTargetDirectSkill` 为门禁，零触碰非试炼 PVE 与全部 PVP 伤害管线。 |
 | **V7** | **二阶段「决战姿态」在回合中途触发导致一回合连劈两次或吞掉既有预告** | 阶段切换仅在**回合末结算且确认未终局后**执行；若次轮原本已有未兑现重劈预告，先按原预告正常兑现后再切 2 回合循环，绝不同回合双劈。 |
 | **V8** | **「一键防御化劲」快捷按钮制造第二套非法提交通道或误锁非本人宝宝** | 快捷按钮在客户端仅作为 `BATTLE_ACTION_DEFEND` 的 UI 快捷入口，走完全相同的 `SubmitBattleActionRequest(battle_id, round_index, actor_id)` 权威校验，严格验归属、回合与截止时刻。 |
-| **V9** | **新增双卫同阵与荣誉印记破坏既有表 ID、proto 字段号或位图位序** | 严格遵循 `proto-and-tables.md` 与 `bit-storage-and-table-ids.md`：既有 `Dungeon` `101..110`、`boss_trial_kind` `1..6` 与既有试炼志 `bit_index` **零修改**；所有新枚举、新表行与新 proto 字段均在末尾递增追加。 |
+| **V9** | **新增双卫同阵与荣誉印记破坏既有表 ID、proto 字段号或位图位序** | 严格遵循 `proto-and-tables.md` 与 `bit-storage-and-table-ids.md`：既有 `Dungeon` `101..111`、`boss_trial_kind` `1..7` 与既有试炼志 `bit_index` **零修改**；所有新枚举（`8`）、新表行（`Dungeon 112` / `Monster 109..110` / `Entry 105` / `Seal 1051..1053` / `Milestone 105`）与新 proto 字段均在末尾递增追加。 |
 
 ---
 
@@ -425,7 +425,7 @@ U03  顶部：胜利 ／ 未能通关 ／ 已退出 ／ 本次作废
 
 ### 14.2 执行步骤
 
-1. 核对并冻结 V2 增量契约（`BattleStateS2C` 阶段/破绽/蓄势/多目标预告、`BattleTrialJournalFacts` 高光计数、`Dungeon` 新增 `id=111` 双卫同阵与策应卫 `Monster` 行），输出离线演示 JSON 样例给异机 Codex。
+1. 核对并冻结 V2 增量契约（`BattleStateS2C` 阶段/破绽/蓄势/多目标预告、`BattleTrialJournalFacts` 高光计数、`Dungeon` 新增 `id=112` 双卫同阵与策应卫 `Monster 109/110` 行），输出离线演示 JSON 样例给异机 Codex。
 2. `TurnBattleEngine` 落地 6 项核心机制（聚火溅射、破绽、护势联防轻反制与动态切阵、断疗反噬与进阶净化、策应卫与裂地双劈、二阶段决战姿态），补全 `turn_battle_engine_test` 用例覆盖 D05～D29。
 3. Scene 侧落地准备房快照/版本失效/幂等开局、确定退出、临时资源隔离及试炼志第 5 格 + 荣誉印戳/称号授形。
 4. 同步独立 Java 仓实现并登记 `PARITY.md`，两仓分别按各自构建门禁编译与跑测。
@@ -440,7 +440,7 @@ U03  顶部：胜利 ／ 未能通关 ／ 已退出 ／ 本次作废
 
 > 请按 `docs/design/boss-trial-planning-ui.md` 的 **2026-11-24 V2 深度策略定稿**，在既有 2026-11-24 Slice C（`turn_battle_engine.{h,cpp}`）与两阶段装备材料总账（`player_equipment_material_reward.{h,cpp}`）基础上，完成首领试炼 V2 逻辑、协议、配表、客户端非 UI 绑定与双服同步：
 >
-> 1. **先出契约与离线样例**：在不改动既有 `Dungeon` `101..110`、`boss_trial_kind` `1..6` 及既有试炼志 `bit_index` 的前提下，末尾追加 `kBossTrialKindBreakDualGuard = 7`（困难·双卫同阵 `Dungeon` 新行）、两类策应卫（破军卫/鼓噪卫）怪物配置、`BattleStateS2C` 阶段/破绽/蓄势/多目标预告扩展字段、以及 `BattleTrialJournalFacts` 高光破招计数；先向异机 Codex 交付字段、事件、错误与离线演示样例契约。
+> 1. **先出契约与离线样例**：在不改动既有 `Dungeon` `101..111`、`boss_trial_kind` `1..7` 及既有试炼志 `bit_index` 的前提下，末尾追加 `kBossTrialKindBreakDualGuard = 8`（困难·双卫同阵 `Dungeon id=112` 新行）、两类策应卫（破军卫 `109` / 鼓噪卫 `110`）怪物配置、`BattleStateS2C` 阶段/破绽/蓄势/多目标预告扩展字段、以及 `BattleTrialJournalFacts` 高光破招计数；先向异机 Codex 交付字段、事件、错误与离线演示样例契约。
 > 2. **战斗引擎 V2 核心（`TurnBattleEngine`）**：
 >    - 首领试炼敌方阵型「主目标聚火 100% / 多目标直伤副目标溅射 60%」（利用既有 `primaryTargetId`，严禁影响非试炼 PVE 与 PVP）；
 >    - 统一反打状态「破绽」（完整 +35% / 双劈半化解 +20%，持续至下回合末，不叠乘，与二阶段自身易伤 +15% 加算）；
@@ -523,7 +523,7 @@ U03  顶部：胜利 ／ 未能通关 ／ 已退出 ／ 本次作废
 | D25 | 结算重复投递与迟到旧包 | 同 `battle_id` 只应用一次；旧结果不污染场景或新局 |
 | D26 | 五行试炼志第 5 格与高光荣誉授形 | 卷一既有 12 印零漂移；双卫同阵 3 印与化劲宗师、称号/印戳/留灯院评语准确点亮且零战力 |
 | D27 | 临时状态全隔离 | 场景残血入场、胜败退出及并发资产变更互不污染；无隐藏经验金币掉落或任务计数 |
-| D28 | 既有表 ID 与位图零破坏检查 | `Dungeon` `101..110`、`boss_trial_kind` `1..6` 与既有试炼志 `bit_index` 原样不变（防线 V9） |
+| D28 | 既有表 ID 与位图零破坏检查 | `Dungeon` `101..111`、`boss_trial_kind` `1..7` 与既有试炼志 `bit_index` 原样不变（防线 V9） |
 | D29 | 四套基准阵容实测时长与容错 | 纯物/纯法/辅助+宠/毒火流全可通；普通 3～5 分、困难 5～7 分 |
 | D30 | 三种分辨率、特效可读性与焦点导航 | `1280×720`/`1920×1080`/`2560×1080` 下聚火标、双连线、破绽裂印、一键防御化劲、Esc 与手柄焦点全部正常 |
 

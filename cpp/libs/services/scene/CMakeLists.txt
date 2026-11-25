@@ -157,6 +157,7 @@ set(SOURCE_FILES
     player/system/mission_marshal.cpp
     player/system/player_activity_schedule.cpp
     player/system/player_activity.cpp
+    player/system/player_festival_beast.cpp
 )
 
 add_library(scene STATIC ${SOURCE_FILES})

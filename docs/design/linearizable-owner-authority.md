@@ -2,7 +2,7 @@
 
 > 日期：2026-11-24  
 > 对标来源：`xuanming-server/services/runtime/owner` 与 `CLAUDE.md §9.22 / §9.23`  
-> 状态：阶段 1 核心事务引擎、DDL、重连状态决策机与 `scene_manager` 可选配置装配已落地并通过单测；全量替代 Redis `ownerepoch` 及联动 C++ scene / Java 独立版排入阶段 2–3。  
+> 状态：核心事务引擎、DDL、重连状态决策机、`scene_manager` `ServiceContext` 强读装配，以及 `EnterScene` / `LeaveScene` 的 `shadow` 双写审计与 `enforce` fail-closed 入口闸门均已落地并通过单测。  
 > Java 独立版（`xuanming-server-mmo`）状态：本阶段未变更任何客户端可见 proto、帧或配表契约，暂无需改动 `xuanming-server-mmo`；阶段 2 切换真实进场主链并引入客户端重连状态字段时须同步更新 `xuanming-server-mmo` 与 `PARITY.md`。
 
 ---

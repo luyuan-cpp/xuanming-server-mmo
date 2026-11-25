@@ -223,8 +223,11 @@
     <ClInclude Include="player\system\mission_marshal.h" />
     <ClCompile Include="player\system\player_activity_schedule.cpp" />
     <ClCompile Include="player\system\player_activity.cpp" />
+    <ClCompile Include="player\system\player_festival_beast.cpp" />
     <ClInclude Include="player\system\player_activity.h" />
     <ClInclude Include="player\system\player_activity_schedule.h" />
+    <ClInclude Include="player\system\festival_beast_rules.h" />
+    <ClInclude Include="player\system\player_festival_beast.h" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

@@ -49,6 +49,26 @@ type CharacterAppearanceSeries_idComp struct {
     Value uint32
 }
 
+type CharacterAppearanceArchive_nameComp struct {
+    Value string
+}
+
+type CharacterAppearanceNicknameComp struct {
+    Value string
+}
+
+type CharacterAppearanceBiography_summaryComp struct {
+    Value string
+}
+
+type CharacterAppearanceStory_titleComp struct {
+    Value string
+}
+
+type CharacterAppearanceStory_bodyComp struct {
+    Value string
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -88,5 +108,25 @@ func MakeCharacterAppearanceCard_unlockableComp(row *pb.CharacterAppearanceTable
 
 func MakeCharacterAppearanceSeries_idComp(row *pb.CharacterAppearanceTable) CharacterAppearanceSeries_idComp {
     return CharacterAppearanceSeries_idComp{Value: row.SeriesId}
+}
+
+func MakeCharacterAppearanceArchive_nameComp(row *pb.CharacterAppearanceTable) CharacterAppearanceArchive_nameComp {
+    return CharacterAppearanceArchive_nameComp{Value: row.ArchiveName}
+}
+
+func MakeCharacterAppearanceNicknameComp(row *pb.CharacterAppearanceTable) CharacterAppearanceNicknameComp {
+    return CharacterAppearanceNicknameComp{Value: row.Nickname}
+}
+
+func MakeCharacterAppearanceBiography_summaryComp(row *pb.CharacterAppearanceTable) CharacterAppearanceBiography_summaryComp {
+    return CharacterAppearanceBiography_summaryComp{Value: row.BiographySummary}
+}
+
+func MakeCharacterAppearanceStory_titleComp(row *pb.CharacterAppearanceTable) CharacterAppearanceStory_titleComp {
+    return CharacterAppearanceStory_titleComp{Value: row.StoryTitle}
+}
+
+func MakeCharacterAppearanceStory_bodyComp(row *pb.CharacterAppearanceTable) CharacterAppearanceStory_bodyComp {
+    return CharacterAppearanceStory_bodyComp{Value: row.StoryBody}
 }
 

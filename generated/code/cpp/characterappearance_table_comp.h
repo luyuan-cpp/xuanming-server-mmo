@@ -50,6 +50,26 @@ struct CharacterAppearanceSeries_idComp {
     uint32_t value;
 };
 
+struct CharacterAppearanceArchive_nameComp {
+    std::string_view value;
+};
+
+struct CharacterAppearanceNicknameComp {
+    std::string_view value;
+};
+
+struct CharacterAppearanceBiography_summaryComp {
+    std::string_view value;
+};
+
+struct CharacterAppearanceStory_titleComp {
+    std::string_view value;
+};
+
+struct CharacterAppearanceStory_bodyComp {
+    std::string_view value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -81,4 +101,19 @@ inline CharacterAppearanceCard_unlockableComp MakeCharacterAppearanceCard_unlock
 }
 inline CharacterAppearanceSeries_idComp MakeCharacterAppearanceSeries_idComp(const CharacterAppearanceTable& row) {
     return { row.series_id() };
+}
+inline CharacterAppearanceArchive_nameComp MakeCharacterAppearanceArchive_nameComp(const CharacterAppearanceTable& row) {
+    return { std::string_view(row.archive_name()) };
+}
+inline CharacterAppearanceNicknameComp MakeCharacterAppearanceNicknameComp(const CharacterAppearanceTable& row) {
+    return { std::string_view(row.nickname()) };
+}
+inline CharacterAppearanceBiography_summaryComp MakeCharacterAppearanceBiography_summaryComp(const CharacterAppearanceTable& row) {
+    return { std::string_view(row.biography_summary()) };
+}
+inline CharacterAppearanceStory_titleComp MakeCharacterAppearanceStory_titleComp(const CharacterAppearanceTable& row) {
+    return { std::string_view(row.story_title()) };
+}
+inline CharacterAppearanceStory_bodyComp MakeCharacterAppearanceStory_bodyComp(const CharacterAppearanceTable& row) {
+    return { std::string_view(row.story_body()) };
 }

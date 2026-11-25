@@ -401,7 +401,11 @@
         "MatchTournamentQualifierLimit": 16048,
         "MatchTournamentMatchNotReady": 16049,
         "MatchTournamentAlreadyCheered": 16050,
-        "MatchTournamentRewardUnavailable": 16051
+        "MatchTournamentRewardUnavailable": 16051,
+        "MatchBattleSurrenderNotAllowed": 16052,
+        "MatchBattleSurrenderTooEarly": 16053,
+        "MatchBattleSurrenderCooldown": 16054,
+        "MatchBattleSurrenderAlreadyVoted": 16055
       }
     },
     "attribute_error": {
@@ -446,7 +450,8 @@
         "PetNoAutoPlan": 26014,
         "PetNothingToChange": 26015,
         "PetIdGenerateFailed": 26016,
-        "PetNameSensitive": 26017
+        "PetNameSensitive": 26017,
+        "PetNotTransferable": 26018
       }
     },
     "trade_error": {
@@ -682,6 +687,26 @@
         "TrialJournalBagFull": 35006,
         "TrialJournalVoucherNotEnough": 35007,
         "TrialJournalArtifactInvalid": 35008
+      }
+    },
+    "festival_beast_error": {
+      "base": 36000,
+      "width": 1000,
+      "ids": {
+        "FestivalBeastNotOpen": 36000,
+        "FestivalBeastConfigInvalid": 36001,
+        "FestivalBeastConfigRevisionMismatch": 36002,
+        "FestivalBeastPetRequired": 36003,
+        "FestivalBeastPetDead": 36004,
+        "FestivalBeastPetChanged": 36005,
+        "FestivalBeastLaunchInFlight": 36006,
+        "FestivalBeastInBattle": 36007,
+        "FestivalBeastFrozen": 36008,
+        "FestivalBeastNotEligible": 36009,
+        "FestivalBeastAlreadyClaimed": 36010,
+        "FestivalBeastExclusiveSlotOccupied": 36011,
+        "FestivalBeastRequestConflict": 36012,
+        "FestivalBeastServiceUnavailable": 36013
       }
     }
   },

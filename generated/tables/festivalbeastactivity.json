@@ -1,0 +1,26 @@
+{
+ "data": [
+  {
+   "activity_name": "瑞兽迎春",
+   "banner_asset_key": "activity_festival_beast_banner",
+   "battle_config_id": 111,
+   "boss_name": "春禧兽",
+   "claim_showcase_days": 7,
+   "config_revision": 1,
+   "cycle_rounds": 3,
+   "effective_end_at_ms": 0,
+   "effective_start_at_ms": 0,
+   "enabled": false,
+   "first_heavy_round": 3,
+   "heavy_damage_percent": 180,
+   "icon_key": "pet_chunxishou_icon",
+   "id": 202601,
+   "required_wins": 3,
+   "reward_definition_version": 1,
+   "reward_identity": "festival_beast_chunxishou_v1",
+   "reward_pet_table_id": 101,
+   "round_limit": 12,
+   "telegraph_lead_rounds": 1
+  }
+ ]
+}

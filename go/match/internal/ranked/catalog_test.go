@@ -19,10 +19,15 @@ func TestBuildFromRealTables(t *testing.T) {
 
 	cat, err := BuildFromTableSet(ts)
 	require.NoError(t, err)
-	require.Equal(t, uint32(1), cat.RuleVersion())
+	require.Equal(t, uint32(2), cat.RuleVersion())
 	require.Equal(t, uint32(5), cat.BattleConfigId())
+	require.Equal(t, uint32(6), cat.WinMilestoneMatches())
 	require.Len(t, cat.PresetViews(), 6)
 	require.Len(t, cat.Fingerprint(), 64)
+	require.Equal(t, DefaultFallback().Fingerprint(), cat.Fingerprint(), "DefaultFallback 必须与真实 V2 配表保持同一确定性指纹")
+	for _, view := range cat.PresetViews() {
+		require.Len(t, view.GetSkillIds(), 4, "V2 预设 id=%d 必须满编 4 技能", view.GetPresetId())
+	}
 
 	defC, defP := cat.DefaultPresets()
 	require.Equal(t, uint32(101), defC)
@@ -37,13 +42,14 @@ func TestBuildFromRealTables(t *testing.T) {
 	require.False(t, cat.IsValidPair(999, 201))
 	require.False(t, cat.IsValidPair(101, 999))
 
-	// 五段边界与未亮段规则(1540 -> 1556 跨段)
+	// V2 五段边界与未亮段规则(新号 1500 初试起步，净胜 2 场 1532 破冰升青锋)
 	require.Equal(t, matchpb.RankedTier_RANKED_TIER_UNSPECIFIED, cat.TierFor(185000, false))
-	require.Equal(t, matchpb.RankedTier_RANKED_TIER_CHUSHI, cat.TierFor(139999, true))
-	require.Equal(t, matchpb.RankedTier_RANKED_TIER_QINGFENG, cat.TierFor(140000, true))
-	require.Equal(t, matchpb.RankedTier_RANKED_TIER_QINGFENG, cat.TierFor(154000, true))
-	require.Equal(t, matchpb.RankedTier_RANKED_TIER_YUNZHANG, cat.TierFor(155600, true))
-	require.Equal(t, matchpb.RankedTier_RANKED_TIER_TIANSHU, cat.TierFor(170000, true))
+	require.Equal(t, matchpb.RankedTier_RANKED_TIER_CHUSHI, cat.TierFor(150000, true))
+	require.Equal(t, matchpb.RankedTier_RANKED_TIER_CHUSHI, cat.TierFor(151999, true))
+	require.Equal(t, matchpb.RankedTier_RANKED_TIER_QINGFENG, cat.TierFor(152000, true))
+	require.Equal(t, matchpb.RankedTier_RANKED_TIER_QINGFENG, cat.TierFor(159999, true))
+	require.Equal(t, matchpb.RankedTier_RANKED_TIER_YUNZHANG, cat.TierFor(160000, true))
+	require.Equal(t, matchpb.RankedTier_RANKED_TIER_TIANSHU, cat.TierFor(172000, true))
 	require.Equal(t, matchpb.RankedTier_RANKED_TIER_WUSHUANG, cat.TierFor(185000, true))
 
 	// 硬上限分差窗口: 永不退化为 +Inf

@@ -269,6 +269,10 @@ public:
     void HandleSetAutoBattle(const ::SessionDetails &sessionDetails,
                              const ::SetAutoBattleRequest &request,
                              ::SetAutoBattleResponse &response);
+    // PVP 第 5 回合起投降 / 同队投降投票表态：通过时直接走唯一 BeginResultCommit 终局收尾，绝不向对手泄密。
+    void HandleSurrenderBattle(const ::SessionDetails &sessionDetails,
+                               const ::SurrenderBattleRequest &request,
+                               ::SurrenderBattleResponse &response);
 
     // 停机收尾,供 SetBeforeShutdown 与维护流程的 source 关闭调用:先关观战准入(此后新观众、新中继 gate 与升档一律回
     // kServiceUnavailable),再停掉房间定时器、关闭房间直连,不铸造任何终局。

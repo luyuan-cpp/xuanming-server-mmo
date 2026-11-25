@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fpet_table.proto\"\xc2\x02\n\x08PetTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x03 \x01(\t\x12\x10\n\x08model_id\x18\x04 \x01(\r\x12\x0f\n\x07quality\x18\x05 \x01(\r\x12\x14\n\x0cunlock_level\x18\x06 \x01(\r\x12\x11\n\tlevel_cap\x18\x07 \x01(\r\x12\x13\n\x0binit_health\x18\x08 \x01(\x04\x12\x11\n\tinit_mana\x18\t \x01(\x04\x12\x12\n\ninit_speed\x18\n \x01(\x04\x12\x14\n\x0c\x61ptitude_min\x18\x0b \x03(\r\x12\x14\n\x0c\x61ptitude_max\x18\x0c \x03(\r\x12\r\n\x05skill\x18\r \x03(\r\x12\x17\n\x0fshop_price_gold\x18\x0e \x01(\x04\x12\x18\n\x10\x61\x63quisition_tier\x18\x0f \x01(\r\x12\x18\n\x10\x63ultivation_tier\x18\x10 \x01(\r\"\'\n\x0cPetTableData\x12\x17\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\t.PetTableB:\n\x0e\x63om.game.tableB\x12PetTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fpet_table.proto\"\x99\x03\n\x08PetTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x03 \x01(\t\x12\x10\n\x08model_id\x18\x04 \x01(\r\x12\x0f\n\x07quality\x18\x05 \x01(\r\x12\x14\n\x0cunlock_level\x18\x06 \x01(\r\x12\x11\n\tlevel_cap\x18\x07 \x01(\r\x12\x13\n\x0binit_health\x18\x08 \x01(\x04\x12\x11\n\tinit_mana\x18\t \x01(\x04\x12\x12\n\ninit_speed\x18\n \x01(\x04\x12\x14\n\x0c\x61ptitude_min\x18\x0b \x03(\r\x12\x14\n\x0c\x61ptitude_max\x18\x0c \x03(\r\x12\r\n\x05skill\x18\r \x03(\r\x12\x17\n\x0fshop_price_gold\x18\x0e \x01(\x04\x12\x18\n\x10\x61\x63quisition_tier\x18\x0f \x01(\r\x12\x18\n\x10\x63ultivation_tier\x18\x10 \x01(\r\x12\x17\n\x0ftransfer_policy\x18\x11 \x01(\r\x12\x1c\n\x14\x65xclusive_gift_slots\x18\x12 \x01(\r\x12\x1e\n\x16\x66ixed_initial_aptitude\x18\x13 \x01(\x08\"\'\n\x0cPetTableData\x12\x17\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\t.PetTableB:\n\x0e\x63om.game.tableB\x12PetTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\022PetTableOuterClassP\001Z\022generated/pb/table'
   _globals['_PETTABLE']._serialized_start=20
-  _globals['_PETTABLE']._serialized_end=342
-  _globals['_PETTABLEDATA']._serialized_start=344
-  _globals['_PETTABLEDATA']._serialized_end=383
+  _globals['_PETTABLE']._serialized_end=429
+  _globals['_PETTABLEDATA']._serialized_start=431
+  _globals['_PETTABLEDATA']._serialized_end=470
 # @@protoc_insertion_point(module_scope)

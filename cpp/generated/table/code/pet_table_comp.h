@@ -66,6 +66,18 @@ struct PetCultivation_tierComp {
     uint32_t value;
 };
 
+struct PetTransfer_policyComp {
+    uint32_t value;
+};
+
+struct PetExclusive_gift_slotsComp {
+    uint32_t value;
+};
+
+struct PetFixed_initial_aptitudeComp {
+    bool value;
+};
+
 struct PetAptitude_minComp {
     std::span<const uint32_t> values;
 };
@@ -121,6 +133,15 @@ inline PetAcquisition_tierComp MakePetAcquisition_tierComp(const PetTable& row) 
 }
 inline PetCultivation_tierComp MakePetCultivation_tierComp(const PetTable& row) {
     return { row.cultivation_tier() };
+}
+inline PetTransfer_policyComp MakePetTransfer_policyComp(const PetTable& row) {
+    return { row.transfer_policy() };
+}
+inline PetExclusive_gift_slotsComp MakePetExclusive_gift_slotsComp(const PetTable& row) {
+    return { row.exclusive_gift_slots() };
+}
+inline PetFixed_initial_aptitudeComp MakePetFixed_initial_aptitudeComp(const PetTable& row) {
+    return { row.fixed_initial_aptitude() };
 }
 inline PetAptitude_minComp MakePetAptitude_minComp(const PetTable& row) {
     const auto& rf = row.aptitude_min();

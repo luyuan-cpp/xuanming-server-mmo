@@ -412,11 +412,7 @@ func (s *Store) rolloverSnapshotHonors(ctx context.Context, cur *pb.MatchRankedS
 	for idx, st := range standings {
 		rankPos := uint64(idx + 1)
 		honorBits := st.honorBits
-		if st.peakTier >= pb.RankedTier_RANKED_TIER_TIANSHU {
-			tierCode := "tianshu"
-			if st.peakTier == pb.RankedTier_RANKED_TIER_WUSHUANG {
-				tierCode = "wushuang"
-			}
+		if tierCode, eligible := rankedHonorTierCode(st.peakTier); eligible {
 			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_TIER_BADGE, uint32(st.peakTier), cur.SeasonKey+"_tier_badge_"+tierCode, stamp); err != nil {
 				return err
 			}
@@ -502,4 +498,18 @@ func (s *Store) rolloverOpenNextSeason(ctx context.Context, cur *pb.MatchRankedS
 	}
 	logx.Infof("[ranked] Season rollover stage 8 (DONE) closed season=%d and opened season=%d key=%s", locked.SeasonId, next.SeasonId, next.SeasonKey)
 	return nil
+}
+
+// rankedHonorTierCode 返回赛季封榜起发永久段位徽章与赛季称号的段位码（V2：云章起发）。
+func rankedHonorTierCode(tier pb.RankedTier) (string, bool) {
+	switch tier {
+	case pb.RankedTier_RANKED_TIER_YUNZHANG:
+		return "yunzhang", true
+	case pb.RankedTier_RANKED_TIER_TIANSHU:
+		return "tianshu", true
+	case pb.RankedTier_RANKED_TIER_WUSHUANG:
+		return "wushuang", true
+	default:
+		return "", false
+	}
 }

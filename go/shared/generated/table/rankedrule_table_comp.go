@@ -101,6 +101,10 @@ type RankedRuleDescComp struct {
     Value string
 }
 
+type RankedRuleMilestone_win_matchesComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -192,5 +196,9 @@ func MakeRankedRuleTier_wushuang_centiComp(row *pb.RankedRuleTable) RankedRuleTi
 
 func MakeRankedRuleDescComp(row *pb.RankedRuleTable) RankedRuleDescComp {
     return RankedRuleDescComp{Value: row.Desc}
+}
+
+func MakeRankedRuleMilestone_win_matchesComp(row *pb.RankedRuleTable) RankedRuleMilestone_win_matchesComp {
+    return RankedRuleMilestone_win_matchesComp{Value: row.MilestoneWinMatches}
 }
 

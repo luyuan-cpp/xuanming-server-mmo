@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "2d08ed0321d964c6";
+    public static final String SCHEMA_DIGEST = "06b4950b3c21900a";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -19,6 +19,8 @@ public class TableLoader {
             "Buff",
             "Cooldown",
             "EquipAffixQuality",
+            "FestivalBeastActivity",
+            "FestivalBeastTier",
             "GuildDonate",
             "GuildShop",
             "MessageLimiter",
@@ -109,6 +111,10 @@ public class TableLoader {
 
         EquipV1AffixTableManager.getInstance().load(configDir, useBinary);
 
+        FestivalBeastActivityTableManager.getInstance().load(configDir, useBinary);
+
+        FestivalBeastTierTableManager.getInstance().load(configDir, useBinary);
+
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 
         GuildActivityTableManager.getInstance().load(configDir, useBinary);
@@ -198,7 +204,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(68);
+        CountDownLatch latch = new CountDownLatch(70);
 
         new Thread(() -> {
             try {
@@ -505,6 +511,26 @@ public class TableLoader {
                 EquipV1AffixTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load EquipV1Affix table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                FestivalBeastActivityTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load FestivalBeastActivity table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                FestivalBeastTierTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load FestivalBeastTier table", e);
             } finally {
                 latch.countDown();
             }
@@ -961,6 +987,10 @@ public class TableLoader {
         EquipSlotTableManager.getInstance().load(configDir, useBinary);
 
         EquipV1AffixTableManager.getInstance().load(configDir, useBinary);
+
+        FestivalBeastActivityTableManager.getInstance().load(configDir, useBinary);
+
+        FestivalBeastTierTableManager.getInstance().load(configDir, useBinary);
 
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 

@@ -133,6 +133,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-festival-beast-v1.md](design/battle-festival-beast-v1.md) — 瑞兽迎春：轻量活动首发 V1
 - [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知
 - [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留(两阶段:先预留,再扣减或作废)
+- [battle-jianghu-grudge-duel-bounty-v1.md](design/battle-jianghu-grudge-duel-bounty-v1.md) — 《五行奇谈》江湖恩怨、擂台生死状与灵潮劫火悬赏设计（V1）
 - [battle-overflow-mail.md](design/battle-overflow-mail.md) — 战斗掉落两包都放不下时改投邮件
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复:近期战斗结果
@@ -187,6 +188,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [player-attribute-allocation.md](design/player-attribute-allocation.md) — 角色属性加点系统
 - [player-features-ui.md](design/player-features-ui.md) — 背包、任务、活动客户端读取接口
 - [player-pet.md](design/player-pet.md) — 宝宝(宠物)系统 —— 核心线
+- [season-pvp-lunjian-v1-repaired.md](design/season-pvp-lunjian-v1-repaired.md) — 《论剑 / 人宠会武》PVP 玩法设计体检、修复方案与 UI 补全清单（V1 修复版）
 - [season-pvp-pve-economy-unified-v1.md](design/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
 - [season-skills-and-seal-design.md](design/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
 - [season-team-tournament-v1.md](design/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
@@ -355,6 +357,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
 - [ranked-play-season-ui-candidate.md](design/ranked-play-season-ui-candidate.md) — 论剑排位首发 V1 实施规格
 - [ranked-play-v1-implementation.md](design/ranked-play-v1-implementation.md) — 《论剑排位首发 V1》工程落盘设计
+- [ranked-play-v2-overhaul.md](design/ranked-play-v2-overhaul.md) — 《论剑 / 人宠会武》V2 玩法体验重做与双服客户端落地设计
+- [ranked-play-v2-ui-handoff.md](design/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
 - [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷
 - [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留
 - [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)

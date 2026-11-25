@@ -42,13 +42,13 @@ var Segments = []Segment{
 	{Domain: "cross_server", Group: "cross_server_error", Base: 13000, Width: 1000, Lo: 13000, Hi: 13000, Count: 1},
 	{Domain: "guild", Group: "guild_error", Base: 14000, Width: 1000, Lo: 14000, Hi: 14047, Count: 48},
 	{Domain: "friend", Group: "friend_error", Base: 15000, Width: 1000, Lo: 15000, Hi: 15009, Count: 10},
-	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16051, Count: 52},
+	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16055, Count: 56},
 	{Domain: "mail", Group: "mail_error", Base: 17000, Width: 1000, Lo: 17000, Hi: 17011, Count: 12},
 	{Domain: "chat", Group: "chat_error", Base: 18000, Width: 1000, Lo: 18000, Hi: 18006, Count: 7},
 	{Domain: "trade", Group: "trade_error", Base: 20000, Width: 1000, Lo: 20000, Hi: 20017, Count: 18},
 	{Domain: "rank", Group: "rank_error", Base: 21000, Width: 1000, Lo: 21000, Hi: 21003, Count: 4},
 	{Domain: "attribute", Group: "attribute_error", Base: 25000, Width: 1000, Lo: 25000, Hi: 25014, Count: 15},
-	{Domain: "pet", Group: "pet_error", Base: 26000, Width: 1000, Lo: 26000, Hi: 26017, Count: 18},
+	{Domain: "pet", Group: "pet_error", Base: 26000, Width: 1000, Lo: 26000, Hi: 26018, Count: 19},
 	{Domain: "asset", Group: "asset_error", Base: 27000, Width: 1000, Lo: 27000, Hi: 27008, Count: 9},
 	{Domain: "equip", Group: "equip_error", Base: 28000, Width: 1000, Lo: 28000, Hi: 28030, Count: 31},
 	{Domain: "player_inbox", Group: "player_inbox_error", Base: 29000, Width: 1000, Lo: 29000, Hi: 29014, Count: 15},
@@ -58,6 +58,7 @@ var Segments = []Segment{
 	{Domain: "appearance", Group: "appearance_error", Base: 33000, Width: 1000, Lo: 33000, Hi: 33009, Count: 10},
 	{Domain: "season", Group: "season_error", Base: 34000, Width: 1000, Lo: 34000, Hi: 34011, Count: 12},
 	{Domain: "trial_journal", Group: "trial_journal_error", Base: 35000, Width: 1000, Lo: 35000, Hi: 35008, Count: 9},
+	{Domain: "festival_beast", Group: "festival_beast_error", Base: 36000, Width: 1000, Lo: 36000, Hi: 36013, Count: 14},
 }
 
 // DomainOf 返回码所属的域名。不属于任何已声明段时返回空串。

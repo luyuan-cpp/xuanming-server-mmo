@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"shared/authoritysql"
 	"shared/clusterredis"
 	"shared/playerredis"
 	"shared/redisauth"
@@ -57,6 +58,57 @@ func (c *Config) ValidateRedisSections() error {
 func (c *Config) ResolveGateTokenSecret(lookup func(string) (string, bool)) error {
 	return secretenv.Fill("GateTokenSecretEnv", c.GateTokenSecretEnv, lookup,
 		secretenv.Target{Field: "GateTokenSecret", Value: &c.GateTokenSecret})
+}
+
+// OwnerAuthorityConfig configures the optional SQL owner authority store.
+type OwnerAuthorityConfig struct {
+	// Mode selects runtime integration: ""/"shadow" (dual-write + divergence check, non-blocking)
+	// or "enforce" (fail-closed linearizable SQL gate before Kafka route commit).
+	Mode         string `json:",optional"`
+	DSN          string `json:",optional"`
+	DSNEnv       string `json:",optional"`
+	Database     string `json:",optional"`
+	Backend      string `json:",optional"` // ""/"tidb" or "mysql"
+	MaxOpenConns int    `json:",optional"`
+	SkewMarginMs int64  `json:",optional"`
+}
+
+// Enabled reports whether SQL owner authority is configured.
+func (c OwnerAuthorityConfig) Enabled() bool {
+	return c.DSN != "" || c.DSNEnv != ""
+}
+
+// EffectiveMode returns "" when disabled, "enforce" when configured to enforce, or "shadow".
+func (c OwnerAuthorityConfig) EffectiveMode() string {
+	if !c.Enabled() {
+		return ""
+	}
+	if c.Mode == "enforce" {
+		return "enforce"
+	}
+	return "shadow"
+}
+
+// ResolveDSN validates OwnerAuthorityConfig and resolves its DSN via single-source env semantics.
+func (c OwnerAuthorityConfig) ResolveDSN(lookup func(string) (string, bool)) (string, error) {
+	if !c.Enabled() {
+		return "", nil
+	}
+	if c.Mode != "" && c.Mode != "shadow" && c.Mode != "enforce" {
+		return "", fmt.Errorf("OwnerAuthority.Mode must be empty, shadow, or enforce, got %q", c.Mode)
+	}
+	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
+		return "", fmt.Errorf("OwnerAuthority.Backend: %w", err)
+	}
+	if c.SkewMarginMs < 0 {
+		return "", fmt.Errorf("OwnerAuthority.SkewMarginMs must be >= 0, got %d", c.SkewMarginMs)
+	}
+	dsn := c.DSN
+	if err := secretenv.Fill("OwnerAuthority.DSNEnv", c.DSNEnv, lookup,
+		secretenv.Target{Field: "OwnerAuthority.DSN", Value: &dsn}); err != nil {
+		return "", err
+	}
+	return dsn, nil
 }
 
 type Config struct {
@@ -221,6 +273,10 @@ type Config struct {
 	// OwnerEpochMint: 铸造 owner_epoch 之后的落盘确认(WAITAOF,docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)。
 	// 整块可缺省,缺省即「本地 AOF 落盘 1 份、不等副本、最多等 1500ms」。
 	OwnerEpochMint OwnerEpochMintConfig `json:",optional"`
+
+	// OwnerAuthority configures optional linearizable SQL player ownership authority
+	// (docs/design/linearizable-owner-authority.md). Empty DSN/DSNEnv keeps it disabled.
+	OwnerAuthority OwnerAuthorityConfig `json:",optional"`
 
 	// PlayerRedis: 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、
 	// 切线冷却、进场去重、owner_epoch、handoff、handoff_fence。控制域在下面的 ControlRedis,一段脚本不能跨这两个域。

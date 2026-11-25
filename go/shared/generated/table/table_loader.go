@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "2d08ed0321d964c6"
+const SchemaDigest = "06b4950b3c21900a"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -18,6 +18,8 @@ var hotReloadableTables = map[string]bool{
 	"Buff": true,
 	"Cooldown": true,
 	"EquipAffixQuality": true,
+	"FestivalBeastActivity": true,
+	"FestivalBeastTier": true,
 	"GuildDonate": true,
 	"GuildShop": true,
 	"MessageLimiter": true,
@@ -66,6 +68,8 @@ var allTableNames = []string{
 	"EquipGemSocket",
 	"EquipSlot",
 	"EquipV1Affix",
+	"FestivalBeastActivity",
+	"FestivalBeastTier",
 	"GlobalVariable",
 	"GuildActivity",
 	"GuildDonate",
@@ -160,6 +164,8 @@ type TableSet struct {
 	EquipGemSocket *EquipGemSocketTableManager
 	EquipSlot *EquipSlotTableManager
 	EquipV1Affix *EquipV1AffixTableManager
+	FestivalBeastActivity *FestivalBeastActivityTableManager
+	FestivalBeastTier *FestivalBeastTierTableManager
 	GlobalVariable *GlobalVariableTableManager
 	GuildActivity *GuildActivityTableManager
 	GuildDonate *GuildDonateTableManager
@@ -250,6 +256,8 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		EquipGemSocket: NewEquipGemSocketTableManager(),
 		EquipSlot: NewEquipSlotTableManager(),
 		EquipV1Affix: NewEquipV1AffixTableManager(),
+		FestivalBeastActivity: NewFestivalBeastActivityTableManager(),
+		FestivalBeastTier: NewFestivalBeastTierTableManager(),
 		GlobalVariable: NewGlobalVariableTableManager(),
 		GuildActivity: NewGuildActivityTableManager(),
 		GuildDonate: NewGuildDonateTableManager(),
@@ -380,6 +388,12 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.EquipV1Affix.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare EquipV1Affix table failed: %w", err)
+	}
+	if err := ts.FestivalBeastActivity.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare FestivalBeastActivity table failed: %w", err)
+	}
+	if err := ts.FestivalBeastTier.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare FestivalBeastTier table failed: %w", err)
 	}
 	if err := ts.GlobalVariable.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare GlobalVariable table failed: %w", err)
@@ -595,6 +609,12 @@ func Commit(ts *TableSet) {
 	if ts.EquipV1Affix != nil {
 		EquipV1AffixTableManagerInstance.swapSnapshot(ts.EquipV1Affix.snap.Load())
 	}
+	if ts.FestivalBeastActivity != nil {
+		FestivalBeastActivityTableManagerInstance.swapSnapshot(ts.FestivalBeastActivity.snap.Load())
+	}
+	if ts.FestivalBeastTier != nil {
+		FestivalBeastTierTableManagerInstance.swapSnapshot(ts.FestivalBeastTier.snap.Load())
+	}
 	if ts.GlobalVariable != nil {
 		GlobalVariableTableManagerInstance.swapSnapshot(ts.GlobalVariable.snap.Load())
 	}
@@ -781,6 +801,8 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		EquipGemSocket: NewEquipGemSocketTableManager(),
 		EquipSlot: NewEquipSlotTableManager(),
 		EquipV1Affix: NewEquipV1AffixTableManager(),
+		FestivalBeastActivity: NewFestivalBeastActivityTableManager(),
+		FestivalBeastTier: NewFestivalBeastTierTableManager(),
 		GlobalVariable: NewGlobalVariableTableManager(),
 		GuildActivity: NewGuildActivityTableManager(),
 		GuildDonate: NewGuildDonateTableManager(),
@@ -820,7 +842,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(68)
+	wg.Add(70)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1005,6 +1027,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.EquipV1Affix.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load EquipV1Affix table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.FestivalBeastActivity.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load FestivalBeastActivity table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.FestivalBeastTier.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load FestivalBeastTier table: %v", err)
 		}
 	}()
 	go func() {

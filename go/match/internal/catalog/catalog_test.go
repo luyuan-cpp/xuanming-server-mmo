@@ -276,11 +276,20 @@ func TestLoadGeneratedTablesIncludesBossTrialsAndColdStartWhitelist(t *testing.T
 			t.Fatalf("首领试炼/护卫救援 Dungeon %d 应同时开放单人与组队入口", id)
 		}
 	}
+	if !c.Open(modeSolo, 112) || !c.Open(modeTeam, 112) {
+		t.Fatalf("困难·双卫同阵 Dungeon 112 应同时开放单人与组队入口")
+	}
+	if got := c.BossTrialKind(112); got != 8 {
+		t.Fatalf("Dungeon 112 BossTrialKind 应为 8, got %d", got)
+	}
+	if got := c.RoundLimit(112); got != 15 {
+		t.Fatalf("Dungeon 112 回合上限应为 15, got %d", got)
+	}
 	if got := c.RoundLimit(109); got != 8 {
 		t.Fatalf("护卫救援 Dungeon 109 回合上限应为 8, got %d", got)
 	}
 
-	// 核对真实导出表生成的全部 11 格试炼志上下文：卷一(101..104)、卷二(201..204)、卷三护卫救援(301)、物法易势(302)、人宠会武(303)。
+	// 核对真实导出表生成的全部 12 格试炼志上下文：卷一(101..105)、卷二(201..204)、卷三护卫救援(301)、物法易势(302)、人宠会武(303)。
 	wantPveTrials := map[uint32]struct {
 		entryId  uint32
 		guardId  uint32
@@ -295,6 +304,7 @@ func TestLoadGeneratedTablesIncludesBossTrialsAndColdStartWhitelist(t *testing.T
 		107: {entryId: 202, guardId: 107, seasonId: 0},
 		108: {entryId: 204, guardId: 107, seasonId: 0},
 		109: {entryId: 301, guardId: 102, seasonId: 1},
+		112: {entryId: 105, guardId: 102, seasonId: 0},
 	}
 	for dungeonId, want := range wantPveTrials {
 		solo := c.TrialContextFor(modeSolo, dungeonId, nil, nil)

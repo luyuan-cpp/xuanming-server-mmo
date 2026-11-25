@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 68;
+        public const int TableCount = 70;
 
         private static Action s_loadSuccessCallback;
 
@@ -69,6 +69,8 @@ namespace MmorpgClient.Table
                 EquipGemSocketTableManager.FileName(useBinary),
                 EquipSlotTableManager.FileName(useBinary),
                 EquipV1AffixTableManager.FileName(useBinary),
+                FestivalBeastActivityTableManager.FileName(useBinary),
+                FestivalBeastTierTableManager.FileName(useBinary),
                 GlobalVariableTableManager.FileName(useBinary),
                 GuildActivityTableManager.FileName(useBinary),
                 GuildDonateTableManager.FileName(useBinary),
@@ -144,6 +146,8 @@ namespace MmorpgClient.Table
             EquipGemSocketTableManager.Instance.Load(configDir, useBinary);
             EquipSlotTableManager.Instance.Load(configDir, useBinary);
             EquipV1AffixTableManager.Instance.Load(configDir, useBinary);
+            FestivalBeastActivityTableManager.Instance.Load(configDir, useBinary);
+            FestivalBeastTierTableManager.Instance.Load(configDir, useBinary);
             GlobalVariableTableManager.Instance.Load(configDir, useBinary);
             GuildActivityTableManager.Instance.Load(configDir, useBinary);
             GuildDonateTableManager.Instance.Load(configDir, useBinary);
@@ -267,6 +271,10 @@ namespace MmorpgClient.Table
                 EquipSlotTableManager.Instance.LoadFromBytes, EquipSlotTableManager.Instance.LoadFromJson);
             LoadOne(EquipV1AffixTableManager.FileName(useBinary), byteProvider, useBinary,
                 EquipV1AffixTableManager.Instance.LoadFromBytes, EquipV1AffixTableManager.Instance.LoadFromJson);
+            LoadOne(FestivalBeastActivityTableManager.FileName(useBinary), byteProvider, useBinary,
+                FestivalBeastActivityTableManager.Instance.LoadFromBytes, FestivalBeastActivityTableManager.Instance.LoadFromJson);
+            LoadOne(FestivalBeastTierTableManager.FileName(useBinary), byteProvider, useBinary,
+                FestivalBeastTierTableManager.Instance.LoadFromBytes, FestivalBeastTierTableManager.Instance.LoadFromJson);
             LoadOne(GlobalVariableTableManager.FileName(useBinary), byteProvider, useBinary,
                 GlobalVariableTableManager.Instance.LoadFromBytes, GlobalVariableTableManager.Instance.LoadFromJson);
             LoadOne(GuildActivityTableManager.FileName(useBinary), byteProvider, useBinary,

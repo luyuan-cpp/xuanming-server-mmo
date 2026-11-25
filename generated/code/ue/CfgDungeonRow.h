@@ -76,7 +76,7 @@ struct FCfgDungeonRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
 	int32 allow_pet_capture = 0;
 
-	/** 首领试炼/轮换玩法类型：0=常规，1=破阵首领·回春，2=破阵首领·护势，3=灵障首领，4=玄毒首领，5=护卫救援(PVE轮换)，6=物法易势(5V5轮换)。 */
+	/** 首领试炼/轮换玩法类型：0=常规，1=破阵首领·回春，2=破阵首领·护势，3=灵障首领，4=玄毒首领，5=护卫救援(PVE轮换)，6=物法易势(5V5轮换)，7=瑞兽迎春(限时单人神兽挑战)，8=破阵首领·双卫同阵(困难合阵)。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
 	int32 boss_trial_kind = 0;
 

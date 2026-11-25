@@ -11,8 +11,11 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
+	battlepb "proto/battle"
 	pb "proto/match"
 )
+
+var ErrOutsideActivityWindow = errors.New("活动开局不在有效开放时间窗内")
 
 const directColumns = "kind,owner_id,request_high,request_low,payload,battle_id,cancelled,owner_account,owner_revision,spectator_exits,exit_prepared,start_original"
 
@@ -66,7 +69,7 @@ func DecodeDirectStart(record *pb.MatchDirectIntentRecord) (*pb.MatchDirectStart
 	return original, nil
 }
 func validateDirectActor(ctx context.Context, key *pb.MatchDirectIntentRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchAuthorityTicketRecord, error) {
-	if key.Kind == 2 || key.Kind == 4 {
+	if key.Kind == 2 || key.Kind == 4 || key.Kind == 5 {
 		return &pb.MatchAuthorityTicketRecord{}, nil
 	}
 	actor := originalPlayer(ctx, key.OwnerId)
@@ -88,7 +91,7 @@ func (s *Store) PrepareDirectAdmission(ctx context.Context, key *pb.MatchDirectI
 }
 
 func (s *Store) prepareDirectAdmissionOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchDirectIntentRecord, error) {
-	if key == nil || key.Kind < 1 || key.Kind > 4 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
+	if key == nil || key.Kind < 1 || key.Kind > 5 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
 		return nil, ErrDirectConflict
 	}
 	observed, err := s.DirectAdmission(ctx, key)
@@ -163,6 +166,21 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 	stamp, err := now(ctx, tx)
 	if err != nil {
 		return nil, err
+	}
+	// 瑞兽迎春(Kind=5)：在持久准入提交点按数据库权威时钟复核左闭右开开放区间 [start, end)。
+	// 一旦本事务提交成功，即视为截止前已持久准入，后续可正常完成并结算至原期次。
+	if key.Kind == 5 {
+		var actx battlepb.BattleActivityContext
+		if proto.Unmarshal(formation.ActivityContext, &actx) != nil ||
+			actx.GetKind() != battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST ||
+			actx.GetFestivalBeast() == nil {
+			return nil, ErrDirectConflict
+		}
+		fb := actx.GetFestivalBeast()
+		if fb.GetEffectiveStartAtMs() == 0 || fb.GetEffectiveEndAtMs() <= fb.GetEffectiveStartAtMs() ||
+			stamp < fb.GetEffectiveStartAtMs() || stamp >= fb.GetEffectiveEndAtMs() {
+			return nil, ErrOutsideActivityWindow
+		}
 	}
 	original := &pb.MatchDirectStartOriginal{Formation: proto.Clone(formation).(*pb.MatchFormationRecord)}
 	for _, source := range group {

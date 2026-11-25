@@ -299,6 +299,36 @@
    "id": 3032,
    "seal_slot_kind": 3,
    "title": "明心应劫"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关困难·双卫同阵（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 105,
+   "id": 1051,
+   "seal_slot_kind": 1,
+   "title": "合阵破局"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "困难·双卫同阵中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 105,
+   "id": 1052,
+   "seal_slot_kind": 2,
+   "title": "双卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 13,
+   "desc": "困难·双卫同阵中成功驱散护势（或双系击伤）且全场零有效回春（或触发断疗反噬）并胜出",
+   "enabled": true,
+   "entry_id": 105,
+   "id": 1053,
+   "seal_slot_kind": 3,
+   "title": "连环双破"
   }
  ]
 }

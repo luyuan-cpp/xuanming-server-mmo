@@ -5040,3 +5040,40 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - Java 服务端：`game-proto`/`game-table`/`game-mail`/`game-match`/`game-scene` `clean install` 0 错误；`game-match` 6 套件（含 `TournamentParityTest` 2/2、`MatchApplicationContextTest` 等）**58/58 PASS**；`game-scene` `MysteryMerchantAndEquipmentCraftTest` **3/3 PASS**。
   - Unity 客户端：`tools/client_compile_check.ps1` **exit=0, files=680, errors=0**；Roslyn + NUnit 实跑 `TournamentClientTests` **2/2 PASS**。
 - **未执行范围**：未启动完整 Docker/TiDB/Redis/Kafka 多进程栈做实网联调与压测；Unity 侧未搭建 UGUI 窗口/Prefab（交 ChatGPT 按交接文档制作）；未执行 `git commit` / `git push`，三仓并行未提交改动均完整保留。
+
+
+## 2026-11-25 《群仙问道赛》V1 Unity 道家 Q 版 UGUI 全量接入（主城入口、五分页、四弹窗、结构化 Tip 恢复与观战/回放/邮箱联动）
+
+- **美术与原型对齐**：核验 `D:/work/image/designs/season-team-tournament-v1` 与 Azure `origin/main`（`79d75a6b`）LFS SHA-256 完全一致（`hud-entry-base.png` `33133c73...`）；导入 `Assets/Resources/UI/Ugui/TournamentV1/hud-entry-base.png`（含 Sprite `.meta`），窗框、标题牌、按钮、流苏、公告徽标与物品图标复用已有 `UI/Ugui/MailV1` 与 `UI/Ugui/TeamV2` 正式切片；玩家头像严格走 `QdaoCharacterCatalog.LoadPortrait(game.ResolveCharacterId(playerId))` 并在未知形象时显示中性太极占位，不借用演示造型冒充玩家。
+- **客户端状态与纯 C# UI 推导层（`mmorpg-client/Assets/Scripts/Game/Tournament/`）**：
+  - `TournamentClient.cs` 补齐结构化 `LastErrorTipId`（解决 `UNITY-HANDOFF.md` 标注的 Tip 精准恢复接口限制，免去 UI 比较中文文案）。
+  - 新增纯 C# `TournamentUiModel.cs`（零 `UnityEngine` 依赖）：实现 `ServerTimeMs` 相对单调差值倒计时校准、四季阶段主 CTA 推导、15 个 `KMatchTournament*` Tip 恢复策略分类、出战阵容草稿校验、本队限定战报回放守卫及历届赛季切换选项。
+- **道家 Q 版 UGUI 与主城联动（`mmorpg-client/Assets/Scripts/UI/Ugui/Tournament/` + `WorldHudNavigation.cs`）**：
+  - `TournamentArtCatalog.cs`、`TournamentWindow.cs`、`TournamentUiRoot.cs`：1640×900 窗口嵌入 1920×1080 `EquipmentUiFit` 安全区容器（左右各留 140px，关闭钮位于窗内右上角避开小游戏 140px 胶囊区）；完整落地 5 分页（赛事总览四阶段自适应、我的战队动态名册、全服积分榜动态晋级线与 0/2/4/8/16 动态淘汰对阵树、赛季绑定奖励与免费助威、冠军殿堂）与 4 轻弹窗（创建战队、邀请队员、赛前出战阵容确认、报名锁定二次确认）。
+  - `WorldHudNavigation.cs` 末尾追加 `WorldHudEntry.Tournament`（归属「历练」紧邻论剑）；精选/激战中节点直连 `SpectateClient.Instance.WatchBattle(battleId)`，本队已结束淘汰赛节点直连 `BattleReportClient.Instance.FetchReplay(battleId)`，领奖页「前往邮箱」直连 `MailUiRoot.Instance.Toggle()`；严格对称订阅/退订 `Changed` 与 `MatchBattleLaunched`，断线/切号即刻清空旧快照与弹窗。
+- **实际验证结果**：
+  - `tools/client_compile_check.ps1`：**`exit=0, files=717, errors=0`**。
+  - Roslyn + NUnit 实跑 `TournamentClientTests` + `TournamentUiModelTests`（同步编过 `WorldHudNavigationLifecycleTests`）：**5/5 PASS**，Tournament 相关源码 0 warning。
+  - `.meta` 与 GUID 唯一性检查：**13/13 全部齐备且唯一**；WebGL2 / IL2CPP / 纯 C# SRP 静态守卫通过。
+- **未执行范围**：未在 Unity Editor PlayMode 下做实机 1920×1080 / 2400×1080 像素级截图对照与多进程实网点击回归；未执行 `git commit` / `git push`。
+
+## 2026-11-25 《论剑 / 人宠会武》V2 体验重做（双服全闭环 + Unity 非 UI 层 + Codex UI 交接单）
+
+- **设计与契约源（`xuanming-server-mmo-cpp`）**：
+  - 落盘 [ranked-play-v2-overhaul.md](design/ranked-play-v2-overhaul.md)（废止旧稿 [ranked-play-season-ui-candidate.md](design/ranked-play-season-ui-candidate.md) 并标注指向）与面向另一台电脑 UI 代理的 [ranked-play-v2-ui-handoff.md](design/ranked-play-v2-ui-handoff.md)。
+  - 升级 `data/RankedPreset.xlsx`（6 套免费娱乐场预设补满 4 槽、清零偏科：101 破阵补 `10035 断脉咒`、102 控场换全封 `10020 封灵咒` + 补 `10041 玄镜映法`、103 守心补 `10026 生生不息`、201 破甲金猊换 `10016 青羽催行` + `13005 裂甲追击`、202 灵咒灵狐补 `13006 灵术回响`、203 护主石灵补法罩 `11005 如意灵环`）。
+  - 升级 `data/schema/rankedrule_table.proto` 与 `data/RankedRule.xlsx`（`rule_version=2`、校准五段门槛 `152000/160000/172000/185000` 让 1500 新号落初试、新增 `milestone_win_matches=6`）；`data/Dungeon.xlsx` `id=5` 显式写入 `round_limit=20`；`data/tip/Tip.xlsx` 追加 `MatchBattleSurrender*` 错误码 `16052..16055`。
+  - 扩展 `proto/battle/battle_data.proto`（`BattleSurrenderVoteState`、`BattleEventItem.is_primary_focus=27`、`BattleSettlementData.surrendered=32`）、`proto/battle/player_battle.proto`（`BattleStateS2C` `21..25`、`BattleClientPlayer` `SurrenderBattle=479` 与 `NotifySurrenderVote=480`）与 `proto/match/match_service.proto`（`RANKED_REWARD_WIN_MILESTONE=7`、`RankedSeasonInfo` `24..28`），执行 `dev.bat gen` 全量导出（70 表）并同步全语言生成物。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - C++ `battle`：`TurnBattleEngine` / `configured_battle_effects.cpp` 实现竞技 PVP 主目标凝锋 `+20%`（`is_primary_focus`）、末 7 回合「战意渐盛」（每层伤害 `+10%`、治疗与新盾 `-10%` 下限 `20%`）、PVP 第 5 回合延迟投降（1V1 秒投、多人全活跃队友同意、连续 2 回合未手动挂机者不阻挡、否决 3 回合冷却/过期 2 回合冷却、`surrendered=true, fled=false`）；`BattleRoomManager` 与 `BattleClientEdge` 接入 RPC `479`、同队单播 `NotifySurrenderVote=480`、终局统一提交闸与敌方/观众 `surrender_vote` 脱敏。
+  - Go `match`：`internal/ranked/catalog.go` 校验 `milestone_win_matches` 与同步 V2 `DefaultFallback`；`internal/authority/ranked.go` 透传五段门槛与 6 胜里程碑、落地 `milestone_bits` `bit3 (0x8)` 授予并允许佩戴 `{seasonKey}_win_milestone_6`；`internal/authority/ranked_rollover.go` 将封榜永久段位徽章与称号下探覆盖「云章」及以上。
+- **Java 独立服务端对账（`xuanming-server-mmo`）**：
+  - 执行 `ContractSync.java` 全量同步（143 proto、70 表），在 `game-battle-engine`、`game-battle`、`game-match` 完整对齐凝锋 `+20%`、战意渐盛、PVP 第 5 回合投降与视图脱敏、新 6 套预设、校准五段、云章荣誉与 6 胜锋芒里程碑，并更新 `PARITY.md`。
+- **Unity 客户端非 UI 层（`mmorpg-client`）**：
+  - 更新 `tools/gen_messageids.ps1` 与 `Assets/Scripts/Net/MessageIds.cs`（180 条，含 `479`/`480`）、`DirectRoutingBattleTransport.cs`、`RpcGuard.cs`、`BattleClient.cs`（`RoundLimit`/`EscalationStacks`/`EscalationStartRound`/`SurrenderUnlockRound`/`CurrentSurrenderVote`/`CanSurrenderNow`/`OnSurrenderVoteChanged`/`SurrenderBattle()` 及禁用 PVP 连续战斗自动续排）、`RankedModels.cs`、`RankedClient.cs`；UGUI 表现层补全与新控件全部整理进 [ranked-play-v2-ui-handoff.md](design/ranked-play-v2-ui-handoff.md) 交由 Codex 执行。
+- **实际验证结果**：
+  - C++：`test_cpp_no_raw_pointer_member.py` **13/13 OK**；串行 MSBuild `/m:1` `battle.exe`、`turn_battle_engine_test.exe` 0 错误编过；`RankedBattleTest.*` **11/11 PASS**、`TableBattleDataProviderTest.*` **9/9 PASS**（附带修复并行未提交 `season_battle_test.cpp:736` 一处编译笔误 `set_tag` 以放行测试链接）。
+  - Go：`cd go/match && go test ./...` 全部包 **PASS**（0 失败）。
+  - Java：`game-proto` / `game-table` / `game-battle-engine` `clean install` 0 错误；定向对账套件（`RankedBattleEngineTest` 8/8、`RankedParityTest` + `MatchReportsScriptsAndRankedTest` 6/6、`BattleProtocolTest` + `BattleViewsTest` + `ClientActionsTest` + `BattleEdgeHandlerTest` 68/68）全部 **PASS**；`game-battle` 全量 640 项（含 UTF-8 控制台日志复验 `BattleConfigurationTest`/`BattleNodeTest` 46/46）**0 失败**（22 跳过）。
+  - Unity：`tools/client_compile_check.ps1` **`exit=0, files=718, errors=0`**；Roslyn + NUnit 实跑 `RankedClientTests` + `BattleClientAutoBattleTests` **27/27 PASS**（`DirectRoutingBattleTransportTests.cs` 同步 0 错误编过）。
+- **未执行范围**：未重编 `scene.exe` 复跑 `scene.exe --validate-tables`（实表由 `dev.bat gen`、Go `TestBuildFromRealTables`、C++ `TableBattleDataProviderTest` 与 Java `ConfigTables` 验证）；Unity UGUI 面板留待另一台电脑 Codex 按交接单实施；未执行 `git commit` / `git push`。

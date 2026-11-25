@@ -86,6 +86,41 @@ public:
     bool UsesFreePreset() const {
         return createRequest.has_ranked_context() && createRequest.ranked_context().use_free_preset();
     }
+    // 竞技 PVP（正式会武 / 物法易势 5V5 / 赛季锦标赛）：启用主目标凝锋与后期战意渐盛，绝不影响 PVE。
+    bool IsCompetitivePvpBattle() const {
+        return !IsPveMatch() &&
+               (IsRankedBattle() ||
+                bossTrialKind == kBossTrialKindPolarity5v5 ||
+                createRequest.match_mode() == kMatchModePolarity5v5 ||
+                createRequest.match_mode() == kMatchModeSeasonTournament);
+    }
+    uint32_t MaxRounds() const { return maxRounds; }
+    uint32_t EscalationStartRound() const {
+        return (IsCompetitivePvpBattle() && maxRounds >= kPvpEscalationMinMaxRounds)
+            ? (maxRounds - kPvpEscalationLeadRounds)
+            : 0u;
+    }
+    uint32_t EscalationStacks() const {
+        const uint32_t start = EscalationStartRound();
+        return (start > 0u && roundIndex >= start) ? (roundIndex - start + 1u) : 0u;
+    }
+    uint32_t EscalationDamagePct() const {
+        return 100u + EscalationStacks() * kPvpEscalationDamageStepPct;
+    }
+    uint32_t EscalationSupportPct() const {
+        const uint32_t drop = EscalationStacks() * kPvpEscalationSupportStepPct;
+        const uint32_t maxDrop = 100u - kPvpEscalationSupportFloorPct;
+        return drop >= maxDrop ? kPvpEscalationSupportFloorPct : (100u - drop);
+    }
+    uint32_t SurrenderUnlockRound() const {
+        return IsPveMatch() ? 0u : kPvpSurrenderUnlockRound;
+    }
+    // PVP 第 5 回合起投降 / 同队投降表态；返回 0 成功并可选回填本队最新状态，非 0 为 tip 错误码。
+    uint32_t SubmitSurrenderVote(uint64_t playerId, bool agree, BattleSurrenderVoteState* outVoteState = nullptr);
+    // 仅向同队参战者回填本队投降投票或冷却态（对手与观众视角由节点清空，绝不泄密）。
+    void FillSurrenderVoteForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const;
+    // 查询指定参战者的阵营（0/1），不存在返回 std::nullopt。
+    std::optional<uint32_t> TeamIndexOfPlayer(uint64_t playerId) const;
     void MarkPlayerEntered(uint64_t playerId);
     BattleParticipationFact BuildParticipationFact(uint64_t playerId) const;
     bool DidPlayerParticipate(uint64_t playerId) const;
@@ -118,6 +153,9 @@ public:
     // 数量只存在于引擎私有的开局快照副本里(ExecuteItem 原地递减),节点按视角回填
     // BattleStateS2C.self_items 时用它。玩家不在本局返回空表。
     std::vector<BattleItemEntry> SelfItems(uint64_t playerId) const;
+
+    // 当前对局是否属于首领试炼（1..4 / 8），供房间管理器应用 18 秒紧凑指令窗等试炼策略。
+    bool IsBossTrialBattle() const { return IsBossTrialKind(bossTrialKind); }
 
     // 开局时被忽略的战斗剧本及原因(英文,每条一句;CreateBattleRequest.team_scripts 里不合法的条目)。
     // 引擎不打日志,由节点在 Initialize 成功后逐条记 ERROR;被忽略的队出手照旧,对局照常进行
@@ -161,6 +199,9 @@ private:
         uint32_t shieldOrdinal = 0;
         bool equipmentHeal = false;
         bool healingSnapshot = false;
+        bool isMultiTargetSkill = false;
+        bool primaryFocusBonus = false;
+        bool isPrimaryFocus = false;
     };
     bool ConfiguredSubjectAllowed(const BattleActorState& actor, const SkillTable& row) const;
     uint32_t ConfiguredRank(const BattleActorState& actor, const SkillTable& row) const;
@@ -545,15 +586,31 @@ private:
     void RecordEffectiveContribution(const BattleActorState& actor);
     uint64_t ApplyEncounterDamageModifiers(const BattleActorState& source, BattleActorState& target,
                                            uint64_t damage, uint32_t damageType, bool isDirectPrimary,
-                                           TurnResultS2C& result);
+                                           TurnResultS2C& result, bool isMultiTargetSkill = false,
+                                           bool isPrimaryTarget = true, bool* outSplashReduced = nullptr);
+    bool HasActiveEncounterDamageModifiers() const;
     bool IsActorControlLocked(const BattleActorState& actor) const;
+    bool IsFestivalBeastBattle() const;
     bool IsEncounterSlowPhaseActor(uint64_t actorId) const;
+    bool ActorHasBossCleaveParryProtection(const BattleActorState& target, uint32_t damageType) const;
+    void ApplyBossExposed(uint64_t actorId, uint32_t pct, uint32_t untilRound);
+    void EmitBossMechanicEvent(TurnResultS2C& result, uint32_t mechanicKind, uint64_t sourceId,
+                               uint64_t targetId, uint64_t value);
+    void TriggerRejuvBacklash(uint64_t sourceId, BattleActorState& boss, TurnResultS2C& result);
+    void HandleBossTrialMonsterDeath(BattleActorState& deadMonster, TurnResultS2C& result);
+    void ProcessBossTrialRoundEnd(TurnResultS2C& result);
+    uint32_t ChooseDynamicStanceType(uint32_t currentRound) const;
     void InitSpecialEncounterState();
     void UpdatePolarityForRound();
     uint32_t NextPolaritySwitchRound() const;
     void RefreshEncounterTelegraphs();
     void ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& result);
-    void TryDispelBossStance(const BattleActorState& source, const BattleActorState& target);
+    void TryDispelBossStance(const BattleActorState& source, const BattleActorState& target, TurnResultS2C& result);
+
+    struct BossExposedState {
+        uint32_t pct = 0;
+        uint32_t untilRound = 0;
+    };
 
     // 五行试炼志 V2 局内权威战法事实（仅内存确定性累积，不消耗 RNG）
     std::set<uint64_t> everDiedActors;
@@ -567,12 +624,30 @@ private:
     // 赛季首领试炼、护卫救援、物法易势 5V5 与防挂机战中事实（全部确定性）
     uint32_t bossTrialKind = 0;
     uint32_t battleDifficulty = 0;
+    uint32_t initialAttackerHumanCount = 0;
     uint64_t protectedGuardActorId = 0;
     uint32_t initialPolarity = 0;
     uint32_t activePolarity = 0;
     uint32_t bossStanceType = 0;
+    uint32_t bossStanceRemainRounds = 0;
+    uint32_t lastChosenStanceType = 0;
     uint64_t bossBarrierShield = 0;
+    uint32_t bossPhase = 0;
+    uint32_t nextPhase2CleaveTelegraphRound = 0;
+    uint32_t bossMomentumStacks = 0;
+    uint32_t bossDisheartenedUntilRound = 0;
+    std::map<uint64_t, BossExposedState> exposedActors;
+    std::map<uint64_t, uint32_t> sunderUntilRound;
+    std::set<uint64_t> attackerTriggeredStanceCounterThisRound;
+    std::map<uint32_t, std::pair<uint64_t, uint64_t>> roundPlayerDirectDamage;
+    uint32_t cleaveParryCount = 0;
+    uint32_t healInterruptBacklashCount = 0;
+    uint32_t stanceBreakCount = 0;
+    std::map<uint64_t, uint32_t> selfCleavesTargetedByPlayer;
+    std::map<uint64_t, uint32_t> selfCleavesParriedByPlayer;
     std::vector<BattleTelegraphEntry> activeTelegraphs;
+    std::vector<BattleTelegraphEntry> lastResolvedTelegraphs;
+    uint64_t telegraphStateVersion = 0;
     std::map<uint64_t, std::set<uint32_t>> manualActionRoundsByPlayer;
     std::set<uint64_t> effectiveContributionPlayers;
     // 论剑排位有效参与事实(有序集合保确定性;终局前由 BuildParticipationFact 冻结进 BattleResultEvent)
@@ -580,6 +655,11 @@ private:
     std::set<uint64_t> manualActionPlayers;
     std::set<uint64_t> explicitAutoPlayers;
     std::set<uint64_t> hadOperableTurnPlayers;
+    // PVP 延迟投降状态（按阵营隔离，连续未手动回合数用于排除纯挂机队友防绑架，零时钟依赖）
+    std::optional<uint32_t> surrenderedTeam;
+    std::array<BattleSurrenderVoteState, 2> teamSurrenderVotes;
+    std::map<uint64_t, uint32_t> consecutiveIdleRoundsByPlayer;
+    void ExpireSurrenderVotesForRoundAdvance();
 
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始

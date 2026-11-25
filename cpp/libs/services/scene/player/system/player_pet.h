@@ -121,6 +121,19 @@ public:
 	// petIdOut 仅在返回 kSuccess 时有效。
 	static uint32_t GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut);
 
+	// 单一宠物容量与流转策略入口：普通携带量只计 exclusive_gift_slots == 0 的种类；
+	// 专属活动神兽走独立赠送位（不占普通 max_pets，普通商店/捕捉/交易亦不可占用）。
+	static bool IsTransferableSpecies(uint32_t petTableId);
+	static bool IsExclusiveGiftSpecies(uint32_t petTableId);
+	static uint32_t CountNormalPets(const class PlayerPetComp& comp);
+	static uint32_t CountSpeciesPets(const class PlayerPetComp& comp, uint32_t petTableId);
+	static bool HasNormalPetSlot(const class PlayerPetComp& comp);
+	static bool HasExclusiveGiftSlot(const class PlayerPetComp& comp, uint32_t petTableId);
+	// 专属活动神兽发放预备（仅校验专属容量/固定首发资质并分配永久 pet_id，不写组件、不触发存盘）。
+	static uint32_t PrepareExclusiveActivityPet(entt::entity player, uint32_t petTableId, PetInstance& candidateOut);
+	// 与活动领取记录同一逻辑帧同步提交，无失败分支。
+	static void CommitPreparedActivityPet(entt::entity player, PetInstance&& candidate);
+
 	// 普通玩家商店：序号来自只读列表，最近一次成功请求原样重试不重复扣费。
 	static uint32_t BuildShop(entt::entity player, GetPetShopResponse& response);
 	static uint32_t BuyPet(entt::entity player, uint32_t petTableId, uint64_t sequence,

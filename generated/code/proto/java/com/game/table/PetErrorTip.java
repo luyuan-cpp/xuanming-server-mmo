@@ -107,6 +107,10 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kPetNameSensitive = 26017;</code>
      */
     kPetNameSensitive(26017),
+    /**
+     * <code>kPetNotTransferable = 26018;</code>
+     */
+    kPetNotTransferable(26018),
     UNRECOGNIZED(-1),
     ;
 
@@ -195,6 +199,10 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kPetNameSensitive = 26017;</code>
      */
     public static final int kPetNameSensitive_VALUE = 26017;
+    /**
+     * <code>kPetNotTransferable = 26018;</code>
+     */
+    public static final int kPetNotTransferable_VALUE = 26018;
 
 
     public final int getNumber() {
@@ -240,6 +248,7 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
         case 26015: return kPetNothingToChange;
         case 26016: return kPetIdGenerateFailed;
         case 26017: return kPetNameSensitive;
+        case 26018: return kPetNotTransferable;
         default: return null;
       }
     }
@@ -305,7 +314,7 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023pet_error_tip.proto*\351\003\n\tpet_error\022\020\n\014k" +
+      "\n\023pet_error_tip.proto*\204\004\n\tpet_error\022\020\n\014k" +
       "Pet_errorOK\020\000\022\022\n\014kPetNotFound\020\220\313\001\022\031\n\023kPe" +
       "tTableRowMissing\020\221\313\001\022\022\n\014kPetSlotFull\020\222\313\001" +
       "\022\035\n\027kPetOwnerLevelNotEnough\020\223\313\001\022\027\n\021kPetA" +
@@ -317,8 +326,9 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
       "\025kPetDimensionNotFound\020\234\313\001\022\027\n\021kPetGoldNo" +
       "tEnough\020\235\313\001\022\024\n\016kPetNoAutoPlan\020\236\313\001\022\031\n\023kPe" +
       "tNothingToChange\020\237\313\001\022\032\n\024kPetIdGenerateFa" +
-      "iled\020\240\313\001\022\027\n\021kPetNameSensitive\020\241\313\001B$\n\016com" +
-      ".game.tableZ\022generated/pb/tableb\006proto3"
+      "iled\020\240\313\001\022\027\n\021kPetNameSensitive\020\241\313\001\022\031\n\023kPe" +
+      "tNotTransferable\020\242\313\001B$\n\016com.game.tableZ\022" +
+      "generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

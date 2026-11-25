@@ -71,6 +71,12 @@ var (
 		Help:      "Whether this replica leads the mutating background loops (1 leader / 0 follower).",
 	})
 
+	ownerAuthorityOpsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "owner_authority_ops_total",
+		Help:      "Linearizable SQL owner authority operations by mode (shadow|enforce), op (enter|leave), and result.",
+	}, []string{"mode", "op", "result"})
+
 	rebalanceMigrationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "rebalance_migrations_total",
@@ -813,6 +819,7 @@ func register() {
 			gateRedirectExcludedTotal, gateRedirectFallbackTotal,
 			foreignZoneRegistryReadsTotal, foreignZoneSkipsTotal,
 			evacuationResolveTotal, // planned_drain.go
+			ownerAuthorityOpsTotal,
 		)
 		for _, outcome := range loadRefreshOutcomes {
 			loadRefreshTotal.WithLabelValues(outcome).Add(0)
@@ -1587,6 +1594,12 @@ func RegisterDebugHandler(path string, handler http.Handler) {
 // were registered before Start returned. Failures log but do not block
 // service startup — metrics are observability, not critical path.
 // Empty addr is a no-op (disables the endpoint).
+// ObserveOwnerAuthorityOp records a linearizable SQL owner authority operation outcome.
+func ObserveOwnerAuthorityOp(mode, op, result string) {
+	register()
+	ownerAuthorityOpsTotal.WithLabelValues(mode, op, result).Inc()
+}
+
 func Start(addr string) {
 	if addr == "" {
 		logx.Info("[metrics] MetricsListenAddr empty; Prometheus /metrics endpoint disabled")

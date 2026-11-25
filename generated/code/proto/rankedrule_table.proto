@@ -31,6 +31,7 @@ message RankedRuleTable {
 	uint32 tier_tianshu_centi = 20;
 	uint32 tier_wushuang_centi = 21;
 	string desc = 22;
+	uint32 milestone_win_matches = 23;
 }
 
 message RankedRuleTableData {
