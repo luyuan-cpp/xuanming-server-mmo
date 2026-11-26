@@ -1043,6 +1043,7 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<PlayerTrialJournalComp>(player); // 五行试炼志持久状态(long-term-progression-v2.md)
     registry.emplace<PlayerCraftComp>(player); // 装备品相/技能制书与代打持久状态(equipment-quality-and-skill-crafting-v1.md)
     registry.emplace<PlayerFestivalBeastComp>(player); // 瑞兽迎春限时活动持久状态
+    registry.emplace<PlayerTravelPassComp>(player); // 游历手记持久状态
     registry.emplace<CurrencyComp>(player);
     registry.emplace<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。

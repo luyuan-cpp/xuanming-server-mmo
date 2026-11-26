@@ -448,14 +448,14 @@ service SceneSpiritShopClientPlayer {
 
 ---
 
-## 6. 执行步骤（待负责人拍板确认后按序执行）
+## 6. 执行步骤与当前落码验收状态
 
-- [x] **步骤 1（本轮已完成）**：核对 C++/Go 源码、既有支付/商城/神秘商人/月卡/材料账契约及当前工作区并行改动，完成需求分析、设计分析、思想分析、漏洞分析、步骤分析与四问准入自检，落盘至本文件。
-- [x] **步骤 2（本轮已完成）**：更新 `tools/scripts/gen_docs_index.py`（归入「玩法系统」分类）并运行生成 `docs/README.md`，通过 `--check` 校验。
-- [ ] **步骤 3（待确认拍板点）**：负责人确认下方 3 个快速勾选点，以及当前工作区并行改动是否可以进入落码窗口。
-- [ ] **步骤 4（阶段 1 落码）**：编写 `tools/scripts/spirit_shop_xlsx_patch.py`（幂等产出 `SpiritShopGoods.xlsx`、`SpiritShopLimitGroup.xlsx`、补 `Tip.xlsx` `37000` 段与 `MessageLimiter.xlsx`），新增 proto 与 schema，执行 `dev.bat gen`，落地 C++ `PlayerSpiritShopSystem` + handler + GTest 单测，跑只读静态守卫、串行 `msbuild /m:1` 与 `scene.exe --validate-tables`。
-- [ ] **步骤 5（阶段 2 双服对齐）**：在 `xuanming-server-mmo` 运行 `ContractSync.java`、实现 Java `SpiritShopService` 与对账单测，并核销 `PARITY.md`。
-- [ ] **步骤 6（阶段 3 客户端与联调）**：在 `mmorpg-client` 跑 `gen.bat client`，落地 `SpiritShopModels` / `SpiritShopClient`、NUnit 单测与四大缺料入口跳转，并按需产出给异机 Codex 的「灵石百宝阁」UI 交接规范（附商城充值档位补齐 `¥18=180 灵石` 配置说明）。
+- [x] **步骤 1**：核对 C++/Go 源码、既有支付/商城/神秘商人/月卡/材料账契约及当前工作区并行改动，完成需求分析、设计分析、思想分析、漏洞分析、步骤分析与四问准入自检，落盘至本文件。
+- [x] **步骤 2**：更新 `tools/scripts/gen_docs_index.py`（归入「玩法系统」分类）并运行生成 `docs/README.md`，通过 `--check` 校验。
+- [x] **步骤 3**：负责人定案首套提速共享组终身 300 份封顶及 7 件初始商品定价（见 §7），明确不做宝宝头像框、人物头像框不进商城单卖。
+- [x] **步骤 4（阶段 1 落码）**：完成 `tools/scripts/spirit_shop_xlsx_patch.py`、`SpiritShopGoods.xlsx`（7 SKU）、`SpiritShopLimitGroup.xlsx`（`group_id=1, max_weight=300`）、`Tip.xlsx`（`37000..37010`）、`MessageLimiter.xlsx`（`509/510`）、`player_spirit_shop_comp.proto`、`player_spirit_shop.proto`、`mysql_database_table.proto`(34)、`transaction_log.proto`(`TX_SPIRIT_SHOP_BUY=44`)、`client_request_ledger.h`(`kBuySpiritShopGoods=15`)，非交互导表 + `proto-gen-run` 全通过；完成 C++ `spirit_shop_rules.h` / `player_spirit_shop.{h,cpp}` / `player_spirit_shop_handler.cpp` / `player_database_loader.cpp` / `player_handoff_gate.h` / `main.cpp` 及 GTest 单测（3 项静态守卫全绿、`proto.lib`/`table.lib`/`scene.lib`、`go/db`、`go/shared/generated/table` 全绿，独立 GTest 沙箱实跑 `SpiritShopRealTablesTest` + `SpiritShopRulesTest` + `PlayerSpiritShopTest` **10/10 PASS**，输出 `valid_groups=1 sellable_goods=7 ok=true`）。
+- [x] **步骤 5（阶段 2 双服对齐）**：`xuanming-server-mmo` 已于提交 `3f7dbc1f` 完成 `ContractSync`、第 14 代持久台账 `0014.schema`、`TX_SPIRIT_SHOP_BUY=44`、`SpiritShopTables`/`SpiritShopService`/`SpiritShopFeature` 及 `SpiritShopFeatureAndServiceTest`（`game-scene` 全量 2,184/2,184 PASS），已同步更新 `PARITY.md`。
+- [x] **步骤 6（阶段 3 客户端逻辑与可运行 uGUI）**：`mmorpg-client` 已完成表/协议/`MessageIds(509/510)` 同步、`GameClient.SpiritShop`（`SpiritShopModels` + `SpiritShopClient`）、可交互 uGUI（`SpiritShopUiRoot` + `SpiritShopWindow`，含 3 分页/双余额/300 份进度条/月卡聚合卡/二次确认与充值短链）、主城 HUD「百宝阁」入口、四大缺料场景直达（易容 `301`、打造 `101`、打磨 `201`、制书 `202`）与 `SpiritShopClientTests`（全量 762 个 `Assets/Scripts` 源码 0 错误编译 + NUnit **5/5 PASS**）。专属切图换肤留槽位待 Codex 按 §8 制作后直接落入 `Assets/Resources/UI/Ugui/SpiritShopV1/` 即可自动生效。
 
 ---
 

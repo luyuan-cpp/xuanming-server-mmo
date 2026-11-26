@@ -5284,7 +5284,7 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 ## 2026-11-25 官方灵石百宝阁与绑定/终身限购首套提速包 V1 全链路落码与三仓验收（C++/Go 权威服 + Java 独立服 + Unity 客户端及 uGUI）
 
 - **设计定案与文档索引**：
-  - 落盘 `docs/design/spirit-shop-and-starter-packs-v1.md`（§7 定案：首套提速共享组 `group_id=1` 终身封顶 **300 份 / ¥30**，支持 `101` 60 / `102` 180 / `103` 300 自由拼单；精进与外观单价 `定星保底符 60`、`天工秘墨 180`、`角色形象卡 100`、`角色改名卡 100`；红线明确不做宝宝头像框、人物头像框不进商城单卖；§8 对齐 `SpiritShopWindow.cs` 与 `WorldHudNavigation.cs` 给出 Codex 专属道家 Q 版换肤任务书）。
+  - 落盘 `docs/planning/spirit-shop-and-starter-packs-v1.md`（§7 定案：首套提速共享组 `group_id=1` 终身封顶 **300 份 / ¥30**，支持 `101` 60 / `102` 180 / `103` 300 自由拼单；精进与外观单价 `定星保底符 60`、`天工秘墨 180`、`角色形象卡 100`、`角色改名卡 100`；红线明确不做宝宝头像框、人物头像框不进商城单卖；§8 对齐 `SpiritShopWindow.cs` 与 `WorldHudNavigation.cs` 给出 Codex 专属纯功能作图清单）。
   - 更新 `tools/scripts/gen_docs_index.py` 并生成 `docs/README.md`。
 - **配表、协议与 C++/Go 权威服务端（`xuanming-server-mmo-cpp`）**：
   - 新增 `data/schema/{spiritshoplimitgroup_table,spiritshopgoods_table}.proto`、`tools/scripts/spirit_shop_xlsx_patch.py`、`data/{SpiritShopLimitGroup,SpiritShopGoods}.xlsx`（1 共享组 + 7 在售 SKU），追加 `Tip.xlsx` `//spirit_shop_error`（`37000..37010`）与 `MessageLimiter.xlsx`（`509=10/1s`、`510=5/1s`）；新增 `proto/common/component/player_spirit_shop_comp.proto`、`proto/scene/player_spirit_shop.proto`（`509=GetSpiritShopInfo`、`510=BuySpiritShopGoods`），追加 `mysql_database_table.proto` `spirit_shop = 34 (WALLET)`、`transaction_log.proto` `TX_SPIRIT_SHOP_BUY = 44`、`client_request_ledger.h` `kBuySpiritShopGoods = 15`。非交互导表（`Deploy: 14 OK, 0 failed`）与 `proto-gen-run` 全通过。
@@ -5301,3 +5301,26 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **未执行范围与已知并行阻塞**：
   - `cpp/nodes/scene/scene.vcxproj` 整包链接与 `cpp/tests/bag_test/bag_test.vcxproj` 整包编译当前分别受同工作区并行会话未收尾的 `player_appearance_handler` / `core.lib` / `rpc.lib` 与 `afk_pass_test.cpp:455` 阻断，整包 `scene.exe --validate-tables` 与全量 `bag_test.exe` 待并行线收口后复跑（百宝阁真实导表 `ValidateTables()` 与 10 条 C++ 单测已在独立沙箱实跑通过）；
   - 未做真库多进程实网联调与 Unity Editor 真机分辨率逐像素验收；`Assets/Resources/UI/Ugui/SpiritShopV1/` 专属道家 Q 版切图待 Codex 按 §8 制作；三个代码仓均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Gemini：活动界面非强制不肝氪商业化闭环（「青云游历手记 · 第一期」526–529 + 活动中心低打扰种草卡，C++/Go/Python/Unity 落码验证与 Codex 纯功能作图交接）
+
+- **方案与设计文档**：
+  - 方案定案与六段分析：[docs/planning/activity-travel-pass-and-showcase-v1.md](planning/activity-travel-pass-and-showcase-v1.md)；异机 Codex 纯功能作图交接清单（无风格词）：[docs/planning/ui-handoff/activity-travel-pass-ui-handoff.md](planning/ui-handoff/activity-travel-pass-ui-handoff.md)。
+  - **主引擎（方案 B）「青云游历手记 · 第一期」**：零日常、零签到、零周清，所有常规/高难 PVE 胜（`+20`/`+30`）与正式 PVP/帮战/物法易势（胜 `+30`、过防挂机门平/负 `+15`、逃跑/挂机 `0`）在战斗结算同事务自动累计游历点（封顶 `300` 点、10 档每 30 点 1 档）；支持先玩后买随时补领、仅消耗 `180` 真实充值灵石（严禁扣绑定灵石）、解锁典藏后永不过期、全物品强制 `bound=true` 且 0 战力上限突破、3 枚零战力纪念头像框/称谓自由穿脱。
+  - **体验种草（方案 A）**：`GetActivityList(190)` 聚合 `900001` 游历手记（仅存在真实可领免费或已解锁典藏档位时 `has_claimable_reward=true`，绝不为未购典藏造假红点）、`900002`「留灯风物 · 免费试穿」（零红点直达外观试穿）、`900003`「灵石百宝阁 · 轻便利」（零红点直达百宝阁）。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - 表与协议：`data/schema/travelpass{season,tier}_table.proto`、`data/TravelPassSeason.xlsx`（`id=1`）、`data/TravelPassTier.xlsx`（10 档）、`data/tip/Tip.xlsx`（`38000..38012` `travel_pass_error`）、`data/MessageLimiter.xlsx`（`526..529`）、`proto/common/component/player_travel_pass_comp.proto`、`mysql_database_table.proto`（字段 35 `WALLET` 组）、`transaction_log.proto`（`45/46`）、`client_request_ledger_comp.proto`（字段 30）、`proto/scene/player_activity.proto`（3 新入口枚举 + 4 新 RPC `526..529`）。执行 `proto-gen-run`、`data_table_exporter`、`gen_schema_index.py`、`gen_docs_index.py` 均 exit 0。
+  - C++ 实现：`travel_pass_rules.h`、`player_travel_pass.{h,cpp}`、`player_activity_handler.cpp`、`player_feature_snapshot.cpp`、`player_database_loader.cpp`、`player_battle.cpp`、`client_request_ledger.{h,cpp}`、`main.cpp`、`player_travel_pass_test.cpp`、`persist_round_trip_test.cpp`、`cross_zone_test.cpp`。
+  - 验证证据：
+    - 静态守卫：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**、`check_log_text_english.py` **0 违规**、`gen_docs_index.py --check` / `gen_schema_index.py --check` 均 exit 0。
+    - Go 产物：`cd go/shared && go build ./generated/pb/... ./generated/table/...` **exit 0**。
+    - C++ 编译与单测（串行 `/m:1`，隔离 scratch 目录避开并行会话锁文件）：`proto.lib`/`table.lib`/`scene.lib` 已含全部游历手记对象，`cpp/nodes/scene/scene.vcxproj`（`scene.exe`）**0 错误编过链接**；隔离 GTest 可执行文件（含 `player_travel_pass_test.cpp` + `persist_round_trip_test.cpp` + `player_feature_snapshot_test.cpp`）实测：**`TravelPassRulesTest` 1/1 PASS、`PlayerTravelPassTest` 3/3 PASS、`PlayerFeatureSnapshotTest` 15/15 PASS**、`PersistRoundTripTest` 5/6 PASS（唯一失败为并行会话未补夹具的 7 个其它类型，`PlayerTravelPassComp`/`TravelPassSeasonProgress` 均完整通过未知字段往返）。另注：`bag_test.vcxproj` 全量链接被并行会话 `afk_pass_test.cpp(455)` 阻塞；`scene.exe --validate-tables generated/tables` 因并行会话后续新增 `PetCosmetic`/`SkillVfxCosmetic` 致 `table.lib` 内嵌 `schema_digest`（76 表）与最新 78 表 `manifest.json` 不一致而退 1（`PlayerTravelPassSystem::ValidateTables()` 已在 `PlayerTravelPassTest` 对真实导出表验证通过）。
+- **Unity 客户端（`mmorpg-client`）**：
+  - 同步 `sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1`；新增 `TravelPassModels.cs`、`TravelPassClient.cs`、`TravelPassWindow.cs`、`TravelPassUiRoot.cs`、`TravelPassClientTests.cs` 及全部对应 `.meta`，接线 `GameClient.cs`、`GameplayWindow.Activities.cs`、`GameplayUiRoot.cs`（不改动原有 4 左侧分类牌与活跃条像素保真）。
+  - 验证证据：`client_compile_check.ps1` 我方全部 772 文件 **0 错误**（后续并行会话新增的 `AppearanceUiRoot.Cosmetics.cs`/`BattlePresenter.cs` 有 4 处无关编译错）；`run_activity_tests.ps1 -IncludePlayerFeaturesRegression` **61/61 PASS**；Roslyn+NUnit `TravelPassClientTests` **5/5 PASS**。
+- **Python 服务端（`xuanming-server-mmo-python`）**：
+  - 同步游历手记 proto、`message_id.txt(526..529)`、`travelpass{season,tier}.{json,pb}`、`messagelimiter.{json,pb}`、`tip_text.json(38000..38012)`、`_table_descriptors.pb`、`manifest.json` 与 `schema.pb`；新增 `src/xuanming/nodes/scene_travel_pass.py` 接入 `scene_activity.py` / `battle_settlement.py` / `runtime.py`，新增 `tests/test_cpp_wt_travel_pass.py`。
+  - 验证证据：`pytest tests/test_cpp_wt_travel_pass.py tests/test_latest_cpp_sync_systems.py -v` **7/7 PASS**，`test_cpp_wt_spirit_shop.py` **6/6 PASS**。
+- **Java 独立服务端（`xuanming-server-mmo`）**：并行会话 `ContractSync` 已落盘游历手记协议与表，因 `game-player-store` `0015.schema` 正由并行会话演进，已在 `PARITY.md` 顶部登记，未碰 `player_state.proto` / `0015.schema`。
+- **提交与作图**：未执行 `git commit` / `git push`；已产出 12 件纯功能 UI 切图清单供负责人转发异机 Codex 作图。

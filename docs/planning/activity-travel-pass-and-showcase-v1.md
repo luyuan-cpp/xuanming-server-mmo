@@ -138,12 +138,5 @@
 
 ## 6. 执行步骤与异机 Codex 作图交接规格
 
-- 服务端与客户端程序逻辑及默认可用 UGUI（复用既有 Qdao 玉绿/米白金边切图 + `Resources.Load` 可选精修素材钩子）由本轮一次性落码闭环。
-- 精修视觉素材路径约定（Codex 交付后直接放进 `mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/` 即自动生效，零改代码）：
-  - `travel_pass_banner.png`（1080×240，游历手记顶部青云画卷横幅）
-  - `travel_pass_card_icon.png`（256×256，活动中心「青云游历手记」入口卡主图标）
-  - `showcase_appearance_icon.png`（256×256，活动中心「留灯风物 · 免费试穿」入口卡主图标）
-  - `showcase_spirit_shop_icon.png`（256×256，活动中心「灵石百宝阁 · 轻便利」入口卡主图标）
-  - `frame_travel_qingyun_s1.png`（256×256 透明中空，「青云游历框」限定纪念头像框）
-  - `badge_travel_premium.png`（180×64，典藏轨「典藏」玉金徽章）
-  - `tier_card_free.png` / `tier_card_premium.png`（240×170，免费轨素雅宣纸卡底与典藏轨金边玉青卡底）
+- 服务端与客户端程序逻辑及默认可用 UGUI（复用既有基础框架切图，并通过 `Resources.Load<Sprite>("UI/Ugui/TravelPassV1/...")` 自动加载专属资源，缺省优雅回落）由本轮一次性落码闭环。
+- 异机 Codex 纯功能 UI / 美术作图交接清单（不含风格设定）见 [activity-travel-pass-ui-handoff.md](ui-handoff/activity-travel-pass-ui-handoff.md)，交付素材放入 `mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/` 后无需修改代码即自动生效。

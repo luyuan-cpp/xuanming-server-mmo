@@ -132,6 +132,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 ### UI 与美术交接单(`planning/ui-handoff/`)
 
+- [activity-travel-pass-ui-handoff.md](planning/ui-handoff/activity-travel-pass-ui-handoff.md) — 青云游历手记与活动种草卡 UI 美术作图交接清单
 - [battle-art-prompts.md](planning/ui-handoff/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
 - [battle-festival-beast-ui-handoff.md](planning/ui-handoff/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
 - [battle-season-one-ui-handoff.md](planning/ui-handoff/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
