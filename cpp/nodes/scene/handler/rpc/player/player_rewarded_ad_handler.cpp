@@ -17,6 +17,7 @@ void SceneRewardedAdClientPlayerHandler::GetRewardedAdInfo(entt::entity player,c
 		response->mutable_error_message()->set_id(err);
 	}
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneRewardedAdClientPlayerHandler::BeginRewardedAdSession(entt::entity player,const ::BeginRewardedAdSessionRequest* request,
@@ -29,6 +30,7 @@ void SceneRewardedAdClientPlayerHandler::BeginRewardedAdSession(entt::entity pla
 		response->mutable_error_message()->set_id(err);
 	}
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneRewardedAdClientPlayerHandler::ClaimRewardedAd(entt::entity player,const ::ClaimRewardedAdRequest* request,
@@ -41,4 +43,5 @@ void SceneRewardedAdClientPlayerHandler::ClaimRewardedAd(entt::entity player,con
 		response->mutable_error_message()->set_id(err);
 	}
 ///<<< END WRITING YOUR CODE
+
 }

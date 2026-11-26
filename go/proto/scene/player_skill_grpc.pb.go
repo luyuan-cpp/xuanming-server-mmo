@@ -33,6 +33,8 @@ const (
 	SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName   = "/SceneSkillClientPlayer/ListCraftProxyStalls"
 	SceneSkillClientPlayer_SaveSkillLoadout_FullMethodName       = "/SceneSkillClientPlayer/SaveSkillLoadout"
 	SceneSkillClientPlayer_SwitchSkillLoadout_FullMethodName     = "/SceneSkillClientPlayer/SwitchSkillLoadout"
+	SceneSkillClientPlayer_SealSkillBook_FullMethodName          = "/SceneSkillClientPlayer/SealSkillBook"
+	SceneSkillClientPlayer_UnsealSkillBook_FullMethodName        = "/SceneSkillClientPlayer/UnsealSkillBook"
 )
 
 // SceneSkillClientPlayerClient is the client API for SceneSkillClientPlayer service.
@@ -53,6 +55,8 @@ type SceneSkillClientPlayerClient interface {
 	ListCraftProxyStalls(ctx context.Context, in *ListCraftProxyStallsRequest, opts ...grpc.CallOption) (*ListCraftProxyStallsResponse, error)
 	SaveSkillLoadout(ctx context.Context, in *SaveSkillLoadoutRequest, opts ...grpc.CallOption) (*SaveSkillLoadoutResponse, error)
 	SwitchSkillLoadout(ctx context.Context, in *SwitchSkillLoadoutRequest, opts ...grpc.CallOption) (*SwitchSkillLoadoutResponse, error)
+	SealSkillBook(ctx context.Context, in *SealSkillBookRequest, opts ...grpc.CallOption) (*SealSkillBookResponse, error)
+	UnsealSkillBook(ctx context.Context, in *UnsealSkillBookRequest, opts ...grpc.CallOption) (*UnsealSkillBookResponse, error)
 }
 
 type sceneSkillClientPlayerClient struct {
@@ -193,6 +197,26 @@ func (c *sceneSkillClientPlayerClient) SwitchSkillLoadout(ctx context.Context, i
 	return out, nil
 }
 
+func (c *sceneSkillClientPlayerClient) SealSkillBook(ctx context.Context, in *SealSkillBookRequest, opts ...grpc.CallOption) (*SealSkillBookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SealSkillBookResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_SealSkillBook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) UnsealSkillBook(ctx context.Context, in *UnsealSkillBookRequest, opts ...grpc.CallOption) (*UnsealSkillBookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnsealSkillBookResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_UnsealSkillBook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSkillClientPlayerServer is the server API for SceneSkillClientPlayer service.
 // All implementations must embed UnimplementedSceneSkillClientPlayerServer
 // for forward compatibility.
@@ -211,6 +235,8 @@ type SceneSkillClientPlayerServer interface {
 	ListCraftProxyStalls(context.Context, *ListCraftProxyStallsRequest) (*ListCraftProxyStallsResponse, error)
 	SaveSkillLoadout(context.Context, *SaveSkillLoadoutRequest) (*SaveSkillLoadoutResponse, error)
 	SwitchSkillLoadout(context.Context, *SwitchSkillLoadoutRequest) (*SwitchSkillLoadoutResponse, error)
+	SealSkillBook(context.Context, *SealSkillBookRequest) (*SealSkillBookResponse, error)
+	UnsealSkillBook(context.Context, *UnsealSkillBookRequest) (*UnsealSkillBookResponse, error)
 	mustEmbedUnimplementedSceneSkillClientPlayerServer()
 }
 
@@ -259,6 +285,12 @@ func (UnimplementedSceneSkillClientPlayerServer) SaveSkillLoadout(context.Contex
 }
 func (UnimplementedSceneSkillClientPlayerServer) SwitchSkillLoadout(context.Context, *SwitchSkillLoadoutRequest) (*SwitchSkillLoadoutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SwitchSkillLoadout not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) SealSkillBook(context.Context, *SealSkillBookRequest) (*SealSkillBookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SealSkillBook not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) UnsealSkillBook(context.Context, *UnsealSkillBookRequest) (*UnsealSkillBookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnsealSkillBook not implemented")
 }
 func (UnimplementedSceneSkillClientPlayerServer) mustEmbedUnimplementedSceneSkillClientPlayerServer() {
 }
@@ -516,6 +548,42 @@ func _SceneSkillClientPlayer_SwitchSkillLoadout_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSkillClientPlayer_SealSkillBook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SealSkillBookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).SealSkillBook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_SealSkillBook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).SealSkillBook(ctx, req.(*SealSkillBookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_UnsealSkillBook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnsealSkillBookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).UnsealSkillBook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_UnsealSkillBook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).UnsealSkillBook(ctx, req.(*UnsealSkillBookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSkillClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSkillClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -574,6 +642,14 @@ var SceneSkillClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SwitchSkillLoadout",
 			Handler:    _SceneSkillClientPlayer_SwitchSkillLoadout_Handler,
+		},
+		{
+			MethodName: "SealSkillBook",
+			Handler:    _SceneSkillClientPlayer_SealSkillBook_Handler,
+		},
+		{
+			MethodName: "UnsealSkillBook",
+			Handler:    _SceneSkillClientPlayer_UnsealSkillBook_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

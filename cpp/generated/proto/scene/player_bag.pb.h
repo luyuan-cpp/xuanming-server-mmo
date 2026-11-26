@@ -478,6 +478,14 @@ extern const ::google::protobuf::internal::ClassDataFull SaveEquipLoadoutRespons
 #else
 extern const SaveEquipLoadoutResponseGlobalsTypeInternal SaveEquipLoadoutResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SealedSkillBookInfo;
+struct SealedSkillBookInfoGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SealedSkillBookInfoGlobalsTypeInternal SealedSkillBookInfo_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SealedSkillBookInfo_class_data_;
+#else
+extern const SealedSkillBookInfoGlobalsTypeInternal SealedSkillBookInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SortBagRequest;
 struct SortBagRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -837,7 +845,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockEquipLoadoutRequest final : p
   [[nodiscard]] static const UnlockEquipLoadoutRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnlockEquipLoadoutRequest>(&UnlockEquipLoadoutRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 57;
+  static constexpr int kIndexInFileMessages = 58;
   friend void swap(UnlockEquipLoadoutRequest& a, UnlockEquipLoadoutRequest& b) { a.Swap(&b); }
   inline void Swap(UnlockEquipLoadoutRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1062,7 +1070,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnequipItemRequest final : public :
   [[nodiscard]] static const UnequipItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnequipItemRequest>(&UnequipItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(UnequipItemRequest& a, UnequipItemRequest& b) { a.Swap(&b); }
   inline void Swap(UnequipItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1263,7 +1271,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchEquipLoadoutRequest final : p
   [[nodiscard]] static const SwitchEquipLoadoutRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SwitchEquipLoadoutRequest>(&SwitchEquipLoadoutRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 55;
+  static constexpr int kIndexInFileMessages = 56;
   friend void swap(SwitchEquipLoadoutRequest& a, SwitchEquipLoadoutRequest& b) { a.Swap(&b); }
   inline void Swap(SwitchEquipLoadoutRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1505,7 +1513,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SortBagRequest final : public ::goo
   [[nodiscard]] static const SortBagRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SortBagRequest>(&SortBagRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(SortBagRequest& a, SortBagRequest& b) { a.Swap(&b); }
   inline void Swap(SortBagRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1650,6 +1658,294 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SortBagRequest final : public ::goo
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SealedSkillBookInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SealedSkillBookInfo) */ {
+ public:
+  inline SealedSkillBookInfo() : SealedSkillBookInfo(nullptr) {}
+  ~SealedSkillBookInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SealedSkillBookInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SealedSkillBookInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SealedSkillBookInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SealedSkillBookInfo(const SealedSkillBookInfo& from) : SealedSkillBookInfo(nullptr, from) {}
+  inline SealedSkillBookInfo(SealedSkillBookInfo&& from) noexcept : SealedSkillBookInfo(nullptr, ::std::move(from)) {}
+  inline SealedSkillBookInfo& operator=(const SealedSkillBookInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SealedSkillBookInfo& operator=(SealedSkillBookInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SealedSkillBookInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SealedSkillBookInfo>(&SealedSkillBookInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(SealedSkillBookInfo& a, SealedSkillBookInfo& b) { a.Swap(&b); }
+  inline void Swap(SealedSkillBookInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SealedSkillBookInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SealedSkillBookInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SealedSkillBookInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SealedSkillBookInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SealedSkillBookInfo& from) { SealedSkillBookInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SealedSkillBookInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SealedSkillBookInfo"; }
+
+  explicit SealedSkillBookInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SealedSkillBookInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SealedSkillBookInfo& from);
+  SealedSkillBookInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SealedSkillBookInfo&& from) noexcept
+      : SealedSkillBookInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSkillNameFieldNumber = 2,
+    kScrollNameFieldNumber = 4,
+    kCrafterNameFieldNumber = 6,
+    kSkillTableIdFieldNumber = 1,
+    kScrollIdFieldNumber = 3,
+    kCrafterPlayerIdFieldNumber = 7,
+    kRarityTierFieldNumber = 5,
+  };
+  // string skill_name = 2;
+  void clear_skill_name() ;
+  [[nodiscard]] const ::std::string& skill_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_skill_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_skill_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_skill_name();
+  void set_allocated_skill_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_skill_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_skill_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_skill_name();
+
+  public:
+  // string scroll_name = 4;
+  void clear_scroll_name() ;
+  [[nodiscard]] const ::std::string& scroll_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_scroll_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_scroll_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_scroll_name();
+  void set_allocated_scroll_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_scroll_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_scroll_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_scroll_name();
+
+  public:
+  // string crafter_name = 6;
+  void clear_crafter_name() ;
+  [[nodiscard]] const ::std::string& crafter_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_crafter_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_crafter_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_crafter_name();
+  void set_allocated_crafter_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_crafter_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_crafter_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_crafter_name();
+
+  public:
+  // uint32 skill_table_id = 1;
+  void clear_skill_table_id() ;
+  [[nodiscard]] ::uint32_t skill_table_id() const;
+  void set_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_table_id() const;
+  void _internal_set_skill_table_id(::uint32_t value);
+
+  public:
+  // uint32 scroll_id = 3;
+  void clear_scroll_id() ;
+  [[nodiscard]] ::uint32_t scroll_id() const;
+  void set_scroll_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scroll_id() const;
+  void _internal_set_scroll_id(::uint32_t value);
+
+  public:
+  // uint64 crafter_player_id = 7;
+  void clear_crafter_player_id() ;
+  [[nodiscard]] ::uint64_t crafter_player_id() const;
+  void set_crafter_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_crafter_player_id() const;
+  void _internal_set_crafter_player_id(::uint64_t value);
+
+  public:
+  // uint32 rarity_tier = 5;
+  void clear_rarity_tier() ;
+  [[nodiscard]] ::uint32_t rarity_tier() const;
+  void set_rarity_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rarity_tier() const;
+  void _internal_set_rarity_tier(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SealedSkillBookInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 61,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SealedSkillBookInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr skill_name_;
+    ::google::protobuf::internal::ArenaStringPtr scroll_name_;
+    ::google::protobuf::internal::ArenaStringPtr crafter_name_;
+    ::uint32_t skill_table_id_;
+    ::uint32_t scroll_id_;
+    ::uint64_t crafter_player_id_;
+    ::uint32_t rarity_tier_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetrieveTemporaryItemsRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:RetrieveTemporaryItemsRequest) */ {
  public:
@@ -1706,7 +2002,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetrieveTemporaryItemsRequest final
   [[nodiscard]] static const RetrieveTemporaryItemsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RetrieveTemporaryItemsRequest>(&RetrieveTemporaryItemsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(RetrieveTemporaryItemsRequest& a, RetrieveTemporaryItemsRequest& b) { a.Swap(&b); }
   inline void Swap(RetrieveTemporaryItemsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1919,7 +2215,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveGemRequest final : public ::g
   [[nodiscard]] static const RemoveGemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemoveGemRequest>(&RemoveGemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(RemoveGemRequest& a, RemoveGemRequest& b) { a.Swap(&b); }
   inline void Swap(RemoveGemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2132,7 +2428,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InlayGemRequest final : public ::go
   [[nodiscard]] static const InlayGemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<InlayGemRequest>(&InlayGemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(InlayGemRequest& a, InlayGemRequest& b) { a.Swap(&b); }
   inline void Swap(InlayGemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2357,7 +2653,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmGrantItemRequest final : public :
   [[nodiscard]] static const GmGrantItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmGrantItemRequest>(&GmGrantItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(GmGrantItemRequest& a, GmGrantItemRequest& b) { a.Swap(&b); }
   inline void Swap(GmGrantItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2569,7 +2865,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipmentMaterialRewardRequest f
   [[nodiscard]] static const GetEquipmentMaterialRewardRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipmentMaterialRewardRequest>(&GetEquipmentMaterialRewardRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 43;
+  static constexpr int kIndexInFileMessages = 44;
   friend void swap(GetEquipmentMaterialRewardRequest& a, GetEquipmentMaterialRewardRequest& b) { a.Swap(&b); }
   inline void Swap(GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2707,7 +3003,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipmentCraftRulesRequest final
   [[nodiscard]] static const GetEquipmentCraftRulesRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipmentCraftRulesRequest>(&GetEquipmentCraftRulesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(GetEquipmentCraftRulesRequest& a, GetEquipmentCraftRulesRequest& b) { a.Swap(&b); }
   inline void Swap(GetEquipmentCraftRulesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2845,7 +3141,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipLoadoutsRequest final : pub
   [[nodiscard]] static const GetEquipLoadoutsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipLoadoutsRequest>(&GetEquipLoadoutsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 51;
+  static constexpr int kIndexInFileMessages = 52;
   friend void swap(GetEquipLoadoutsRequest& a, GetEquipLoadoutsRequest& b) { a.Swap(&b); }
   inline void Swap(GetEquipLoadoutsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2984,7 +3280,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetBagRequest final : public ::goog
   [[nodiscard]] static const GetBagRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetBagRequest>(&GetBagRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(GetBagRequest& a, GetBagRequest& b) { a.Swap(&b); }
   inline void Swap(GetBagRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3185,7 +3481,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftMaterial final : publ
   [[nodiscard]] static const EquipmentCraftMaterial& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentCraftMaterial>(&EquipmentCraftMaterial_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(EquipmentCraftMaterial& a, EquipmentCraftMaterial& b) { a.Swap(&b); }
   inline void Swap(EquipmentCraftMaterial* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3456,7 +3752,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftChoice final : public
   [[nodiscard]] static const EquipmentCraftChoice& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentCraftChoice>(&EquipmentCraftChoice_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(EquipmentCraftChoice& a, EquipmentCraftChoice& b) { a.Swap(&b); }
   inline void Swap(EquipmentCraftChoice* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4023,7 +4319,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutLinkedOption final : pu
   [[nodiscard]] static const EquipLoadoutLinkedOption& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipLoadoutLinkedOption>(&EquipLoadoutLinkedOption_globals_);
   }
-  static constexpr int kIndexInFileMessages = 49;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(EquipLoadoutLinkedOption& a, EquipLoadoutLinkedOption& b) { a.Swap(&b); }
   inline void Swap(EquipLoadoutLinkedOption* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4253,7 +4549,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipItemRequest final : public ::g
   [[nodiscard]] static const EquipItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipItemRequest>(&EquipItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(EquipItemRequest& a, EquipItemRequest& b) { a.Swap(&b); }
   inline void Swap(EquipItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4468,7 +4764,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipFixedAffixInfo final : public 
   [[nodiscard]] static const EquipFixedAffixInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipFixedAffixInfo>(&EquipFixedAffixInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(EquipFixedAffixInfo& a, EquipFixedAffixInfo& b) { a.Swap(&b); }
   inline void Swap(EquipFixedAffixInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5629,7 +5925,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipArtifactInfo final : public ::
   [[nodiscard]] static const EquipArtifactInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipArtifactInfo>(&EquipArtifactInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(EquipArtifactInfo& a, EquipArtifactInfo& b) { a.Swap(&b); }
   inline void Swap(EquipArtifactInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5936,7 +6232,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipAffixQualityInfo final : publi
   [[nodiscard]] static const EquipAffixQualityInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipAffixQualityInfo>(&EquipAffixQualityInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(EquipAffixQualityInfo& a, EquipAffixQualityInfo& b) { a.Swap(&b); }
   inline void Swap(EquipAffixQualityInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6202,7 +6498,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnhanceEquipRequest final : public 
   [[nodiscard]] static const EnhanceEquipRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnhanceEquipRequest>(&EnhanceEquipRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(EnhanceEquipRequest& a, EnhanceEquipRequest& b) { a.Swap(&b); }
   inline void Swap(EnhanceEquipRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6453,7 +6749,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftMasteryInfo final : public ::g
   [[nodiscard]] static const CraftMasteryInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CraftMasteryInfo>(&CraftMasteryInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(CraftMasteryInfo& a, CraftMasteryInfo& b) { a.Swap(&b); }
   inline void Swap(CraftMasteryInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6707,7 +7003,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimEquipmentMaterialRewardRequest
   [[nodiscard]] static const ClaimEquipmentMaterialRewardRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimEquipmentMaterialRewardRequest>(&ClaimEquipmentMaterialRewardRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 45;
+  static constexpr int kIndexInFileMessages = 46;
   friend void swap(ClaimEquipmentMaterialRewardRequest& a, ClaimEquipmentMaterialRewardRequest& b) { a.Swap(&b); }
   inline void Swap(ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6944,7 +7240,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagSlotInfo final : public ::google
   [[nodiscard]] static const BagSlotInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BagSlotInfo>(&BagSlotInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(BagSlotInfo& a, BagSlotInfo& b) { a.Swap(&b); }
   inline void Swap(BagSlotInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7181,7 +7477,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagHeldItemInfo final : public ::go
   [[nodiscard]] static const BagHeldItemInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BagHeldItemInfo>(&BagHeldItemInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(BagHeldItemInfo& a, BagHeldItemInfo& b) { a.Swap(&b); }
   inline void Swap(BagHeldItemInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7394,7 +7690,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveEquipLoadoutRequest final : pub
   [[nodiscard]] static const SaveEquipLoadoutRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveEquipLoadoutRequest>(&SaveEquipLoadoutRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 53;
+  static constexpr int kIndexInFileMessages = 54;
   friend void swap(SaveEquipLoadoutRequest& a, SaveEquipLoadoutRequest& b) { a.Swap(&b); }
   inline void Swap(SaveEquipLoadoutRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7712,7 +8008,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PreviewEquipmentCraftRequest final 
   [[nodiscard]] static const PreviewEquipmentCraftRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PreviewEquipmentCraftRequest>(&PreviewEquipmentCraftRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(PreviewEquipmentCraftRequest& a, PreviewEquipmentCraftRequest& b) { a.Swap(&b); }
   inline void Swap(PreviewEquipmentCraftRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7919,7 +8215,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardSnapshot fin
   [[nodiscard]] static const EquipmentMaterialRewardSnapshot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentMaterialRewardSnapshot>(&EquipmentMaterialRewardSnapshot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 42;
+  static constexpr int kIndexInFileMessages = 43;
   friend void swap(EquipmentMaterialRewardSnapshot& a, EquipmentMaterialRewardSnapshot& b) { a.Swap(&b); }
   inline void Swap(EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8695,7 +8991,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipFixedAffixSlotInfo final : pub
   [[nodiscard]] static const EquipFixedAffixSlotInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipFixedAffixSlotInfo>(&EquipFixedAffixSlotInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(EquipFixedAffixSlotInfo& a, EquipFixedAffixSlotInfo& b) { a.Swap(&b); }
   inline void Swap(EquipFixedAffixSlotInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8926,7 +9222,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitEquipmentCraftRequest final :
   [[nodiscard]] static const CommitEquipmentCraftRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitEquipmentCraftRequest>(&CommitEquipmentCraftRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 40;
+  static constexpr int kIndexInFileMessages = 41;
   friend void swap(CommitEquipmentCraftRequest& a, CommitEquipmentCraftRequest& b) { a.Swap(&b); }
   inline void Swap(CommitEquipmentCraftRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9174,7 +9470,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagLayoutInfo final : public ::goog
   [[nodiscard]] static const BagLayoutInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BagLayoutInfo>(&BagLayoutInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(BagLayoutInfo& a, BagLayoutInfo& b) { a.Swap(&b); }
   inline void Swap(BagLayoutInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9445,7 +9741,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipmentMaterialRewardResponse 
   [[nodiscard]] static const GetEquipmentMaterialRewardResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipmentMaterialRewardResponse>(&GetEquipmentMaterialRewardResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 44;
+  static constexpr int kIndexInFileMessages = 45;
   friend void swap(GetEquipmentMaterialRewardResponse& a, GetEquipmentMaterialRewardResponse& b) { a.Swap(&b); }
   inline void Swap(GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9670,7 +9966,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagItemInfo final : public ::google
   [[nodiscard]] static const BagItemInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BagItemInfo>(&BagItemInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(BagItemInfo& a, BagItemInfo& b) { a.Swap(&b); }
   inline void Swap(BagItemInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9774,6 +10070,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagItemInfo final : public ::google
     kEnhanceNextFieldNumber = 16,
     kGemAttrFieldNumber = 19,
     kArtifactFieldNumber = 23,
+    kSealedSkillBookFieldNumber = 28,
     kItemIdFieldNumber = 1,
     kConfigIdFieldNumber = 2,
     kCountFieldNumber = 3,
@@ -9997,6 +10294,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagItemInfo final : public ::google
   ::EquipArtifactInfo* PROTOBUF_NONNULL _internal_mutable_artifact();
 
   public:
+  // .SealedSkillBookInfo sealed_skill_book = 28;
+  [[nodiscard]] bool has_sealed_skill_book()
+      const;
+  void clear_sealed_skill_book() ;
+  [[nodiscard]] const ::SealedSkillBookInfo& sealed_skill_book() const;
+  [[nodiscard]] ::SealedSkillBookInfo* PROTOBUF_NULLABLE release_sealed_skill_book();
+  ::SealedSkillBookInfo* PROTOBUF_NONNULL mutable_sealed_skill_book();
+  void set_allocated_sealed_skill_book(::SealedSkillBookInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_sealed_skill_book(::SealedSkillBookInfo* PROTOBUF_NULLABLE value);
+  ::SealedSkillBookInfo* PROTOBUF_NULLABLE unsafe_arena_release_sealed_skill_book();
+
+  private:
+  const ::SealedSkillBookInfo& _internal_sealed_skill_book() const;
+  ::SealedSkillBookInfo* PROTOBUF_NONNULL _internal_mutable_sealed_skill_book();
+
+  public:
   // uint64 item_id = 1;
   void clear_item_id() ;
   [[nodiscard]] ::uint64_t item_id() const;
@@ -10151,8 +10464,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagItemInfo final : public ::google
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 27,
-                          7, 95,
+      ::google::protobuf::internal::TcParseTable<5, 28,
+                          8, 95,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -10192,6 +10505,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagItemInfo final : public ::google
     ::EquipEnhancePreview* PROTOBUF_NULLABLE enhance_next_;
     ::EquipAttrLineInfo* PROTOBUF_NULLABLE gem_attr_;
     ::EquipArtifactInfo* PROTOBUF_NULLABLE artifact_;
+    ::SealedSkillBookInfo* PROTOBUF_NULLABLE sealed_skill_book_;
     ::uint64_t item_id_;
     ::uint32_t config_id_;
     ::uint32_t count_;
@@ -10270,7 +10584,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftRecipe final : public
   [[nodiscard]] static const EquipmentCraftRecipe& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentCraftRecipe>(&EquipmentCraftRecipe_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(EquipmentCraftRecipe& a, EquipmentCraftRecipe& b) { a.Swap(&b); }
   inline void Swap(EquipmentCraftRecipe* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10501,7 +10815,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftPreview final : publi
   [[nodiscard]] static const EquipmentCraftPreview& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentCraftPreview>(&EquipmentCraftPreview_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(EquipmentCraftPreview& a, EquipmentCraftPreview& b) { a.Swap(&b); }
   inline void Swap(EquipmentCraftPreview* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10868,7 +11182,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutSlotView final : public
   [[nodiscard]] static const EquipLoadoutSlotView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipLoadoutSlotView>(&EquipLoadoutSlotView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 47;
+  static constexpr int kIndexInFileMessages = 48;
   friend void swap(EquipLoadoutSlotView& a, EquipLoadoutSlotView& b) { a.Swap(&b); }
   inline void Swap(EquipLoadoutSlotView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11140,7 +11454,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagInfo final : public ::google::pr
   [[nodiscard]] static const BagInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BagInfo>(&BagInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(BagInfo& a, BagInfo& b) { a.Swap(&b); }
   inline void Swap(BagInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11411,7 +11725,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnequipItemResponse final : public 
   [[nodiscard]] static const UnequipItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnequipItemResponse>(&UnequipItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(UnequipItemResponse& a, UnequipItemResponse& b) { a.Swap(&b); }
   inline void Swap(UnequipItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11654,7 +11968,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SortBagResponse final : public ::go
   [[nodiscard]] static const SortBagResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SortBagResponse>(&SortBagResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(SortBagResponse& a, SortBagResponse& b) { a.Swap(&b); }
   inline void Swap(SortBagResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11891,7 +12205,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetrieveTemporaryItemsResponse fina
   [[nodiscard]] static const RetrieveTemporaryItemsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RetrieveTemporaryItemsResponse>(&RetrieveTemporaryItemsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(RetrieveTemporaryItemsResponse& a, RetrieveTemporaryItemsResponse& b) { a.Swap(&b); }
   inline void Swap(RetrieveTemporaryItemsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12134,7 +12448,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveGemResponse final : public ::
   [[nodiscard]] static const RemoveGemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RemoveGemResponse>(&RemoveGemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(RemoveGemResponse& a, RemoveGemResponse& b) { a.Swap(&b); }
   inline void Swap(RemoveGemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12377,7 +12691,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PreviewEquipmentCraftResponse final
   [[nodiscard]] static const PreviewEquipmentCraftResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PreviewEquipmentCraftResponse>(&PreviewEquipmentCraftResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(PreviewEquipmentCraftResponse& a, PreviewEquipmentCraftResponse& b) { a.Swap(&b); }
   inline void Swap(PreviewEquipmentCraftResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12602,7 +12916,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InlayGemResponse final : public ::g
   [[nodiscard]] static const InlayGemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<InlayGemResponse>(&InlayGemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(InlayGemResponse& a, InlayGemResponse& b) { a.Swap(&b); }
   inline void Swap(InlayGemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12845,7 +13159,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmGrantItemResponse final : public 
   [[nodiscard]] static const GmGrantItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmGrantItemResponse>(&GmGrantItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(GmGrantItemResponse& a, GmGrantItemResponse& b) { a.Swap(&b); }
   inline void Swap(GmGrantItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13070,7 +13384,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipmentCraftRulesResponse fina
   [[nodiscard]] static const GetEquipmentCraftRulesResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipmentCraftRulesResponse>(&GetEquipmentCraftRulesResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 36;
+  static constexpr int kIndexInFileMessages = 37;
   friend void swap(GetEquipmentCraftRulesResponse& a, GetEquipmentCraftRulesResponse& b) { a.Swap(&b); }
   inline void Swap(GetEquipmentCraftRulesResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13393,7 +13707,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetBagResponse final : public ::goo
   [[nodiscard]] static const GetBagResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetBagResponse>(&GetBagResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(GetBagResponse& a, GetBagResponse& b) { a.Swap(&b); }
   inline void Swap(GetBagResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13618,7 +13932,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutSchemeInfo final : publ
   [[nodiscard]] static const EquipLoadoutSchemeInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipLoadoutSchemeInfo>(&EquipLoadoutSchemeInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 48;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(EquipLoadoutSchemeInfo& a, EquipLoadoutSchemeInfo& b) { a.Swap(&b); }
   inline void Swap(EquipLoadoutSchemeInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13919,7 +14233,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipItemResponse final : public ::
   [[nodiscard]] static const EquipItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipItemResponse>(&EquipItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(EquipItemResponse& a, EquipItemResponse& b) { a.Swap(&b); }
   inline void Swap(EquipItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14162,7 +14476,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnhanceEquipResponse final : public
   [[nodiscard]] static const EnhanceEquipResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnhanceEquipResponse>(&EnhanceEquipResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(EnhanceEquipResponse& a, EnhanceEquipResponse& b) { a.Swap(&b); }
   inline void Swap(EnhanceEquipResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14465,7 +14779,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitEquipmentCraftResponse final 
   [[nodiscard]] static const CommitEquipmentCraftResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitEquipmentCraftResponse>(&CommitEquipmentCraftResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 41;
+  static constexpr int kIndexInFileMessages = 42;
   friend void swap(CommitEquipmentCraftResponse& a, CommitEquipmentCraftResponse& b) { a.Swap(&b); }
   inline void Swap(CommitEquipmentCraftResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14867,7 +15181,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimEquipmentMaterialRewardRespons
   [[nodiscard]] static const ClaimEquipmentMaterialRewardResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimEquipmentMaterialRewardResponse>(&ClaimEquipmentMaterialRewardResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 46;
+  static constexpr int kIndexInFileMessages = 47;
   friend void swap(ClaimEquipmentMaterialRewardResponse& a, ClaimEquipmentMaterialRewardResponse& b) { a.Swap(&b); }
   inline void Swap(ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15203,7 +15517,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutSnapshot final : public
   [[nodiscard]] static const EquipLoadoutSnapshot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipLoadoutSnapshot>(&EquipLoadoutSnapshot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 50;
+  static constexpr int kIndexInFileMessages = 51;
   friend void swap(EquipLoadoutSnapshot& a, EquipLoadoutSnapshot& b) { a.Swap(&b); }
   inline void Swap(EquipLoadoutSnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15581,7 +15895,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockEquipLoadoutResponse final : 
   [[nodiscard]] static const UnlockEquipLoadoutResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnlockEquipLoadoutResponse>(&UnlockEquipLoadoutResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 58;
+  static constexpr int kIndexInFileMessages = 59;
   friend void swap(UnlockEquipLoadoutResponse& a, UnlockEquipLoadoutResponse& b) { a.Swap(&b); }
   inline void Swap(UnlockEquipLoadoutResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15953,7 +16267,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchEquipLoadoutResponse final : 
   [[nodiscard]] static const SwitchEquipLoadoutResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SwitchEquipLoadoutResponse>(&SwitchEquipLoadoutResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 56;
+  static constexpr int kIndexInFileMessages = 57;
   friend void swap(SwitchEquipLoadoutResponse& a, SwitchEquipLoadoutResponse& b) { a.Swap(&b); }
   inline void Swap(SwitchEquipLoadoutResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16295,7 +16609,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveEquipLoadoutResponse final : pu
   [[nodiscard]] static const SaveEquipLoadoutResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveEquipLoadoutResponse>(&SaveEquipLoadoutResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 54;
+  static constexpr int kIndexInFileMessages = 55;
   friend void swap(SaveEquipLoadoutResponse& a, SaveEquipLoadoutResponse& b) { a.Swap(&b); }
   inline void Swap(SaveEquipLoadoutResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16549,7 +16863,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipLoadoutsResponse final : pu
   [[nodiscard]] static const GetEquipLoadoutsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipLoadoutsResponse>(&GetEquipLoadoutsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 52;
+  static constexpr int kIndexInFileMessages = 53;
   friend void swap(GetEquipLoadoutsResponse& a, GetEquipLoadoutsResponse& b) { a.Swap(&b); }
   inline void Swap(GetEquipLoadoutsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18092,13 +18406,305 @@ inline void EquipEnhancePreview::_internal_set_tradable_material_available(::uin
 
 // -------------------------------------------------------------------
 
+// SealedSkillBookInfo
+
+// uint32 skill_table_id = 1;
+inline void SealedSkillBookInfo::clear_skill_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t SealedSkillBookInfo::skill_table_id() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.skill_table_id)
+  return _internal_skill_table_id();
+}
+inline void SealedSkillBookInfo::set_skill_table_id(::uint32_t value) {
+  _internal_set_skill_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.skill_table_id)
+}
+inline ::uint32_t SealedSkillBookInfo::_internal_skill_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_table_id_;
+}
+inline void SealedSkillBookInfo::_internal_set_skill_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = value;
+}
+
+// string skill_name = 2;
+inline void SealedSkillBookInfo::clear_skill_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SealedSkillBookInfo::skill_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.skill_name)
+  return _internal_skill_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SealedSkillBookInfo::set_skill_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.skill_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.skill_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookInfo::mutable_skill_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_skill_name();
+  // @@protoc_insertion_point(field_mutable:SealedSkillBookInfo.skill_name)
+  return _s;
+}
+inline const ::std::string& SealedSkillBookInfo::_internal_skill_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_name_.Get();
+}
+inline void SealedSkillBookInfo::_internal_set_skill_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookInfo::_internal_mutable_skill_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.skill_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SealedSkillBookInfo::release_skill_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SealedSkillBookInfo.skill_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.skill_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.skill_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SealedSkillBookInfo::set_allocated_skill_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.skill_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.skill_name_.IsDefault()) {
+    _impl_.skill_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SealedSkillBookInfo.skill_name)
+}
+
+// uint32 scroll_id = 3;
+inline void SealedSkillBookInfo::clear_scroll_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SealedSkillBookInfo::scroll_id() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.scroll_id)
+  return _internal_scroll_id();
+}
+inline void SealedSkillBookInfo::set_scroll_id(::uint32_t value) {
+  _internal_set_scroll_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.scroll_id)
+}
+inline ::uint32_t SealedSkillBookInfo::_internal_scroll_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_id_;
+}
+inline void SealedSkillBookInfo::_internal_set_scroll_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = value;
+}
+
+// string scroll_name = 4;
+inline void SealedSkillBookInfo::clear_scroll_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SealedSkillBookInfo::scroll_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.scroll_name)
+  return _internal_scroll_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SealedSkillBookInfo::set_scroll_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.scroll_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.scroll_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookInfo::mutable_scroll_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_scroll_name();
+  // @@protoc_insertion_point(field_mutable:SealedSkillBookInfo.scroll_name)
+  return _s;
+}
+inline const ::std::string& SealedSkillBookInfo::_internal_scroll_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_name_.Get();
+}
+inline void SealedSkillBookInfo::_internal_set_scroll_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookInfo::_internal_mutable_scroll_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.scroll_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SealedSkillBookInfo::release_scroll_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SealedSkillBookInfo.scroll_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.scroll_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.scroll_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SealedSkillBookInfo::set_allocated_scroll_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.scroll_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.scroll_name_.IsDefault()) {
+    _impl_.scroll_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SealedSkillBookInfo.scroll_name)
+}
+
+// uint32 rarity_tier = 5;
+inline void SealedSkillBookInfo::clear_rarity_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rarity_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t SealedSkillBookInfo::rarity_tier() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.rarity_tier)
+  return _internal_rarity_tier();
+}
+inline void SealedSkillBookInfo::set_rarity_tier(::uint32_t value) {
+  _internal_set_rarity_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.rarity_tier)
+}
+inline ::uint32_t SealedSkillBookInfo::_internal_rarity_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rarity_tier_;
+}
+inline void SealedSkillBookInfo::_internal_set_rarity_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rarity_tier_ = value;
+}
+
+// string crafter_name = 6;
+inline void SealedSkillBookInfo::clear_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SealedSkillBookInfo::crafter_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.crafter_name)
+  return _internal_crafter_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SealedSkillBookInfo::set_crafter_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.crafter_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.crafter_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookInfo::mutable_crafter_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_crafter_name();
+  // @@protoc_insertion_point(field_mutable:SealedSkillBookInfo.crafter_name)
+  return _s;
+}
+inline const ::std::string& SealedSkillBookInfo::_internal_crafter_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafter_name_.Get();
+}
+inline void SealedSkillBookInfo::_internal_set_crafter_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookInfo::_internal_mutable_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.crafter_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SealedSkillBookInfo::release_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SealedSkillBookInfo.crafter_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.crafter_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.crafter_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SealedSkillBookInfo::set_allocated_crafter_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.crafter_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.crafter_name_.IsDefault()) {
+    _impl_.crafter_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SealedSkillBookInfo.crafter_name)
+}
+
+// uint64 crafter_player_id = 7;
+inline void SealedSkillBookInfo::clear_crafter_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t SealedSkillBookInfo::crafter_player_id() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookInfo.crafter_player_id)
+  return _internal_crafter_player_id();
+}
+inline void SealedSkillBookInfo::set_crafter_player_id(::uint64_t value) {
+  _internal_set_crafter_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookInfo.crafter_player_id)
+}
+inline ::uint64_t SealedSkillBookInfo::_internal_crafter_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafter_player_id_;
+}
+inline void SealedSkillBookInfo::_internal_set_crafter_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // BagItemInfo
 
 // uint64 item_id = 1;
 inline void BagItemInfo::clear_item_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t BagItemInfo::item_id() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.item_id)
@@ -18106,7 +18712,7 @@ inline ::uint64_t BagItemInfo::item_id() const {
 }
 inline void BagItemInfo::set_item_id(::uint64_t value) {
   _internal_set_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.item_id)
 }
 inline ::uint64_t BagItemInfo::_internal_item_id() const {
@@ -18122,7 +18728,7 @@ inline void BagItemInfo::_internal_set_item_id(::uint64_t value) {
 inline void BagItemInfo::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BagItemInfo::config_id() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.config_id)
@@ -18130,7 +18736,7 @@ inline ::uint32_t BagItemInfo::config_id() const {
 }
 inline void BagItemInfo::set_config_id(::uint32_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.config_id)
 }
 inline ::uint32_t BagItemInfo::_internal_config_id() const {
@@ -18146,7 +18752,7 @@ inline void BagItemInfo::_internal_set_config_id(::uint32_t value) {
 inline void BagItemInfo::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t BagItemInfo::count() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.count)
@@ -18154,7 +18760,7 @@ inline ::uint32_t BagItemInfo::count() const {
 }
 inline void BagItemInfo::set_count(::uint32_t value) {
   _internal_set_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.count)
 }
 inline ::uint32_t BagItemInfo::_internal_count() const {
@@ -18170,7 +18776,7 @@ inline void BagItemInfo::_internal_set_count(::uint32_t value) {
 inline void BagItemInfo::clear_max_stack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_stack_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t BagItemInfo::max_stack() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.max_stack)
@@ -18178,7 +18784,7 @@ inline ::uint32_t BagItemInfo::max_stack() const {
 }
 inline void BagItemInfo::set_max_stack(::uint32_t value) {
   _internal_set_max_stack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.max_stack)
 }
 inline ::uint32_t BagItemInfo::_internal_max_stack() const {
@@ -18194,7 +18800,7 @@ inline void BagItemInfo::_internal_set_max_stack(::uint32_t value) {
 inline void BagItemInfo::clear_equip_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equip_kind_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t BagItemInfo::equip_kind() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.equip_kind)
@@ -18202,7 +18808,7 @@ inline ::uint32_t BagItemInfo::equip_kind() const {
 }
 inline void BagItemInfo::set_equip_kind(::uint32_t value) {
   _internal_set_equip_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.equip_kind)
 }
 inline ::uint32_t BagItemInfo::_internal_equip_kind() const {
@@ -18410,7 +19016,7 @@ inline void BagItemInfo::set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE
 inline void BagItemInfo::clear_equip_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equip_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t BagItemInfo::equip_level() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.equip_level)
@@ -18418,7 +19024,7 @@ inline ::uint32_t BagItemInfo::equip_level() const {
 }
 inline void BagItemInfo::set_equip_level(::uint32_t value) {
   _internal_set_equip_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.equip_level)
 }
 inline ::uint32_t BagItemInfo::_internal_equip_level() const {
@@ -18434,7 +19040,7 @@ inline void BagItemInfo::_internal_set_equip_level(::uint32_t value) {
 inline void BagItemInfo::clear_equip_class() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equip_class_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t BagItemInfo::equip_class() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.equip_class)
@@ -18442,7 +19048,7 @@ inline ::uint32_t BagItemInfo::equip_class() const {
 }
 inline void BagItemInfo::set_equip_class(::uint32_t value) {
   _internal_set_equip_class(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.equip_class)
 }
 inline ::uint32_t BagItemInfo::_internal_equip_class() const {
@@ -18632,7 +19238,7 @@ BagItemInfo::_internal_mutable_affixes() {
 inline void BagItemInfo::clear_enhance_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t BagItemInfo::enhance_level() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.enhance_level)
@@ -18640,7 +19246,7 @@ inline ::uint32_t BagItemInfo::enhance_level() const {
 }
 inline void BagItemInfo::set_enhance_level(::uint32_t value) {
   _internal_set_enhance_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.enhance_level)
 }
 inline ::uint32_t BagItemInfo::_internal_enhance_level() const {
@@ -18656,7 +19262,7 @@ inline void BagItemInfo::_internal_set_enhance_level(::uint32_t value) {
 inline void BagItemInfo::clear_enhance_max_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_max_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t BagItemInfo::enhance_max_level() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.enhance_max_level)
@@ -18664,7 +19270,7 @@ inline ::uint32_t BagItemInfo::enhance_max_level() const {
 }
 inline void BagItemInfo::set_enhance_max_level(::uint32_t value) {
   _internal_set_enhance_max_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.enhance_max_level)
 }
 inline ::uint32_t BagItemInfo::_internal_enhance_max_level() const {
@@ -18833,7 +19439,7 @@ BagItemInfo::_internal_mutable_gem_sockets() {
 inline void BagItemInfo::clear_gem_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gem_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t BagItemInfo::gem_type() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.gem_type)
@@ -18841,7 +19447,7 @@ inline ::uint32_t BagItemInfo::gem_type() const {
 }
 inline void BagItemInfo::set_gem_type(::uint32_t value) {
   _internal_set_gem_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.gem_type)
 }
 inline ::uint32_t BagItemInfo::_internal_gem_type() const {
@@ -18955,7 +19561,7 @@ inline void BagItemInfo::set_allocated_gem_attr(::EquipAttrLineInfo* PROTOBUF_NU
 inline void BagItemInfo::clear_enhance_bonus_permyriad() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_bonus_permyriad_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t BagItemInfo::enhance_bonus_permyriad() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.enhance_bonus_permyriad)
@@ -18963,7 +19569,7 @@ inline ::uint32_t BagItemInfo::enhance_bonus_permyriad() const {
 }
 inline void BagItemInfo::set_enhance_bonus_permyriad(::uint32_t value) {
   _internal_set_enhance_bonus_permyriad(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.enhance_bonus_permyriad)
 }
 inline ::uint32_t BagItemInfo::_internal_enhance_bonus_permyriad() const {
@@ -18979,7 +19585,7 @@ inline void BagItemInfo::_internal_set_enhance_bonus_permyriad(::uint32_t value)
 inline void BagItemInfo::clear_equip_profile() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equip_profile_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t BagItemInfo::equip_profile() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.equip_profile)
@@ -18987,7 +19593,7 @@ inline ::uint32_t BagItemInfo::equip_profile() const {
 }
 inline void BagItemInfo::set_equip_profile(::uint32_t value) {
   _internal_set_equip_profile(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.equip_profile)
 }
 inline ::uint32_t BagItemInfo::_internal_equip_profile() const {
@@ -19156,7 +19762,7 @@ inline void BagItemInfo::set_allocated_artifact(::EquipArtifactInfo* PROTOBUF_NU
 inline void BagItemInfo::clear_enhance_pity_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_pity_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint32_t BagItemInfo::enhance_pity_count() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.enhance_pity_count)
@@ -19164,7 +19770,7 @@ inline ::uint32_t BagItemInfo::enhance_pity_count() const {
 }
 inline void BagItemInfo::set_enhance_pity_count(::uint32_t value) {
   _internal_set_enhance_pity_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.enhance_pity_count)
 }
 inline ::uint32_t BagItemInfo::_internal_enhance_pity_count() const {
@@ -19180,7 +19786,7 @@ inline void BagItemInfo::_internal_set_enhance_pity_count(::uint32_t value) {
 inline void BagItemInfo::clear_bound() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline bool BagItemInfo::bound() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.bound)
@@ -19188,7 +19794,7 @@ inline bool BagItemInfo::bound() const {
 }
 inline void BagItemInfo::set_bound(bool value) {
   _internal_set_bound(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.bound)
 }
 inline bool BagItemInfo::_internal_bound() const {
@@ -19268,7 +19874,7 @@ inline void BagItemInfo::set_allocated_crafter_name(::std::string* PROTOBUF_NULL
 inline void BagItemInfo::clear_crafter_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.crafter_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint64_t BagItemInfo::crafter_player_id() const {
   // @@protoc_insertion_point(field_get:BagItemInfo.crafter_player_id)
@@ -19276,7 +19882,7 @@ inline ::uint64_t BagItemInfo::crafter_player_id() const {
 }
 inline void BagItemInfo::set_crafter_player_id(::uint64_t value) {
   _internal_set_crafter_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:BagItemInfo.crafter_player_id)
 }
 inline ::uint64_t BagItemInfo::_internal_crafter_player_id() const {
@@ -19286,6 +19892,104 @@ inline ::uint64_t BagItemInfo::_internal_crafter_player_id() const {
 inline void BagItemInfo::_internal_set_crafter_player_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.crafter_player_id_ = value;
+}
+
+// .SealedSkillBookInfo sealed_skill_book = 28;
+inline bool BagItemInfo::has_sealed_skill_book() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
+  PROTOBUF_ASSUME(!value || _impl_.sealed_skill_book_ != nullptr);
+  return value;
+}
+inline void BagItemInfo::clear_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.sealed_skill_book_ != nullptr) _impl_.sealed_skill_book_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline const ::SealedSkillBookInfo& BagItemInfo::_internal_sealed_skill_book() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SealedSkillBookInfo* p = _impl_.sealed_skill_book_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SealedSkillBookInfo>(&::SealedSkillBookInfo_globals_);
+}
+inline const ::SealedSkillBookInfo& BagItemInfo::sealed_skill_book() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BagItemInfo.sealed_skill_book)
+  return _internal_sealed_skill_book();
+}
+inline void BagItemInfo::unsafe_arena_set_allocated_sealed_skill_book(
+    ::SealedSkillBookInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.sealed_skill_book_);
+  }
+  _impl_.sealed_skill_book_ = reinterpret_cast<::SealedSkillBookInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BagItemInfo.sealed_skill_book)
+}
+inline ::SealedSkillBookInfo* PROTOBUF_NULLABLE BagItemInfo::release_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::SealedSkillBookInfo* released = _impl_.sealed_skill_book_;
+  _impl_.sealed_skill_book_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SealedSkillBookInfo* PROTOBUF_NULLABLE BagItemInfo::unsafe_arena_release_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BagItemInfo.sealed_skill_book)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::SealedSkillBookInfo* temp = _impl_.sealed_skill_book_;
+  _impl_.sealed_skill_book_ = nullptr;
+  return temp;
+}
+inline ::SealedSkillBookInfo* PROTOBUF_NONNULL BagItemInfo::_internal_mutable_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.sealed_skill_book_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SealedSkillBookInfo>(GetArena());
+    _impl_.sealed_skill_book_ = reinterpret_cast<::SealedSkillBookInfo*>(p);
+  }
+  return _impl_.sealed_skill_book_;
+}
+inline ::SealedSkillBookInfo* PROTOBUF_NONNULL BagItemInfo::mutable_sealed_skill_book()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::SealedSkillBookInfo* _msg = _internal_mutable_sealed_skill_book();
+  // @@protoc_insertion_point(field_mutable:BagItemInfo.sealed_skill_book)
+  return _msg;
+}
+inline void BagItemInfo::set_allocated_sealed_skill_book(::SealedSkillBookInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.sealed_skill_book_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  }
+
+  _impl_.sealed_skill_book_ = reinterpret_cast<::SealedSkillBookInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BagItemInfo.sealed_skill_book)
 }
 
 // -------------------------------------------------------------------

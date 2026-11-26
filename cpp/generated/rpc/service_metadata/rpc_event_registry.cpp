@@ -461,7 +461,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 543,
+static_assert(kMaxRpcMethodCount == 545,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -2576,6 +2576,16 @@ void InitMessageInfo()
         std::make_unique<::SwitchSkillLoadoutRequest>(),
         std::make_unique<::SwitchSkillLoadoutResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerSealSkillBookMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "SealSkillBook",
+        std::make_unique<::SealSkillBookRequest>(),
+        std::make_unique<::SealSkillBookResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerUnsealSkillBookMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "UnsealSkillBook",
+        std::make_unique<::UnsealSkillBookRequest>(),
+        std::make_unique<::UnsealSkillBookResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSpiritShopClientPlayer ---
     gRpcMethodRegistry[SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId] = RpcMethodMeta{
@@ -3342,6 +3352,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerListCraftProxyStallsMessageId:
 	case SceneSkillClientPlayerSaveSkillLoadoutMessageId:
 	case SceneSkillClientPlayerSwitchSkillLoadoutMessageId:
+	case SceneSkillClientPlayerSealSkillBookMessageId:
+	case SceneSkillClientPlayerUnsealSkillBookMessageId:
 	case SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId:
 	case SceneSpiritShopClientPlayerBuySpiritShopGoodsMessageId:
 	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:

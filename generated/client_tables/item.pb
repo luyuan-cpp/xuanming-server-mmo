@@ -174,7 +174,8 @@ c�c:	改名卡BQ使用后可修改一次角色名（冷却 7 天，旧名保�
 ���:绝学残卷B~困难首领与正式会武产出的稀世残卷，可自由交易流通，配合天工秘墨可定向合成稀世绝学书。J9UI/Ugui/CraftQualitySkill/Icons/item_rare_scroll_fragment
 ���:天工秘墨B�仅自用绑定秘墨，可通过玩法长线保底积攒或官方商城直购，配合绝学残卷 100% 定向合成稀世绝学书。J2UI/Ugui/CraftQualitySkill/Icons/item_celestial_ink
 ��c:解封剥离符B�官方小额配套符箓。消耗 1 张将绑定装备清空全部绑定养成（强化等级、保底与绑定词条/署名），仅恢复为纯可交易原胚，绝不把绑定材料洗白为可交易。J+UI/Ugui/EconomyTradeV1/icon_unseal_talisman
-��c:流派副套继承符B�官方小额配套符箓。消耗 1 张将同部位同等级段主装备的强化等级与保底进度无损继承至目标副套装备，目标装备转为仅自用绑定，避免换流派重复肝强化且不洗白可交易成品。J+UI/Ugui/EconomyTradeV1/icon_unseal_talisman
+��c:流派副套继承符B�官方小额配套符箓。消耗 1 张将同部位同等级段主装备的强化等级与保底进度无损继承至目标副套装备，目标装备转为仅自用绑定，避免换流派重复肝强化且不洗白可交易成品。J,UI/Ugui/EconomyTradeV2/icon_inherit_talisman
 ��c:灵宠幻化符B�仅自用绑定幻化符：可在衣柜「灵宠」页永久解锁一款支持兑换的灵宠幻化，已拥有幻化随时免费穿脱（纯外观零数值）。J.UI/Ugui/WardrobeCosmetics/item_pet_morph_charm
 ��c:技能特效卷B�仅自用绑定特效卷：可在衣柜「特效」页永久解锁一款支持兑换的技能特效，已拥有特效随时免费切换（纯画面零数值）。J/UI/Ugui/WardrobeCosmetics/item_skill_vfx_scroll
 ��c:装备方案扩容符B{官方便利配套符箓。解锁额外装备流派方案位时优先消耗 1 张，不提供任何属性或战力加成。J3UI/Ugui/EquipLoadoutV1/icon_loadout_expand_talisman
+��:封卷道籍B已封缄的可交易常规技能书，可上架聚宝斋/集市或面对面交易，开卷回书架后即可研习或拆页。JUI/Icons/item_sealed_skill_book

@@ -5389,7 +5389,7 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - Codex 交付的 3 张野外栖息地 HUD 专属无字透明切图（Azure `image/main@a9c6026d`，`D:\work\image\designs\world-map-habitat-ui\`）已逐字节 SHA-256 核验落盘至 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}.png`，生成无冲突 Unity `.meta` 并写入 `CONTROL-USAGE.md` 对应 `spriteBorder`（`32/18/32/18`、`24/12/24/12`、`0/0/0/0`）；`CityTravelUiRoot.cs` 按钮文字安全区同步校准为 `(31, 10, 128, 30)`，`WorldMapOverviewTests.cs` 补充三张专属切图名断言。
 - **M2-Tide 灵潮珍兽潮增量闭环（把灵潮真正打通到野外捕宠生态，零新协议/零新表结构）**：
   - 复用 `Pet.xlsx` 中全部 3 只 `cultivation_tier=3` 珍稀常规灵宠 + 6 只既有全动画灵宠，向 `Monster.xlsx`（`211..219`，捕获率 `50%–55%`）、`Dungeon.xlsx`（`212` 八景岛·岚铎仙/砚羽灵/绯耳灵、`213` 月汐湾·苍嶂麟/赤砂魁/烛翎、`215` 碧渊水宫·月弦师/霜团貂/绛铃）、`PlayMode.xlsx`（`412/413/415`）追加数据并全量导出（Deploy 14 OK）。
-  - C++ `PlayerBattleSystem::IsWorldTideActiveOnScene` 与 Java `PlayerBattleService.isWorldTideActiveOnScene` 在 `PrepareBattle` 中对 `Dungeon 210..219` 叠加校验灵潮激活窗口（休潮期或非灵潮图回 `kFeatureUnavailable` 零写锁，常态 `202/203/205` 不受限）；Unity `WorldMapOverviewModels`、`CityTravelWindow`、`CityTravelUiRoot` 动态切换大地图抽屉灵潮珍兽预告与野外浮条「灵潮珍兽现身 / 寻潮遇兽」（派发 `212/213/215`，`EndsAtMs` 到点自动切回常态，预接可选 `wild_habitat_{bar,btn,icon}_tide` 切图并缺图自动回落常态 3 图）。
+  - C++ `PlayerBattleSystem::IsWorldTideActiveOnScene` 与 Java `PlayerBattleService.isWorldTideActiveOnScene` 在 `PrepareBattle` 中对 `Dungeon 210..219` 叠加校验灵潮激活窗口（休潮期或非灵潮图回 `kFeatureUnavailable` 零写锁，常态 `202/203/205` 不受限）；Unity `WorldMapOverviewModels`、`CityTravelWindow`、`CityTravelUiRoot` 动态切换大地图抽屉灵潮珍兽预告与野外浮条「灵潮珍兽现身 / 寻潮遇兽」（派发 `212/213/215`，`EndsAtMs` 到点自动切回常态）；Codex 交付的 3 张灵潮态专属无字切图（Azure `image/main@064a90bf`，`D:\work\image\designs\world-map-habitat-tide-ui\`）已逐字节 SHA-256 核验落盘至 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/{wild_habitat_bar_tide,wild_habitat_btn_tide,wild_habitat_icon_tide}.png` 并配齐无冲突 `.meta`（`32/18/32/18`、`24/12/24/12`、`0/0/0/0`）。
   - 增量验证：C++ `test_cpp_no_raw_pointer_member.py` 13/13、`check_log_text_english.py` exit 0、`scene.lib` / `scene.exe` / `bag_test.exe` 均 0 错误编译链接、`bag_test.exe` `PrepareWildPetHabitatRequiresMatchingWildScene` 等 5 项备战测试 **5/5 PASS**、`turn_battle_engine_test.exe` `TableBattleDataProviderTest.*` **9/9 PASS**；Go `match/internal/catalog` **PASS**；Java `game-table` / `game-battle-engine` `TableBattleDataTest` / `game-scene` `PrepareBattleTest` 2 项栖息地与灵潮窗口单测 **2/2 PASS**；Unity `sync_tables.ps1` 81/81、`client_compile_check.ps1` **781 文件 0 错误**、Tianyong 66 测试文件 0 错误编译且 .NET 实跑 M2-Tide 全量纯 C# 断言 **PASS**；三仓均未执行 `git commit` / `git push`。
 
 
@@ -5474,3 +5474,37 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - [TravelPassClientTests.cs](../../mmorpg-client/Assets/Tests/EditMode/Battle/TravelPassClientTests.cs)：将 `TravelPassV1` 断言由旧版 8 张草稿边框（含不存在的 `hero_banner`）更新为 12 张正式切图及其精确 `spriteBorder`（共 69 项）。
   - [scene_travel_pass.py](../../xuanming-server-mmo-python/src/xuanming/nodes/scene_travel_pass.py)：将活动入口 `900001..900003` 的 `icon_key` 对齐 C++ 权威路径 `UI/Ugui/TravelPassV1/{travel_pass_card_icon,showcase_appearance_icon,showcase_spirit_shop_icon}`。
 - **验证与提交状态**：`client_compile_check.ps1` exit 0（792 文件 0 错误）、`run_activity_tests.ps1 -IncludePlayerFeaturesRegression` 61/61 PASS、`TravelPassClientTests` 5 项纯 C# 逻辑单测 PASS（`Resources.Load` 断言项需在 Unity Editor EditMode 下执行，另以脚本核验 12/12 资产路径与 `.meta` `spriteBorder` 精确匹配）、Python `tests/test_cpp_wt_travel_pass.py` 3/3 PASS；未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：《群仙问道赛》V3+V4 29 枚正式 UI 美术切片核验同步与 UGUI 对比度/44px 热区收口
+
+- **美术正式包核验与同步（`D:\work\image\designs\season-team-tournament-v3` `711b7903122` → `mmorpg-client`）**：
+  - 拉取并逐枚核对 `source/asset-manifest.json` 与 `UNITY-HANDOFF.md` 交付的全部 29 枚透明 RGBA8 PNG 切片；覆盖客户端工作区中 8 枚旧版差异切片（`e/predict-pick.png`、`e/predict-panel.png`、`e/predict-hit.png`、`e/predict-miss.png`、`f/mvp-seal.png`、`f/mvp-card-bg.png`、`h/ban-seal.png`、`i/highlights-panel.png`），实现 29/29 与 `image@711b7903122` 及客户端 `HEAD` 逐字节 SHA-256 一致；核验 `TournamentV3/` 及 8 个子目录共 9 份目录 `.meta`、29 份 Sprite `.meta`（`textureType=8`、`spriteMode=1`、`alphaIsTransparency=1`、`rect` 像素尺寸 29/29 精确匹配）；未改动 V1/V2 美术切片与主城底图。
+- **按交接单与视觉走查微调 UGUI（`mmorpg-client`）**：
+  - [TournamentArtCatalog.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Tournament/TournamentArtCatalog.cs)：修复 `V3SkinnedButton` 在深玉底皮 `warmup-btn.png` 上误用深色 `JadeDeep` 文字的问题，统一使用暖金高亮 `PrimaryBtnText` 并增加左右雕饰安全内距。
+  - [TournamentSpectateCheerOverlay.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Tournament/TournamentSpectateCheerOverlay.cs)：修复观战顶部 `v3-d-warmup-badge` 深玉胶囊上误用深色 `JadeDeep` 文字的问题，改为 `PrimaryBtnText` 搭配左右安全内距与自适应字号。
+  - [TournamentUiRoot.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Tournament/TournamentUiRoot.cs)：修复 BO3 灵脉禁选提交成功后立即关窗导致看不到「禁」印与重算 3 局序列的问题，改为 `BanLeyline` 窗内实时刷新。
+  - [TournamentWindow.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Tournament/TournamentWindow.cs)：
+    - 对阵树节点扩展至 `364×172`，队伍行按 `44px` 间距排布，将 `v3-e-predict-pick`（原生 `84×32`）与 `v3-f-mvp-seal`（`36×36`）外包透明 `≥44px` `Button` 点击热区并统一已猜/未猜态为深玉暖金高对比文字（已猜加金边高亮框与 `✓已猜(N)`），节点底栏按钮与全部 8 处弹窗关闭键/操作键均补齐至 `≥44px` 触控高度；
+    - 热身约战弹窗对齐 `warmup-badge`（原生 `140×36`）与 `warmup-btn`（原生 `196×48`）及灵脉单选键 `44px` 高度；
+    - MVP 高光战报卡无有效公开回放时保留禁用态按钮（「暂无公开战报」）；《本季名局录》每行补齐双方战旗徽标（`EmbA` + `EmbB`）；
+    - 移除《神机问道榜》加载文案中触发合规词红线的字样（「绝无付费押注」→「全程免费参与」）。
+- **验证与提交状态**：`client_compile_check.ps1` **exit=0（792 文件 0 错误）**；EditMode `TournamentClientTests`（5/5）+ `TournamentUiModelTests`（6/6）= **11/11 PASS**；全仓 `.meta` GUID 扫描 **12,408/12,408 零重复**；8 个 Tournament 脚本 WebGL2/IL2CPP 禁用 API **0 命中**、合规红线词 **0 命中**；未在 Unity Editor 真机双分辨率下截图验收；各仓库均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：卷 7《兵法叠势卷》7 张 Codex 透明图标导入客户端并完成 SHA-256 / Sprite `.meta` 核验
+
+- **美术导入与校验（`mmorpg-client`）**：
+  - 从 `D:\work\image\designs\growing-passive-skills-v2-20261126\`（Azure commit `3ca9e66758ba7bf6c11d2ecd495198ef698a1e40`）逐张看图并核验 `manifest.json`（7/7 RGBA8 PNG-32 尺寸与 SHA-256 逐字节一致），同步落盘：
+    - `Assets/Resources/UI/Skills/{12023..12028}.png`（6 张 `512×512`，同时供技能面板、典籍制书、灵宠技能与战斗头顶 Buff 图标回退复用）；
+    - `Assets/Resources/UI/Ugui/Skills/Scrolls/scroll_7.png`（1 张 `128×128`，典籍制书第 7 卷宗切页图标）。
+  - 核验全部 7 份既有 `.meta` 均为 Unity `Sprite`（`textureType=8`, `spriteMode=1`, `alphaIsTransparency=1`, rect 尺寸匹配），未覆盖 GUID；`client_compile_check.ps1` **exit 0（792 文件 0 错误）**；三仓均未 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：游历手记按 `team-ui-v2` 修订版切图（`c9611bc5`）同步与标题/按钮精修
+
+- **修订版美术同步（Azure `image/main` 提交 `c9611bc5d664d448c5b12e523bf14428278f4152`）**：
+  - 从远端安全拉取并解码 `designs/travel-pass-v1/` 全部 12 张修订 PNG-32（8 张面板按 `team-ui-v2` 纸绢卷云金玉边饰重切，4 枚图标沿用确认稿），同步至 `mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/` 并清理并行会话混入的旧版 `hero_banner.{png,png.meta}`；24/24 文件与 `c9611bc5d664d448c5b12e523bf14428278f4152` 逐字节 SHA-256 一致、四角 Alpha 全 `0`、`frame_travel_qingyun_s1.png` 中央 176 px 透明中孔最大 Alpha=`0`。
+- **界面精修（`mmorpg-client`）**：
+  - [TravelPassWindow.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/TravelPass/TravelPassWindow.cs)：结合修订版 `title_plate.png` 卷云端头与底部垂穗，将 `_titleText` 收束于 `(76, 14, 368, 68)`（字号 32）；按修订预览 `main-layout-2560x1080.png` 调整横幅右侧主次按钮为「一键领取」（次按钮，`1188, 41, 240×66`）与「解锁典藏」（主按钮，`1444, 41, 276×66`）。
+- **验证**：`client_compile_check.ps1` exit 0、`run_activity_tests.ps1 -IncludePlayerFeaturesRegression` 61/61 PASS、`TravelPassClientTests` 5 项纯 C# 单测 PASS、12 项 `TravelPassV1` 资源与 `spriteBorder` 断言与磁盘 `.meta` 12/12 精确匹配；未执行 `git commit` / `git push`。

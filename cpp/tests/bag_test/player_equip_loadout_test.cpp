@@ -28,7 +28,7 @@
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/database/mysql_database_table.pb.h"
 #include "proto/scene/player_bag.pb.h"
-#include "services/scene/battle/comp/in_battle_comp.h"
+#include "proto/common/component/battle_comp.pb.h"
 #include "services/scene/player/comp/last_persisted_snapshot_comp.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
@@ -73,9 +73,10 @@ constexpr std::array<uint32_t, 8> kFormalConfigIds = {
 };
 
 int gPersistCalls = 0;
-void RecordPersistForTest(entt::entity)
+bool RecordPersistForTest(entt::entity)
 {
 	++gPersistCalls;
+	return true;
 }
 
 ItemComp MakeEquipItem(uint64_t guid, uint32_t configId, uint32_t enhanceLevel = 0)
@@ -488,7 +489,8 @@ TEST_F(PlayerEquipLoadoutTest, TieredUnlockTalismanBindDiamondAndMaxCap)
 		UnlockEquipLoadoutResponse resp;
 		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
 		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(2u, resp.unlocked_scheme_count());
+		EXPECT_EQ(2u, resp.result_unlocked_count());
+		EXPECT_EQ(2u, resp.current_unlocked_count());
 		EXPECT_EQ(0u, resp.used_item_config_id());
 		EXPECT_EQ(40u, resp.spent_bind_diamond());
 		EXPECT_EQ(20u, resp.spent_diamond());
@@ -505,7 +507,7 @@ TEST_F(PlayerEquipLoadoutTest, TieredUnlockTalismanBindDiamondAndMaxCap)
 		UnlockEquipLoadoutResponse resp;
 		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
 		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(3u, resp.unlocked_scheme_count());
+		EXPECT_EQ(3u, resp.result_unlocked_count());
 		EXPECT_EQ(equiploadout::kUnlockItemConfigId, resp.used_item_config_id());
 		EXPECT_EQ(0u, resp.spent_diamond());
 		EXPECT_EQ(0u, Inventory().GetTotalItemCount(equiploadout::kUnlockItemConfigId));
@@ -532,7 +534,7 @@ TEST_F(PlayerEquipLoadoutTest, TieredUnlockTalismanBindDiamondAndMaxCap)
 		UnlockEquipLoadoutResponse resp;
 		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
 		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(4u, resp.unlocked_scheme_count());
+		EXPECT_EQ(4u, resp.result_unlocked_count());
 		EXPECT_EQ(180u, resp.spent_diamond());
 		EXPECT_EQ(500u, CurrencySystem::GetBalance(player_, kCurrencyBindDiamond));
 	}
@@ -546,7 +548,7 @@ TEST_F(PlayerEquipLoadoutTest, TieredUnlockTalismanBindDiamondAndMaxCap)
 		UnlockEquipLoadoutResponse resp;
 		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
 		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(5u, resp.unlocked_scheme_count());
+		EXPECT_EQ(5u, resp.result_unlocked_count());
 		EXPECT_EQ(240u, resp.spent_diamond());
 	}
 

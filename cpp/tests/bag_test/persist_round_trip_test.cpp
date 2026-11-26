@@ -768,7 +768,7 @@ protected:
         loadoutScheme->set_linked_attribute_scheme_id(1);
         auto *slotBinding = loadoutScheme->add_slots();
         slotBinding->set_slot(3);
-        slotBinding->set_item_guid(kBagItemGuid);
+        slotBinding->set_item_guid((uint64_t{1} << 60) + 999);
 
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());

@@ -307,9 +307,9 @@
 
 #### 2) 设计分析
 - **核心动作（零重复造交易系统，直接复用现有背包 + 面对面交易 + 集市托管）**：
-  1. **封卷入包（`SealSkillBook`）**：仅允许 `book.bound() == false && book.rarity_tier() == 0` 的书架技能书执行；原子从 `PlayerCraftComp.skill_books` 移除该 `book_id`，并在人物背包创建 1 枚不可堆叠的实体道具 `3411 封卷道籍`（`ItemComp.bound = false`，携带 `SealedSkillBookData { skill_table_id, scroll_id, rarity_tier, crafter_player_id, crafter_name }`）。
-  2. **自由流通**：`3411 封卷道籍` 作为标准 `ItemComp` 实例，天然复用 `bag_marshal.cpp` 完整存盘透传、邮件附件、面对面交易与聚宝斋集市托管，不另写第二套交易管线。
-  3. **开卷入书架（`UnsealSkillBook`）**：从人物背包原子销毁指定 `item_id` 的 `3411 封卷道籍`，按其 `SealedSkillBookData` 写回 `PlayerCraftComp.skill_books`（分配新 `book_id`，`bound` 继承 `ItemComp.bound()` 防洗白），随后即可研习或拆页。
+  1. **封卷入包（`SealSkillBook`）**：仅允许 `book.bound() == false && book.rarity_tier() == 0` 的书架技能书执行；原子从 `PlayerCraftComp.skill_books` 移除该 `book_id`，并在人物背包创建 1 枚不可堆叠的实体道具 `3414 封卷道籍`（`ItemComp.bound = false`，携带 `SealedSkillBookData { skill_table_id, scroll_id, rarity_tier, crafter_player_id, crafter_name }`）。
+  2. **自由流通**：`3414 封卷道籍` 作为标准 `ItemComp` 实例，天然复用 `bag_marshal.cpp` 完整存盘透传、邮件附件、面对面交易与聚宝斋集市托管，不另写第二套交易管线。
+  3. **开卷入书架（`UnsealSkillBook`）**：从人物背包原子销毁指定 `item_id` 的 `3414 封卷道籍`，按其 `SealedSkillBookData` 写回 `PlayerCraftComp.skill_books`（分配新 `book_id`，`bound` 继承 `ItemComp.bound()` 防洗白），随后即可研习或拆页。
 
 #### 3) 思想分析
 - **KISS / 复用优先**：`bag_marshal.cpp` 已整份拷贝 `ItemEntry.instance`，`go/trade` 与集市已整份托管 `ItemComp` 快照；在 `ItemComp` 挂 1 个不可堆叠子消息 `SealedSkillBookData`，即可零侵入接入整套经济/交易/防篡改基础设施。
@@ -326,9 +326,9 @@
 - **美术侧**：仅需 1 张 `512×512` 透明底道具图标（`item_sealed_skill_book.png`），界面直接复用既有典籍制书书架与背包浮窗，无需新整屏。
 
 #### 6) 执行步骤（待并行会话提交后按序执行）
-1. **协议与配表**：`item_base_comp.proto` 新增 `SealedSkillBookData sealed_skill_book = 7`；`player_skill.proto` 追加 `SealSkillBook` / `UnsealSkillBook` 两个 RPC；`client_request_ledger_comp.proto` 增加对应去重枚举；`data/Item.xlsx` 新增 `3411 封卷道籍`（`max_stack_size = 1`, `icon_key = UI/Icons/item_sealed_skill_book`，同时顺手修正 `3410` 的 `icon_key` 为 `UI/Ugui/EconomyTradeV2/icon_inherit_talisman`）；`data/MessageLimiter.xlsx` 为两新 RPC 补限流；执行协议生成、导表与 `persist_schema_gen` 同步。
-2. **服务端实现与单测**：更新 `ItemStore::IsIndependentInstance`、`PlayerCraftSystem::SealSkillBook / UnsealSkillBook` 及 Scene Handler 路由；在 `player_craft_quality_test.cpp` 补充封卷/开卷往返、绑定/稀世拦截、背包满回滚、幂等重放与预留拦截单测；同步核对 `go/trade` 与 Java `PARITY.md`。
-3. **客户端接入与单测**：执行 `gen_proto.ps1`、`gen_messageids.ps1`、`sync_tables.ps1`；在 `SkillCraftClient` 接双 RPC，`SkillCraftWindow` 书架未绑定常规书新增「封卷入包」按钮并展示背包中待开卷的 `3411` 条目（点击「开卷入书架」），`EquipmentScreenModel` / `EquipTooltip` 展示封卷技能与署名信息；导入 Codex 交付的 `item_sealed_skill_book.png`；跑通 `client_compile_check.ps1` 与 NUnit 单测。
+1. **协议与配表**：`item_base_comp.proto` 新增 `SealedSkillBookData sealed_skill_book = 7`；`player_skill.proto` 追加 `SealSkillBook` / `UnsealSkillBook` 两个 RPC；`client_request_ledger_comp.proto` 增加 `sealed_book_item_id = 37`；`data/Item.xlsx` 新增 `3414 封卷道籍`（`max_stack_size = 1`, `icon_key = UI/Icons/item_sealed_skill_book`，同时顺手修正 `3410` 的 `icon_key` 为 `UI/Ugui/EconomyTradeV2/icon_inherit_talisman`）；`data/MessageLimiter.xlsx` 为两新 RPC 补限流；执行协议生成、导表与 `persist_schema_gen` 同步。
+2. **服务端实现与单测**：更新 `ItemStore::IsIndependentInstance`、`PlayerEquipSystem::FillItemDisplay`、`PlayerCraftSystem::SealSkillBook / UnsealSkillBook` 及 Scene Handler 路由；在 `player_craft_quality_test.cpp` 补充封卷/开卷往返、绑定/稀世拦截、背包满回滚、幂等重放与预留拦截单测；同步核对 `go/trade` 与 Java `PARITY.md`。
+3. **客户端接入与单测**：执行 `gen_proto.ps1`、`gen_messageids.ps1`、`sync_tables.ps1`；在 `SkillCraftClient` 接双 RPC，`SkillCraftWindow` 书架未绑定常规书新增「封卷入包」按钮并展示背包中待开卷的 `3414` 条目（点击「开卷入书架」），`EquipmentScreenModel` / `EquipTooltip` 展示封卷技能与署名信息；导入 Codex 交付的 `item_sealed_skill_book.png`；跑通 `client_compile_check.ps1` 与 NUnit 单测。
 
 
 

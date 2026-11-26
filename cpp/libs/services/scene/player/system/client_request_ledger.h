@@ -68,6 +68,8 @@ enum class ClientRequestKind : uint8_t
 	kEquipSkillVfx = 19,              // SceneAppearanceClientPlayer.EquipSkillVfx:耗券永久解锁并启用技能特效
 	kEquipLoadoutUnlock = 20,         // SceneBagClientPlayer.UnlockEquipLoadout:付费或耗扩容符解锁装备方案位
 	kClaimRewardedAd = 21,            // SceneRewardedAdClientPlayer.ClaimRewardedAd:激励视频完播领绑定银两
+	kSealSkillBook = 22,              // SceneSkillClientPlayer.SealSkillBook:书架可交易常规技能书封卷入包
+	kUnsealSkillBook = 23,            // SceneSkillClientPlayer.UnsealSkillBook:背包封卷道籍开卷回书架
 	kCount
 };
 
@@ -91,7 +93,8 @@ inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhanc
 														  "buy_spirit_shop_goods",
 														  "unlock_travel_pass_premium", "claim_travel_pass_reward",
 														  "equip_pet_cosmetic", "equip_skill_vfx",
-														  "equip_loadout_unlock", "claim_rewarded_ad"};
+														  "equip_loadout_unlock", "claim_rewarded_ad",
+														  "seal_skill_book", "unseal_skill_book"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -148,6 +151,7 @@ struct ClientRequestResult
 	uint64_t equipLoadoutSpentDiamond{0};
 	uint32_t rewardedAdCurrencyType{0};
 	uint64_t rewardedAdAmount{0};
+	uint64_t sealedBookItemId{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

@@ -21,6 +21,7 @@ inline constexpr uint32_t kRareScrollInkConfigId = 3408;
 inline constexpr uint32_t kUnsealTalismanConfigId = 3409;   // 解封剥离符：清空绑定养成，仅恢复纯 T 原胚。
 inline constexpr uint32_t kInheritTalismanConfigId = 3410;  // 流派副套继承符：无损继承强化等级至同部位副套（目标转绑定）。
 inline constexpr uint32_t kBoundArtifactVoucherConfigId = 3404;
+inline constexpr uint32_t kSealedSkillBookConfigId = 3414;  // 封卷道籍：书架内可交易常规技能书封卷入包实体道具（不可堆叠、可流通）。
 
 // 策划口径永久仅自用绑定道具（商店 / 邮件 / 系统入包均强制 bound = true，禁止经任何发奖通道洗成可交易）。
 inline constexpr bool IsAlwaysBoundItem(uint32_t configId) {

@@ -727,4 +727,157 @@ TEST_F(PlayerCraftQualityTest, AlwaysBoundRuleAndBatchInitCreditPreserveBoundIso
     EXPECT_EQ(0u, InventoryOf(buyer).GetTotalTradableItemCount(equipcraft::kRareScrollInkConfigId));
 }
 
+TEST_F(PlayerCraftQualityTest, SealAndUnsealSkillBookPreserveIdentitySignatureBoundAndIdempotency) {
+    // 1. 让 master 成为制卷宗师，给 buyer 用可交易残页拓印 2 本可交易常规书 + 1 本绑定常规书 + 1 本稀世书。
+    tlsEcs.actorRegistry.get<PlayerCraftComp>(master).set_scroll_mastery_exp(60);
+    SetCraftProxyStallRequest openReq;
+    openReq.set_open(true);
+    openReq.set_proxy_scroll_fee_gold(60);
+    SetCraftProxyStallResponse openResp;
+    PlayerCraftSystem::SetProxyStall(master, openReq, openResp);
+    ASSERT_FALSE(openResp.has_error_message()) << openResp.DebugString();
+
+    GrantItem(buyer, equipcraft::kScrollFragmentConfigId, 100, false);
+    GrantItem(buyer, equipcraft::kRareScrollPageConfigId, 1, false);
+    GrantItem(buyer, equipcraft::kRareScrollInkConfigId, 1, true);
+
+    auto craftBook = [&](CraftSkillBookRequest::CraftMode mode, uint32_t scrollId, uint32_t targetSkillId,
+                         uint64_t expectedRev, uint64_t proxyId, uint32_t forcedRoll) {
+        gForcedCraftRoll = forcedRoll;
+        CraftSkillBookRequest req;
+        req.set_mode(mode);
+        req.set_scroll_id(scrollId);
+        req.set_target_skill_table_id(targetSkillId);
+        req.set_expected_revision(expectedRev);
+        req.set_client_request_id(++nextKey);
+        req.set_proxy_master_player_id(proxyId);
+        CraftSkillBookResponse resp;
+        PlayerCraftSystem::CraftSkillBook(buyer, req, resp);
+        EXPECT_FALSE(resp.has_error_message()) << resp.DebugString();
+        return resp.crafted_book();
+    };
+
+    // 宗师代制 2 本不同常规可交易书（12020 愈战愈勇、12021 深谋远虑）
+    const auto tradableBook1 = craftBook(CraftSkillBookRequest::RANDOM_REGULAR, 3, 0, 0, kMasterId, 0);
+    const auto tradableBook2 = craftBook(CraftSkillBookRequest::RANDOM_REGULAR, 3, 0, 1, kMasterId, 1);
+    ASSERT_FALSE(tradableBook1.bound());
+    ASSERT_FALSE(tradableBook2.bound());
+    ASSERT_EQ("欧冶子", tradableBook1.crafter_name());
+
+    // 稀世书（绑定）不可封卷
+    const auto rareBook = craftBook(CraftSkillBookRequest::TARGETED_RARE, 2, 10041, 2, 0, 0);
+    ASSERT_TRUE(rareBook.bound());
+    {
+        SealSkillBookRequest badRare;
+        badRare.set_book_id(rareBook.book_id());
+        badRare.set_expected_revision(3);
+        badRare.set_client_request_id(++nextKey);
+        SealSkillBookResponse badResp;
+        PlayerCraftSystem::SealSkillBook(buyer, badRare, badResp);
+        EXPECT_TRUE(badResp.has_error_message());
+        EXPECT_EQ(kInvalidParameter, badResp.error_message().id());
+    }
+
+    // 2. 封卷两本可交易常规书入包：各自独立占 1 格（绝不并堆），携带完整技能与宗师署名，支持幂等重放。
+    SealSkillBookRequest seal1;
+    seal1.set_book_id(tradableBook1.book_id());
+    seal1.set_expected_revision(3);
+    seal1.set_client_request_id(++nextKey);
+    SealSkillBookResponse seal1Resp;
+    PlayerCraftSystem::SealSkillBook(buyer, seal1, seal1Resp);
+    ASSERT_FALSE(seal1Resp.has_error_message()) << seal1Resp.DebugString();
+    EXPECT_FALSE(seal1Resp.replayed());
+    EXPECT_NE(0u, seal1Resp.item_id());
+    EXPECT_EQ(tradableBook1.skill_table_id(), seal1Resp.skill_table_id());
+
+    // 同键重放：不重复创建背包道具，原样返回首次 item_id。
+    SealSkillBookResponse seal1Replay;
+    PlayerCraftSystem::SealSkillBook(buyer, seal1, seal1Replay);
+    ASSERT_FALSE(seal1Replay.has_error_message());
+    EXPECT_TRUE(seal1Replay.replayed());
+    EXPECT_EQ(seal1Resp.item_id(), seal1Replay.item_id());
+    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
+
+    // 封卷第 2 本，校验独立实例与 BagItemInfo 投影。
+    SealSkillBookRequest seal2;
+    seal2.set_book_id(tradableBook2.book_id());
+    seal2.set_expected_revision(4);
+    seal2.set_client_request_id(++nextKey);
+    SealSkillBookResponse seal2Resp;
+    PlayerCraftSystem::SealSkillBook(buyer, seal2, seal2Resp);
+    ASSERT_FALSE(seal2Resp.has_error_message()) << seal2Resp.DebugString();
+    EXPECT_NE(seal1Resp.item_id(), seal2Resp.item_id());
+    EXPECT_EQ(2u, InventoryOf(buyer).GetTotalTradableItemCount(equipcraft::kSealedSkillBookConfigId));
+
+    const auto* sealedItem1 = InventoryOf(buyer).GetItemCompByGuid(seal1Resp.item_id());
+    ASSERT_NE(nullptr, sealedItem1);
+    EXPECT_TRUE(ItemStore::IsIndependentInstance(*sealedItem1));
+    EXPECT_FALSE(sealedItem1->bound());
+    EXPECT_TRUE(sealedItem1->has_sealed_skill_book());
+    EXPECT_EQ(tradableBook1.skill_table_id(), sealedItem1->sealed_skill_book().skill_table_id());
+    EXPECT_EQ("欧冶子", sealedItem1->sealed_skill_book().crafter_name());
+
+    BagItemInfo display;
+    PlayerEquipSystem::FillItemDisplay(*sealedItem1, display);
+    EXPECT_TRUE(display.has_sealed_skill_book());
+    EXPECT_EQ(tradableBook1.skill_table_id(), display.sealed_skill_book().skill_table_id());
+    EXPECT_EQ(3u, display.sealed_skill_book().scroll_id());
+    EXPECT_EQ("欧冶子", display.sealed_skill_book().crafter_name());
+    EXPECT_EQ("欧冶子", display.crafter_name());
+
+    // 3. 模拟交易过户到 master（把第 1 本封卷道籍原样放进 master 背包，开卷回书架后保留技能/署名且支持重放）。
+    InitItemParam transferred;
+    transferred.itemPBComp = *sealedItem1;
+    transferred.itemPBComp.set_item_id(kInvalidGuid);
+    ASSERT_EQ(kSuccess, BagService::AddItem(master, InventoryOf(master), transferred));
+    Guid masterSealedId = 0;
+    InventoryOf(master).ForEachItem([&](Guid guid, const ItemComp& it) {
+        if (it.config_id() == equipcraft::kSealedSkillBookConfigId) masterSealedId = guid;
+    });
+    ASSERT_NE(0u, masterSealedId);
+
+    UnsealSkillBookRequest unsealReq;
+    unsealReq.set_item_id(masterSealedId);
+    unsealReq.set_expected_revision(0);
+    unsealReq.set_client_request_id(++nextKey);
+    UnsealSkillBookResponse unsealResp;
+    PlayerCraftSystem::UnsealSkillBook(master, unsealReq, unsealResp);
+    ASSERT_FALSE(unsealResp.has_error_message()) << unsealResp.DebugString();
+    EXPECT_FALSE(unsealResp.replayed());
+    EXPECT_EQ(tradableBook1.skill_table_id(), unsealResp.unsealed_book().skill_table_id());
+    EXPECT_EQ("欧冶子", unsealResp.unsealed_book().crafter_name());
+    EXPECT_FALSE(unsealResp.unsealed_book().bound());
+    EXPECT_EQ(0u, InventoryOf(master).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
+
+    // 开卷同键重放：不重复加书。
+    UnsealSkillBookResponse unsealReplay;
+    PlayerCraftSystem::UnsealSkillBook(master, unsealReq, unsealReplay);
+    ASSERT_FALSE(unsealReplay.has_error_message());
+    EXPECT_TRUE(unsealReplay.replayed());
+    EXPECT_EQ(unsealResp.unsealed_book().book_id(), unsealReplay.unsealed_book().book_id());
+    EXPECT_EQ(1, unsealReplay.state().skill_books_size());
+
+    // 4. 防洗白：若 3414 封卷道籍本身 bound=true，开卷回书架必须继承 bound=true，且禁止再封卷。
+    auto* sealedItem2 = InventoryOf(buyer).GetItemCompByGuid(seal2Resp.item_id());
+    ASSERT_NE(nullptr, sealedItem2);
+    sealedItem2->set_bound(true);
+    UnsealSkillBookRequest unsealBoundReq;
+    unsealBoundReq.set_item_id(seal2Resp.item_id());
+    unsealBoundReq.set_expected_revision(5);
+    unsealBoundReq.set_client_request_id(++nextKey);
+    UnsealSkillBookResponse unsealBoundResp;
+    PlayerCraftSystem::UnsealSkillBook(buyer, unsealBoundReq, unsealBoundResp);
+    ASSERT_FALSE(unsealBoundResp.has_error_message()) << unsealBoundResp.DebugString();
+    EXPECT_TRUE(unsealBoundResp.unsealed_book().bound());
+
+    SealSkillBookRequest resealBound;
+    resealBound.set_book_id(unsealBoundResp.unsealed_book().book_id());
+    resealBound.set_expected_revision(6);
+    resealBound.set_client_request_id(++nextKey);
+    SealSkillBookResponse resealResp;
+    PlayerCraftSystem::SealSkillBook(buyer, resealBound, resealResp);
+    EXPECT_TRUE(resealResp.has_error_message());
+    EXPECT_EQ(kInvalidParameter, resealResp.error_message().id());
+}
+
 } // namespace

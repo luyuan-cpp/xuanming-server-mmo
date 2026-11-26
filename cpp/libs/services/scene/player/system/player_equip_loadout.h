@@ -20,7 +20,7 @@ class UnlockEquipLoadoutResponse;
 class PlayerEquipLoadoutSystem
 {
 public:
-	using PersistFn = void (*)(entt::entity);
+	using PersistFn = bool (*)(entt::entity);
 	using NameFilterFn = std::function<bool(std::string_view)>;
 
 	static uint32_t Get(entt::entity player, GetEquipLoadoutsResponse &response);

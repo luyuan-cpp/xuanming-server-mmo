@@ -125,6 +125,7 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.equipLoadoutSpentDiamond = record->equip_loadout_spent_diamond();
 	result.rewardedAdCurrencyType = record->rewarded_ad_currency_type();
 	result.rewardedAdAmount = record->rewarded_ad_amount();
+	result.sealedBookItemId = record->sealed_book_item_id();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -178,6 +179,7 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_equip_loadout_spent_diamond(result.equipLoadoutSpentDiamond);
 	record->set_rewarded_ad_currency_type(result.rewardedAdCurrencyType);
 	record->set_rewarded_ad_amount(result.rewardedAdAmount);
+	record->set_sealed_book_item_id(result.sealedBookItemId);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }

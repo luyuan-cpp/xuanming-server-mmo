@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "schema_digest": "8a563f7a854d5bc4",
-  "version": 90,
-  "content_digest": "1e51de589add41ec5b98083cdde31f625cb6ff87c7c66aaf0ecb5f0acd28db10",
-  "generated_at": "2026-11-26T09:08:28Z",
+  "version": 91,
+  "content_digest": "ef7bef927f934f49b4ce785a6ec6a5ab9ac6813066fb12c2c1b3d0bdfa7557d8",
+  "generated_at": "2026-11-26T09:25:47Z",
   "source_rev": {
-    "commit": "88418681484a87cd95cea8d13c1d66d0b08a34b3",
+    "commit": "4c71d8095d0c9649b6f4b29d9757a58891c89732",
     "data_dirty": true
   },
   "table_count": 82,
@@ -1089,24 +1089,24 @@
       "name": "Item",
       "hot_reload": false,
       "ids_permanent": true,
-      "rows": 145,
+      "rows": 146,
       "source": {
         "file": "Item.xlsx",
-        "size": 15868,
-        "sha256": "40734e05a33f03595a2de7503c765310c8cbbb4f911d719cf06b746c6b45982e"
+        "size": 16043,
+        "sha256": "3c2a73ce783b5e0d0df8d63330e6253148bf8c3774eb88521d2e49f378228810"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "item.json",
-          "size": 58145,
-          "sha256": "27b16ad25ea0a50b9481ba3ff1407cc29cbc69bc375af0cb3e4d691f10131f38"
+          "size": 58693,
+          "sha256": "42a535c2513f89fc70836851d3c6ebb72bf972dc321ec3d5172bba78ecc2978f"
         },
         {
           "kind": "binary",
           "file": "item.pb",
-          "size": 13832,
-          "sha256": "7d6d186ec3ac6269f5ddd99fbdba3746aa13a96510dc19f3bda3908b3213039b"
+          "size": 14017,
+          "sha256": "48a6438960a80fc69cc2ea0b9e2b2143d85dcc6fc306c28778fd0403c6376607"
         }
       ]
     },
@@ -1114,24 +1114,24 @@
       "name": "MessageLimiter",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 118,
+      "rows": 120,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 6962,
-        "sha256": "a15700f112014e79a9e9e7e55dac5241683da1bb5e94d630b1c85ed40edc0cea"
+        "size": 7000,
+        "sha256": "6e7cd353f5923f58b291e5368ecfc48867c29b50014030d2c5a422150a265ecf"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 10547,
-          "sha256": "e4ca103e6da008ad5cff0dc28ed28e898781a31350764184ffe8016a5509d718"
+          "size": 10725,
+          "sha256": "432c44e6828ed8dae420774734fe98e6447bd9a82ab395b7a17b405c3e48061a"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 1396,
-          "sha256": "2a0e59616ebdf9640061d32ba19b62f1e2a24c7aabdd9b29d1db6a09b139b205"
+          "size": 1420,
+          "sha256": "9680402bbc0028bccbb71b1375dd56885c260f1e0b74ccc231a09a6abf401682"
         }
       ]
     },

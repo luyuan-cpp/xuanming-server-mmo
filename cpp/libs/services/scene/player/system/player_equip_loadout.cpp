@@ -25,6 +25,7 @@
 #include "player/system/equip_attribute_rules.h"
 #include "player/system/equip_loadout_rules.h"
 #include "player/system/player_attribute.h"
+#include "player/system/player_equip.h"
 #include "player/system/player_feature_snapshot.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
@@ -37,6 +38,7 @@
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/attribute_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -143,32 +145,45 @@ EquipLoadoutScheme *FindOrCreateScheme(PlayerEquipLoadoutComp &comp, uint32_t sc
 	return created;
 }
 
-uint32_t HighestQualityTierOf(const ItemComp &item)
-{
-	if (!item.has_equip())
-	{
-		return 0;
-	}
-	uint32_t best = 0;
-	for (const auto &affix : item.equip().fixed_affixes())
-	{
-		best = std::max(best, affix.quality_tier());
-	}
-	return best;
-}
-
 void FillSlotViewItemMeta(const ItemComp &item, EquipLoadoutSlotView &view)
 {
-	view.set_config_id(item.config_id());
+	auto *out = view.mutable_item();
+	out->Clear();
+	out->set_item_id(item.item_id());
+	out->set_config_id(item.config_id());
+	out->set_count(item.size());
+	out->set_bound(item.bound());
 	if (const auto *row = ItemRow(item.config_id()); row != nullptr)
 	{
-		view.set_item_name(row->name());
-		view.set_icon_key(row->icon_key());
+		out->set_max_stack(row->max_stack_size());
+		out->set_equip_kind(row->equip_kind());
+		out->set_name(row->name());
+		out->set_description(row->description());
+		out->set_icon_key(row->icon_key());
 	}
-	if (item.has_equip())
+	PlayerEquipSystem::FillItemDisplay(item, *out);
+}
+
+void FillSlotHeader(uint32_t slot, EquipLoadoutSlotView &view)
+{
+	view.set_slot(slot);
+	if (const auto [row, err] = EquipSlotTableManager::Instance().FindByIdSilent(slot); row != nullptr)
 	{
-		view.set_enhance_level(item.equip().enhance_level());
-		view.set_quality_tier(HighestQualityTierOf(item));
+		view.set_slot_name(row->name());
+		view.set_equip_kind(row->equip_kind());
+		return;
+	}
+	switch (slot)
+	{
+	case 3u: view.set_slot_name("武器"); view.set_equip_kind(11u); break;
+	case 4u: view.set_slot_name("帽子"); view.set_equip_kind(12u); break;
+	case 5u: view.set_slot_name("衣服"); view.set_equip_kind(13u); break;
+	case 6u: view.set_slot_name("鞋子"); view.set_equip_kind(14u); break;
+	case 7u: view.set_slot_name("首饰一"); view.set_equip_kind(15u); break;
+	case 8u: view.set_slot_name("首饰二"); view.set_equip_kind(15u); break;
+	case 9u: view.set_slot_name("法宝一"); view.set_equip_kind(16u); break;
+	case 10u: view.set_slot_name("法宝二"); view.set_equip_kind(16u); break;
+	default: break;
 	}
 }
 
@@ -278,9 +293,11 @@ void RequestUnlockPersist(entt::entity player, bool force)
 void FillUnlockAppliedReply(entt::entity player, const ClientRequestResult &result, bool replayed,
 							UnlockEquipLoadoutResponse &response)
 {
+	const auto &comp = tlsEcs.actorRegistry.get<PlayerEquipLoadoutComp>(player);
 	response.set_outcome(UnlockEquipLoadoutResponse::APPLIED);
 	response.set_replayed(replayed);
-	response.set_unlocked_scheme_count(result.equipLoadoutUnlockedCount);
+	response.set_result_unlocked_count(result.equipLoadoutUnlockedCount);
+	response.set_current_unlocked_count(equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count()));
 	response.set_used_item_config_id(result.equipLoadoutUsedItemId);
 	response.set_spent_bind_diamond(result.equipLoadoutSpentBindDiamond);
 	response.set_spent_diamond(result.equipLoadoutSpentDiamond);
@@ -340,9 +357,9 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 		return err;
 	}
 	const auto &comp = tlsEcs.actorRegistry.get<PlayerEquipLoadoutComp>(player);
-	const auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
-	const Bag &inventory = bags.bags[kInventory];
-	const Bag &equipment = bags.bags[kEquipment];
+	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+	Bag &inventory = bags.bags[kInventory];
+	Bag &equipment = bags.bags[kEquipment];
 
 	const uint32_t unlocked = equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count());
 	const uint32_t active = equiploadout::EffectiveActiveSchemeId(comp.active_scheme_id(), unlocked);
@@ -354,6 +371,8 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 	snapshot.set_state_version(version);
 	snapshot.set_unlock_item_config_id(equiploadout::kUnlockItemConfigId);
 	snapshot.set_unlock_item_owned(BagService::RemovableCount(player, inventory, equiploadout::kUnlockItemConfigId));
+	snapshot.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+	snapshot.set_bind_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
 
 	if (unlocked < equiploadout::kMaxSchemes)
 	{
@@ -392,10 +411,11 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 			}
 		}
 
+		uint32_t missingCount = 0;
 		for (const uint32_t slot : equiploadout::kFormalSlots)
 		{
 			auto *slotView = info->add_slots();
-			slotView->set_slot(slot);
+			FillSlotHeader(slot, *slotView);
 			const auto it = boundBySlot.find(slot);
 			if (it == boundBySlot.end() || it->second == 0)
 			{
@@ -417,8 +437,10 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 			else
 			{
 				slotView->set_status(EQUIP_LOADOUT_SLOT_MISSING_OR_STORED);
+				++missingCount;
 			}
 		}
+		info->set_missing_count(missingCount);
 	}
 
 	const uint32_t skillSchemes = PlayerSkillSystem::UnlockedLoadoutSchemeCount(player);
@@ -545,9 +567,9 @@ void PlayerEquipLoadoutSystem::Save(entt::entity player, const SaveEquipLoadoutR
 		return;
 	}
 
-	const auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
-	const Bag &inventory = bags.bags[kInventory];
-	const Bag &equipment = bags.bags[kEquipment];
+	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+	Bag &inventory = bags.bags[kInventory];
+	Bag &equipment = bags.bags[kEquipment];
 
 	std::map<uint32_t, uint64_t> validatedSlots;
 	if (request.capture_current_equipped())
@@ -1099,6 +1121,10 @@ void PlayerEquipLoadoutSystem::Unlock(entt::entity player, const UnlockEquipLoad
 		response.set_outcome(knownOutcome ? UnlockEquipLoadoutResponse::REJECTED
 										  : UnlockEquipLoadoutResponse::UNKNOWN);
 		response.mutable_error_message()->set_id(errorTip);
+		if (const auto *curComp = tlsEcs.actorRegistry.try_get<PlayerEquipLoadoutComp>(player); curComp != nullptr)
+		{
+			response.set_current_unlocked_count(equiploadout::EffectiveUnlockedCount(curComp->unlocked_scheme_count()));
+		}
 		if (BuildSnapshot(player, *response.mutable_snapshot()) != kSuccess)
 		{
 			response.clear_snapshot();

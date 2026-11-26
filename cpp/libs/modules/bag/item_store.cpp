@@ -360,7 +360,7 @@ bool ItemStore::IsMergeCandidate(const ItemComp &item, uint32_t maxStack)
 
 bool ItemStore::IsIndependentInstance(const ItemComp &item)
 {
-    return item.has_equip() || unknown_field_carry::CarriesNewerVersionFields(item);
+    return item.has_equip() || item.has_sealed_skill_book() || unknown_field_carry::CarriesNewerVersionFields(item);
 }
 
 void ItemStore::MergePartialStacks()

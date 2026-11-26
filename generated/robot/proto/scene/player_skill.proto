@@ -255,6 +255,37 @@ message DismantleSkillBookResponse {
   SkillCraftingStateSnapshot state = 5;
 }
 
+// 书架内未绑定常规技能书封卷入包（生成可交易 3414 封卷道籍实体道具，可上架聚宝斋/集市或面对面交易）。
+message SealSkillBookRequest {
+  uint64 book_id = 1;
+  uint64 expected_revision = 2;
+  uint64 client_request_id = 3;
+}
+
+message SealSkillBookResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  uint64 item_id = 4;        // 新生成的背包 3414 封卷道籍实例 ID。
+  uint32 skill_table_id = 5; // 封存的 SkillTable.id。
+  SkillCraftingStateSnapshot state = 6;
+}
+
+// 背包中的 3414 封卷道籍开卷回书架（继承原物品绑定性，防洗白）。
+message UnsealSkillBookRequest {
+  uint64 item_id = 1;
+  uint64 expected_revision = 2;
+  uint64 client_request_id = 3;
+}
+
+message UnsealSkillBookResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  CraftedSkillBookEntry unsealed_book = 4;
+  SkillCraftingStateSnapshot state = 5;
+}
+
 message SetCraftProxyStallRequest {
   bool open = 1;
   uint64 proxy_forge_fee_gold = 2;  // 合法范围 50..100 银两（关摊时可填 0）。
@@ -316,4 +347,6 @@ service SceneSkillClientPlayer {
   rpc ListCraftProxyStalls (ListCraftProxyStallsRequest) returns (ListCraftProxyStallsResponse);
   rpc SaveSkillLoadout (SaveSkillLoadoutRequest) returns (SaveSkillLoadoutResponse);
   rpc SwitchSkillLoadout (SwitchSkillLoadoutRequest) returns (SwitchSkillLoadoutResponse);
+  rpc SealSkillBook (SealSkillBookRequest) returns (SealSkillBookResponse);
+  rpc UnsealSkillBook (UnsealSkillBookRequest) returns (UnsealSkillBookResponse);
 }

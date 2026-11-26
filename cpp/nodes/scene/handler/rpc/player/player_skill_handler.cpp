@@ -171,3 +171,19 @@ void SceneSkillClientPlayerHandler::SwitchSkillLoadout(entt::entity player,const
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneSkillClientPlayerHandler::SealSkillBook(entt::entity player,const ::SealSkillBookRequest* request,
+	::SealSkillBookResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::SealSkillBook(player, *request, *response);
+///<<< END WRITING YOUR CODE
+}
+
+void SceneSkillClientPlayerHandler::UnsealSkillBook(entt::entity player,const ::UnsealSkillBookRequest* request,
+	::UnsealSkillBookResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::UnsealSkillBook(player, *request, *response);
+///<<< END WRITING YOUR CODE
+}

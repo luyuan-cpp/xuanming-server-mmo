@@ -848,6 +848,265 @@ void PlayerCraftSystem::DismantleSkillBook(entt::entity player, const DismantleS
     FillStateSnapshot(player, *response.mutable_state());
 }
 
+void PlayerCraftSystem::SealSkillBook(entt::entity player, const SealSkillBookRequest& request,
+                                      SealSkillBookResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (request.client_request_id() == 0 || request.book_id() == 0) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kSealSkillBook, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        response.set_item_id(first.sealedBookItemId);
+        response.set_skill_table_id(first.craftedSkillTableId);
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    if (craft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        ledger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != craft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+
+    const int bookIdx = FindBookIndex(craft, request.book_id());
+    if (bookIdx < 0) {
+        fail(kSkillBookNotFound);
+        return;
+    }
+    const CraftedSkillBookEntry book = craft.skill_books(bookIdx);
+    // 防洗白硬隔离：仅未绑定常规技能书允许封卷入包流通；稀世绝学或绑定书一律拒绝。
+    if (book.bound() || book.rarity_tier() != 0 || book.skill_table_id() == 0 ||
+        !SkillTableManager::Instance().Exists(book.skill_table_id())) {
+        fail(kInvalidParameter);
+        return;
+    }
+    const auto* sealedItemRow = ItemTableManager::Instance().FindByIdSilent(equipcraft::kSealedSkillBookConfigId).first;
+    if (sealedItemRow == nullptr || sealedItemRow->max_stack_size() != 1 || sealedItemRow->equip_kind() != 0) {
+        fail(kInvalidTableData);
+        return;
+    }
+
+    InitItemParam sealedParam;
+    sealedParam.itemPBComp.set_item_id(kInvalidGuid);
+    sealedParam.itemPBComp.set_config_id(equipcraft::kSealedSkillBookConfigId);
+    sealedParam.itemPBComp.set_size(1);
+    sealedParam.itemPBComp.set_bound(false);
+    auto* sealedData = sealedParam.itemPBComp.mutable_sealed_skill_book();
+    sealedData->set_skill_table_id(book.skill_table_id());
+    sealedData->set_scroll_id(book.scroll_id());
+    sealedData->set_rarity_tier(0);
+    if (!book.crafter_name().empty()) sealedData->set_crafter_name(book.crafter_name());
+    if (book.crafter_player_id() != 0) sealedData->set_crafter_player_id(book.crafter_player_id());
+
+    const auto ledgerBefore = ledger.SerializeAsString();
+    const uint64_t revBefore = craft.scroll_craft_revision();
+    Guid createdItemId = 0;
+    std::vector<GuidVector> written;
+    const auto exErr = BagService::ExchangeInventoryExact(
+        player, {}, {sealedParam}, {}, request.client_request_id(), "{\"operation\":\"skill_book_seal\"}", written,
+        [&](const std::vector<GuidVector>& createdGuids) -> uint32_t {
+            if (ledger.SerializeAsString() != ledgerBefore || craft.scroll_craft_revision() != revBefore ||
+                CheckWritable(player) != kSuccess) {
+                return kFeatureUnavailable;
+            }
+            if (createdGuids.size() != 1 || createdGuids[0].size() != 1 || createdGuids[0][0] == 0) {
+                return kServiceUnavailable;
+            }
+            const int currentIdx = FindBookIndex(craft, request.book_id());
+            if (currentIdx < 0) return kSkillBookNotFound;
+
+            createdItemId = createdGuids[0][0];
+            ClientRequestResult applied;
+            applied.craftedSkillBookId = book.book_id();
+            applied.craftedSkillTableId = book.skill_table_id();
+            applied.scrollCraftRevision = revBefore + 1;
+            applied.sealedBookItemId = createdItemId;
+
+            ClientRequestLedgerComp nextLedger = ledger;
+            if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                                 ClientRequestKind::kSealSkillBook, fingerprint, applied) ||
+                !client_request_ledger::Validate(nextLedger).empty()) {
+                return kServiceUnavailable;
+            }
+            RemoveBookAt(craft, currentIdx);
+            craft.set_scroll_craft_revision(revBefore + 1);
+            ledger.Swap(&nextLedger);
+            return kSuccess;
+        });
+
+    if (exErr != kSuccess) {
+        fail(exErr);
+        return;
+    }
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_book_sealed");
+    response.set_item_id(createdItemId);
+    response.set_skill_table_id(book.skill_table_id());
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
+void PlayerCraftSystem::UnsealSkillBook(entt::entity player, const UnsealSkillBookRequest& request,
+                                        UnsealSkillBookResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (request.client_request_id() == 0 || request.item_id() == 0) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kUnsealSkillBook, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        const auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+        if (const int idx = FindBookIndex(craft, first.craftedSkillBookId); idx >= 0) {
+            *response.mutable_unsealed_book() = craft.skill_books(idx);
+        } else {
+            response.mutable_unsealed_book()->set_book_id(first.craftedSkillBookId);
+            response.mutable_unsealed_book()->set_skill_table_id(first.craftedSkillTableId);
+        }
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+    if (craft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        craft.next_book_seq() == std::numeric_limits<uint64_t>::max() ||
+        ledger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != craft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+
+    const auto* item = inventory.GetItemCompByGuid(request.item_id());
+    if (item == nullptr) {
+        fail(kSkillBookNotFound);
+        return;
+    }
+    if (item->config_id() != equipcraft::kSealedSkillBookConfigId || item->size() != 1 ||
+        !item->has_sealed_skill_book()) {
+        fail(kInvalidParameter);
+        return;
+    }
+    const auto& sealed = item->sealed_skill_book();
+    if (sealed.skill_table_id() == 0 || sealed.rarity_tier() != 0 ||
+        !SkillTableManager::Instance().Exists(sealed.skill_table_id())) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (BagService::CheckRemovableInstances(player, inventory, {request.item_id()}) != BagService::RemovalVerdict::kEnough) {
+        fail(kFeatureUnavailable);
+        return;
+    }
+
+    const uint64_t bookId = craft.next_book_seq() == 0 ? 1u : craft.next_book_seq();
+    const uint64_t revBefore = craft.scroll_craft_revision();
+    CraftedSkillBookEntry newBook;
+    newBook.set_book_id(bookId);
+    newBook.set_skill_table_id(sealed.skill_table_id());
+    newBook.set_scroll_id(sealed.scroll_id());
+    newBook.set_rarity_tier(0);
+    // 防洗白：若封卷道具本身带绑定标记，开卷回书架后严格继承绑定。
+    newBook.set_bound(item->bound());
+    if (!sealed.crafter_name().empty()) newBook.set_crafter_name(sealed.crafter_name());
+    if (sealed.crafter_player_id() != 0) newBook.set_crafter_player_id(sealed.crafter_player_id());
+
+    ClientRequestResult applied;
+    applied.craftedSkillBookId = bookId;
+    applied.craftedSkillTableId = sealed.skill_table_id();
+    applied.scrollCraftRevision = revBefore + 1;
+    applied.sealedBookItemId = request.item_id();
+
+    ClientRequestLedgerComp nextLedger = ledger;
+    if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                         ClientRequestKind::kUnsealSkillBook, fingerprint, applied) ||
+        !client_request_ledger::Validate(nextLedger).empty()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    const auto removeErr = BagService::RemoveItem(player, inventory, request.item_id());
+    if (removeErr != kSuccess) {
+        fail(removeErr);
+        return;
+    }
+
+    *craft.add_skill_books() = newBook;
+    craft.set_next_book_seq(bookId + 1);
+    craft.set_scroll_craft_revision(revBefore + 1);
+    ledger.Swap(&nextLedger);
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_book_unsealed");
+    *response.mutable_unsealed_book() = newBook;
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
 void PlayerCraftSystem::SetProxyStall(entt::entity player, const SetCraftProxyStallRequest& request,
                                       SetCraftProxyStallResponse& response) {
     response.Clear();

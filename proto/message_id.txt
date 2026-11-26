@@ -541,3 +541,5 @@
 540=SceneRewardedAdClientPlayerGetRewardedAdInfo
 541=SceneRewardedAdClientPlayerBeginRewardedAdSession
 542=SceneRewardedAdClientPlayerClaimRewardedAd
+543=SceneSkillClientPlayerSealSkillBook
+544=SceneSkillClientPlayerUnsealSkillBook

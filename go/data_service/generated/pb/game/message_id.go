@@ -511,3 +511,5 @@ const SceneBagClientPlayerUnlockEquipLoadoutMessageId = 539
 const SceneRewardedAdClientPlayerGetRewardedAdInfoMessageId = 540
 const SceneRewardedAdClientPlayerBeginRewardedAdSessionMessageId = 541
 const SceneRewardedAdClientPlayerClaimRewardedAdMessageId = 542
+const SceneSkillClientPlayerSealSkillBookMessageId = 543
+const SceneSkillClientPlayerUnsealSkillBookMessageId = 544

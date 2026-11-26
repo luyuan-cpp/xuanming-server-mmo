@@ -318,6 +318,83 @@ func (x *EquipInstanceData) GetCrafterPlayerId() uint64 {
 	return 0
 }
 
+// 封卷道籍实例数据（将书架内未绑定常规技能书封卷入包后携带，供背包/集市/面对面流通与开卷回书架）。
+type SealedSkillBookData struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SkillTableId    uint32                 `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`          // SkillTable.id。
+	ScrollId        uint32                 `protobuf:"varint,2,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`                        // 产出所属卷宗 SkillScrollCraft.id。
+	RarityTier      uint32                 `protobuf:"varint,3,opt,name=rarity_tier,json=rarityTier,proto3" json:"rarity_tier,omitempty"`                  // 0 = 常规技能书（稀世书禁止封卷）。
+	CrafterName     string                 `protobuf:"bytes,4,opt,name=crafter_name,json=crafterName,proto3" json:"crafter_name,omitempty"`                // 宗师署名（空 = 无署名）。
+	CrafterPlayerId uint64                 `protobuf:"varint,5,opt,name=crafter_player_id,json=crafterPlayerId,proto3" json:"crafter_player_id,omitempty"` // 宗师玩家 ID（仅追溯）。
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SealedSkillBookData) Reset() {
+	*x = SealedSkillBookData{}
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SealedSkillBookData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SealedSkillBookData) ProtoMessage() {}
+
+func (x *SealedSkillBookData) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SealedSkillBookData.ProtoReflect.Descriptor instead.
+func (*SealedSkillBookData) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SealedSkillBookData) GetSkillTableId() uint32 {
+	if x != nil {
+		return x.SkillTableId
+	}
+	return 0
+}
+
+func (x *SealedSkillBookData) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *SealedSkillBookData) GetRarityTier() uint32 {
+	if x != nil {
+		return x.RarityTier
+	}
+	return 0
+}
+
+func (x *SealedSkillBookData) GetCrafterName() string {
+	if x != nil {
+		return x.CrafterName
+	}
+	return ""
+}
+
+func (x *SealedSkillBookData) GetCrafterPlayerId() uint64 {
+	if x != nil {
+		return x.CrafterPlayerId
+	}
+	return 0
+}
+
 type ItemComp struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	ItemId   uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
@@ -342,14 +419,16 @@ type ItemComp struct {
 	// 镜像 ItemEntry.equip(字段 14),两边必须同改(bag_marshal 的转换函数)。
 	Equip *EquipInstanceData `protobuf:"bytes,5,opt,name=equip,proto3" json:"equip,omitempty"`
 	// 仅自用绑定标记：true = 不可交易、不可上架集市/聚宝斋、不可赠送（用于五行试炼志拓印兑换的自用法宝等）。
-	Bound         bool `protobuf:"varint,6,opt,name=bound,proto3" json:"bound,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Bound bool `protobuf:"varint,6,opt,name=bound,proto3" json:"bound,omitempty"`
+	// 封卷道籍实例数据：仅 3414 封卷道籍拥有，不可堆叠，随 ItemEntry.instance 完整持久化与跨服/交易透传。
+	SealedSkillBook *SealedSkillBookData `protobuf:"bytes,7,opt,name=sealed_skill_book,json=sealedSkillBook,proto3" json:"sealed_skill_book,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ItemComp) Reset() {
 	*x = ItemComp{}
-	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[4]
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -361,7 +440,7 @@ func (x *ItemComp) String() string {
 func (*ItemComp) ProtoMessage() {}
 
 func (x *ItemComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[4]
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -374,7 +453,7 @@ func (x *ItemComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ItemComp.ProtoReflect.Descriptor instead.
 func (*ItemComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{4}
+	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ItemComp) GetItemId() uint64 {
@@ -419,6 +498,13 @@ func (x *ItemComp) GetBound() bool {
 	return false
 }
 
+func (x *ItemComp) GetSealedSkillBook() *SealedSkillBookData {
+	if x != nil {
+		return x.SealedSkillBook
+	}
+	return nil
+}
+
 var File_proto_common_component_item_base_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
@@ -445,7 +531,14 @@ const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
 	"\rfixed_affixes\x18\x04 \x03(\v2\x10.EquipFixedAffixR\ffixedAffixes\x12,\n" +
 	"\x12enhance_pity_count\x18\x05 \x01(\rR\x10enhancePityCount\x12!\n" +
 	"\fcrafter_name\x18\x06 \x01(\tR\vcrafterName\x12*\n" +
-	"\x11crafter_player_id\x18\a \x01(\x04R\x0fcrafterPlayerId\"\xb5\x01\n" +
+	"\x11crafter_player_id\x18\a \x01(\x04R\x0fcrafterPlayerId\"\xc8\x01\n" +
+	"\x13SealedSkillBookData\x12$\n" +
+	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x1b\n" +
+	"\tscroll_id\x18\x02 \x01(\rR\bscrollId\x12\x1f\n" +
+	"\vrarity_tier\x18\x03 \x01(\rR\n" +
+	"rarityTier\x12!\n" +
+	"\fcrafter_name\x18\x04 \x01(\tR\vcrafterName\x12*\n" +
+	"\x11crafter_player_id\x18\x05 \x01(\x04R\x0fcrafterPlayerId\"\xf7\x01\n" +
 	"\bItemComp\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x12\n" +
@@ -453,7 +546,8 @@ const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
 	"\vacquire_seq\x18\x04 \x01(\x04R\n" +
 	"acquireSeq\x12(\n" +
 	"\x05equip\x18\x05 \x01(\v2\x12.EquipInstanceDataR\x05equip\x12\x14\n" +
-	"\x05bound\x18\x06 \x01(\bR\x05boundB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x05bound\x18\x06 \x01(\bR\x05bound\x12@\n" +
+	"\x11sealed_skill_book\x18\a \x01(\v2\x14.SealedSkillBookDataR\x0fsealedSkillBookB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_item_base_comp_proto_rawDescOnce sync.Once
@@ -467,24 +561,26 @@ func file_proto_common_component_item_base_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_item_base_comp_proto_rawDescData
 }
 
-var file_proto_common_component_item_base_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_common_component_item_base_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_common_component_item_base_comp_proto_goTypes = []any{
-	(*EquipAffix)(nil),        // 0: EquipAffix
-	(*EquipGem)(nil),          // 1: EquipGem
-	(*EquipFixedAffix)(nil),   // 2: EquipFixedAffix
-	(*EquipInstanceData)(nil), // 3: EquipInstanceData
-	(*ItemComp)(nil),          // 4: ItemComp
+	(*EquipAffix)(nil),          // 0: EquipAffix
+	(*EquipGem)(nil),            // 1: EquipGem
+	(*EquipFixedAffix)(nil),     // 2: EquipFixedAffix
+	(*EquipInstanceData)(nil),   // 3: EquipInstanceData
+	(*SealedSkillBookData)(nil), // 4: SealedSkillBookData
+	(*ItemComp)(nil),            // 5: ItemComp
 }
 var file_proto_common_component_item_base_comp_proto_depIdxs = []int32{
 	0, // 0: EquipInstanceData.affixes:type_name -> EquipAffix
 	1, // 1: EquipInstanceData.gems:type_name -> EquipGem
 	2, // 2: EquipInstanceData.fixed_affixes:type_name -> EquipFixedAffix
 	3, // 3: ItemComp.equip:type_name -> EquipInstanceData
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 4: ItemComp.sealed_skill_book:type_name -> SealedSkillBookData
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_item_base_comp_proto_init() }
@@ -498,7 +594,7 @@ func file_proto_common_component_item_base_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_item_base_comp_proto_rawDesc), len(file_proto_common_component_item_base_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

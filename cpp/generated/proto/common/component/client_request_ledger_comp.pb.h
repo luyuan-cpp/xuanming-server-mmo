@@ -882,6 +882,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kRewardedAdCurrencyTypeFieldNumber = 35,
     kEquipLoadoutSpentDiamondFieldNumber = 34,
     kRewardedAdAmountFieldNumber = 36,
+    kSealedBookItemIdFieldNumber = 37,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -1248,11 +1249,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_rewarded_ad_amount(::uint64_t value);
 
   public:
+  // uint64 sealed_book_item_id = 37;
+  void clear_sealed_book_item_id() ;
+  [[nodiscard]] ::uint64_t sealed_book_item_id() const;
+  void set_sealed_book_item_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sealed_book_item_id() const;
+  void _internal_set_sealed_book_item_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 36,
+      ::google::protobuf::internal::TcParseTable<5, 37,
                           0, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1317,6 +1328,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint32_t rewarded_ad_currency_type_;
     ::uint64_t equip_loadout_spent_diamond_;
     ::uint64_t rewarded_ad_amount_;
+    ::uint64_t sealed_book_item_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2756,6 +2768,30 @@ inline ::uint64_t ClientRequestRecord::_internal_rewarded_ad_amount() const {
 inline void ClientRequestRecord::_internal_set_rewarded_ad_amount(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rewarded_ad_amount_ = value;
+}
+
+// uint64 sealed_book_item_id = 37;
+inline void ClientRequestRecord::clear_sealed_book_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sealed_book_item_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+}
+inline ::uint64_t ClientRequestRecord::sealed_book_item_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.sealed_book_item_id)
+  return _internal_sealed_book_item_id();
+}
+inline void ClientRequestRecord::set_sealed_book_item_id(::uint64_t value) {
+  _internal_set_sealed_book_item_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.sealed_book_item_id)
+}
+inline ::uint64_t ClientRequestRecord::_internal_sealed_book_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sealed_book_item_id_;
+}
+inline void ClientRequestRecord::_internal_set_sealed_book_item_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sealed_book_item_id_ = value;
 }
 
 // -------------------------------------------------------------------

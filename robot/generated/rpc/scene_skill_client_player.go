@@ -284,3 +284,49 @@ func (sceneSkillClientPlayerRpc) decodeSwitchSkillLoadout(reply *base.MessageCon
 	}
 	return resp, nil
 }
+
+// SealSkillBook 异步调用 SceneSkillClientPlayer.SealSkillBook(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) SealSkillBook(c *pkg.GameClient, req *scene.SealSkillBookRequest, timeout time.Duration, done func(*scene.SealSkillBookResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerSealSkillBookMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSealSkillBook(reply, err))
+	})
+}
+
+// SealSkillBookSync 同步调用 SceneSkillClientPlayer.SealSkillBook(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) SealSkillBookSync(ctx context.Context, c *pkg.GameClient, req *scene.SealSkillBookRequest, timeout time.Duration) (*scene.SealSkillBookResponse, error) {
+	return r.decodeSealSkillBook(c.CallSync(ctx, game.SceneSkillClientPlayerSealSkillBookMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeSealSkillBook(reply *base.MessageContent, err error) (*scene.SealSkillBookResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SealSkillBookResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.SealSkillBook reply: %w", err)
+	}
+	return resp, nil
+}
+
+// UnsealSkillBook 异步调用 SceneSkillClientPlayer.UnsealSkillBook(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) UnsealSkillBook(c *pkg.GameClient, req *scene.UnsealSkillBookRequest, timeout time.Duration, done func(*scene.UnsealSkillBookResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerUnsealSkillBookMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUnsealSkillBook(reply, err))
+	})
+}
+
+// UnsealSkillBookSync 同步调用 SceneSkillClientPlayer.UnsealSkillBook(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) UnsealSkillBookSync(ctx context.Context, c *pkg.GameClient, req *scene.UnsealSkillBookRequest, timeout time.Duration) (*scene.UnsealSkillBookResponse, error) {
+	return r.decodeUnsealSkillBook(c.CallSync(ctx, game.SceneSkillClientPlayerUnsealSkillBookMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeUnsealSkillBook(reply *base.MessageContent, err error) (*scene.UnsealSkillBookResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.UnsealSkillBookResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.UnsealSkillBook reply: %w", err)
+	}
+	return resp, nil
+}

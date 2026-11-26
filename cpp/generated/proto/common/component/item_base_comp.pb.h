@@ -93,6 +93,14 @@ extern const ::google::protobuf::internal::ClassDataFull ItemComp_class_data_;
 #else
 extern const ItemCompGlobalsTypeInternal ItemComp_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SealedSkillBookData;
+struct SealedSkillBookDataGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SealedSkillBookDataGlobalsTypeInternal SealedSkillBookData_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SealedSkillBookData_class_data_;
+#else
+extern const SealedSkillBookDataGlobalsTypeInternal SealedSkillBookData_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -102,6 +110,260 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SealedSkillBookData final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SealedSkillBookData) */ {
+ public:
+  inline SealedSkillBookData() : SealedSkillBookData(nullptr) {}
+  ~SealedSkillBookData() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SealedSkillBookData* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SealedSkillBookData));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SealedSkillBookData(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SealedSkillBookData(const SealedSkillBookData& from) : SealedSkillBookData(nullptr, from) {}
+  inline SealedSkillBookData(SealedSkillBookData&& from) noexcept : SealedSkillBookData(nullptr, ::std::move(from)) {}
+  inline SealedSkillBookData& operator=(const SealedSkillBookData& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SealedSkillBookData& operator=(SealedSkillBookData&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SealedSkillBookData& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SealedSkillBookData>(&SealedSkillBookData_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(SealedSkillBookData& a, SealedSkillBookData& b) { a.Swap(&b); }
+  inline void Swap(SealedSkillBookData* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SealedSkillBookData* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SealedSkillBookData* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SealedSkillBookData>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SealedSkillBookData& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SealedSkillBookData& from) { SealedSkillBookData::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SealedSkillBookData* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SealedSkillBookData"; }
+
+  explicit SealedSkillBookData(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SealedSkillBookData(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SealedSkillBookData& from);
+  SealedSkillBookData(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SealedSkillBookData&& from) noexcept
+      : SealedSkillBookData(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCrafterNameFieldNumber = 4,
+    kSkillTableIdFieldNumber = 1,
+    kScrollIdFieldNumber = 2,
+    kCrafterPlayerIdFieldNumber = 5,
+    kRarityTierFieldNumber = 3,
+  };
+  // string crafter_name = 4;
+  void clear_crafter_name() ;
+  [[nodiscard]] const ::std::string& crafter_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_crafter_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_crafter_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_crafter_name();
+  void set_allocated_crafter_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_crafter_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_crafter_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_crafter_name();
+
+  public:
+  // uint32 skill_table_id = 1;
+  void clear_skill_table_id() ;
+  [[nodiscard]] ::uint32_t skill_table_id() const;
+  void set_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_table_id() const;
+  void _internal_set_skill_table_id(::uint32_t value);
+
+  public:
+  // uint32 scroll_id = 2;
+  void clear_scroll_id() ;
+  [[nodiscard]] ::uint32_t scroll_id() const;
+  void set_scroll_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scroll_id() const;
+  void _internal_set_scroll_id(::uint32_t value);
+
+  public:
+  // uint64 crafter_player_id = 5;
+  void clear_crafter_player_id() ;
+  [[nodiscard]] ::uint64_t crafter_player_id() const;
+  void set_crafter_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_crafter_player_id() const;
+  void _internal_set_crafter_player_id(::uint64_t value);
+
+  public:
+  // uint32 rarity_tier = 3;
+  void clear_rarity_tier() ;
+  [[nodiscard]] ::uint32_t rarity_tier() const;
+  void set_rarity_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rarity_tier() const;
+  void _internal_set_rarity_tier(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SealedSkillBookData)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 40,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SealedSkillBookData& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr crafter_name_;
+    ::uint32_t skill_table_id_;
+    ::uint32_t scroll_id_;
+    ::uint64_t crafter_player_id_;
+    ::uint32_t rarity_tier_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fitem_5fbase_5fcomp_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipGem final : public ::google::protobuf::Message
@@ -1158,7 +1420,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
   [[nodiscard]] static const ItemComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ItemComp>(&ItemComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(ItemComp& a, ItemComp& b) { a.Swap(&b); }
   inline void Swap(ItemComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1251,6 +1513,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
   // accessors -------------------------------------------------------
   enum : int {
     kEquipFieldNumber = 5,
+    kSealedSkillBookFieldNumber = 7,
     kItemIdFieldNumber = 1,
     kConfigIdFieldNumber = 2,
     kSizeFieldNumber = 3,
@@ -1271,6 +1534,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
   private:
   const ::EquipInstanceData& _internal_equip() const;
   ::EquipInstanceData* PROTOBUF_NONNULL _internal_mutable_equip();
+
+  public:
+  // .SealedSkillBookData sealed_skill_book = 7;
+  [[nodiscard]] bool has_sealed_skill_book()
+      const;
+  void clear_sealed_skill_book() ;
+  [[nodiscard]] const ::SealedSkillBookData& sealed_skill_book() const;
+  [[nodiscard]] ::SealedSkillBookData* PROTOBUF_NULLABLE release_sealed_skill_book();
+  ::SealedSkillBookData* PROTOBUF_NONNULL mutable_sealed_skill_book();
+  void set_allocated_sealed_skill_book(::SealedSkillBookData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_sealed_skill_book(::SealedSkillBookData* PROTOBUF_NULLABLE value);
+  ::SealedSkillBookData* PROTOBUF_NULLABLE unsafe_arena_release_sealed_skill_book();
+
+  private:
+  const ::SealedSkillBookData& _internal_sealed_skill_book() const;
+  ::SealedSkillBookData* PROTOBUF_NONNULL _internal_mutable_sealed_skill_book();
 
   public:
   // uint64 item_id = 1;
@@ -1327,8 +1606,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1357,6 +1636,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::EquipInstanceData* PROTOBUF_NULLABLE equip_;
+    ::SealedSkillBookData* PROTOBUF_NULLABLE sealed_skill_book_;
     ::uint64_t item_id_;
     ::uint32_t config_id_;
     ::uint32_t size_;
@@ -1939,13 +2219,177 @@ inline void EquipInstanceData::_internal_set_crafter_player_id(::uint64_t value)
 
 // -------------------------------------------------------------------
 
+// SealedSkillBookData
+
+// uint32 skill_table_id = 1;
+inline void SealedSkillBookData::clear_skill_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SealedSkillBookData::skill_table_id() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookData.skill_table_id)
+  return _internal_skill_table_id();
+}
+inline void SealedSkillBookData::set_skill_table_id(::uint32_t value) {
+  _internal_set_skill_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookData.skill_table_id)
+}
+inline ::uint32_t SealedSkillBookData::_internal_skill_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_table_id_;
+}
+inline void SealedSkillBookData::_internal_set_skill_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = value;
+}
+
+// uint32 scroll_id = 2;
+inline void SealedSkillBookData::clear_scroll_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SealedSkillBookData::scroll_id() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookData.scroll_id)
+  return _internal_scroll_id();
+}
+inline void SealedSkillBookData::set_scroll_id(::uint32_t value) {
+  _internal_set_scroll_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookData.scroll_id)
+}
+inline ::uint32_t SealedSkillBookData::_internal_scroll_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_id_;
+}
+inline void SealedSkillBookData::_internal_set_scroll_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = value;
+}
+
+// uint32 rarity_tier = 3;
+inline void SealedSkillBookData::clear_rarity_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rarity_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SealedSkillBookData::rarity_tier() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookData.rarity_tier)
+  return _internal_rarity_tier();
+}
+inline void SealedSkillBookData::set_rarity_tier(::uint32_t value) {
+  _internal_set_rarity_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookData.rarity_tier)
+}
+inline ::uint32_t SealedSkillBookData::_internal_rarity_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rarity_tier_;
+}
+inline void SealedSkillBookData::_internal_set_rarity_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rarity_tier_ = value;
+}
+
+// string crafter_name = 4;
+inline void SealedSkillBookData::clear_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SealedSkillBookData::crafter_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SealedSkillBookData.crafter_name)
+  return _internal_crafter_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SealedSkillBookData::set_crafter_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.crafter_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SealedSkillBookData.crafter_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookData::mutable_crafter_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_crafter_name();
+  // @@protoc_insertion_point(field_mutable:SealedSkillBookData.crafter_name)
+  return _s;
+}
+inline const ::std::string& SealedSkillBookData::_internal_crafter_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafter_name_.Get();
+}
+inline void SealedSkillBookData::_internal_set_crafter_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SealedSkillBookData::_internal_mutable_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.crafter_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SealedSkillBookData::release_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SealedSkillBookData.crafter_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.crafter_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.crafter_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SealedSkillBookData::set_allocated_crafter_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.crafter_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.crafter_name_.IsDefault()) {
+    _impl_.crafter_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SealedSkillBookData.crafter_name)
+}
+
+// uint64 crafter_player_id = 5;
+inline void SealedSkillBookData::clear_crafter_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t SealedSkillBookData::crafter_player_id() const {
+  // @@protoc_insertion_point(field_get:SealedSkillBookData.crafter_player_id)
+  return _internal_crafter_player_id();
+}
+inline void SealedSkillBookData::set_crafter_player_id(::uint64_t value) {
+  _internal_set_crafter_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SealedSkillBookData.crafter_player_id)
+}
+inline ::uint64_t SealedSkillBookData::_internal_crafter_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafter_player_id_;
+}
+inline void SealedSkillBookData::_internal_set_crafter_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // ItemComp
 
 // uint64 item_id = 1;
 inline void ItemComp::clear_item_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t ItemComp::item_id() const {
   // @@protoc_insertion_point(field_get:ItemComp.item_id)
@@ -1953,7 +2397,7 @@ inline ::uint64_t ItemComp::item_id() const {
 }
 inline void ItemComp::set_item_id(::uint64_t value) {
   _internal_set_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:ItemComp.item_id)
 }
 inline ::uint64_t ItemComp::_internal_item_id() const {
@@ -1969,7 +2413,7 @@ inline void ItemComp::_internal_set_item_id(::uint64_t value) {
 inline void ItemComp::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t ItemComp::config_id() const {
   // @@protoc_insertion_point(field_get:ItemComp.config_id)
@@ -1977,7 +2421,7 @@ inline ::uint32_t ItemComp::config_id() const {
 }
 inline void ItemComp::set_config_id(::uint32_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ItemComp.config_id)
 }
 inline ::uint32_t ItemComp::_internal_config_id() const {
@@ -1993,7 +2437,7 @@ inline void ItemComp::_internal_set_config_id(::uint32_t value) {
 inline void ItemComp::clear_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t ItemComp::size() const {
   // @@protoc_insertion_point(field_get:ItemComp.size)
@@ -2001,7 +2445,7 @@ inline ::uint32_t ItemComp::size() const {
 }
 inline void ItemComp::set_size(::uint32_t value) {
   _internal_set_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ItemComp.size)
 }
 inline ::uint32_t ItemComp::_internal_size() const {
@@ -2017,7 +2461,7 @@ inline void ItemComp::_internal_set_size(::uint32_t value) {
 inline void ItemComp::clear_acquire_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.acquire_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t ItemComp::acquire_seq() const {
   // @@protoc_insertion_point(field_get:ItemComp.acquire_seq)
@@ -2025,7 +2469,7 @@ inline ::uint64_t ItemComp::acquire_seq() const {
 }
 inline void ItemComp::set_acquire_seq(::uint64_t value) {
   _internal_set_acquire_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:ItemComp.acquire_seq)
 }
 inline ::uint64_t ItemComp::_internal_acquire_seq() const {
@@ -2139,7 +2583,7 @@ inline void ItemComp::set_allocated_equip(::EquipInstanceData* PROTOBUF_NULLABLE
 inline void ItemComp::clear_bound() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline bool ItemComp::bound() const {
   // @@protoc_insertion_point(field_get:ItemComp.bound)
@@ -2147,7 +2591,7 @@ inline bool ItemComp::bound() const {
 }
 inline void ItemComp::set_bound(bool value) {
   _internal_set_bound(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:ItemComp.bound)
 }
 inline bool ItemComp::_internal_bound() const {
@@ -2157,6 +2601,104 @@ inline bool ItemComp::_internal_bound() const {
 inline void ItemComp::_internal_set_bound(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_ = value;
+}
+
+// .SealedSkillBookData sealed_skill_book = 7;
+inline bool ItemComp::has_sealed_skill_book() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.sealed_skill_book_ != nullptr);
+  return value;
+}
+inline void ItemComp::clear_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.sealed_skill_book_ != nullptr) _impl_.sealed_skill_book_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::SealedSkillBookData& ItemComp::_internal_sealed_skill_book() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SealedSkillBookData* p = _impl_.sealed_skill_book_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SealedSkillBookData>(&::SealedSkillBookData_globals_);
+}
+inline const ::SealedSkillBookData& ItemComp::sealed_skill_book() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ItemComp.sealed_skill_book)
+  return _internal_sealed_skill_book();
+}
+inline void ItemComp::unsafe_arena_set_allocated_sealed_skill_book(
+    ::SealedSkillBookData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.sealed_skill_book_);
+  }
+  _impl_.sealed_skill_book_ = reinterpret_cast<::SealedSkillBookData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ItemComp.sealed_skill_book)
+}
+inline ::SealedSkillBookData* PROTOBUF_NULLABLE ItemComp::release_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SealedSkillBookData* released = _impl_.sealed_skill_book_;
+  _impl_.sealed_skill_book_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SealedSkillBookData* PROTOBUF_NULLABLE ItemComp::unsafe_arena_release_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ItemComp.sealed_skill_book)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SealedSkillBookData* temp = _impl_.sealed_skill_book_;
+  _impl_.sealed_skill_book_ = nullptr;
+  return temp;
+}
+inline ::SealedSkillBookData* PROTOBUF_NONNULL ItemComp::_internal_mutable_sealed_skill_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.sealed_skill_book_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SealedSkillBookData>(GetArena());
+    _impl_.sealed_skill_book_ = reinterpret_cast<::SealedSkillBookData*>(p);
+  }
+  return _impl_.sealed_skill_book_;
+}
+inline ::SealedSkillBookData* PROTOBUF_NONNULL ItemComp::mutable_sealed_skill_book()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SealedSkillBookData* _msg = _internal_mutable_sealed_skill_book();
+  // @@protoc_insertion_point(field_mutable:ItemComp.sealed_skill_book)
+  return _msg;
+}
+inline void ItemComp::set_allocated_sealed_skill_book(::SealedSkillBookData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.sealed_skill_book_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.sealed_skill_book_ = reinterpret_cast<::SealedSkillBookData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ItemComp.sealed_skill_book)
 }
 
 #ifdef __GNUC__

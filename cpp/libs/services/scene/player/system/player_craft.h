@@ -10,6 +10,10 @@ class LearnSkillBookRequest;
 class LearnSkillBookResponse;
 class DismantleSkillBookRequest;
 class DismantleSkillBookResponse;
+class SealSkillBookRequest;
+class SealSkillBookResponse;
+class UnsealSkillBookRequest;
+class UnsealSkillBookResponse;
 class SetCraftProxyStallRequest;
 class SetCraftProxyStallResponse;
 class ListCraftProxyStallsResponse;
@@ -40,6 +44,10 @@ public:
                                LearnSkillBookResponse& response);
     static void DismantleSkillBook(entt::entity player, const DismantleSkillBookRequest& request,
                                    DismantleSkillBookResponse& response);
+    static void SealSkillBook(entt::entity player, const SealSkillBookRequest& request,
+                              SealSkillBookResponse& response);
+    static void UnsealSkillBook(entt::entity player, const UnsealSkillBookRequest& request,
+                                UnsealSkillBookResponse& response);
     static void SetProxyStall(entt::entity player, const SetCraftProxyStallRequest& request,
                               SetCraftProxyStallResponse& response);
     static void ListProxyStalls(entt::entity player, ListCraftProxyStallsResponse& response);

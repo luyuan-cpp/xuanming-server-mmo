@@ -54,3 +54,11 @@ constexpr uint32_t SceneSkillClientPlayerSaveSkillLoadoutIndex = 11;
 constexpr uint32_t SceneSkillClientPlayerSwitchSkillLoadoutMessageId = 503;
 constexpr uint32_t SceneSkillClientPlayerSwitchSkillLoadoutIndex = 12;
 #define SceneSkillClientPlayerSwitchSkillLoadoutMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(12)
+
+constexpr uint32_t SceneSkillClientPlayerSealSkillBookMessageId = 543;
+constexpr uint32_t SceneSkillClientPlayerSealSkillBookIndex = 13;
+#define SceneSkillClientPlayerSealSkillBookMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(13)
+
+constexpr uint32_t SceneSkillClientPlayerUnsealSkillBookMessageId = 544;
+constexpr uint32_t SceneSkillClientPlayerUnsealSkillBookIndex = 14;
+#define SceneSkillClientPlayerUnsealSkillBookMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(14)

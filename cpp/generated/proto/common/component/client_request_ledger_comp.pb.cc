@@ -454,11 +454,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      36, 248,  // max_field_number, fast_idx_mask
+      37, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      36,  // num_field_entries
+      37,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -595,7 +595,7 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equip_loadout_unlocked_count_)}},
     }}, {{
       33, 0, 1,
-      65520, 32,
+      65504, 32,
       65535, 65535
     }}, {{
       // uint64 key = 1;
@@ -670,6 +670,8 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.rewarded_ad_currency_type_), _Internal::kHasBitsOffset + 33, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 rewarded_ad_amount = 36;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.rewarded_ad_amount_), _Internal::kHasBitsOffset + 35, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 sealed_book_item_id = 37;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.sealed_book_item_id_), _Internal::kHasBitsOffset + 36, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -719,7 +721,8 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         equip_loadout_used_item_id_{0u},
         rewarded_ad_currency_type_{0u},
         equip_loadout_spent_diamond_{::uint64_t{0u}},
-        rewarded_ad_amount_{::uint64_t{0u}} {}
+        rewarded_ad_amount_{::uint64_t{0u}},
+        sealed_book_item_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -1181,7 +1184,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        39, // hasbit index offset
+        40, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -1218,6 +1221,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equip_loadout_spent_diamond_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.rewarded_ad_currency_type_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.rewarded_ad_amount_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.sealed_book_item_id_),
         1,
         3,
         0,
@@ -1254,6 +1258,7 @@ const ::uint32_t
         34,
         33,
         35,
+        36,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         14, // hasbit index offset
@@ -1325,10 +1330,10 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {75, sizeof(::EquipmentMaterialRewardLedger)},
-        {100, sizeof(::BattleEconomyLedger)},
-        {109, sizeof(::RewardedAdLedger)},
-        {126, sizeof(::ClientRequestLedgerComp)},
+        {77, sizeof(::EquipmentMaterialRewardLedger)},
+        {102, sizeof(::BattleEconomyLedger)},
+        {111, sizeof(::RewardedAdLedger)},
+        {128, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1341,7 +1346,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\345\010\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\202\t\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -1369,37 +1374,37 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "\001(\r\022(\n equip_loadout_spent_bind_diamond\030"
     "! \001(\004\022#\n\033equip_loadout_spent_diamond\030\" \001"
     "(\004\022!\n\031rewarded_ad_currency_type\030# \001(\r\022\032\n"
-    "\022rewarded_ad_amount\030$ \001(\004\"\304\002\n\035EquipmentM"
-    "aterialRewardLedger\022\030\n\020day_starts_at_ms\030"
-    "\001 \001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017available"
-    "_units\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifeti"
-    "me_earned\030\005 \001(\r\022\035\n\025tradable_earned_total"
-    "\030\006 \001(\r\022 \n\030available_tradable_units\030\007 \001(\004"
-    "\022\031\n\021week_starts_at_ms\030\010 \001(\004\022\030\n\020earned_th"
-    "is_week\030\t \001(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n"
-    "\031stage1_tradable_confirmed\030\013 \001(\r\"o\n\023Batt"
-    "leEconomyLedger\022\031\n\021week_starts_at_ms\030\001 \001"
-    "(\004\022\037\n\027battle_silver_this_week\030\002 \001(\004\022\034\n\024b"
-    "attle_exp_this_week\030\003 \001(\004\"\332\001\n\020RewardedAd"
-    "Ledger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\025\n\rclai"
-    "med_today\030\002 \001(\r\022\030\n\020last_claim_at_ms\030\003 \001("
-    "\004\022\036\n\026total_claimed_lifetime\030\004 \001(\004\022\031\n\021act"
-    "ive_session_id\030\005 \001(\004\022 \n\030active_session_i"
-    "ssued_ms\030\006 \001(\004\022\036\n\026active_session_slot_id"
-    "\030\007 \001(\r\"\371\001\n\027ClientRequestLedgerComp\022%\n\007re"
-    "cords\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010nex"
-    "t_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227\n\017m"
-    "aterial_reward\030\004 \001(\0132\036.EquipmentMaterial"
-    "RewardLedger\022,\n\016battle_economy\030\005 \001(\0132\024.B"
-    "attleEconomyLedger\022&\n\013rewarded_ad\030\006 \001(\0132"
-    "\021.RewardedAdLedgerB\022Z\020common/componentb\006"
-    "proto3"
+    "\022rewarded_ad_amount\030$ \001(\004\022\033\n\023sealed_book"
+    "_item_id\030% \001(\004\"\304\002\n\035EquipmentMaterialRewa"
+    "rdLedger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014ea"
+    "rned_today\030\002 \001(\r\022\027\n\017available_units\030\003 \001("
+    "\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetime_earned\030\005"
+    " \001(\r\022\035\n\025tradable_earned_total\030\006 \001(\r\022 \n\030a"
+    "vailable_tradable_units\030\007 \001(\004\022\031\n\021week_st"
+    "arts_at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001"
+    "(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n\031stage1_tra"
+    "dable_confirmed\030\013 \001(\r\"o\n\023BattleEconomyLe"
+    "dger\022\031\n\021week_starts_at_ms\030\001 \001(\004\022\037\n\027battl"
+    "e_silver_this_week\030\002 \001(\004\022\034\n\024battle_exp_t"
+    "his_week\030\003 \001(\004\"\332\001\n\020RewardedAdLedger\022\030\n\020d"
+    "ay_starts_at_ms\030\001 \001(\004\022\025\n\rclaimed_today\030\002"
+    " \001(\r\022\030\n\020last_claim_at_ms\030\003 \001(\004\022\036\n\026total_"
+    "claimed_lifetime\030\004 \001(\004\022\031\n\021active_session"
+    "_id\030\005 \001(\004\022 \n\030active_session_issued_ms\030\006 "
+    "\001(\004\022\036\n\026active_session_slot_id\030\007 \001(\r\"\371\001\n\027"
+    "ClientRequestLedgerComp\022%\n\007records\030\001 \003(\013"
+    "2\024.ClientRequestRecord\022\020\n\010next_seq\030\002 \001(\004"
+    "\022\026\n\016forge_revision\030\003 \001(\004\0227\n\017material_rew"
+    "ard\030\004 \001(\0132\036.EquipmentMaterialRewardLedge"
+    "r\022,\n\016battle_economy\030\005 \001(\0132\024.BattleEconom"
+    "yLedger\022&\n\013rewarded_ad\030\006 \001(\0132\021.RewardedA"
+    "dLedgerB\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    2126,
+    2155,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -1449,9 +1454,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, rewarded_ad_amount_) -
+           offsetof(Impl_, sealed_book_item_id_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::rewarded_ad_amount_));
+               sizeof(Impl_::sealed_book_item_id_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -1466,9 +1471,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, rewarded_ad_amount_) -
+           offsetof(Impl_, sealed_book_item_id_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::rewarded_ad_amount_));
+               sizeof(Impl_::sealed_book_item_id_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -1543,10 +1548,10 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.equipment_polish_pity_count_)) + sizeof(_impl_.equip_loadout_spent_bind_diamond_));
   }
   cached_has_bits = _impl_._has_bits_[1];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     ::memset(&_impl_.equip_loadout_used_item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.rewarded_ad_amount_) -
-        reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.rewarded_ad_amount_));
+        reinterpret_cast<char*>(&_impl_.sealed_book_item_id_) -
+        reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.sealed_book_item_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1897,6 +1902,15 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint64 sealed_book_item_id = 37;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_sealed_book_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          37, this_._internal_sealed_book_item_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2153,7 +2167,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
   cached_has_bits = this_._impl_._has_bits_[1];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // uint32 equip_loadout_used_item_id = 32;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_equip_loadout_used_item_id() != 0) {
@@ -2180,6 +2194,13 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       if (this_._internal_rewarded_ad_amount() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_rewarded_ad_amount());
+      }
+    }
+    // uint64 sealed_book_item_id = 37;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_sealed_book_item_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_sealed_book_item_id());
       }
     }
   }
@@ -2373,7 +2394,7 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     }
   }
   cached_has_bits = from._impl_._has_bits_[1];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_equip_loadout_used_item_id() != 0) {
         _this->_impl_.equip_loadout_used_item_id_ = from._impl_.equip_loadout_used_item_id_;
@@ -2392,6 +2413,11 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_rewarded_ad_amount() != 0) {
         _this->_impl_.rewarded_ad_amount_ = from._impl_.rewarded_ad_amount_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_sealed_book_item_id() != 0) {
+        _this->_impl_.sealed_book_item_id_ = from._impl_.sealed_book_item_id_;
       }
     }
   }
@@ -2417,8 +2443,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[1], other->_impl_._has_bits_[1]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.rewarded_ad_amount_)
-      + sizeof(ClientRequestRecord::_impl_.rewarded_ad_amount_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.sealed_book_item_id_)
+      + sizeof(ClientRequestRecord::_impl_.sealed_book_item_id_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));

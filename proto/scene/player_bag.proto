@@ -65,6 +65,16 @@ message EquipEnhancePreview {
 }
 
 // 实例与布局分离；显示信息不写入玩家持久化记录。
+message SealedSkillBookInfo {
+  uint32 skill_table_id = 1;
+  string skill_name = 2;
+  uint32 scroll_id = 3;
+  string scroll_name = 4;
+  uint32 rarity_tier = 5;
+  string crafter_name = 6;
+  uint64 crafter_player_id = 7;
+}
+
 message BagItemInfo {
   uint64 item_id = 1;
   uint32 config_id = 2;
@@ -95,6 +105,7 @@ message BagItemInfo {
   bool bound = 25;                // true = 仅自用绑定（不可交易/上架/赠送）
   string crafter_name = 26;       // 宗师打造/打磨极品永久署名（空 = 无署名）
   uint64 crafter_player_id = 27;  // 宗师玩家 ID（仅追溯）
+  SealedSkillBookInfo sealed_skill_book = 28; // 3414 封卷道籍：封存的技能书展示数据（非封卷为空）
 }
 
 message BagSlotInfo {

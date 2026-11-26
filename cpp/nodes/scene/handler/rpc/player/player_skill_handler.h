@@ -53,6 +53,12 @@ public:
     static void SwitchSkillLoadout(entt::entity player,
         const ::SwitchSkillLoadoutRequest* request,
         ::SwitchSkillLoadoutResponse* response);
+    static void SealSkillBook(entt::entity player,
+        const ::SealSkillBookRequest* request,
+        ::SealSkillBookResponse* response);
+    static void UnsealSkillBook(entt::entity player,
+        const ::UnsealSkillBookRequest* request,
+        ::UnsealSkillBookResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -172,6 +178,24 @@ public:
             SwitchSkillLoadout(player,
                 static_cast<const ::SwitchSkillLoadoutRequest*>(request),
                 static_cast<::SwitchSkillLoadoutResponse*>(response));
+			}
+            break;
+        case 13:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SealSkillBookResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SealSkillBook(player,
+                static_cast<const ::SealSkillBookRequest*>(request),
+                static_cast<::SealSkillBookResponse*>(response));
+			}
+            break;
+        case 14:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::UnsealSkillBookResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            UnsealSkillBook(player,
+                static_cast<const ::UnsealSkillBookRequest*>(request),
+                static_cast<::UnsealSkillBookResponse*>(response));
 			}
             break;
         default:

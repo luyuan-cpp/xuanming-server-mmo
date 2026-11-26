@@ -602,6 +602,16 @@ state=bootstrap
 1=PlayerEquipLoadoutComp#6 optional uint64 last_base_version
 1=PlayerEquipLoadoutComp#7 optional uint32 last_scheme_id
 1=player_database#36 optional PlayerEquipLoadoutComp equip_loadout_component group=3
+1=ClientRequestLedgerComp#6 optional RewardedAdLedger rewarded_ad
+1=ClientRequestRecord#35 optional uint32 rewarded_ad_currency_type
+1=ClientRequestRecord#36 optional uint64 rewarded_ad_amount
+1=RewardedAdLedger#1 optional uint64 day_starts_at_ms
+1=RewardedAdLedger#2 optional uint32 claimed_today
+1=RewardedAdLedger#3 optional uint64 last_claim_at_ms
+1=RewardedAdLedger#4 optional uint64 total_claimed_lifetime
+1=RewardedAdLedger#5 optional uint64 active_session_id
+1=RewardedAdLedger#6 optional uint64 active_session_issued_ms
+1=RewardedAdLedger#7 optional uint32 active_session_slot_id
 
 retired=player_database#10
 retired=player_database#17

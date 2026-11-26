@@ -61,8 +61,7 @@ protected:
 		prevSnapshot_ = RewardedAdSlotTableManager::Instance().CurrentSnapshot();
 		player_ = tlsEcs.actorRegistry.create();
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player_).value = kPlayerGuid;
-		auto &ownership = tlsEcs.actorRegistry.emplace<PlayerOwnershipComp>(player_);
-		ownership.state = PlayerOwnershipState::kOwned;
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player_).epoch = 1;
 		tlsEcs.actorRegistry.emplace<LevelComp>(player_).set_level(10);
 		tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
 		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
@@ -79,7 +78,7 @@ protected:
 		{
 			RewardedAdSlotTableManager::Instance().InstallSnapshot(prevSnapshot_);
 		}
-		GainBlockService::ClearGlobalBlocks();
+		GainBlockService::ClearAllGlobalBlocks();
 	}
 
 	entt::entity player_{entt::null};

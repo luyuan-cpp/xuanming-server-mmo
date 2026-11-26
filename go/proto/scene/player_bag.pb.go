@@ -137,7 +137,7 @@ func (x EquipmentCraftChoice_Operation) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EquipmentCraftChoice_Operation.Descriptor instead.
 func (EquipmentCraftChoice_Operation) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{32, 0}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{33, 0}
 }
 
 type CommitEquipmentCraftResponse_Outcome int32
@@ -186,7 +186,7 @@ func (x CommitEquipmentCraftResponse_Outcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CommitEquipmentCraftResponse_Outcome.Descriptor instead.
 func (CommitEquipmentCraftResponse_Outcome) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{41, 0}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{42, 0}
 }
 
 type ClaimEquipmentMaterialRewardResponse_Outcome int32
@@ -235,7 +235,7 @@ func (x ClaimEquipmentMaterialRewardResponse_Outcome) Number() protoreflect.Enum
 
 // Deprecated: Use ClaimEquipmentMaterialRewardResponse_Outcome.Descriptor instead.
 func (ClaimEquipmentMaterialRewardResponse_Outcome) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{46, 0}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{47, 0}
 }
 
 type UnlockEquipLoadoutResponse_Outcome int32
@@ -284,7 +284,7 @@ func (x UnlockEquipLoadoutResponse_Outcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UnlockEquipLoadoutResponse_Outcome.Descriptor instead.
 func (UnlockEquipLoadoutResponse_Outcome) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{58, 0}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{59, 0}
 }
 
 // 装备 tooltip 的一行属性(设计文档 docs/design/equipment-attributes.md §3.2)。
@@ -706,6 +706,98 @@ func (x *EquipEnhancePreview) GetTradableMaterialAvailable() uint64 {
 }
 
 // 实例与布局分离；显示信息不写入玩家持久化记录。
+type SealedSkillBookInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SkillTableId    uint32                 `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
+	SkillName       string                 `protobuf:"bytes,2,opt,name=skill_name,json=skillName,proto3" json:"skill_name,omitempty"`
+	ScrollId        uint32                 `protobuf:"varint,3,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`
+	ScrollName      string                 `protobuf:"bytes,4,opt,name=scroll_name,json=scrollName,proto3" json:"scroll_name,omitempty"`
+	RarityTier      uint32                 `protobuf:"varint,5,opt,name=rarity_tier,json=rarityTier,proto3" json:"rarity_tier,omitempty"`
+	CrafterName     string                 `protobuf:"bytes,6,opt,name=crafter_name,json=crafterName,proto3" json:"crafter_name,omitempty"`
+	CrafterPlayerId uint64                 `protobuf:"varint,7,opt,name=crafter_player_id,json=crafterPlayerId,proto3" json:"crafter_player_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SealedSkillBookInfo) Reset() {
+	*x = SealedSkillBookInfo{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SealedSkillBookInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SealedSkillBookInfo) ProtoMessage() {}
+
+func (x *SealedSkillBookInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SealedSkillBookInfo.ProtoReflect.Descriptor instead.
+func (*SealedSkillBookInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SealedSkillBookInfo) GetSkillTableId() uint32 {
+	if x != nil {
+		return x.SkillTableId
+	}
+	return 0
+}
+
+func (x *SealedSkillBookInfo) GetSkillName() string {
+	if x != nil {
+		return x.SkillName
+	}
+	return ""
+}
+
+func (x *SealedSkillBookInfo) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *SealedSkillBookInfo) GetScrollName() string {
+	if x != nil {
+		return x.ScrollName
+	}
+	return ""
+}
+
+func (x *SealedSkillBookInfo) GetRarityTier() uint32 {
+	if x != nil {
+		return x.RarityTier
+	}
+	return 0
+}
+
+func (x *SealedSkillBookInfo) GetCrafterName() string {
+	if x != nil {
+		return x.CrafterName
+	}
+	return ""
+}
+
+func (x *SealedSkillBookInfo) GetCrafterPlayerId() uint64 {
+	if x != nil {
+		return x.CrafterPlayerId
+	}
+	return 0
+}
+
 type BagItemInfo struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	ItemId      uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
@@ -737,13 +829,14 @@ type BagItemInfo struct {
 	Bound                 bool                       `protobuf:"varint,25,opt,name=bound,proto3" json:"bound,omitempty"`                                                 // true = 仅自用绑定（不可交易/上架/赠送）
 	CrafterName           string                     `protobuf:"bytes,26,opt,name=crafter_name,json=crafterName,proto3" json:"crafter_name,omitempty"`                   // 宗师打造/打磨极品永久署名（空 = 无署名）
 	CrafterPlayerId       uint64                     `protobuf:"varint,27,opt,name=crafter_player_id,json=crafterPlayerId,proto3" json:"crafter_player_id,omitempty"`    // 宗师玩家 ID（仅追溯）
+	SealedSkillBook       *SealedSkillBookInfo       `protobuf:"bytes,28,opt,name=sealed_skill_book,json=sealedSkillBook,proto3" json:"sealed_skill_book,omitempty"`     // 3414 封卷道籍：封存的技能书展示数据（非封卷为空）
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BagItemInfo) Reset() {
 	*x = BagItemInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[4]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +848,7 @@ func (x *BagItemInfo) String() string {
 func (*BagItemInfo) ProtoMessage() {}
 
 func (x *BagItemInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[4]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +861,7 @@ func (x *BagItemInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BagItemInfo.ProtoReflect.Descriptor instead.
 func (*BagItemInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{4}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BagItemInfo) GetItemId() uint64 {
@@ -960,6 +1053,13 @@ func (x *BagItemInfo) GetCrafterPlayerId() uint64 {
 	return 0
 }
 
+func (x *BagItemInfo) GetSealedSkillBook() *SealedSkillBookInfo {
+	if x != nil {
+		return x.SealedSkillBook
+	}
+	return nil
+}
+
 type BagSlotInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
@@ -972,7 +1072,7 @@ type BagSlotInfo struct {
 
 func (x *BagSlotInfo) Reset() {
 	*x = BagSlotInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[5]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -984,7 +1084,7 @@ func (x *BagSlotInfo) String() string {
 func (*BagSlotInfo) ProtoMessage() {}
 
 func (x *BagSlotInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[5]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -997,7 +1097,7 @@ func (x *BagSlotInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BagSlotInfo.ProtoReflect.Descriptor instead.
 func (*BagSlotInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{5}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BagSlotInfo) GetSlot() uint32 {
@@ -1043,7 +1143,7 @@ type BagLayoutInfo struct {
 
 func (x *BagLayoutInfo) Reset() {
 	*x = BagLayoutInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[6]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1055,7 +1155,7 @@ func (x *BagLayoutInfo) String() string {
 func (*BagLayoutInfo) ProtoMessage() {}
 
 func (x *BagLayoutInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[6]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1068,7 +1168,7 @@ func (x *BagLayoutInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BagLayoutInfo.ProtoReflect.Descriptor instead.
 func (*BagLayoutInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{6}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *BagLayoutInfo) GetBagType() uint32 {
@@ -1118,7 +1218,7 @@ type BagHeldItemInfo struct {
 
 func (x *BagHeldItemInfo) Reset() {
 	*x = BagHeldItemInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[7]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1130,7 +1230,7 @@ func (x *BagHeldItemInfo) String() string {
 func (*BagHeldItemInfo) ProtoMessage() {}
 
 func (x *BagHeldItemInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[7]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1143,7 +1243,7 @@ func (x *BagHeldItemInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BagHeldItemInfo.ProtoReflect.Descriptor instead.
 func (*BagHeldItemInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BagHeldItemInfo) GetConfigId() uint32 {
@@ -1174,7 +1274,7 @@ type BagInfo struct {
 
 func (x *BagInfo) Reset() {
 	*x = BagInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[8]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1186,7 +1286,7 @@ func (x *BagInfo) String() string {
 func (*BagInfo) ProtoMessage() {}
 
 func (x *BagInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[8]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1199,7 +1299,7 @@ func (x *BagInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BagInfo.ProtoReflect.Descriptor instead.
 func (*BagInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *BagInfo) GetItems() []*BagItemInfo {
@@ -1239,7 +1339,7 @@ type GetBagRequest struct {
 
 func (x *GetBagRequest) Reset() {
 	*x = GetBagRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[9]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1251,7 +1351,7 @@ func (x *GetBagRequest) String() string {
 func (*GetBagRequest) ProtoMessage() {}
 
 func (x *GetBagRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[9]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1264,7 +1364,7 @@ func (x *GetBagRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBagRequest.ProtoReflect.Descriptor instead.
 func (*GetBagRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{9}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetBagRequest) GetBagType() uint32 {
@@ -1284,7 +1384,7 @@ type GetBagResponse struct {
 
 func (x *GetBagResponse) Reset() {
 	*x = GetBagResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[10]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1296,7 +1396,7 @@ func (x *GetBagResponse) String() string {
 func (*GetBagResponse) ProtoMessage() {}
 
 func (x *GetBagResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[10]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1309,7 +1409,7 @@ func (x *GetBagResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBagResponse.ProtoReflect.Descriptor instead.
 func (*GetBagResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetBagResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1335,7 +1435,7 @@ type SortBagRequest struct {
 
 func (x *SortBagRequest) Reset() {
 	*x = SortBagRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[11]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1347,7 +1447,7 @@ func (x *SortBagRequest) String() string {
 func (*SortBagRequest) ProtoMessage() {}
 
 func (x *SortBagRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[11]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1360,7 +1460,7 @@ func (x *SortBagRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SortBagRequest.ProtoReflect.Descriptor instead.
 func (*SortBagRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SortBagRequest) GetBagType() uint32 {
@@ -1381,7 +1481,7 @@ type SortBagResponse struct {
 
 func (x *SortBagResponse) Reset() {
 	*x = SortBagResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[12]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1393,7 +1493,7 @@ func (x *SortBagResponse) String() string {
 func (*SortBagResponse) ProtoMessage() {}
 
 func (x *SortBagResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[12]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1406,7 +1506,7 @@ func (x *SortBagResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SortBagResponse.ProtoReflect.Descriptor instead.
 func (*SortBagResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{12}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SortBagResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1444,7 +1544,7 @@ type EquipItemRequest struct {
 
 func (x *EquipItemRequest) Reset() {
 	*x = EquipItemRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[13]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1456,7 +1556,7 @@ func (x *EquipItemRequest) String() string {
 func (*EquipItemRequest) ProtoMessage() {}
 
 func (x *EquipItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[13]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1469,7 +1569,7 @@ func (x *EquipItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipItemRequest.ProtoReflect.Descriptor instead.
 func (*EquipItemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{13}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *EquipItemRequest) GetItemId() uint64 {
@@ -1497,7 +1597,7 @@ type EquipItemResponse struct {
 
 func (x *EquipItemResponse) Reset() {
 	*x = EquipItemResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[14]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1509,7 +1609,7 @@ func (x *EquipItemResponse) String() string {
 func (*EquipItemResponse) ProtoMessage() {}
 
 func (x *EquipItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[14]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1522,7 +1622,7 @@ func (x *EquipItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipItemResponse.ProtoReflect.Descriptor instead.
 func (*EquipItemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{14}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *EquipItemResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1556,7 +1656,7 @@ type UnequipItemRequest struct {
 
 func (x *UnequipItemRequest) Reset() {
 	*x = UnequipItemRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[15]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1668,7 @@ func (x *UnequipItemRequest) String() string {
 func (*UnequipItemRequest) ProtoMessage() {}
 
 func (x *UnequipItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[15]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1681,7 @@ func (x *UnequipItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnequipItemRequest.ProtoReflect.Descriptor instead.
 func (*UnequipItemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{15}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UnequipItemRequest) GetItemId() uint64 {
@@ -1602,7 +1702,7 @@ type UnequipItemResponse struct {
 
 func (x *UnequipItemResponse) Reset() {
 	*x = UnequipItemResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[16]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1614,7 +1714,7 @@ func (x *UnequipItemResponse) String() string {
 func (*UnequipItemResponse) ProtoMessage() {}
 
 func (x *UnequipItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[16]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1627,7 +1727,7 @@ func (x *UnequipItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnequipItemResponse.ProtoReflect.Descriptor instead.
 func (*UnequipItemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{16}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *UnequipItemResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1662,7 +1762,7 @@ type GmGrantItemRequest struct {
 
 func (x *GmGrantItemRequest) Reset() {
 	*x = GmGrantItemRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[17]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1674,7 +1774,7 @@ func (x *GmGrantItemRequest) String() string {
 func (*GmGrantItemRequest) ProtoMessage() {}
 
 func (x *GmGrantItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[17]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1687,7 +1787,7 @@ func (x *GmGrantItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GmGrantItemRequest.ProtoReflect.Descriptor instead.
 func (*GmGrantItemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{17}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GmGrantItemRequest) GetConfigId() uint32 {
@@ -1714,7 +1814,7 @@ type GmGrantItemResponse struct {
 
 func (x *GmGrantItemResponse) Reset() {
 	*x = GmGrantItemResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[18]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1726,7 +1826,7 @@ func (x *GmGrantItemResponse) String() string {
 func (*GmGrantItemResponse) ProtoMessage() {}
 
 func (x *GmGrantItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[18]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1739,7 +1839,7 @@ func (x *GmGrantItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GmGrantItemResponse.ProtoReflect.Descriptor instead.
 func (*GmGrantItemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{18}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GmGrantItemResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1789,7 +1889,7 @@ type EnhanceEquipRequest struct {
 
 func (x *EnhanceEquipRequest) Reset() {
 	*x = EnhanceEquipRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[19]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1801,7 +1901,7 @@ func (x *EnhanceEquipRequest) String() string {
 func (*EnhanceEquipRequest) ProtoMessage() {}
 
 func (x *EnhanceEquipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[19]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1814,7 +1914,7 @@ func (x *EnhanceEquipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnhanceEquipRequest.ProtoReflect.Descriptor instead.
 func (*EnhanceEquipRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{19}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *EnhanceEquipRequest) GetItemId() uint64 {
@@ -1872,7 +1972,7 @@ type EnhanceEquipResponse struct {
 
 func (x *EnhanceEquipResponse) Reset() {
 	*x = EnhanceEquipResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[20]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1884,7 +1984,7 @@ func (x *EnhanceEquipResponse) String() string {
 func (*EnhanceEquipResponse) ProtoMessage() {}
 
 func (x *EnhanceEquipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[20]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1897,7 +1997,7 @@ func (x *EnhanceEquipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnhanceEquipResponse.ProtoReflect.Descriptor instead.
 func (*EnhanceEquipResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{20}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *EnhanceEquipResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1969,7 +2069,7 @@ type InlayGemRequest struct {
 
 func (x *InlayGemRequest) Reset() {
 	*x = InlayGemRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[21]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1981,7 +2081,7 @@ func (x *InlayGemRequest) String() string {
 func (*InlayGemRequest) ProtoMessage() {}
 
 func (x *InlayGemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[21]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1994,7 +2094,7 @@ func (x *InlayGemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InlayGemRequest.ProtoReflect.Descriptor instead.
 func (*InlayGemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{21}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *InlayGemRequest) GetItemId() uint64 {
@@ -2029,7 +2129,7 @@ type InlayGemResponse struct {
 
 func (x *InlayGemResponse) Reset() {
 	*x = InlayGemResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[22]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2041,7 +2141,7 @@ func (x *InlayGemResponse) String() string {
 func (*InlayGemResponse) ProtoMessage() {}
 
 func (x *InlayGemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[22]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2054,7 +2154,7 @@ func (x *InlayGemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InlayGemResponse.ProtoReflect.Descriptor instead.
 func (*InlayGemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{22}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *InlayGemResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2089,7 +2189,7 @@ type RemoveGemRequest struct {
 
 func (x *RemoveGemRequest) Reset() {
 	*x = RemoveGemRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[23]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2101,7 +2201,7 @@ func (x *RemoveGemRequest) String() string {
 func (*RemoveGemRequest) ProtoMessage() {}
 
 func (x *RemoveGemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[23]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2114,7 +2214,7 @@ func (x *RemoveGemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveGemRequest.ProtoReflect.Descriptor instead.
 func (*RemoveGemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{23}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RemoveGemRequest) GetItemId() uint64 {
@@ -2142,7 +2242,7 @@ type RemoveGemResponse struct {
 
 func (x *RemoveGemResponse) Reset() {
 	*x = RemoveGemResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[24]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2154,7 +2254,7 @@ func (x *RemoveGemResponse) String() string {
 func (*RemoveGemResponse) ProtoMessage() {}
 
 func (x *RemoveGemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[24]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2167,7 +2267,7 @@ func (x *RemoveGemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveGemResponse.ProtoReflect.Descriptor instead.
 func (*RemoveGemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{24}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RemoveGemResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2211,7 +2311,7 @@ type RetrieveTemporaryItemsRequest struct {
 
 func (x *RetrieveTemporaryItemsRequest) Reset() {
 	*x = RetrieveTemporaryItemsRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[25]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2223,7 +2323,7 @@ func (x *RetrieveTemporaryItemsRequest) String() string {
 func (*RetrieveTemporaryItemsRequest) ProtoMessage() {}
 
 func (x *RetrieveTemporaryItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[25]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2236,7 +2336,7 @@ func (x *RetrieveTemporaryItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetrieveTemporaryItemsRequest.ProtoReflect.Descriptor instead.
 func (*RetrieveTemporaryItemsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{25}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RetrieveTemporaryItemsRequest) GetItemId() uint64 {
@@ -2264,7 +2364,7 @@ type RetrieveTemporaryItemsResponse struct {
 
 func (x *RetrieveTemporaryItemsResponse) Reset() {
 	*x = RetrieveTemporaryItemsResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[26]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2276,7 +2376,7 @@ func (x *RetrieveTemporaryItemsResponse) String() string {
 func (*RetrieveTemporaryItemsResponse) ProtoMessage() {}
 
 func (x *RetrieveTemporaryItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[26]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2289,7 +2389,7 @@ func (x *RetrieveTemporaryItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetrieveTemporaryItemsResponse.ProtoReflect.Descriptor instead.
 func (*RetrieveTemporaryItemsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{26}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RetrieveTemporaryItemsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2346,7 +2446,7 @@ type EquipFixedAffixInfo struct {
 
 func (x *EquipFixedAffixInfo) Reset() {
 	*x = EquipFixedAffixInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[27]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2358,7 +2458,7 @@ func (x *EquipFixedAffixInfo) String() string {
 func (*EquipFixedAffixInfo) ProtoMessage() {}
 
 func (x *EquipFixedAffixInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[27]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2371,7 +2471,7 @@ func (x *EquipFixedAffixInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipFixedAffixInfo.ProtoReflect.Descriptor instead.
 func (*EquipFixedAffixInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{27}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *EquipFixedAffixInfo) GetAffixId() uint32 {
@@ -2556,7 +2656,7 @@ type EquipAffixQualityInfo struct {
 
 func (x *EquipAffixQualityInfo) Reset() {
 	*x = EquipAffixQualityInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[28]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2568,7 +2668,7 @@ func (x *EquipAffixQualityInfo) String() string {
 func (*EquipAffixQualityInfo) ProtoMessage() {}
 
 func (x *EquipAffixQualityInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[28]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2581,7 +2681,7 @@ func (x *EquipAffixQualityInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipAffixQualityInfo.ProtoReflect.Descriptor instead.
 func (*EquipAffixQualityInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{28}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *EquipAffixQualityInfo) GetQualityTier() uint32 {
@@ -2639,7 +2739,7 @@ type CraftMasteryInfo struct {
 
 func (x *CraftMasteryInfo) Reset() {
 	*x = CraftMasteryInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[29]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2651,7 +2751,7 @@ func (x *CraftMasteryInfo) String() string {
 func (*CraftMasteryInfo) ProtoMessage() {}
 
 func (x *CraftMasteryInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[29]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2664,7 +2764,7 @@ func (x *CraftMasteryInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CraftMasteryInfo.ProtoReflect.Descriptor instead.
 func (*CraftMasteryInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{29}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *CraftMasteryInfo) GetTier() uint32 {
@@ -2713,7 +2813,7 @@ type EquipFixedAffixSlotInfo struct {
 
 func (x *EquipFixedAffixSlotInfo) Reset() {
 	*x = EquipFixedAffixSlotInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[30]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2725,7 +2825,7 @@ func (x *EquipFixedAffixSlotInfo) String() string {
 func (*EquipFixedAffixSlotInfo) ProtoMessage() {}
 
 func (x *EquipFixedAffixSlotInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[30]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2738,7 +2838,7 @@ func (x *EquipFixedAffixSlotInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipFixedAffixSlotInfo.ProtoReflect.Descriptor instead.
 func (*EquipFixedAffixSlotInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{30}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *EquipFixedAffixSlotInfo) GetSlot() uint32 {
@@ -2779,7 +2879,7 @@ type EquipArtifactInfo struct {
 
 func (x *EquipArtifactInfo) Reset() {
 	*x = EquipArtifactInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[31]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2791,7 +2891,7 @@ func (x *EquipArtifactInfo) String() string {
 func (*EquipArtifactInfo) ProtoMessage() {}
 
 func (x *EquipArtifactInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[31]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2804,7 +2904,7 @@ func (x *EquipArtifactInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipArtifactInfo.ProtoReflect.Descriptor instead.
 func (*EquipArtifactInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{31}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *EquipArtifactInfo) GetEffectId() uint32 {
@@ -2888,7 +2988,7 @@ type EquipmentCraftChoice struct {
 
 func (x *EquipmentCraftChoice) Reset() {
 	*x = EquipmentCraftChoice{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[32]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2900,7 +3000,7 @@ func (x *EquipmentCraftChoice) String() string {
 func (*EquipmentCraftChoice) ProtoMessage() {}
 
 func (x *EquipmentCraftChoice) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[32]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2913,7 +3013,7 @@ func (x *EquipmentCraftChoice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipmentCraftChoice.ProtoReflect.Descriptor instead.
 func (*EquipmentCraftChoice) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{32}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *EquipmentCraftChoice) GetOperation() EquipmentCraftChoice_Operation {
@@ -3000,7 +3100,7 @@ type EquipmentCraftMaterial struct {
 
 func (x *EquipmentCraftMaterial) Reset() {
 	*x = EquipmentCraftMaterial{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[33]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3012,7 +3112,7 @@ func (x *EquipmentCraftMaterial) String() string {
 func (*EquipmentCraftMaterial) ProtoMessage() {}
 
 func (x *EquipmentCraftMaterial) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[33]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3025,7 +3125,7 @@ func (x *EquipmentCraftMaterial) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipmentCraftMaterial.ProtoReflect.Descriptor instead.
 func (*EquipmentCraftMaterial) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{33}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *EquipmentCraftMaterial) GetConfigId() uint32 {
@@ -3081,7 +3181,7 @@ type EquipmentCraftRecipe struct {
 
 func (x *EquipmentCraftRecipe) Reset() {
 	*x = EquipmentCraftRecipe{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[34]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3093,7 +3193,7 @@ func (x *EquipmentCraftRecipe) String() string {
 func (*EquipmentCraftRecipe) ProtoMessage() {}
 
 func (x *EquipmentCraftRecipe) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[34]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3106,7 +3206,7 @@ func (x *EquipmentCraftRecipe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipmentCraftRecipe.ProtoReflect.Descriptor instead.
 func (*EquipmentCraftRecipe) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{34}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *EquipmentCraftRecipe) GetProduct() *BagItemInfo {
@@ -3138,7 +3238,7 @@ type GetEquipmentCraftRulesRequest struct {
 
 func (x *GetEquipmentCraftRulesRequest) Reset() {
 	*x = GetEquipmentCraftRulesRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[35]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3150,7 +3250,7 @@ func (x *GetEquipmentCraftRulesRequest) String() string {
 func (*GetEquipmentCraftRulesRequest) ProtoMessage() {}
 
 func (x *GetEquipmentCraftRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[35]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3163,7 +3263,7 @@ func (x *GetEquipmentCraftRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEquipmentCraftRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetEquipmentCraftRulesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{35}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{36}
 }
 
 type GetEquipmentCraftRulesResponse struct {
@@ -3181,7 +3281,7 @@ type GetEquipmentCraftRulesResponse struct {
 
 func (x *GetEquipmentCraftRulesResponse) Reset() {
 	*x = GetEquipmentCraftRulesResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[36]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3193,7 +3293,7 @@ func (x *GetEquipmentCraftRulesResponse) String() string {
 func (*GetEquipmentCraftRulesResponse) ProtoMessage() {}
 
 func (x *GetEquipmentCraftRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[36]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3206,7 +3306,7 @@ func (x *GetEquipmentCraftRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEquipmentCraftRulesResponse.ProtoReflect.Descriptor instead.
 func (*GetEquipmentCraftRulesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{36}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetEquipmentCraftRulesResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3278,7 +3378,7 @@ type EquipmentCraftPreview struct {
 
 func (x *EquipmentCraftPreview) Reset() {
 	*x = EquipmentCraftPreview{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[37]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3290,7 +3390,7 @@ func (x *EquipmentCraftPreview) String() string {
 func (*EquipmentCraftPreview) ProtoMessage() {}
 
 func (x *EquipmentCraftPreview) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[37]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3303,7 +3403,7 @@ func (x *EquipmentCraftPreview) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipmentCraftPreview.ProtoReflect.Descriptor instead.
 func (*EquipmentCraftPreview) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{37}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *EquipmentCraftPreview) GetChoice() *EquipmentCraftChoice {
@@ -3399,7 +3499,7 @@ type PreviewEquipmentCraftRequest struct {
 
 func (x *PreviewEquipmentCraftRequest) Reset() {
 	*x = PreviewEquipmentCraftRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[38]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3411,7 +3511,7 @@ func (x *PreviewEquipmentCraftRequest) String() string {
 func (*PreviewEquipmentCraftRequest) ProtoMessage() {}
 
 func (x *PreviewEquipmentCraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[38]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3424,7 +3524,7 @@ func (x *PreviewEquipmentCraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewEquipmentCraftRequest.ProtoReflect.Descriptor instead.
 func (*PreviewEquipmentCraftRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{38}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *PreviewEquipmentCraftRequest) GetChoice() *EquipmentCraftChoice {
@@ -3444,7 +3544,7 @@ type PreviewEquipmentCraftResponse struct {
 
 func (x *PreviewEquipmentCraftResponse) Reset() {
 	*x = PreviewEquipmentCraftResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[39]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3456,7 +3556,7 @@ func (x *PreviewEquipmentCraftResponse) String() string {
 func (*PreviewEquipmentCraftResponse) ProtoMessage() {}
 
 func (x *PreviewEquipmentCraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[39]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3469,7 +3569,7 @@ func (x *PreviewEquipmentCraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewEquipmentCraftResponse.ProtoReflect.Descriptor instead.
 func (*PreviewEquipmentCraftResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{39}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *PreviewEquipmentCraftResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3499,7 +3599,7 @@ type CommitEquipmentCraftRequest struct {
 
 func (x *CommitEquipmentCraftRequest) Reset() {
 	*x = CommitEquipmentCraftRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[40]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3511,7 +3611,7 @@ func (x *CommitEquipmentCraftRequest) String() string {
 func (*CommitEquipmentCraftRequest) ProtoMessage() {}
 
 func (x *CommitEquipmentCraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[40]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3524,7 +3624,7 @@ func (x *CommitEquipmentCraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitEquipmentCraftRequest.ProtoReflect.Descriptor instead.
 func (*CommitEquipmentCraftRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{40}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *CommitEquipmentCraftRequest) GetChoice() *EquipmentCraftChoice {
@@ -3577,7 +3677,7 @@ type CommitEquipmentCraftResponse struct {
 
 func (x *CommitEquipmentCraftResponse) Reset() {
 	*x = CommitEquipmentCraftResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[41]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3589,7 +3689,7 @@ func (x *CommitEquipmentCraftResponse) String() string {
 func (*CommitEquipmentCraftResponse) ProtoMessage() {}
 
 func (x *CommitEquipmentCraftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[41]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3602,7 +3702,7 @@ func (x *CommitEquipmentCraftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitEquipmentCraftResponse.ProtoReflect.Descriptor instead.
 func (*CommitEquipmentCraftResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{41}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *CommitEquipmentCraftResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3736,7 +3836,7 @@ type EquipmentMaterialRewardSnapshot struct {
 
 func (x *EquipmentMaterialRewardSnapshot) Reset() {
 	*x = EquipmentMaterialRewardSnapshot{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[42]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3748,7 +3848,7 @@ func (x *EquipmentMaterialRewardSnapshot) String() string {
 func (*EquipmentMaterialRewardSnapshot) ProtoMessage() {}
 
 func (x *EquipmentMaterialRewardSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[42]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3761,7 +3861,7 @@ func (x *EquipmentMaterialRewardSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipmentMaterialRewardSnapshot.ProtoReflect.Descriptor instead.
 func (*EquipmentMaterialRewardSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{42}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *EquipmentMaterialRewardSnapshot) GetAvailable() bool {
@@ -3933,7 +4033,7 @@ type GetEquipmentMaterialRewardRequest struct {
 
 func (x *GetEquipmentMaterialRewardRequest) Reset() {
 	*x = GetEquipmentMaterialRewardRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[43]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3945,7 +4045,7 @@ func (x *GetEquipmentMaterialRewardRequest) String() string {
 func (*GetEquipmentMaterialRewardRequest) ProtoMessage() {}
 
 func (x *GetEquipmentMaterialRewardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[43]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3958,7 +4058,7 @@ func (x *GetEquipmentMaterialRewardRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetEquipmentMaterialRewardRequest.ProtoReflect.Descriptor instead.
 func (*GetEquipmentMaterialRewardRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{43}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{44}
 }
 
 type GetEquipmentMaterialRewardResponse struct {
@@ -3971,7 +4071,7 @@ type GetEquipmentMaterialRewardResponse struct {
 
 func (x *GetEquipmentMaterialRewardResponse) Reset() {
 	*x = GetEquipmentMaterialRewardResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[44]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3983,7 +4083,7 @@ func (x *GetEquipmentMaterialRewardResponse) String() string {
 func (*GetEquipmentMaterialRewardResponse) ProtoMessage() {}
 
 func (x *GetEquipmentMaterialRewardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[44]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3996,7 +4096,7 @@ func (x *GetEquipmentMaterialRewardResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetEquipmentMaterialRewardResponse.ProtoReflect.Descriptor instead.
 func (*GetEquipmentMaterialRewardResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{44}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetEquipmentMaterialRewardResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -4026,7 +4126,7 @@ type ClaimEquipmentMaterialRewardRequest struct {
 
 func (x *ClaimEquipmentMaterialRewardRequest) Reset() {
 	*x = ClaimEquipmentMaterialRewardRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[45]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4038,7 +4138,7 @@ func (x *ClaimEquipmentMaterialRewardRequest) String() string {
 func (*ClaimEquipmentMaterialRewardRequest) ProtoMessage() {}
 
 func (x *ClaimEquipmentMaterialRewardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[45]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4051,7 +4151,7 @@ func (x *ClaimEquipmentMaterialRewardRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ClaimEquipmentMaterialRewardRequest.ProtoReflect.Descriptor instead.
 func (*ClaimEquipmentMaterialRewardRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{45}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ClaimEquipmentMaterialRewardRequest) GetClientRequestId() uint64 {
@@ -4099,7 +4199,7 @@ type ClaimEquipmentMaterialRewardResponse struct {
 
 func (x *ClaimEquipmentMaterialRewardResponse) Reset() {
 	*x = ClaimEquipmentMaterialRewardResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[46]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4111,7 +4211,7 @@ func (x *ClaimEquipmentMaterialRewardResponse) String() string {
 func (*ClaimEquipmentMaterialRewardResponse) ProtoMessage() {}
 
 func (x *ClaimEquipmentMaterialRewardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[46]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4124,7 +4224,7 @@ func (x *ClaimEquipmentMaterialRewardResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ClaimEquipmentMaterialRewardResponse.ProtoReflect.Descriptor instead.
 func (*ClaimEquipmentMaterialRewardResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{46}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ClaimEquipmentMaterialRewardResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -4204,7 +4304,7 @@ type EquipLoadoutSlotView struct {
 
 func (x *EquipLoadoutSlotView) Reset() {
 	*x = EquipLoadoutSlotView{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[47]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4216,7 +4316,7 @@ func (x *EquipLoadoutSlotView) String() string {
 func (*EquipLoadoutSlotView) ProtoMessage() {}
 
 func (x *EquipLoadoutSlotView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[47]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4229,7 +4329,7 @@ func (x *EquipLoadoutSlotView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipLoadoutSlotView.ProtoReflect.Descriptor instead.
 func (*EquipLoadoutSlotView) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{47}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *EquipLoadoutSlotView) GetSlot() uint32 {
@@ -4290,7 +4390,7 @@ type EquipLoadoutSchemeInfo struct {
 
 func (x *EquipLoadoutSchemeInfo) Reset() {
 	*x = EquipLoadoutSchemeInfo{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[48]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4302,7 +4402,7 @@ func (x *EquipLoadoutSchemeInfo) String() string {
 func (*EquipLoadoutSchemeInfo) ProtoMessage() {}
 
 func (x *EquipLoadoutSchemeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[48]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4315,7 +4415,7 @@ func (x *EquipLoadoutSchemeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipLoadoutSchemeInfo.ProtoReflect.Descriptor instead.
 func (*EquipLoadoutSchemeInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{48}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *EquipLoadoutSchemeInfo) GetSchemeId() uint32 {
@@ -4385,7 +4485,7 @@ type EquipLoadoutLinkedOption struct {
 
 func (x *EquipLoadoutLinkedOption) Reset() {
 	*x = EquipLoadoutLinkedOption{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[49]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4397,7 +4497,7 @@ func (x *EquipLoadoutLinkedOption) String() string {
 func (*EquipLoadoutLinkedOption) ProtoMessage() {}
 
 func (x *EquipLoadoutLinkedOption) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[49]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4410,7 +4510,7 @@ func (x *EquipLoadoutLinkedOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipLoadoutLinkedOption.ProtoReflect.Descriptor instead.
 func (*EquipLoadoutLinkedOption) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{49}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *EquipLoadoutLinkedOption) GetSchemeId() uint32 {
@@ -4455,7 +4555,7 @@ type EquipLoadoutSnapshot struct {
 
 func (x *EquipLoadoutSnapshot) Reset() {
 	*x = EquipLoadoutSnapshot{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[50]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4467,7 +4567,7 @@ func (x *EquipLoadoutSnapshot) String() string {
 func (*EquipLoadoutSnapshot) ProtoMessage() {}
 
 func (x *EquipLoadoutSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[50]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4480,7 +4580,7 @@ func (x *EquipLoadoutSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipLoadoutSnapshot.ProtoReflect.Descriptor instead.
 func (*EquipLoadoutSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{50}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *EquipLoadoutSnapshot) GetUnlockedSchemeCount() uint32 {
@@ -4582,7 +4682,7 @@ type GetEquipLoadoutsRequest struct {
 
 func (x *GetEquipLoadoutsRequest) Reset() {
 	*x = GetEquipLoadoutsRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[51]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4594,7 +4694,7 @@ func (x *GetEquipLoadoutsRequest) String() string {
 func (*GetEquipLoadoutsRequest) ProtoMessage() {}
 
 func (x *GetEquipLoadoutsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[51]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4607,7 +4707,7 @@ func (x *GetEquipLoadoutsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEquipLoadoutsRequest.ProtoReflect.Descriptor instead.
 func (*GetEquipLoadoutsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{51}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{52}
 }
 
 type GetEquipLoadoutsResponse struct {
@@ -4620,7 +4720,7 @@ type GetEquipLoadoutsResponse struct {
 
 func (x *GetEquipLoadoutsResponse) Reset() {
 	*x = GetEquipLoadoutsResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[52]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4632,7 +4732,7 @@ func (x *GetEquipLoadoutsResponse) String() string {
 func (*GetEquipLoadoutsResponse) ProtoMessage() {}
 
 func (x *GetEquipLoadoutsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[52]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4645,7 +4745,7 @@ func (x *GetEquipLoadoutsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEquipLoadoutsResponse.ProtoReflect.Descriptor instead.
 func (*GetEquipLoadoutsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{52}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *GetEquipLoadoutsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -4679,7 +4779,7 @@ type SaveEquipLoadoutRequest struct {
 
 func (x *SaveEquipLoadoutRequest) Reset() {
 	*x = SaveEquipLoadoutRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[53]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4691,7 +4791,7 @@ func (x *SaveEquipLoadoutRequest) String() string {
 func (*SaveEquipLoadoutRequest) ProtoMessage() {}
 
 func (x *SaveEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[53]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4704,7 +4804,7 @@ func (x *SaveEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveEquipLoadoutRequest.ProtoReflect.Descriptor instead.
 func (*SaveEquipLoadoutRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{53}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *SaveEquipLoadoutRequest) GetSchemeId() uint32 {
@@ -4782,7 +4882,7 @@ type SaveEquipLoadoutResponse struct {
 
 func (x *SaveEquipLoadoutResponse) Reset() {
 	*x = SaveEquipLoadoutResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[54]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4794,7 +4894,7 @@ func (x *SaveEquipLoadoutResponse) String() string {
 func (*SaveEquipLoadoutResponse) ProtoMessage() {}
 
 func (x *SaveEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[54]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4807,7 +4907,7 @@ func (x *SaveEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveEquipLoadoutResponse.ProtoReflect.Descriptor instead.
 func (*SaveEquipLoadoutResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{54}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *SaveEquipLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -4850,7 +4950,7 @@ type SwitchEquipLoadoutRequest struct {
 
 func (x *SwitchEquipLoadoutRequest) Reset() {
 	*x = SwitchEquipLoadoutRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[55]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4862,7 +4962,7 @@ func (x *SwitchEquipLoadoutRequest) String() string {
 func (*SwitchEquipLoadoutRequest) ProtoMessage() {}
 
 func (x *SwitchEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[55]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4875,7 +4975,7 @@ func (x *SwitchEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchEquipLoadoutRequest.ProtoReflect.Descriptor instead.
 func (*SwitchEquipLoadoutRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{55}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *SwitchEquipLoadoutRequest) GetSchemeId() uint32 {
@@ -4922,7 +5022,7 @@ type SwitchEquipLoadoutResponse struct {
 
 func (x *SwitchEquipLoadoutResponse) Reset() {
 	*x = SwitchEquipLoadoutResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[56]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4934,7 +5034,7 @@ func (x *SwitchEquipLoadoutResponse) String() string {
 func (*SwitchEquipLoadoutResponse) ProtoMessage() {}
 
 func (x *SwitchEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[56]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4947,7 +5047,7 @@ func (x *SwitchEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchEquipLoadoutResponse.ProtoReflect.Descriptor instead.
 func (*SwitchEquipLoadoutResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{56}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *SwitchEquipLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -5018,7 +5118,7 @@ type UnlockEquipLoadoutRequest struct {
 
 func (x *UnlockEquipLoadoutRequest) Reset() {
 	*x = UnlockEquipLoadoutRequest{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[57]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5030,7 +5130,7 @@ func (x *UnlockEquipLoadoutRequest) String() string {
 func (*UnlockEquipLoadoutRequest) ProtoMessage() {}
 
 func (x *UnlockEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[57]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5043,7 +5143,7 @@ func (x *UnlockEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlockEquipLoadoutRequest.ProtoReflect.Descriptor instead.
 func (*UnlockEquipLoadoutRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{57}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *UnlockEquipLoadoutRequest) GetClientRequestId() uint64 {
@@ -5087,7 +5187,7 @@ type UnlockEquipLoadoutResponse struct {
 
 func (x *UnlockEquipLoadoutResponse) Reset() {
 	*x = UnlockEquipLoadoutResponse{}
-	mi := &file_proto_scene_player_bag_proto_msgTypes[58]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5099,7 +5199,7 @@ func (x *UnlockEquipLoadoutResponse) String() string {
 func (*UnlockEquipLoadoutResponse) ProtoMessage() {}
 
 func (x *UnlockEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_bag_proto_msgTypes[58]
+	mi := &file_proto_scene_player_bag_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5112,7 +5212,7 @@ func (x *UnlockEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlockEquipLoadoutResponse.ProtoReflect.Descriptor instead.
 func (*UnlockEquipLoadoutResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{58}
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *UnlockEquipLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -5245,7 +5345,18 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x12current_pity_count\x18\v \x01(\rR\x10currentPityCount\x120\n" +
 	"\x14pity_guaranteed_next\x18\f \x01(\bR\x12pityGuaranteedNext\x12/\n" +
 	"\x14will_bind_on_enhance\x18\r \x01(\bR\x11willBindOnEnhance\x12>\n" +
-	"\x1btradable_material_available\x18\x0e \x01(\x04R\x19tradableMaterialAvailable\"\xa3\b\n" +
+	"\x1btradable_material_available\x18\x0e \x01(\x04R\x19tradableMaterialAvailable\"\x88\x02\n" +
+	"\x13SealedSkillBookInfo\x12$\n" +
+	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x1d\n" +
+	"\n" +
+	"skill_name\x18\x02 \x01(\tR\tskillName\x12\x1b\n" +
+	"\tscroll_id\x18\x03 \x01(\rR\bscrollId\x12\x1f\n" +
+	"\vscroll_name\x18\x04 \x01(\tR\n" +
+	"scrollName\x12\x1f\n" +
+	"\vrarity_tier\x18\x05 \x01(\rR\n" +
+	"rarityTier\x12!\n" +
+	"\fcrafter_name\x18\x06 \x01(\tR\vcrafterName\x12*\n" +
+	"\x11crafter_player_id\x18\a \x01(\x04R\x0fcrafterPlayerId\"\xe5\b\n" +
 	"\vBagItemInfo\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x14\n" +
@@ -5279,7 +5390,8 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x12enhance_pity_count\x18\x18 \x01(\rR\x10enhancePityCount\x12\x14\n" +
 	"\x05bound\x18\x19 \x01(\bR\x05bound\x12!\n" +
 	"\fcrafter_name\x18\x1a \x01(\tR\vcrafterName\x12*\n" +
-	"\x11crafter_player_id\x18\x1b \x01(\x04R\x0fcrafterPlayerId\"h\n" +
+	"\x11crafter_player_id\x18\x1b \x01(\x04R\x0fcrafterPlayerId\x12@\n" +
+	"\x11sealed_skill_book\x18\x1c \x01(\v2\x14.SealedSkillBookInfoR\x0fsealedSkillBook\"h\n" +
 	"\vBagSlotInfo\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\x04R\x06itemId\x12\x14\n" +
@@ -5696,7 +5808,7 @@ func file_proto_scene_player_bag_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_player_bag_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
+var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_proto_scene_player_bag_proto_goTypes = []any{
 	(EquipLoadoutSlotStatus)(0),                       // 0: EquipLoadoutSlotStatus
 	(EquipmentCraftChoice_Operation)(0),               // 1: EquipmentCraftChoice.Operation
@@ -5707,64 +5819,65 @@ var file_proto_scene_player_bag_proto_goTypes = []any{
 	(*EquipSlotInfo)(nil),                             // 6: EquipSlotInfo
 	(*EquipGemSocketInfo)(nil),                        // 7: EquipGemSocketInfo
 	(*EquipEnhancePreview)(nil),                       // 8: EquipEnhancePreview
-	(*BagItemInfo)(nil),                               // 9: BagItemInfo
-	(*BagSlotInfo)(nil),                               // 10: BagSlotInfo
-	(*BagLayoutInfo)(nil),                             // 11: BagLayoutInfo
-	(*BagHeldItemInfo)(nil),                           // 12: BagHeldItemInfo
-	(*BagInfo)(nil),                                   // 13: BagInfo
-	(*GetBagRequest)(nil),                             // 14: GetBagRequest
-	(*GetBagResponse)(nil),                            // 15: GetBagResponse
-	(*SortBagRequest)(nil),                            // 16: SortBagRequest
-	(*SortBagResponse)(nil),                           // 17: SortBagResponse
-	(*EquipItemRequest)(nil),                          // 18: EquipItemRequest
-	(*EquipItemResponse)(nil),                         // 19: EquipItemResponse
-	(*UnequipItemRequest)(nil),                        // 20: UnequipItemRequest
-	(*UnequipItemResponse)(nil),                       // 21: UnequipItemResponse
-	(*GmGrantItemRequest)(nil),                        // 22: GmGrantItemRequest
-	(*GmGrantItemResponse)(nil),                       // 23: GmGrantItemResponse
-	(*EnhanceEquipRequest)(nil),                       // 24: EnhanceEquipRequest
-	(*EnhanceEquipResponse)(nil),                      // 25: EnhanceEquipResponse
-	(*InlayGemRequest)(nil),                           // 26: InlayGemRequest
-	(*InlayGemResponse)(nil),                          // 27: InlayGemResponse
-	(*RemoveGemRequest)(nil),                          // 28: RemoveGemRequest
-	(*RemoveGemResponse)(nil),                         // 29: RemoveGemResponse
-	(*RetrieveTemporaryItemsRequest)(nil),             // 30: RetrieveTemporaryItemsRequest
-	(*RetrieveTemporaryItemsResponse)(nil),            // 31: RetrieveTemporaryItemsResponse
-	(*EquipFixedAffixInfo)(nil),                       // 32: EquipFixedAffixInfo
-	(*EquipAffixQualityInfo)(nil),                     // 33: EquipAffixQualityInfo
-	(*CraftMasteryInfo)(nil),                          // 34: CraftMasteryInfo
-	(*EquipFixedAffixSlotInfo)(nil),                   // 35: EquipFixedAffixSlotInfo
-	(*EquipArtifactInfo)(nil),                         // 36: EquipArtifactInfo
-	(*EquipmentCraftChoice)(nil),                      // 37: EquipmentCraftChoice
-	(*EquipmentCraftMaterial)(nil),                    // 38: EquipmentCraftMaterial
-	(*EquipmentCraftRecipe)(nil),                      // 39: EquipmentCraftRecipe
-	(*GetEquipmentCraftRulesRequest)(nil),             // 40: GetEquipmentCraftRulesRequest
-	(*GetEquipmentCraftRulesResponse)(nil),            // 41: GetEquipmentCraftRulesResponse
-	(*EquipmentCraftPreview)(nil),                     // 42: EquipmentCraftPreview
-	(*PreviewEquipmentCraftRequest)(nil),              // 43: PreviewEquipmentCraftRequest
-	(*PreviewEquipmentCraftResponse)(nil),             // 44: PreviewEquipmentCraftResponse
-	(*CommitEquipmentCraftRequest)(nil),               // 45: CommitEquipmentCraftRequest
-	(*CommitEquipmentCraftResponse)(nil),              // 46: CommitEquipmentCraftResponse
-	(*EquipmentMaterialRewardSnapshot)(nil),           // 47: EquipmentMaterialRewardSnapshot
-	(*GetEquipmentMaterialRewardRequest)(nil),         // 48: GetEquipmentMaterialRewardRequest
-	(*GetEquipmentMaterialRewardResponse)(nil),        // 49: GetEquipmentMaterialRewardResponse
-	(*ClaimEquipmentMaterialRewardRequest)(nil),       // 50: ClaimEquipmentMaterialRewardRequest
-	(*ClaimEquipmentMaterialRewardResponse)(nil),      // 51: ClaimEquipmentMaterialRewardResponse
-	(*EquipLoadoutSlotView)(nil),                      // 52: EquipLoadoutSlotView
-	(*EquipLoadoutSchemeInfo)(nil),                    // 53: EquipLoadoutSchemeInfo
-	(*EquipLoadoutLinkedOption)(nil),                  // 54: EquipLoadoutLinkedOption
-	(*EquipLoadoutSnapshot)(nil),                      // 55: EquipLoadoutSnapshot
-	(*GetEquipLoadoutsRequest)(nil),                   // 56: GetEquipLoadoutsRequest
-	(*GetEquipLoadoutsResponse)(nil),                  // 57: GetEquipLoadoutsResponse
-	(*SaveEquipLoadoutRequest)(nil),                   // 58: SaveEquipLoadoutRequest
-	(*SaveEquipLoadoutResponse)(nil),                  // 59: SaveEquipLoadoutResponse
-	(*SwitchEquipLoadoutRequest)(nil),                 // 60: SwitchEquipLoadoutRequest
-	(*SwitchEquipLoadoutResponse)(nil),                // 61: SwitchEquipLoadoutResponse
-	(*UnlockEquipLoadoutRequest)(nil),                 // 62: UnlockEquipLoadoutRequest
-	(*UnlockEquipLoadoutResponse)(nil),                // 63: UnlockEquipLoadoutResponse
-	(*component.CurrencyComp)(nil),                    // 64: CurrencyComp
-	(*base.TipInfoMessage)(nil),                       // 65: TipInfoMessage
-	(*component.EquipLoadoutSlotBinding)(nil),         // 66: EquipLoadoutSlotBinding
+	(*SealedSkillBookInfo)(nil),                       // 9: SealedSkillBookInfo
+	(*BagItemInfo)(nil),                               // 10: BagItemInfo
+	(*BagSlotInfo)(nil),                               // 11: BagSlotInfo
+	(*BagLayoutInfo)(nil),                             // 12: BagLayoutInfo
+	(*BagHeldItemInfo)(nil),                           // 13: BagHeldItemInfo
+	(*BagInfo)(nil),                                   // 14: BagInfo
+	(*GetBagRequest)(nil),                             // 15: GetBagRequest
+	(*GetBagResponse)(nil),                            // 16: GetBagResponse
+	(*SortBagRequest)(nil),                            // 17: SortBagRequest
+	(*SortBagResponse)(nil),                           // 18: SortBagResponse
+	(*EquipItemRequest)(nil),                          // 19: EquipItemRequest
+	(*EquipItemResponse)(nil),                         // 20: EquipItemResponse
+	(*UnequipItemRequest)(nil),                        // 21: UnequipItemRequest
+	(*UnequipItemResponse)(nil),                       // 22: UnequipItemResponse
+	(*GmGrantItemRequest)(nil),                        // 23: GmGrantItemRequest
+	(*GmGrantItemResponse)(nil),                       // 24: GmGrantItemResponse
+	(*EnhanceEquipRequest)(nil),                       // 25: EnhanceEquipRequest
+	(*EnhanceEquipResponse)(nil),                      // 26: EnhanceEquipResponse
+	(*InlayGemRequest)(nil),                           // 27: InlayGemRequest
+	(*InlayGemResponse)(nil),                          // 28: InlayGemResponse
+	(*RemoveGemRequest)(nil),                          // 29: RemoveGemRequest
+	(*RemoveGemResponse)(nil),                         // 30: RemoveGemResponse
+	(*RetrieveTemporaryItemsRequest)(nil),             // 31: RetrieveTemporaryItemsRequest
+	(*RetrieveTemporaryItemsResponse)(nil),            // 32: RetrieveTemporaryItemsResponse
+	(*EquipFixedAffixInfo)(nil),                       // 33: EquipFixedAffixInfo
+	(*EquipAffixQualityInfo)(nil),                     // 34: EquipAffixQualityInfo
+	(*CraftMasteryInfo)(nil),                          // 35: CraftMasteryInfo
+	(*EquipFixedAffixSlotInfo)(nil),                   // 36: EquipFixedAffixSlotInfo
+	(*EquipArtifactInfo)(nil),                         // 37: EquipArtifactInfo
+	(*EquipmentCraftChoice)(nil),                      // 38: EquipmentCraftChoice
+	(*EquipmentCraftMaterial)(nil),                    // 39: EquipmentCraftMaterial
+	(*EquipmentCraftRecipe)(nil),                      // 40: EquipmentCraftRecipe
+	(*GetEquipmentCraftRulesRequest)(nil),             // 41: GetEquipmentCraftRulesRequest
+	(*GetEquipmentCraftRulesResponse)(nil),            // 42: GetEquipmentCraftRulesResponse
+	(*EquipmentCraftPreview)(nil),                     // 43: EquipmentCraftPreview
+	(*PreviewEquipmentCraftRequest)(nil),              // 44: PreviewEquipmentCraftRequest
+	(*PreviewEquipmentCraftResponse)(nil),             // 45: PreviewEquipmentCraftResponse
+	(*CommitEquipmentCraftRequest)(nil),               // 46: CommitEquipmentCraftRequest
+	(*CommitEquipmentCraftResponse)(nil),              // 47: CommitEquipmentCraftResponse
+	(*EquipmentMaterialRewardSnapshot)(nil),           // 48: EquipmentMaterialRewardSnapshot
+	(*GetEquipmentMaterialRewardRequest)(nil),         // 49: GetEquipmentMaterialRewardRequest
+	(*GetEquipmentMaterialRewardResponse)(nil),        // 50: GetEquipmentMaterialRewardResponse
+	(*ClaimEquipmentMaterialRewardRequest)(nil),       // 51: ClaimEquipmentMaterialRewardRequest
+	(*ClaimEquipmentMaterialRewardResponse)(nil),      // 52: ClaimEquipmentMaterialRewardResponse
+	(*EquipLoadoutSlotView)(nil),                      // 53: EquipLoadoutSlotView
+	(*EquipLoadoutSchemeInfo)(nil),                    // 54: EquipLoadoutSchemeInfo
+	(*EquipLoadoutLinkedOption)(nil),                  // 55: EquipLoadoutLinkedOption
+	(*EquipLoadoutSnapshot)(nil),                      // 56: EquipLoadoutSnapshot
+	(*GetEquipLoadoutsRequest)(nil),                   // 57: GetEquipLoadoutsRequest
+	(*GetEquipLoadoutsResponse)(nil),                  // 58: GetEquipLoadoutsResponse
+	(*SaveEquipLoadoutRequest)(nil),                   // 59: SaveEquipLoadoutRequest
+	(*SaveEquipLoadoutResponse)(nil),                  // 60: SaveEquipLoadoutResponse
+	(*SwitchEquipLoadoutRequest)(nil),                 // 61: SwitchEquipLoadoutRequest
+	(*SwitchEquipLoadoutResponse)(nil),                // 62: SwitchEquipLoadoutResponse
+	(*UnlockEquipLoadoutRequest)(nil),                 // 63: UnlockEquipLoadoutRequest
+	(*UnlockEquipLoadoutResponse)(nil),                // 64: UnlockEquipLoadoutResponse
+	(*component.CurrencyComp)(nil),                    // 65: CurrencyComp
+	(*base.TipInfoMessage)(nil),                       // 66: TipInfoMessage
+	(*component.EquipLoadoutSlotBinding)(nil),         // 67: EquipLoadoutSlotBinding
 }
 var file_proto_scene_player_bag_proto_depIdxs = []int32{
 	5,   // 0: EquipGemSocketInfo.attr:type_name -> EquipAttrLineInfo
@@ -5773,127 +5886,128 @@ var file_proto_scene_player_bag_proto_depIdxs = []int32{
 	8,   // 3: BagItemInfo.enhance_next:type_name -> EquipEnhancePreview
 	7,   // 4: BagItemInfo.gem_sockets:type_name -> EquipGemSocketInfo
 	5,   // 5: BagItemInfo.gem_attr:type_name -> EquipAttrLineInfo
-	35,  // 6: BagItemInfo.fixed_affix_slots:type_name -> EquipFixedAffixSlotInfo
-	36,  // 7: BagItemInfo.artifact:type_name -> EquipArtifactInfo
-	10,  // 8: BagLayoutInfo.slots:type_name -> BagSlotInfo
-	6,   // 9: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
-	9,   // 10: BagInfo.items:type_name -> BagItemInfo
-	11,  // 11: BagInfo.layout:type_name -> BagLayoutInfo
-	64,  // 12: BagInfo.currency:type_name -> CurrencyComp
-	12,  // 13: BagInfo.held_items:type_name -> BagHeldItemInfo
-	65,  // 14: GetBagResponse.error_message:type_name -> TipInfoMessage
-	13,  // 15: GetBagResponse.bag:type_name -> BagInfo
-	65,  // 16: SortBagResponse.error_message:type_name -> TipInfoMessage
-	13,  // 17: SortBagResponse.bag:type_name -> BagInfo
-	65,  // 18: EquipItemResponse.error_message:type_name -> TipInfoMessage
-	13,  // 19: EquipItemResponse.bag:type_name -> BagInfo
-	13,  // 20: EquipItemResponse.equipment:type_name -> BagInfo
-	65,  // 21: UnequipItemResponse.error_message:type_name -> TipInfoMessage
-	13,  // 22: UnequipItemResponse.bag:type_name -> BagInfo
-	13,  // 23: UnequipItemResponse.equipment:type_name -> BagInfo
-	65,  // 24: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
-	13,  // 25: GmGrantItemResponse.bag:type_name -> BagInfo
-	65,  // 26: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
-	13,  // 27: EnhanceEquipResponse.bag:type_name -> BagInfo
-	13,  // 28: EnhanceEquipResponse.equipment:type_name -> BagInfo
-	65,  // 29: InlayGemResponse.error_message:type_name -> TipInfoMessage
-	13,  // 30: InlayGemResponse.bag:type_name -> BagInfo
-	13,  // 31: InlayGemResponse.equipment:type_name -> BagInfo
-	65,  // 32: RemoveGemResponse.error_message:type_name -> TipInfoMessage
-	13,  // 33: RemoveGemResponse.bag:type_name -> BagInfo
-	13,  // 34: RemoveGemResponse.equipment:type_name -> BagInfo
-	65,  // 35: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
-	13,  // 36: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
-	13,  // 37: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
-	32,  // 38: EquipFixedAffixSlotInfo.selected:type_name -> EquipFixedAffixInfo
-	1,   // 39: EquipmentCraftChoice.operation:type_name -> EquipmentCraftChoice.Operation
-	9,   // 40: EquipmentCraftRecipe.product:type_name -> BagItemInfo
-	65,  // 41: GetEquipmentCraftRulesResponse.error_message:type_name -> TipInfoMessage
-	39,  // 42: GetEquipmentCraftRulesResponse.recipes:type_name -> EquipmentCraftRecipe
-	32,  // 43: GetEquipmentCraftRulesResponse.affixes:type_name -> EquipFixedAffixInfo
-	33,  // 44: GetEquipmentCraftRulesResponse.quality_tiers:type_name -> EquipAffixQualityInfo
-	34,  // 45: GetEquipmentCraftRulesResponse.forge_mastery:type_name -> CraftMasteryInfo
-	37,  // 46: EquipmentCraftPreview.choice:type_name -> EquipmentCraftChoice
-	9,   // 47: EquipmentCraftPreview.result:type_name -> BagItemInfo
-	38,  // 48: EquipmentCraftPreview.material:type_name -> EquipmentCraftMaterial
-	38,  // 49: EquipmentCraftPreview.extra_material:type_name -> EquipmentCraftMaterial
-	37,  // 50: PreviewEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
-	65,  // 51: PreviewEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
-	42,  // 52: PreviewEquipmentCraftResponse.preview:type_name -> EquipmentCraftPreview
-	37,  // 53: CommitEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
-	65,  // 54: CommitEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
-	2,   // 55: CommitEquipmentCraftResponse.outcome:type_name -> CommitEquipmentCraftResponse.Outcome
-	13,  // 56: CommitEquipmentCraftResponse.bag:type_name -> BagInfo
-	13,  // 57: CommitEquipmentCraftResponse.equipment:type_name -> BagInfo
-	34,  // 58: CommitEquipmentCraftResponse.forge_mastery:type_name -> CraftMasteryInfo
-	38,  // 59: EquipmentMaterialRewardSnapshot.crafting_material:type_name -> EquipmentCraftMaterial
-	38,  // 60: EquipmentMaterialRewardSnapshot.enhancement_stone:type_name -> EquipmentCraftMaterial
-	65,  // 61: GetEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
-	47,  // 62: GetEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
-	65,  // 63: ClaimEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
-	3,   // 64: ClaimEquipmentMaterialRewardResponse.outcome:type_name -> ClaimEquipmentMaterialRewardResponse.Outcome
-	13,  // 65: ClaimEquipmentMaterialRewardResponse.bag:type_name -> BagInfo
-	47,  // 66: ClaimEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
-	0,   // 67: EquipLoadoutSlotView.status:type_name -> EquipLoadoutSlotStatus
-	9,   // 68: EquipLoadoutSlotView.item:type_name -> BagItemInfo
-	52,  // 69: EquipLoadoutSchemeInfo.slots:type_name -> EquipLoadoutSlotView
-	53,  // 70: EquipLoadoutSnapshot.schemes:type_name -> EquipLoadoutSchemeInfo
-	54,  // 71: EquipLoadoutSnapshot.skill_schemes:type_name -> EquipLoadoutLinkedOption
-	54,  // 72: EquipLoadoutSnapshot.attribute_schemes:type_name -> EquipLoadoutLinkedOption
-	65,  // 73: GetEquipLoadoutsResponse.error_message:type_name -> TipInfoMessage
-	55,  // 74: GetEquipLoadoutsResponse.snapshot:type_name -> EquipLoadoutSnapshot
-	66,  // 75: SaveEquipLoadoutRequest.slots:type_name -> EquipLoadoutSlotBinding
-	65,  // 76: SaveEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
-	55,  // 77: SaveEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
-	65,  // 78: SwitchEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
-	13,  // 79: SwitchEquipLoadoutResponse.bag:type_name -> BagInfo
-	13,  // 80: SwitchEquipLoadoutResponse.equipment:type_name -> BagInfo
-	55,  // 81: SwitchEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
-	65,  // 82: UnlockEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
-	4,   // 83: UnlockEquipLoadoutResponse.outcome:type_name -> UnlockEquipLoadoutResponse.Outcome
-	13,  // 84: UnlockEquipLoadoutResponse.bag:type_name -> BagInfo
-	55,  // 85: UnlockEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
-	14,  // 86: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
-	16,  // 87: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
-	18,  // 88: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
-	20,  // 89: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
-	22,  // 90: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
-	24,  // 91: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
-	26,  // 92: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
-	28,  // 93: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
-	30,  // 94: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
-	40,  // 95: SceneBagClientPlayer.GetEquipmentCraftRules:input_type -> GetEquipmentCraftRulesRequest
-	43,  // 96: SceneBagClientPlayer.PreviewEquipmentCraft:input_type -> PreviewEquipmentCraftRequest
-	45,  // 97: SceneBagClientPlayer.CommitEquipmentCraft:input_type -> CommitEquipmentCraftRequest
-	48,  // 98: SceneBagClientPlayer.GetEquipmentMaterialReward:input_type -> GetEquipmentMaterialRewardRequest
-	50,  // 99: SceneBagClientPlayer.ClaimEquipmentMaterialReward:input_type -> ClaimEquipmentMaterialRewardRequest
-	56,  // 100: SceneBagClientPlayer.GetEquipLoadouts:input_type -> GetEquipLoadoutsRequest
-	58,  // 101: SceneBagClientPlayer.SaveEquipLoadout:input_type -> SaveEquipLoadoutRequest
-	60,  // 102: SceneBagClientPlayer.SwitchEquipLoadout:input_type -> SwitchEquipLoadoutRequest
-	62,  // 103: SceneBagClientPlayer.UnlockEquipLoadout:input_type -> UnlockEquipLoadoutRequest
-	15,  // 104: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
-	17,  // 105: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
-	19,  // 106: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
-	21,  // 107: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
-	23,  // 108: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
-	25,  // 109: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
-	27,  // 110: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
-	29,  // 111: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
-	31,  // 112: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
-	41,  // 113: SceneBagClientPlayer.GetEquipmentCraftRules:output_type -> GetEquipmentCraftRulesResponse
-	44,  // 114: SceneBagClientPlayer.PreviewEquipmentCraft:output_type -> PreviewEquipmentCraftResponse
-	46,  // 115: SceneBagClientPlayer.CommitEquipmentCraft:output_type -> CommitEquipmentCraftResponse
-	49,  // 116: SceneBagClientPlayer.GetEquipmentMaterialReward:output_type -> GetEquipmentMaterialRewardResponse
-	51,  // 117: SceneBagClientPlayer.ClaimEquipmentMaterialReward:output_type -> ClaimEquipmentMaterialRewardResponse
-	57,  // 118: SceneBagClientPlayer.GetEquipLoadouts:output_type -> GetEquipLoadoutsResponse
-	59,  // 119: SceneBagClientPlayer.SaveEquipLoadout:output_type -> SaveEquipLoadoutResponse
-	61,  // 120: SceneBagClientPlayer.SwitchEquipLoadout:output_type -> SwitchEquipLoadoutResponse
-	63,  // 121: SceneBagClientPlayer.UnlockEquipLoadout:output_type -> UnlockEquipLoadoutResponse
-	104, // [104:122] is the sub-list for method output_type
-	86,  // [86:104] is the sub-list for method input_type
-	86,  // [86:86] is the sub-list for extension type_name
-	86,  // [86:86] is the sub-list for extension extendee
-	0,   // [0:86] is the sub-list for field type_name
+	36,  // 6: BagItemInfo.fixed_affix_slots:type_name -> EquipFixedAffixSlotInfo
+	37,  // 7: BagItemInfo.artifact:type_name -> EquipArtifactInfo
+	9,   // 8: BagItemInfo.sealed_skill_book:type_name -> SealedSkillBookInfo
+	11,  // 9: BagLayoutInfo.slots:type_name -> BagSlotInfo
+	6,   // 10: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
+	10,  // 11: BagInfo.items:type_name -> BagItemInfo
+	12,  // 12: BagInfo.layout:type_name -> BagLayoutInfo
+	65,  // 13: BagInfo.currency:type_name -> CurrencyComp
+	13,  // 14: BagInfo.held_items:type_name -> BagHeldItemInfo
+	66,  // 15: GetBagResponse.error_message:type_name -> TipInfoMessage
+	14,  // 16: GetBagResponse.bag:type_name -> BagInfo
+	66,  // 17: SortBagResponse.error_message:type_name -> TipInfoMessage
+	14,  // 18: SortBagResponse.bag:type_name -> BagInfo
+	66,  // 19: EquipItemResponse.error_message:type_name -> TipInfoMessage
+	14,  // 20: EquipItemResponse.bag:type_name -> BagInfo
+	14,  // 21: EquipItemResponse.equipment:type_name -> BagInfo
+	66,  // 22: UnequipItemResponse.error_message:type_name -> TipInfoMessage
+	14,  // 23: UnequipItemResponse.bag:type_name -> BagInfo
+	14,  // 24: UnequipItemResponse.equipment:type_name -> BagInfo
+	66,  // 25: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
+	14,  // 26: GmGrantItemResponse.bag:type_name -> BagInfo
+	66,  // 27: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
+	14,  // 28: EnhanceEquipResponse.bag:type_name -> BagInfo
+	14,  // 29: EnhanceEquipResponse.equipment:type_name -> BagInfo
+	66,  // 30: InlayGemResponse.error_message:type_name -> TipInfoMessage
+	14,  // 31: InlayGemResponse.bag:type_name -> BagInfo
+	14,  // 32: InlayGemResponse.equipment:type_name -> BagInfo
+	66,  // 33: RemoveGemResponse.error_message:type_name -> TipInfoMessage
+	14,  // 34: RemoveGemResponse.bag:type_name -> BagInfo
+	14,  // 35: RemoveGemResponse.equipment:type_name -> BagInfo
+	66,  // 36: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
+	14,  // 37: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
+	14,  // 38: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
+	33,  // 39: EquipFixedAffixSlotInfo.selected:type_name -> EquipFixedAffixInfo
+	1,   // 40: EquipmentCraftChoice.operation:type_name -> EquipmentCraftChoice.Operation
+	10,  // 41: EquipmentCraftRecipe.product:type_name -> BagItemInfo
+	66,  // 42: GetEquipmentCraftRulesResponse.error_message:type_name -> TipInfoMessage
+	40,  // 43: GetEquipmentCraftRulesResponse.recipes:type_name -> EquipmentCraftRecipe
+	33,  // 44: GetEquipmentCraftRulesResponse.affixes:type_name -> EquipFixedAffixInfo
+	34,  // 45: GetEquipmentCraftRulesResponse.quality_tiers:type_name -> EquipAffixQualityInfo
+	35,  // 46: GetEquipmentCraftRulesResponse.forge_mastery:type_name -> CraftMasteryInfo
+	38,  // 47: EquipmentCraftPreview.choice:type_name -> EquipmentCraftChoice
+	10,  // 48: EquipmentCraftPreview.result:type_name -> BagItemInfo
+	39,  // 49: EquipmentCraftPreview.material:type_name -> EquipmentCraftMaterial
+	39,  // 50: EquipmentCraftPreview.extra_material:type_name -> EquipmentCraftMaterial
+	38,  // 51: PreviewEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
+	66,  // 52: PreviewEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
+	43,  // 53: PreviewEquipmentCraftResponse.preview:type_name -> EquipmentCraftPreview
+	38,  // 54: CommitEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
+	66,  // 55: CommitEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
+	2,   // 56: CommitEquipmentCraftResponse.outcome:type_name -> CommitEquipmentCraftResponse.Outcome
+	14,  // 57: CommitEquipmentCraftResponse.bag:type_name -> BagInfo
+	14,  // 58: CommitEquipmentCraftResponse.equipment:type_name -> BagInfo
+	35,  // 59: CommitEquipmentCraftResponse.forge_mastery:type_name -> CraftMasteryInfo
+	39,  // 60: EquipmentMaterialRewardSnapshot.crafting_material:type_name -> EquipmentCraftMaterial
+	39,  // 61: EquipmentMaterialRewardSnapshot.enhancement_stone:type_name -> EquipmentCraftMaterial
+	66,  // 62: GetEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
+	48,  // 63: GetEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
+	66,  // 64: ClaimEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
+	3,   // 65: ClaimEquipmentMaterialRewardResponse.outcome:type_name -> ClaimEquipmentMaterialRewardResponse.Outcome
+	14,  // 66: ClaimEquipmentMaterialRewardResponse.bag:type_name -> BagInfo
+	48,  // 67: ClaimEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
+	0,   // 68: EquipLoadoutSlotView.status:type_name -> EquipLoadoutSlotStatus
+	10,  // 69: EquipLoadoutSlotView.item:type_name -> BagItemInfo
+	53,  // 70: EquipLoadoutSchemeInfo.slots:type_name -> EquipLoadoutSlotView
+	54,  // 71: EquipLoadoutSnapshot.schemes:type_name -> EquipLoadoutSchemeInfo
+	55,  // 72: EquipLoadoutSnapshot.skill_schemes:type_name -> EquipLoadoutLinkedOption
+	55,  // 73: EquipLoadoutSnapshot.attribute_schemes:type_name -> EquipLoadoutLinkedOption
+	66,  // 74: GetEquipLoadoutsResponse.error_message:type_name -> TipInfoMessage
+	56,  // 75: GetEquipLoadoutsResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	67,  // 76: SaveEquipLoadoutRequest.slots:type_name -> EquipLoadoutSlotBinding
+	66,  // 77: SaveEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
+	56,  // 78: SaveEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	66,  // 79: SwitchEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
+	14,  // 80: SwitchEquipLoadoutResponse.bag:type_name -> BagInfo
+	14,  // 81: SwitchEquipLoadoutResponse.equipment:type_name -> BagInfo
+	56,  // 82: SwitchEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	66,  // 83: UnlockEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
+	4,   // 84: UnlockEquipLoadoutResponse.outcome:type_name -> UnlockEquipLoadoutResponse.Outcome
+	14,  // 85: UnlockEquipLoadoutResponse.bag:type_name -> BagInfo
+	56,  // 86: UnlockEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	15,  // 87: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
+	17,  // 88: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
+	19,  // 89: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
+	21,  // 90: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
+	23,  // 91: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
+	25,  // 92: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
+	27,  // 93: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
+	29,  // 94: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
+	31,  // 95: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
+	41,  // 96: SceneBagClientPlayer.GetEquipmentCraftRules:input_type -> GetEquipmentCraftRulesRequest
+	44,  // 97: SceneBagClientPlayer.PreviewEquipmentCraft:input_type -> PreviewEquipmentCraftRequest
+	46,  // 98: SceneBagClientPlayer.CommitEquipmentCraft:input_type -> CommitEquipmentCraftRequest
+	49,  // 99: SceneBagClientPlayer.GetEquipmentMaterialReward:input_type -> GetEquipmentMaterialRewardRequest
+	51,  // 100: SceneBagClientPlayer.ClaimEquipmentMaterialReward:input_type -> ClaimEquipmentMaterialRewardRequest
+	57,  // 101: SceneBagClientPlayer.GetEquipLoadouts:input_type -> GetEquipLoadoutsRequest
+	59,  // 102: SceneBagClientPlayer.SaveEquipLoadout:input_type -> SaveEquipLoadoutRequest
+	61,  // 103: SceneBagClientPlayer.SwitchEquipLoadout:input_type -> SwitchEquipLoadoutRequest
+	63,  // 104: SceneBagClientPlayer.UnlockEquipLoadout:input_type -> UnlockEquipLoadoutRequest
+	16,  // 105: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
+	18,  // 106: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
+	20,  // 107: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
+	22,  // 108: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
+	24,  // 109: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
+	26,  // 110: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
+	28,  // 111: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
+	30,  // 112: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
+	32,  // 113: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
+	42,  // 114: SceneBagClientPlayer.GetEquipmentCraftRules:output_type -> GetEquipmentCraftRulesResponse
+	45,  // 115: SceneBagClientPlayer.PreviewEquipmentCraft:output_type -> PreviewEquipmentCraftResponse
+	47,  // 116: SceneBagClientPlayer.CommitEquipmentCraft:output_type -> CommitEquipmentCraftResponse
+	50,  // 117: SceneBagClientPlayer.GetEquipmentMaterialReward:output_type -> GetEquipmentMaterialRewardResponse
+	52,  // 118: SceneBagClientPlayer.ClaimEquipmentMaterialReward:output_type -> ClaimEquipmentMaterialRewardResponse
+	58,  // 119: SceneBagClientPlayer.GetEquipLoadouts:output_type -> GetEquipLoadoutsResponse
+	60,  // 120: SceneBagClientPlayer.SaveEquipLoadout:output_type -> SaveEquipLoadoutResponse
+	62,  // 121: SceneBagClientPlayer.SwitchEquipLoadout:output_type -> SwitchEquipLoadoutResponse
+	64,  // 122: SceneBagClientPlayer.UnlockEquipLoadout:output_type -> UnlockEquipLoadoutResponse
+	105, // [105:123] is the sub-list for method output_type
+	87,  // [87:105] is the sub-list for method input_type
+	87,  // [87:87] is the sub-list for extension type_name
+	87,  // [87:87] is the sub-list for extension extendee
+	0,   // [0:87] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_bag_proto_init() }
@@ -5901,16 +6015,16 @@ func file_proto_scene_player_bag_proto_init() {
 	if File_proto_scene_player_bag_proto != nil {
 		return
 	}
-	file_proto_scene_player_bag_proto_msgTypes[13].OneofWrappers = []any{}
-	file_proto_scene_player_bag_proto_msgTypes[19].OneofWrappers = []any{}
-	file_proto_scene_player_bag_proto_msgTypes[32].OneofWrappers = []any{}
+	file_proto_scene_player_bag_proto_msgTypes[14].OneofWrappers = []any{}
+	file_proto_scene_player_bag_proto_msgTypes[20].OneofWrappers = []any{}
+	file_proto_scene_player_bag_proto_msgTypes[33].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_bag_proto_rawDesc), len(file_proto_scene_player_bag_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   59,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

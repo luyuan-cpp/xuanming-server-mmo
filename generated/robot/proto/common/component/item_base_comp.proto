@@ -52,6 +52,16 @@ message EquipInstanceData
 	uint64 crafter_player_id = 7;  // 宗师玩家 ID（仅追溯）。
 }
 
+// 封卷道籍实例数据（将书架内未绑定常规技能书封卷入包后携带，供背包/集市/面对面流通与开卷回书架）。
+message SealedSkillBookData
+{
+	uint32 skill_table_id = 1;    // SkillTable.id。
+	uint32 scroll_id = 2;         // 产出所属卷宗 SkillScrollCraft.id。
+	uint32 rarity_tier = 3;       // 0 = 常规技能书（稀世书禁止封卷）。
+	string crafter_name = 4;      // 宗师署名（空 = 无署名）。
+	uint64 crafter_player_id = 5; // 宗师玩家 ID（仅追溯）。
+}
+
 message ItemComp
 {
 	uint64 item_id = 1;
@@ -79,4 +89,6 @@ message ItemComp
 	EquipInstanceData equip = 5;
 	// 仅自用绑定标记：true = 不可交易、不可上架集市/聚宝斋、不可赠送（用于五行试炼志拓印兑换的自用法宝等）。
 	bool bound = 6;
+	// 封卷道籍实例数据：仅 3414 封卷道籍拥有，不可堆叠，随 ItemEntry.instance 完整持久化与跨服/交易透传。
+	SealedSkillBookData sealed_skill_book = 7;
 }

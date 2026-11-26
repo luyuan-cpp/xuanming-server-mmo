@@ -77,6 +77,14 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
         // ::DismantleSkillBookResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::SealSkillBookRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::SealSkillBookResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::UnsealSkillBookRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::UnsealSkillBookResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
         // ::SetCraftProxyStallRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
         // ::SetCraftProxyStallResponse
@@ -205,7 +213,7 @@ constexpr auto UpgradeSkillRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -252,6 +260,162 @@ const ::_pbi::ClassData* UpgradeSkillRequest_get_class_data() {
   return UpgradeSkillRequest_globals_.GetClassData();
 #else
   return UpgradeSkillRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class UnsealSkillBookRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnsealSkillBookRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_._has_bits_);
+};
+
+constexpr UnsealSkillBookRequest::ParseTableT_ UnsealSkillBookRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::UnsealSkillBookRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 item_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnsealSkillBookRequest, _impl_.item_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.item_id_)}},
+      // uint64 expected_revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnsealSkillBookRequest, _impl_.expected_revision_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.expected_revision_)}},
+      // uint64 client_request_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnsealSkillBookRequest, _impl_.client_request_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.client_request_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 item_id = 1;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.item_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expected_revision = 2;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 3;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnsealSkillBookRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        item_id_{::uint64_t{0u}},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr UnsealSkillBookRequest::UnsealSkillBookRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnsealSkillBookRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnsealSkillBookRequest(arena);
+}
+constexpr auto UnsealSkillBookRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnsealSkillBookRequest), alignof(UnsealSkillBookRequest));
+}
+constexpr auto UnsealSkillBookRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnsealSkillBookRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnsealSkillBookRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnsealSkillBookRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnsealSkillBookRequest>(), &UnsealSkillBookRequest::ByteSizeLong,
+              &UnsealSkillBookRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[26],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnsealSkillBookRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnsealSkillBookRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnsealSkillBookRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnsealSkillBookRequest::InternalGenerateClassData_(
+            _default, &UnsealSkillBookRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnsealSkillBookRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnsealSkillBookRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnsealSkillBookRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnsealSkillBookRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnsealSkillBookRequestGlobalsTypeInternal UnsealSkillBookRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnsealSkillBookRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnsealSkillBookRequest_globals_.GetClassData();
+#else
+  return UnsealSkillBookRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1317,7 +1481,7 @@ constexpr auto SetCraftProxyStallRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -1364,6 +1528,162 @@ const ::_pbi::ClassData* SetCraftProxyStallRequest_get_class_data() {
   return SetCraftProxyStallRequest_globals_.GetClassData();
 #else
   return SetCraftProxyStallRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SealSkillBookRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SealSkillBookRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_._has_bits_);
+};
+
+constexpr SealSkillBookRequest::ParseTableT_ SealSkillBookRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SealSkillBookRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 book_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SealSkillBookRequest, _impl_.book_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.book_id_)}},
+      // uint64 expected_revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SealSkillBookRequest, _impl_.expected_revision_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.expected_revision_)}},
+      // uint64 client_request_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SealSkillBookRequest, _impl_.client_request_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.client_request_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 book_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.book_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expected_revision = 2;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 3;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SealSkillBookRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        book_id_{::uint64_t{0u}},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr SealSkillBookRequest::SealSkillBookRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SealSkillBookRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SealSkillBookRequest(arena);
+}
+constexpr auto SealSkillBookRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SealSkillBookRequest), alignof(SealSkillBookRequest));
+}
+constexpr auto SealSkillBookRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SealSkillBookRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SealSkillBookRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SealSkillBookRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SealSkillBookRequest>(), &SealSkillBookRequest::ByteSizeLong,
+              &SealSkillBookRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[24],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SealSkillBookRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SealSkillBookRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SealSkillBookRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SealSkillBookRequest::InternalGenerateClassData_(
+            _default, &SealSkillBookRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SealSkillBookRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SealSkillBookRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SealSkillBookRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SealSkillBookRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SealSkillBookRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SealSkillBookRequestGlobalsTypeInternal SealSkillBookRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SealSkillBookRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SealSkillBookRequest_globals_.GetClassData();
+#else
+  return SealSkillBookRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1786,7 +2106,7 @@ constexpr auto ListCraftProxyStallsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -2601,7 +2921,7 @@ constexpr auto CraftProxyStallInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -4132,7 +4452,7 @@ constexpr auto ListCraftProxyStallsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -4179,6 +4499,194 @@ const ::_pbi::ClassData* ListCraftProxyStallsResponse_get_class_data() {
   return ListCraftProxyStallsResponse_globals_.GetClassData();
 #else
   return ListCraftProxyStallsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class UnsealSkillBookResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnsealSkillBookResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_._has_bits_);
+};
+
+constexpr UnsealSkillBookResponse::ParseTableT_ UnsealSkillBookResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      3,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::UnsealSkillBookResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnsealSkillBookResponse, _impl_.client_request_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(UnsealSkillBookResponse, _impl_.replayed_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.replayed_)}},
+      // .CraftedSkillBookEntry unsealed_book = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 1, 1,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.unsealed_book_)}},
+      // .SkillCraftingStateSnapshot state = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 2, 2,
+        PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .CraftedSkillBookEntry unsealed_book = 4;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.unsealed_book_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .SkillCraftingStateSnapshot state = 5;
+      {PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.state_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::CraftedSkillBookEntry>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::CraftedSkillBookEntry_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnsealSkillBookResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        unsealed_book_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        replayed_{false} {}
+
+template <typename>
+constexpr UnsealSkillBookResponse::UnsealSkillBookResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnsealSkillBookResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnsealSkillBookResponse(arena);
+}
+constexpr auto UnsealSkillBookResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnsealSkillBookResponse), alignof(UnsealSkillBookResponse));
+}
+constexpr auto UnsealSkillBookResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnsealSkillBookResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnsealSkillBookResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnsealSkillBookResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnsealSkillBookResponse>(), &UnsealSkillBookResponse::ByteSizeLong,
+              &UnsealSkillBookResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[27],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnsealSkillBookResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnsealSkillBookResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnsealSkillBookResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnsealSkillBookResponse::InternalGenerateClassData_(
+            _default, &UnsealSkillBookResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnsealSkillBookResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnsealSkillBookResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnsealSkillBookResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnsealSkillBookResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnsealSkillBookResponseGlobalsTypeInternal UnsealSkillBookResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnsealSkillBookResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnsealSkillBookResponse_globals_.GetClassData();
+#else
+  return UnsealSkillBookResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4291,7 +4799,7 @@ constexpr auto SetCraftProxyStallResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -4338,6 +4846,195 @@ const ::_pbi::ClassData* SetCraftProxyStallResponse_get_class_data() {
   return SetCraftProxyStallResponse_globals_.GetClassData();
 #else
   return SetCraftProxyStallResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SealSkillBookResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SealSkillBookResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_._has_bits_);
+};
+
+constexpr SealSkillBookResponse::ParseTableT_ SealSkillBookResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SealSkillBookResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SealSkillBookResponse, _impl_.client_request_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SealSkillBookResponse, _impl_.replayed_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.replayed_)}},
+      // uint64 item_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SealSkillBookResponse, _impl_.item_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.item_id_)}},
+      // uint32 skill_table_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SealSkillBookResponse, _impl_.skill_table_id_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.skill_table_id_)}},
+      // .SkillCraftingStateSnapshot state = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 1, 1,
+        PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 item_id = 4;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.item_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 skill_table_id = 5;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .SkillCraftingStateSnapshot state = 6;
+      {PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.state_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SealSkillBookResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        item_id_{::uint64_t{0u}},
+        replayed_{false},
+        skill_table_id_{0u} {}
+
+template <typename>
+constexpr SealSkillBookResponse::SealSkillBookResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SealSkillBookResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SealSkillBookResponse(arena);
+}
+constexpr auto SealSkillBookResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SealSkillBookResponse), alignof(SealSkillBookResponse));
+}
+constexpr auto SealSkillBookResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SealSkillBookResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SealSkillBookResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SealSkillBookResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SealSkillBookResponse>(), &SealSkillBookResponse::ByteSizeLong,
+              &SealSkillBookResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[25],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SealSkillBookResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SealSkillBookResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SealSkillBookResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SealSkillBookResponse::InternalGenerateClassData_(
+            _default, &SealSkillBookResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SealSkillBookResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SealSkillBookResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SealSkillBookResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SealSkillBookResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SealSkillBookResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SealSkillBookResponseGlobalsTypeInternal SealSkillBookResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SealSkillBookResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SealSkillBookResponse_globals_.GetClassData();
+#else
+  return SealSkillBookResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -5398,7 +6095,7 @@ constexpr auto UpgradeSkillResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -6191,6 +6888,52 @@ const ::uint32_t
         4,
         1,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookRequest, _impl_.book_id_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_.item_id_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_.skill_table_id_),
+        PROTOBUF_FIELD_OFFSET(::SealSkillBookResponse, _impl_.state_),
+        0,
+        2,
+        4,
+        3,
+        5,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookRequest, _impl_.item_id_),
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookResponse, _impl_.unsealed_book_),
+        PROTOBUF_FIELD_OFFSET(::UnsealSkillBookResponse, _impl_.state_),
+        0,
+        3,
+        4,
+        1,
+        2,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_._has_bits_),
         6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.open_),
@@ -6283,13 +7026,17 @@ static const ::_pbi::MigrationSchema
         {343, sizeof(::LearnSkillBookResponse)},
         {356, sizeof(::DismantleSkillBookRequest)},
         {365, sizeof(::DismantleSkillBookResponse)},
-        {378, sizeof(::SetCraftProxyStallRequest)},
-        {387, sizeof(::SetCraftProxyStallResponse)},
-        {394, sizeof(::CraftProxyStallInfo)},
-        {413, sizeof(::ListCraftProxyStallsRequest)},
-        {414, sizeof(::ListCraftProxyStallsResponse)},
-        {421, sizeof(::UpgradeSkillRequest)},
-        {432, sizeof(::UpgradeSkillResponse)},
+        {378, sizeof(::SealSkillBookRequest)},
+        {387, sizeof(::SealSkillBookResponse)},
+        {402, sizeof(::UnsealSkillBookRequest)},
+        {411, sizeof(::UnsealSkillBookResponse)},
+        {424, sizeof(::SetCraftProxyStallRequest)},
+        {433, sizeof(::SetCraftProxyStallResponse)},
+        {440, sizeof(::CraftProxyStallInfo)},
+        {459, sizeof(::ListCraftProxyStallsRequest)},
+        {460, sizeof(::ListCraftProxyStallsResponse)},
+        {467, sizeof(::UpgradeSkillRequest)},
+        {478, sizeof(::UpgradeSkillResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6317,6 +7064,10 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::LearnSkillBookResponse_globals_,
         &::DismantleSkillBookRequest_globals_,
         &::DismantleSkillBookResponse_globals_,
+        &::SealSkillBookRequest_globals_,
+        &::SealSkillBookResponse_globals_,
+        &::UnsealSkillBookRequest_globals_,
+        &::UnsealSkillBookResponse_globals_,
         &::SetCraftProxyStallRequest_globals_,
         &::SetCraftProxyStallResponse_globals_,
         &::CraftProxyStallInfo_globals_,
@@ -6456,52 +7207,70 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "ge\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replaye"
     "d\030\003 \001(\010\022\032\n\022refunded_fragments\030\004 \001(\r\022*\n\005s"
     "tate\030\005 \001(\0132\033.SkillCraftingStateSnapshot\""
-    "f\n\031SetCraftProxyStallRequest\022\014\n\004open\030\001 \001"
-    "(\010\022\034\n\024proxy_forge_fee_gold\030\002 \001(\004\022\035\n\025prox"
-    "y_scroll_fee_gold\030\003 \001(\004\"p\n\032SetCraftProxy"
-    "StallResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022*\n\005state\030\002 \001(\0132\033.SkillCraf"
-    "tingStateSnapshot\"\367\001\n\023CraftProxyStallInf"
-    "o\022\030\n\020master_player_id\030\001 \001(\004\022\023\n\013master_na"
-    "me\030\002 \001(\t\022\032\n\022forge_mastery_tier\030\003 \001(\r\022\033\n\023"
-    "scroll_mastery_tier\030\004 \001(\r\022\034\n\024top_quality"
-    "_rate_bps\030\005 \001(\r\022\035\n\025scroll_bonus_rate_bps"
-    "\030\006 \001(\r\022\034\n\024proxy_forge_fee_gold\030\007 \001(\004\022\035\n\025"
-    "proxy_scroll_fee_gold\030\010 \001(\004\"\035\n\033ListCraft"
-    "ProxyStallsRequest\"l\n\034ListCraftProxyStal"
-    "lsResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022$\n\006stalls\030\002 \003(\0132\024.CraftProxyS"
-    "tallInfo\"c\n\023UpgradeSkillRequest\022\026\n\016skill"
-    "_table_id\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r"
-    "\n\005count\030\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024Upgrad"
-    "eSkillResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.ListSkil"
-    "lsResponse\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013st"
-    "op_tip_id\030\004 \001(\r2\256\007\n\026SceneSkillClientPlay"
-    "er\022;\n\014ReleaseSkill\022\024.ReleaseSkillRequest"
-    "\032\025.ReleaseSkillResponse\022/\n\017NotifySkillUs"
-    "ed\022\r.SkillUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026Noti"
-    "fySkillInterrupted\022\024.SkillInterruptedS2C"
-    "\032\006.Empty\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkil"
-    "lsRequest\032\023.ListSkillsResponse\022;\n\014Upgrad"
-    "eSkill\022\024.UpgradeSkillRequest\032\025.UpgradeSk"
-    "illResponse\022V\n\025GetSkillCraftingState\022\035.G"
-    "etSkillCraftingStateRequest\032\036.GetSkillCr"
-    "aftingStateResponse\022A\n\016CraftSkillBook\022\026."
-    "CraftSkillBookRequest\032\027.CraftSkillBookRe"
-    "sponse\022A\n\016LearnSkillBook\022\026.LearnSkillBoo"
-    "kRequest\032\027.LearnSkillBookResponse\022M\n\022Dis"
-    "mantleSkillBook\022\032.DismantleSkillBookRequ"
-    "est\032\033.DismantleSkillBookResponse\022M\n\022SetC"
-    "raftProxyStall\022\032.SetCraftProxyStallReque"
-    "st\032\033.SetCraftProxyStallResponse\022S\n\024ListC"
-    "raftProxyStalls\022\034.ListCraftProxyStallsRe"
-    "quest\032\035.ListCraftProxyStallsResponse\022G\n\020"
-    "SaveSkillLoadout\022\030.SaveSkillLoadoutReque"
-    "st\032\031.SaveSkillLoadoutResponse\022M\n\022SwitchS"
-    "killLoadout\022\032.SwitchSkillLoadoutRequest\032"
-    "\033.SwitchSkillLoadoutResponse\032\n\200\250\303\001\001\210\250\303\001\001"
-    "B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "]\n\024SealSkillBookRequest\022\017\n\007book_id\030\001 \001(\004"
+    "\022\031\n\021expected_revision\030\002 \001(\004\022\031\n\021client_re"
+    "quest_id\030\003 \001(\004\"\301\001\n\025SealSkillBookResponse"
+    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
+    "\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replayed\030"
+    "\003 \001(\010\022\017\n\007item_id\030\004 \001(\004\022\026\n\016skill_table_id"
+    "\030\005 \001(\r\022*\n\005state\030\006 \001(\0132\033.SkillCraftingSta"
+    "teSnapshot\"_\n\026UnsealSkillBookRequest\022\017\n\007"
+    "item_id\030\001 \001(\004\022\031\n\021expected_revision\030\002 \001(\004"
+    "\022\031\n\021client_request_id\030\003 \001(\004\"\311\001\n\027UnsealSk"
+    "illBookResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022\031\n\021client_request_id\030\002 \001"
+    "(\004\022\020\n\010replayed\030\003 \001(\010\022-\n\runsealed_book\030\004 "
+    "\001(\0132\026.CraftedSkillBookEntry\022*\n\005state\030\005 \001"
+    "(\0132\033.SkillCraftingStateSnapshot\"f\n\031SetCr"
+    "aftProxyStallRequest\022\014\n\004open\030\001 \001(\010\022\034\n\024pr"
+    "oxy_forge_fee_gold\030\002 \001(\004\022\035\n\025proxy_scroll"
+    "_fee_gold\030\003 \001(\004\"p\n\032SetCraftProxyStallRes"
+    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
+    "ssage\022*\n\005state\030\002 \001(\0132\033.SkillCraftingStat"
+    "eSnapshot\"\367\001\n\023CraftProxyStallInfo\022\030\n\020mas"
+    "ter_player_id\030\001 \001(\004\022\023\n\013master_name\030\002 \001(\t"
+    "\022\032\n\022forge_mastery_tier\030\003 \001(\r\022\033\n\023scroll_m"
+    "astery_tier\030\004 \001(\r\022\034\n\024top_quality_rate_bp"
+    "s\030\005 \001(\r\022\035\n\025scroll_bonus_rate_bps\030\006 \001(\r\022\034"
+    "\n\024proxy_forge_fee_gold\030\007 \001(\004\022\035\n\025proxy_sc"
+    "roll_fee_gold\030\010 \001(\004\"\035\n\033ListCraftProxySta"
+    "llsRequest\"l\n\034ListCraftProxyStallsRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022$\n\006stalls\030\002 \003(\0132\024.CraftProxyStallInfo"
+    "\"c\n\023UpgradeSkillRequest\022\026\n\016skill_table_i"
+    "d\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r\n\005count\030"
+    "\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024UpgradeSkillRe"
+    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
+    "essage\022\"\n\005state\030\002 \001(\0132\023.ListSkillsRespon"
+    "se\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013stop_tip_i"
+    "d\030\004 \001(\r2\264\010\n\026SceneSkillClientPlayer\022;\n\014Re"
+    "leaseSkill\022\024.ReleaseSkillRequest\032\025.Relea"
+    "seSkillResponse\022/\n\017NotifySkillUsed\022\r.Ski"
+    "llUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026NotifySkillI"
+    "nterrupted\022\024.SkillInterruptedS2C\032\006.Empty"
+    "\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkillsReques"
+    "t\032\023.ListSkillsResponse\022;\n\014UpgradeSkill\022\024"
+    ".UpgradeSkillRequest\032\025.UpgradeSkillRespo"
+    "nse\022V\n\025GetSkillCraftingState\022\035.GetSkillC"
+    "raftingStateRequest\032\036.GetSkillCraftingSt"
+    "ateResponse\022A\n\016CraftSkillBook\022\026.CraftSki"
+    "llBookRequest\032\027.CraftSkillBookResponse\022A"
+    "\n\016LearnSkillBook\022\026.LearnSkillBookRequest"
+    "\032\027.LearnSkillBookResponse\022M\n\022DismantleSk"
+    "illBook\022\032.DismantleSkillBookRequest\032\033.Di"
+    "smantleSkillBookResponse\022M\n\022SetCraftProx"
+    "yStall\022\032.SetCraftProxyStallRequest\032\033.Set"
+    "CraftProxyStallResponse\022S\n\024ListCraftProx"
+    "yStalls\022\034.ListCraftProxyStallsRequest\032\035."
+    "ListCraftProxyStallsResponse\022G\n\020SaveSkil"
+    "lLoadout\022\030.SaveSkillLoadoutRequest\032\031.Sav"
+    "eSkillLoadoutResponse\022M\n\022SwitchSkillLoad"
+    "out\022\032.SwitchSkillLoadoutRequest\032\033.Switch"
+    "SkillLoadoutResponse\022>\n\rSealSkillBook\022\025."
+    "SealSkillBookRequest\032\026.SealSkillBookResp"
+    "onse\022D\n\017UnsealSkillBook\022\027.UnsealSkillBoo"
+    "kRequest\032\030.UnsealSkillBookResponse\032\n\200\250\303\001"
+    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps[8] = {
@@ -6518,13 +7287,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto = {
     false,
     false,
-    6984,
+    7710,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto,
     "proto/scene/player_skill.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps,
     8,
-    31,
+    35,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fskill_2eproto::offsets,
@@ -15133,6 +15902,1203 @@ void DismantleSkillBookResponse::InternalSwap(DismantleSkillBookResponse* PROTOB
 }
 // ===================================================================
 
+SealSkillBookRequest::SealSkillBookRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SealSkillBookRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SealSkillBookRequest)
+}
+SealSkillBookRequest::SealSkillBookRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SealSkillBookRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SealSkillBookRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SealSkillBookRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SealSkillBookRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, book_id_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, book_id_) +
+               sizeof(Impl_::client_request_id_));
+}
+SealSkillBookRequest::~SealSkillBookRequest() {
+  // @@protoc_insertion_point(destructor:SealSkillBookRequest)
+  SharedDtor(*this);
+}
+inline void SealSkillBookRequest::SharedDtor(MessageLite& self) {
+  SealSkillBookRequest& this_ = static_cast<SealSkillBookRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SealSkillBookRequest_class_data_ =
+        SealSkillBookRequest::InternalGenerateClassData_(SealSkillBookRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SealSkillBookRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SealSkillBookRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SealSkillBookRequest_class_data_.tc_table);
+  return SealSkillBookRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SealSkillBookRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SealSkillBookRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SealSkillBookRequest_globals_));
+  return SealSkillBookRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SealSkillBookRequest::ParseTableT_
+    SealSkillBookRequest::_table_ =
+        SealSkillBookRequest::InternalGenerateParseTable_(SealSkillBookRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SealSkillBookRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:SealSkillBookRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.book_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.book_id_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SealSkillBookRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SealSkillBookRequest& this_ = static_cast<const SealSkillBookRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SealSkillBookRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SealSkillBookRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SealSkillBookRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 book_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_book_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_book_id(), target);
+    }
+  }
+
+  // uint64 expected_revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SealSkillBookRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SealSkillBookRequest::ByteSizeLong(const MessageLite& base) {
+  const SealSkillBookRequest& this_ = static_cast<const SealSkillBookRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SealSkillBookRequest::ByteSizeLong() const {
+  const SealSkillBookRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SealSkillBookRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 book_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_book_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_book_id());
+      }
+    }
+    // uint64 expected_revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SealSkillBookRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SealSkillBookRequest*>(&to_msg);
+  auto& from = static_cast<const SealSkillBookRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SealSkillBookRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_book_id() != 0) {
+        _this->_impl_.book_id_ = from._impl_.book_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SealSkillBookRequest::CopyFrom(const SealSkillBookRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SealSkillBookRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SealSkillBookRequest::InternalSwap(SealSkillBookRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.client_request_id_)
+      + sizeof(SealSkillBookRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(SealSkillBookRequest, _impl_.book_id_)>(
+          reinterpret_cast<char*>(&_impl_.book_id_),
+          reinterpret_cast<char*>(&other->_impl_.book_id_));
+}
+
+::google::protobuf::Metadata SealSkillBookRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SealSkillBookResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+SealSkillBookResponse::SealSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SealSkillBookResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SealSkillBookResponse)
+}
+PROTOBUF_NDEBUG_INLINE SealSkillBookResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SealSkillBookResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+SealSkillBookResponse::SealSkillBookResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SealSkillBookResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SealSkillBookResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SealSkillBookResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, skill_table_id_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::skill_table_id_));
+
+  // @@protoc_insertion_point(copy_constructor:SealSkillBookResponse)
+}
+PROTOBUF_NDEBUG_INLINE SealSkillBookResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SealSkillBookResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, skill_table_id_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::skill_table_id_));
+}
+SealSkillBookResponse::~SealSkillBookResponse() {
+  // @@protoc_insertion_point(destructor:SealSkillBookResponse)
+  SharedDtor(*this);
+}
+inline void SealSkillBookResponse::SharedDtor(MessageLite& self) {
+  SealSkillBookResponse& this_ = static_cast<SealSkillBookResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SealSkillBookResponse_class_data_ =
+        SealSkillBookResponse::InternalGenerateClassData_(SealSkillBookResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SealSkillBookResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SealSkillBookResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SealSkillBookResponse_class_data_.tc_table);
+  return SealSkillBookResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SealSkillBookResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SealSkillBookResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SealSkillBookResponse_globals_));
+  return SealSkillBookResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SealSkillBookResponse::ParseTableT_
+    SealSkillBookResponse::_table_ =
+        SealSkillBookResponse::InternalGenerateParseTable_(SealSkillBookResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SealSkillBookResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:SealSkillBookResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.skill_table_id_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.skill_table_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SealSkillBookResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SealSkillBookResponse& this_ = static_cast<const SealSkillBookResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SealSkillBookResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SealSkillBookResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SealSkillBookResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint64 item_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_item_id(), target);
+    }
+  }
+
+  // uint32 skill_table_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_skill_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_skill_table_id(), target);
+    }
+  }
+
+  // .SkillCraftingStateSnapshot state = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SealSkillBookResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SealSkillBookResponse::ByteSizeLong(const MessageLite& base) {
+  const SealSkillBookResponse& this_ = static_cast<const SealSkillBookResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SealSkillBookResponse::ByteSizeLong() const {
+  const SealSkillBookResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SealSkillBookResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .SkillCraftingStateSnapshot state = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint64 item_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_item_id());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 skill_table_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_skill_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_skill_table_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SealSkillBookResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SealSkillBookResponse*>(&to_msg);
+  auto& from = static_cast<const SealSkillBookResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:SealSkillBookResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_item_id() != 0) {
+        _this->_impl_.item_id_ = from._impl_.item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_skill_table_id() != 0) {
+        _this->_impl_.skill_table_id_ = from._impl_.skill_table_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SealSkillBookResponse::CopyFrom(const SealSkillBookResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SealSkillBookResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SealSkillBookResponse::InternalSwap(SealSkillBookResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.skill_table_id_)
+      + sizeof(SealSkillBookResponse::_impl_.skill_table_id_)
+      - PROTOBUF_FIELD_OFFSET(SealSkillBookResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata SealSkillBookResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UnsealSkillBookRequest::UnsealSkillBookRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsealSkillBookRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:UnsealSkillBookRequest)
+}
+UnsealSkillBookRequest::UnsealSkillBookRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnsealSkillBookRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsealSkillBookRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UnsealSkillBookRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnsealSkillBookRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, item_id_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, item_id_) +
+               sizeof(Impl_::client_request_id_));
+}
+UnsealSkillBookRequest::~UnsealSkillBookRequest() {
+  // @@protoc_insertion_point(destructor:UnsealSkillBookRequest)
+  SharedDtor(*this);
+}
+inline void UnsealSkillBookRequest::SharedDtor(MessageLite& self) {
+  UnsealSkillBookRequest& this_ = static_cast<UnsealSkillBookRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnsealSkillBookRequest_class_data_ =
+        UnsealSkillBookRequest::InternalGenerateClassData_(UnsealSkillBookRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsealSkillBookRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsealSkillBookRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnsealSkillBookRequest_class_data_.tc_table);
+  return UnsealSkillBookRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsealSkillBookRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsealSkillBookRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnsealSkillBookRequest_globals_));
+  return UnsealSkillBookRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnsealSkillBookRequest::ParseTableT_
+    UnsealSkillBookRequest::_table_ =
+        UnsealSkillBookRequest::InternalGenerateParseTable_(UnsealSkillBookRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnsealSkillBookRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:UnsealSkillBookRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.item_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnsealSkillBookRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnsealSkillBookRequest& this_ = static_cast<const UnsealSkillBookRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnsealSkillBookRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnsealSkillBookRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:UnsealSkillBookRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 item_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_item_id(), target);
+    }
+  }
+
+  // uint64 expected_revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:UnsealSkillBookRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnsealSkillBookRequest::ByteSizeLong(const MessageLite& base) {
+  const UnsealSkillBookRequest& this_ = static_cast<const UnsealSkillBookRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnsealSkillBookRequest::ByteSizeLong() const {
+  const UnsealSkillBookRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:UnsealSkillBookRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 item_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_item_id());
+      }
+    }
+    // uint64 expected_revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnsealSkillBookRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnsealSkillBookRequest*>(&to_msg);
+  auto& from = static_cast<const UnsealSkillBookRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:UnsealSkillBookRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_item_id() != 0) {
+        _this->_impl_.item_id_ = from._impl_.item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnsealSkillBookRequest::CopyFrom(const UnsealSkillBookRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:UnsealSkillBookRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnsealSkillBookRequest::InternalSwap(UnsealSkillBookRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.client_request_id_)
+      + sizeof(UnsealSkillBookRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(UnsealSkillBookRequest, _impl_.item_id_)>(
+          reinterpret_cast<char*>(&_impl_.item_id_),
+          reinterpret_cast<char*>(&other->_impl_.item_id_));
+}
+
+::google::protobuf::Metadata UnsealSkillBookRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void UnsealSkillBookResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+void UnsealSkillBookResponse::clear_unsealed_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.unsealed_book_ != nullptr) _impl_.unsealed_book_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+UnsealSkillBookResponse::UnsealSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsealSkillBookResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:UnsealSkillBookResponse)
+}
+PROTOBUF_NDEBUG_INLINE UnsealSkillBookResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::UnsealSkillBookResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+UnsealSkillBookResponse::UnsealSkillBookResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const UnsealSkillBookResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsealSkillBookResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  UnsealSkillBookResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.unsealed_book_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.unsealed_book_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::replayed_));
+
+  // @@protoc_insertion_point(copy_constructor:UnsealSkillBookResponse)
+}
+PROTOBUF_NDEBUG_INLINE UnsealSkillBookResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnsealSkillBookResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::replayed_));
+}
+UnsealSkillBookResponse::~UnsealSkillBookResponse() {
+  // @@protoc_insertion_point(destructor:UnsealSkillBookResponse)
+  SharedDtor(*this);
+}
+inline void UnsealSkillBookResponse::SharedDtor(MessageLite& self) {
+  UnsealSkillBookResponse& this_ = static_cast<UnsealSkillBookResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.unsealed_book_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnsealSkillBookResponse_class_data_ =
+        UnsealSkillBookResponse::InternalGenerateClassData_(UnsealSkillBookResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsealSkillBookResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsealSkillBookResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnsealSkillBookResponse_class_data_.tc_table);
+  return UnsealSkillBookResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsealSkillBookResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsealSkillBookResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnsealSkillBookResponse_globals_));
+  return UnsealSkillBookResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnsealSkillBookResponse::ParseTableT_
+    UnsealSkillBookResponse::_table_ =
+        UnsealSkillBookResponse::InternalGenerateParseTable_(UnsealSkillBookResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnsealSkillBookResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:UnsealSkillBookResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.unsealed_book_ != nullptr);
+      _impl_.unsealed_book_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.replayed_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.replayed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnsealSkillBookResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnsealSkillBookResponse& this_ = static_cast<const UnsealSkillBookResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnsealSkillBookResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnsealSkillBookResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:UnsealSkillBookResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // .CraftedSkillBookEntry unsealed_book = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.unsealed_book_, this_._impl_.unsealed_book_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .SkillCraftingStateSnapshot state = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:UnsealSkillBookResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnsealSkillBookResponse::ByteSizeLong(const MessageLite& base) {
+  const UnsealSkillBookResponse& this_ = static_cast<const UnsealSkillBookResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnsealSkillBookResponse::ByteSizeLong() const {
+  const UnsealSkillBookResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:UnsealSkillBookResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .CraftedSkillBookEntry unsealed_book = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.unsealed_book_);
+    }
+    // .SkillCraftingStateSnapshot state = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnsealSkillBookResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnsealSkillBookResponse*>(&to_msg);
+  auto& from = static_cast<const UnsealSkillBookResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:UnsealSkillBookResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.unsealed_book_ != nullptr);
+      if (_this->_impl_.unsealed_book_ == nullptr) {
+        _this->_impl_.unsealed_book_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.unsealed_book_);
+      } else {
+        _this->_impl_.unsealed_book_->MergeFrom(*from._impl_.unsealed_book_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnsealSkillBookResponse::CopyFrom(const UnsealSkillBookResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:UnsealSkillBookResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnsealSkillBookResponse::InternalSwap(UnsealSkillBookResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.replayed_)
+      + sizeof(UnsealSkillBookResponse::_impl_.replayed_)
+      - PROTOBUF_FIELD_OFFSET(UnsealSkillBookResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata UnsealSkillBookResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 SetCraftProxyStallRequest::SetCraftProxyStallRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, SetCraftProxyStallRequest_get_class_data()) {
@@ -17036,6 +19002,20 @@ void SceneSkillClientPlayer::SwitchSkillLoadout(::google::protobuf::RpcControlle
   controller->SetFailed("Method SwitchSkillLoadout() not implemented.");
   done->Run();
 }
+void SceneSkillClientPlayer::SealSkillBook(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::SealSkillBookRequest* PROTOBUF_NONNULL,
+                         ::SealSkillBookResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method SealSkillBook() not implemented.");
+  done->Run();
+}
+void SceneSkillClientPlayer::UnsealSkillBook(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::UnsealSkillBookRequest* PROTOBUF_NONNULL,
+                         ::UnsealSkillBookResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method UnsealSkillBook() not implemented.");
+  done->Run();
+}
 
 void SceneSkillClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -17096,6 +19076,14 @@ void SceneSkillClientPlayer::CallMethod(
       this->SwitchSkillLoadout(controller, ::google::protobuf::DownCastMessage<::SwitchSkillLoadoutRequest>(request),
                    ::google::protobuf::DownCastMessage<::SwitchSkillLoadoutResponse>(response), done);
       break;
+    case 13:
+      this->SealSkillBook(controller, ::google::protobuf::DownCastMessage<::SealSkillBookRequest>(request),
+                   ::google::protobuf::DownCastMessage<::SealSkillBookResponse>(response), done);
+      break;
+    case 14:
+      this->UnsealSkillBook(controller, ::google::protobuf::DownCastMessage<::UnsealSkillBookRequest>(request),
+                   ::google::protobuf::DownCastMessage<::UnsealSkillBookResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -17133,6 +19121,10 @@ const ::google::protobuf::Message& SceneSkillClientPlayer::GetRequestPrototype(
       return ::SaveSkillLoadoutRequest::default_instance();
     case 12:
       return ::SwitchSkillLoadoutRequest::default_instance();
+    case 13:
+      return ::SealSkillBookRequest::default_instance();
+    case 14:
+      return ::UnsealSkillBookRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -17171,6 +19163,10 @@ const ::google::protobuf::Message& SceneSkillClientPlayer::GetResponsePrototype(
       return ::SaveSkillLoadoutResponse::default_instance();
     case 12:
       return ::SwitchSkillLoadoutResponse::default_instance();
+    case 13:
+      return ::SealSkillBookResponse::default_instance();
+    case 14:
+      return ::UnsealSkillBookResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -17281,6 +19277,20 @@ void SceneSkillClientPlayer_Stub::SwitchSkillLoadout(
     const ::SwitchSkillLoadoutRequest* PROTOBUF_NONNULL request, ::SwitchSkillLoadoutResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(12), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::SealSkillBook(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::SealSkillBookRequest* PROTOBUF_NONNULL request, ::SealSkillBookResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(13), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::UnsealSkillBook(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::UnsealSkillBookRequest* PROTOBUF_NONNULL request, ::UnsealSkillBookResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(14), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

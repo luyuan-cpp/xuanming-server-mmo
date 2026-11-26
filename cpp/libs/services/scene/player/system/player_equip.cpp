@@ -38,6 +38,8 @@
 #include "table/code/equipgemsocket_table.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
+#include "table/code/skill_table.h"
+#include "table/code/skillscrollcraft_table.h"
 #include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -1721,6 +1723,29 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 			const EquipAttributeTable* attr = AttributeRow(gemRow->attr_id());
 			if (attr != nullptr && IsEffectAccepted(*attr)) {
 				FillGemAttrLine(*attr, gemRow->value(), *info.mutable_gem_attr());
+			}
+		}
+		if (item.has_sealed_skill_book()) {
+			const auto& sealed = item.sealed_skill_book();
+			auto* out = info.mutable_sealed_skill_book();
+			out->set_skill_table_id(sealed.skill_table_id());
+			if (const auto* skillRow = SkillTableManager::Instance().FindByIdSilent(sealed.skill_table_id()).first;
+				skillRow != nullptr) {
+				out->set_skill_name(skillRow->name());
+			}
+			out->set_scroll_id(sealed.scroll_id());
+			if (const auto* scrollRow = SkillScrollCraftTableManager::Instance().FindByIdSilent(sealed.scroll_id()).first;
+				scrollRow != nullptr) {
+				out->set_scroll_name(scrollRow->name());
+			}
+			out->set_rarity_tier(sealed.rarity_tier());
+			if (!sealed.crafter_name().empty()) {
+				out->set_crafter_name(sealed.crafter_name());
+				info.set_crafter_name(sealed.crafter_name());
+			}
+			if (sealed.crafter_player_id() != 0) {
+				out->set_crafter_player_id(sealed.crafter_player_id());
+				info.set_crafter_player_id(sealed.crafter_player_id());
 			}
 		}
 		return;
