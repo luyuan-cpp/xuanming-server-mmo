@@ -37,6 +37,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattlePlayerSnapshot_SkillRanksEntry_DoNotUse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattlePlayerSnapshot
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattlePetSnapshot_SkillRanksEntry_DoNotUse
@@ -50,6 +52,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         // ::BattleActorState_AbilityUseCountsEntry_DoNotUse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattleActorState_RoundEffectUsageEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::BattleActorState_EquippedSkillVfxEntry_DoNotUse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattleActorState
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
@@ -68,6 +72,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         // ::BattlePrepPlayerState
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattlePrepState
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::BattleTacticalPing
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattleMonsterDefeat
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
@@ -93,6 +99,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::RankedMemberLoadout
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::RankedMatchContext_MemberWinStreaksEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::RankedMatchContext
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattleParticipationFact
@@ -101,9 +109,358 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
         // ::BattleTrialJournalFacts
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::TournamentBattleContext
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::WuxingTowerBattleContext
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::WuxingTowerSettlementEcho
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::CustomDuelRules
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
+        // ::BattleActorBuildSummary
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class WuxingTowerSettlementEcho::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<WuxingTowerSettlementEcho>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_._has_bits_);
+};
+
+constexpr WuxingTowerSettlementEcho::ParseTableT_ WuxingTowerSettlementEcho::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::WuxingTowerSettlementEcho>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 total_rounds = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.total_rounds_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_)}},
+      // uint32 week_key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.week_key_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.week_key_)}},
+      // uint64 run_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerSettlementEcho, _impl_.run_id_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.run_id_)}},
+      // uint32 floor = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.floor_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.floor_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 week_key = 1;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.week_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 run_id = 2;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.run_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 floor = 3;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.floor_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 total_rounds = 4;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr WuxingTowerSettlementEcho::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        run_id_{::uint64_t{0u}},
+        week_key_{0u},
+        floor_{0u},
+        total_rounds_{0u} {}
+
+template <typename>
+constexpr WuxingTowerSettlementEcho::WuxingTowerSettlementEcho(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL WuxingTowerSettlementEcho::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) WuxingTowerSettlementEcho(arena);
+}
+constexpr auto WuxingTowerSettlementEcho::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(WuxingTowerSettlementEcho), alignof(WuxingTowerSettlementEcho));
+}
+constexpr auto WuxingTowerSettlementEcho::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &WuxingTowerSettlementEcho::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<WuxingTowerSettlementEcho>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &WuxingTowerSettlementEcho::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<WuxingTowerSettlementEcho>(), &WuxingTowerSettlementEcho::ByteSizeLong,
+              &WuxingTowerSettlementEcho::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[42],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct WuxingTowerSettlementEchoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr WuxingTowerSettlementEchoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 WuxingTowerSettlementEcho_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(WuxingTowerSettlementEcho::InternalGenerateClassData_(
+            _default, &WuxingTowerSettlementEcho_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<WuxingTowerSettlementEcho>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~WuxingTowerSettlementEchoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) WuxingTowerSettlementEcho _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<WuxingTowerSettlementEcho>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEchoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST WuxingTowerSettlementEchoGlobalsTypeInternal WuxingTowerSettlementEcho_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* WuxingTowerSettlementEcho_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return WuxingTowerSettlementEcho_globals_.GetClassData();
+#else
+  return WuxingTowerSettlementEcho_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class WuxingTowerBattleContext::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<WuxingTowerBattleContext>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_._has_bits_);
+};
+
+constexpr WuxingTowerBattleContext::ParseTableT_ WuxingTowerBattleContext::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::WuxingTowerBattleContext>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 week_key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerBattleContext, _impl_.week_key_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.week_key_)}},
+      // uint64 run_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerBattleContext, _impl_.run_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.run_id_)}},
+      // uint32 floor = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerBattleContext, _impl_.floor_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.floor_)}},
+      // .TournamentLeylineElement leyline_element = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerBattleContext, _impl_.leyline_element_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.leyline_element_)}},
+      // repeated uint32 active_sigil_ids = 5;
+      {::_pbi::TcParser::FastV32P1,
+       {42, 0, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_sigil_ids_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 week_key = 1;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.week_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 run_id = 2;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.run_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 floor = 3;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.floor_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .TournamentLeylineElement leyline_element = 4;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.leyline_element_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // repeated uint32 active_sigil_ids = 5;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_sigil_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr WuxingTowerBattleContext::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        active_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::WuxingTowerBattleContext,
+            PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.active_sigil_ids_)>()
+         }
+        ,
+        _active_sigil_ids_cached_byte_size_{0},
+        run_id_{::uint64_t{0u}},
+        week_key_{0u},
+        floor_{0u},
+        leyline_element_{static_cast< ::TournamentLeylineElement >(0)} {}
+
+template <typename>
+constexpr WuxingTowerBattleContext::WuxingTowerBattleContext(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL WuxingTowerBattleContext::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) WuxingTowerBattleContext(arena);
+}
+constexpr auto WuxingTowerBattleContext::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(WuxingTowerBattleContext), alignof(WuxingTowerBattleContext));
+}
+constexpr auto WuxingTowerBattleContext::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &WuxingTowerBattleContext::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<WuxingTowerBattleContext>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &WuxingTowerBattleContext::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<WuxingTowerBattleContext>(), &WuxingTowerBattleContext::ByteSizeLong,
+              &WuxingTowerBattleContext::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[41],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct WuxingTowerBattleContextGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr WuxingTowerBattleContextGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 WuxingTowerBattleContext_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(WuxingTowerBattleContext::InternalGenerateClassData_(
+            _default, &WuxingTowerBattleContext_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<WuxingTowerBattleContext>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~WuxingTowerBattleContextGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) WuxingTowerBattleContext _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<WuxingTowerBattleContext>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContextGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST WuxingTowerBattleContextGlobalsTypeInternal WuxingTowerBattleContext_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* WuxingTowerBattleContext_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return WuxingTowerBattleContext_globals_.GetClassData();
+#else
+  return WuxingTowerBattleContext_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class TrialBattleContext::_Internal {
  public:
   using HasBits = decltype(::std::declval<TrialBattleContext>()._impl_._has_bits_);
@@ -225,7 +582,7 @@ constexpr auto TrialBattleContext::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -272,6 +629,254 @@ const ::_pbi::ClassData* TrialBattleContext_get_class_data() {
   return TrialBattleContext_globals_.GetClassData();
 #else
   return TrialBattleContext_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class TournamentBattleContext::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TournamentBattleContext>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_._has_bits_);
+};
+
+constexpr TournamentBattleContext::ParseTableT_ TournamentBattleContext::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_._has_bits_),
+      0, // no _extensions_
+      15, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294934528,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      15,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::TournamentBattleContext>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.season_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.season_id_)}},
+      // uint64 match_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TournamentBattleContext, _impl_.match_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.match_id_)}},
+      // uint32 best_of = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.best_of_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.best_of_)}},
+      // uint32 game_index = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.game_index_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.game_index_)}},
+      // uint32 wins_a = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.wins_a_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.wins_a_)}},
+      // uint32 wins_b = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.wins_b_), 7>(),
+       {48, 7, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.wins_b_)}},
+      // .TournamentLeylineElement leyline_element = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.leyline_element_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.leyline_element_)}},
+      // uint64 squad_a_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TournamentBattleContext, _impl_.squad_a_id_), 9>(),
+       {64, 9, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_a_id_)}},
+      // string squad_a_name = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_a_name_)}},
+      // uint64 squad_b_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TournamentBattleContext, _impl_.squad_b_id_), 10>(),
+       {80, 10, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_b_id_)}},
+      // string squad_b_name = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_b_name_)}},
+      // uint32 squad_a_emblem_id = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.squad_a_emblem_id_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_a_emblem_id_)}},
+      // uint32 squad_b_emblem_id = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TournamentBattleContext, _impl_.squad_b_emblem_id_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_b_emblem_id_)}},
+      // bool is_warmup = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TournamentBattleContext, _impl_.is_warmup_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.is_warmup_)}},
+      // bool is_third_place = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TournamentBattleContext, _impl_.is_third_place_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.is_third_place_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 season_id = 1;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.season_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 match_id = 2;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.match_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 best_of = 3;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.best_of_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 game_index = 4;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.game_index_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 wins_a = 5;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.wins_a_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 wins_b = 6;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.wins_b_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .TournamentLeylineElement leyline_element = 7;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.leyline_element_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 squad_a_id = 8;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_a_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string squad_a_name = 9;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_a_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 squad_b_id = 10;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_b_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string squad_b_name = 11;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_b_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 squad_a_emblem_id = 12;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_a_emblem_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 squad_b_emblem_id = 13;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.squad_b_emblem_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool is_warmup = 14;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.is_warmup_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool is_third_place = 15;
+      {PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.is_third_place_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+      "\27\0\0\0\0\0\0\0\0\14\0\14\0\0\0\0"
+      "TournamentBattleContext"
+      "squad_a_name"
+      "squad_b_name"
+    }},
+  };
+}
+
+
+inline constexpr TournamentBattleContext::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        squad_a_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        squad_b_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        match_id_{::uint64_t{0u}},
+        season_id_{0u},
+        best_of_{0u},
+        game_index_{0u},
+        wins_a_{0u},
+        wins_b_{0u},
+        leyline_element_{static_cast< ::TournamentLeylineElement >(0)},
+        squad_a_id_{::uint64_t{0u}},
+        squad_b_id_{::uint64_t{0u}},
+        squad_a_emblem_id_{0u},
+        squad_b_emblem_id_{0u},
+        is_warmup_{false},
+        is_third_place_{false} {}
+
+template <typename>
+constexpr TournamentBattleContext::TournamentBattleContext(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TournamentBattleContext::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TournamentBattleContext(arena);
+}
+constexpr auto TournamentBattleContext::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TournamentBattleContext), alignof(TournamentBattleContext));
+}
+constexpr auto TournamentBattleContext::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TournamentBattleContext::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TournamentBattleContext>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TournamentBattleContext::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TournamentBattleContext>(), &TournamentBattleContext::ByteSizeLong,
+              &TournamentBattleContext::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[40],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TournamentBattleContextGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TournamentBattleContextGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TournamentBattleContext_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TournamentBattleContext::InternalGenerateClassData_(
+            _default, &TournamentBattleContext_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TournamentBattleContext>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TournamentBattleContextGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TournamentBattleContext _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TournamentBattleContext>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TournamentBattleContextGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TournamentBattleContextGlobalsTypeInternal TournamentBattleContext_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TournamentBattleContext_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TournamentBattleContext_globals_.GetClassData();
+#else
+  return TournamentBattleContext_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -373,7 +978,7 @@ constexpr auto RankedPresetSelection::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -420,6 +1025,139 @@ const ::_pbi::ClassData* RankedPresetSelection_get_class_data() {
   return RankedPresetSelection_globals_.GetClassData();
 #else
   return RankedPresetSelection_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr RankedMatchContext_MemberWinStreaksEntry_DoNotUse::ParseTableT_ RankedMatchContext_MemberWinStreaksEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::RankedMatchContext_MemberWinStreaksEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 value = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.value_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.value_)}},
+      // uint64 key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.key_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 key = 1;
+      {PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 value = 2;
+      {PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr RankedMatchContext_MemberWinStreaksEntry_DoNotUse::RankedMatchContext_MemberWinStreaksEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : RankedMatchContext_MemberWinStreaksEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL RankedMatchContext_MemberWinStreaksEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RankedMatchContext_MemberWinStreaksEntry_DoNotUse(arena);
+}
+constexpr auto RankedMatchContext_MemberWinStreaksEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RankedMatchContext_MemberWinStreaksEntry_DoNotUse), alignof(RankedMatchContext_MemberWinStreaksEntry_DoNotUse));
+}
+constexpr auto RankedMatchContext_MemberWinStreaksEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RankedMatchContext_MemberWinStreaksEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RankedMatchContext_MemberWinStreaksEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RankedMatchContext_MemberWinStreaksEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&RankedMatchContext_MemberWinStreaksEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[35],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RankedMatchContext_MemberWinStreaksEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RankedMatchContext_MemberWinStreaksEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RankedMatchContext_MemberWinStreaksEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RankedMatchContext_MemberWinStreaksEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RankedMatchContext_MemberWinStreaksEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RankedMatchContext_MemberWinStreaksEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RankedMatchContext_MemberWinStreaksEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RankedMatchContext_MemberWinStreaksEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RankedMatchContext_MemberWinStreaksEntry_DoNotUseGlobalsTypeInternal RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RankedMatchContext_MemberWinStreaksEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_.GetClassData();
+#else
+  return RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -605,7 +1343,7 @@ constexpr auto GuildWarBattleContext::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -920,7 +1658,7 @@ constexpr auto FestivalBeastBattleContext::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -967,6 +1705,190 @@ const ::_pbi::ClassData* FestivalBeastBattleContext_get_class_data() {
   return FestivalBeastBattleContext_globals_.GetClassData();
 #else
   return FestivalBeastBattleContext_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CustomDuelRules::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CustomDuelRules>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_._has_bits_);
+};
+
+constexpr CustomDuelRules::ParseTableT_ CustomDuelRules::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CustomDuelRules>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // bool use_free_preset = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CustomDuelRules, _impl_.use_free_preset_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.use_free_preset_)}},
+      // bool enable_polarity_rotation = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CustomDuelRules, _impl_.enable_polarity_rotation_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.enable_polarity_rotation_)}},
+      // uint32 round_limit_override = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CustomDuelRules, _impl_.round_limit_override_), 0>(),
+       {24, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.round_limit_override_)}},
+      // bool ban_control_skills = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CustomDuelRules, _impl_.ban_control_skills_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.ban_control_skills_)}},
+      // bool allow_public_spectate = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CustomDuelRules, _impl_.allow_public_spectate_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.allow_public_spectate_)}},
+      // uint32 challenger_character_preset_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CustomDuelRules, _impl_.challenger_character_preset_id_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.challenger_character_preset_id_)}},
+      // uint32 challenger_pet_preset_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CustomDuelRules, _impl_.challenger_pet_preset_id_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.challenger_pet_preset_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool use_free_preset = 1;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.use_free_preset_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool enable_polarity_rotation = 2;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.enable_polarity_rotation_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 round_limit_override = 3;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.round_limit_override_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool ban_control_skills = 4;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.ban_control_skills_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool allow_public_spectate = 5;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.allow_public_spectate_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 challenger_character_preset_id = 6;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.challenger_character_preset_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 challenger_pet_preset_id = 7;
+      {PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.challenger_pet_preset_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CustomDuelRules::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        round_limit_override_{0u},
+        use_free_preset_{false},
+        enable_polarity_rotation_{false},
+        ban_control_skills_{false},
+        allow_public_spectate_{false},
+        challenger_character_preset_id_{0u},
+        challenger_pet_preset_id_{0u} {}
+
+template <typename>
+constexpr CustomDuelRules::CustomDuelRules(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CustomDuelRules::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CustomDuelRules(arena);
+}
+constexpr auto CustomDuelRules::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CustomDuelRules), alignof(CustomDuelRules));
+}
+constexpr auto CustomDuelRules::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CustomDuelRules::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CustomDuelRules>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CustomDuelRules::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CustomDuelRules>(), &CustomDuelRules::ByteSizeLong,
+              &CustomDuelRules::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[43],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CustomDuelRulesGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CustomDuelRulesGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CustomDuelRules_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CustomDuelRules::InternalGenerateClassData_(
+            _default, &CustomDuelRules_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CustomDuelRules>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CustomDuelRulesGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CustomDuelRules _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CustomDuelRules>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CustomDuelRulesGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CustomDuelRulesGlobalsTypeInternal CustomDuelRules_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CustomDuelRules_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CustomDuelRules_globals_.GetClassData();
+#else
+  return CustomDuelRules_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1248,7 +2170,7 @@ constexpr auto BattleTrialJournalFacts::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -1295,6 +2217,168 @@ const ::_pbi::ClassData* BattleTrialJournalFacts_get_class_data() {
   return BattleTrialJournalFacts_globals_.GetClassData();
 #else
   return BattleTrialJournalFacts_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BattleTacticalPing::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BattleTacticalPing>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_._has_bits_);
+};
+
+constexpr BattleTacticalPing::ParseTableT_ BattleTacticalPing::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BattleTacticalPing>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 round_index = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleTacticalPing, _impl_.round_index_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.round_index_)}},
+      // uint64 sender_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleTacticalPing, _impl_.sender_player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.sender_player_id_)}},
+      // uint64 target_actor_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleTacticalPing, _impl_.target_actor_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.target_actor_id_)}},
+      // .BattlePingKind kind = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleTacticalPing, _impl_.kind_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.kind_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 sender_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.sender_player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 target_actor_id = 2;
+      {PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.target_actor_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .BattlePingKind kind = 3;
+      {PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.kind_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 round_index = 4;
+      {PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.round_index_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BattleTacticalPing::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        sender_player_id_{::uint64_t{0u}},
+        target_actor_id_{::uint64_t{0u}},
+        kind_{static_cast< ::BattlePingKind >(0)},
+        round_index_{0u} {}
+
+template <typename>
+constexpr BattleTacticalPing::BattleTacticalPing(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BattleTacticalPing::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BattleTacticalPing(arena);
+}
+constexpr auto BattleTacticalPing::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BattleTacticalPing), alignof(BattleTacticalPing));
+}
+constexpr auto BattleTacticalPing::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BattleTacticalPing::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BattleTacticalPing>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BattleTacticalPing::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BattleTacticalPing>(), &BattleTacticalPing::ByteSizeLong,
+              &BattleTacticalPing::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[22],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BattleTacticalPingGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BattleTacticalPingGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BattleTacticalPing_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BattleTacticalPing::InternalGenerateClassData_(
+            _default, &BattleTacticalPing_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BattleTacticalPing>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BattleTacticalPingGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BattleTacticalPing _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BattleTacticalPing>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BattleTacticalPingGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BattleTacticalPingGlobalsTypeInternal BattleTacticalPing_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BattleTacticalPing_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BattleTacticalPing_globals_.GetClassData();
+#else
+  return BattleTacticalPing_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1457,7 +2541,7 @@ constexpr auto BattleSurrenderVoteState::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -1799,7 +2883,7 @@ constexpr auto BattleRandomItemReward::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -1960,7 +3044,7 @@ constexpr auto BattlePrepSealOption::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -2149,7 +3233,7 @@ constexpr auto BattlePrepPlayerState::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -2369,7 +3453,7 @@ constexpr auto BattlePrepPetOption::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -2553,6 +3637,139 @@ const ::_pbi::ClassData* BattlePlayerSnapshot_SkillRanksEntry_DoNotUse_get_class
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::ParseTableT_ BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 value = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.value_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.value_)}},
+      // uint32 key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.key_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 key = 1;
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 value = 2;
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse(arena);
+}
+constexpr auto BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse), alignof(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse));
+}
+constexpr auto BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_.GetClassData();
+#else
+  return BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 constexpr BattlePetSnapshot_SkillRanksEntry_DoNotUse::ParseTableT_ BattlePetSnapshot_SkillRanksEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
@@ -2635,7 +3852,7 @@ constexpr auto BattlePetSnapshot_SkillRanksEntry_DoNotUse::InternalGenerateClass
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -2797,7 +4014,7 @@ constexpr auto BattlePetSettlementData::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -2969,7 +4186,7 @@ constexpr auto BattleParticipationFact::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -3117,7 +4334,7 @@ constexpr auto BattleMonsterDefeat::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -3593,7 +4810,7 @@ constexpr auto BattleEventItem::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -3741,7 +4958,7 @@ constexpr auto BattleCurrencyGain::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -4205,7 +5422,7 @@ constexpr auto BattleArtifactState::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -4338,7 +5555,7 @@ constexpr auto BattleActorState_SkillRanksEntry_DoNotUse::InternalGenerateClassD
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -4471,7 +5688,7 @@ constexpr auto BattleActorState_SkillCooldownRoundsEntry_DoNotUse::InternalGener
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -4604,7 +5821,7 @@ constexpr auto BattleActorState_RoundEffectUsageEntry_DoNotUse::InternalGenerate
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -4651,6 +5868,139 @@ const ::_pbi::ClassData* BattleActorState_RoundEffectUsageEntry_DoNotUse_get_cla
   return BattleActorState_RoundEffectUsageEntry_DoNotUse_globals_.GetClassData();
 #else
   return BattleActorState_RoundEffectUsageEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr BattleActorState_EquippedSkillVfxEntry_DoNotUse::ParseTableT_ BattleActorState_EquippedSkillVfxEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BattleActorState_EquippedSkillVfxEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 value = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.value_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.value_)}},
+      // uint32 key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.key_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 key = 1;
+      {PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 value = 2;
+      {PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr BattleActorState_EquippedSkillVfxEntry_DoNotUse::BattleActorState_EquippedSkillVfxEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : BattleActorState_EquippedSkillVfxEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL BattleActorState_EquippedSkillVfxEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BattleActorState_EquippedSkillVfxEntry_DoNotUse(arena);
+}
+constexpr auto BattleActorState_EquippedSkillVfxEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BattleActorState_EquippedSkillVfxEntry_DoNotUse), alignof(BattleActorState_EquippedSkillVfxEntry_DoNotUse));
+}
+constexpr auto BattleActorState_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BattleActorState_EquippedSkillVfxEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BattleActorState_EquippedSkillVfxEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BattleActorState_EquippedSkillVfxEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&BattleActorState_EquippedSkillVfxEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[12],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BattleActorState_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BattleActorState_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BattleActorState_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BattleActorState_EquippedSkillVfxEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BattleActorState_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BattleActorState_EquippedSkillVfxEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BattleActorState_EquippedSkillVfxEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BattleActorState_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BattleActorState_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BattleActorState_EquippedSkillVfxEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_.GetClassData();
+#else
+  return BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4737,7 +6087,7 @@ constexpr auto BattleActorState_AbilityUseCountsEntry_DoNotUse::InternalGenerate
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -4784,6 +6134,258 @@ const ::_pbi::ClassData* BattleActorState_AbilityUseCountsEntry_DoNotUse_get_cla
   return BattleActorState_AbilityUseCountsEntry_DoNotUse_globals_.GetClassData();
 #else
   return BattleActorState_AbilityUseCountsEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BattleActorBuildSummary::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BattleActorBuildSummary>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_._has_bits_);
+};
+
+constexpr BattleActorBuildSummary::ParseTableT_ BattleActorBuildSummary::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_._has_bits_),
+      0, // no _extensions_
+      14, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294950912,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      14,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BattleActorBuildSummary>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleActorBuildSummary, _impl_.player_id_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.player_id_)}},
+      // string name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.name_)}},
+      // uint32 team_index = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.team_index_), 5>(),
+       {24, 5, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.team_index_)}},
+      // uint32 class_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.class_id_), 6>(),
+       {32, 6, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.class_id_)}},
+      // uint32 level = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.level_), 7>(),
+       {40, 7, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.level_)}},
+      // uint32 formation_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.formation_id_), 8>(),
+       {48, 8, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.formation_id_)}},
+      // uint32 wuxing_element = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.wuxing_element_), 9>(),
+       {56, 9, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.wuxing_element_)}},
+      // uint32 season_seal_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.season_seal_id_), 10>(),
+       {64, 10, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.season_seal_id_)}},
+      // uint32 active_pet_table_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.active_pet_table_id_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.active_pet_table_id_)}},
+      // string active_pet_name = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.active_pet_name_)}},
+      // uint32 active_pet_element = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorBuildSummary, _impl_.active_pet_element_), 12>(),
+       {88, 12, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.active_pet_element_)}},
+      // repeated uint32 skill_table_ids = 12;
+      {::_pbi::TcParser::FastV32P1,
+       {98, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.skill_table_ids_)}},
+      // repeated uint32 wuxing_sigil_ids = 13;
+      {::_pbi::TcParser::FastV32P1,
+       {106, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.wuxing_sigil_ids_)}},
+      // bool used_free_preset = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleActorBuildSummary, _impl_.used_free_preset_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.used_free_preset_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string name = 2;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 team_index = 3;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.team_index_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 class_id = 4;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.class_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 level = 5;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.level_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 formation_id = 6;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.formation_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 wuxing_element = 7;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.wuxing_element_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_seal_id = 8;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.season_seal_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 active_pet_table_id = 9;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.active_pet_table_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string active_pet_name = 10;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.active_pet_name_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 active_pet_element = 11;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.active_pet_element_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 skill_table_ids = 12;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.skill_table_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // repeated uint32 wuxing_sigil_ids = 13;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.wuxing_sigil_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // bool used_free_preset = 14;
+      {PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.used_free_preset_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+      "\27\0\4\0\0\0\0\0\0\0\17\0\0\0\0\0"
+      "BattleActorBuildSummary"
+      "name"
+      "active_pet_name"
+    }},
+  };
+}
+
+
+inline constexpr BattleActorBuildSummary::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        skill_table_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattleActorBuildSummary,
+            PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.skill_table_ids_)>()
+         }
+        ,
+        _skill_table_ids_cached_byte_size_{0},
+        wuxing_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattleActorBuildSummary,
+            PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.wuxing_sigil_ids_)>()
+         }
+        ,
+        _wuxing_sigil_ids_cached_byte_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        active_pet_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        team_index_{0u},
+        class_id_{0u},
+        level_{0u},
+        formation_id_{0u},
+        wuxing_element_{0u},
+        season_seal_id_{0u},
+        active_pet_table_id_{0u},
+        active_pet_element_{0u},
+        used_free_preset_{false} {}
+
+template <typename>
+constexpr BattleActorBuildSummary::BattleActorBuildSummary(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BattleActorBuildSummary::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BattleActorBuildSummary(arena);
+}
+constexpr auto BattleActorBuildSummary::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BattleActorBuildSummary), alignof(BattleActorBuildSummary));
+}
+constexpr auto BattleActorBuildSummary::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BattleActorBuildSummary::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BattleActorBuildSummary>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BattleActorBuildSummary::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BattleActorBuildSummary>(), &BattleActorBuildSummary::ByteSizeLong,
+              &BattleActorBuildSummary::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[44],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BattleActorBuildSummaryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BattleActorBuildSummaryGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BattleActorBuildSummary_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BattleActorBuildSummary::InternalGenerateClassData_(
+            _default, &BattleActorBuildSummary_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BattleActorBuildSummary>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BattleActorBuildSummaryGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BattleActorBuildSummary _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BattleActorBuildSummary>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BattleActorBuildSummaryGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BattleActorBuildSummaryGlobalsTypeInternal BattleActorBuildSummary_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BattleActorBuildSummary_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BattleActorBuildSummary_globals_.GetClassData();
+#else
+  return BattleActorBuildSummary_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4899,7 +6501,7 @@ constexpr auto BattleAction::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -5053,7 +6655,7 @@ constexpr auto RankedMemberLoadout::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -5116,12 +6718,12 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_._has_bits_),
       0, // no _extensions_
-      32, 248,  // max_field_number, fast_idx_mask
+      42, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      32,  // num_field_entries
-      7,  // num_aux_entries
+      42,  // num_field_entries
+      8,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -5256,6 +6858,8 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
        {506, 7, 6,
         PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.festival_beast_)}},
     }}, {{
+      33, 0, 1,
+      64512, 32,
       65535, 65535
     }}, {{
       // uint64 battle_id = 1;
@@ -5321,7 +6925,27 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
       // .FestivalBeastBattleContext festival_beast = 31;
       {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.festival_beast_), _Internal::kHasBitsOffset + 7, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool surrendered = 32;
-      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.surrendered_), _Internal::kHasBitsOffset + 31, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.surrendered_), _Internal::kHasBitsOffset + 33, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 total_damage_dealt = 33;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.total_damage_dealt_), _Internal::kHasBitsOffset + 32, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 total_healing_done = 34;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.total_healing_done_), _Internal::kHasBitsOffset + 35, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 total_controls_landed = 35;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.total_controls_landed_), _Internal::kHasBitsOffset + 34, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .WuxingTowerSettlementEcho tower_settlement = 36;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.tower_settlement_), _Internal::kHasBitsOffset + 31, 7, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 primary_focus_damage_dealt = 37;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.primary_focus_damage_dealt_), _Internal::kHasBitsOffset + 36, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 total_shield_granted = 38;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.total_shield_granted_), _Internal::kHasBitsOffset + 37, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 total_dispels_landed = 39;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.total_dispels_landed_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 damage_taken = 40;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.damage_taken_), _Internal::kHasBitsOffset + 38, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .BattleHighlightKind highlight_kind = 41;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.highlight_kind_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 ended_opponent_streak = 42;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.ended_opponent_streak_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -5358,6 +6982,11 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
         {::_pbi::TcParser::GetTable<::FestivalBeastBattleContext>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::FestivalBeastBattleContext_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::WuxingTowerSettlementEcho>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::WuxingTowerSettlementEcho_globals_},
         #endif
     }},
     {{
@@ -5426,7 +7055,17 @@ inline constexpr BattleSettlementData::Impl_::Impl_(
         effective_combat_contribution_{false},
         use_free_preset_{false},
         boss_trial_kind_{0u},
-        surrendered_{false} {}
+        tower_settlement_{nullptr},
+        total_damage_dealt_{::uint64_t{0u}},
+        surrendered_{false},
+        total_controls_landed_{0u},
+        total_healing_done_{::uint64_t{0u}},
+        primary_focus_damage_dealt_{::uint64_t{0u}},
+        total_shield_granted_{::uint64_t{0u}},
+        damage_taken_{::uint64_t{0u}},
+        total_dispels_landed_{0u},
+        highlight_kind_{static_cast< ::BattleHighlightKind >(0)},
+        ended_opponent_streak_{0u} {}
 
 template <typename>
 constexpr BattleSettlementData::BattleSettlementData(::_pbi::ConstantInitialized,
@@ -5469,7 +7108,7 @@ constexpr auto BattleSettlementData::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -5671,7 +7310,7 @@ constexpr auto BattleRewardProfile::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -5877,7 +7516,7 @@ constexpr auto BattlePrepState::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -6092,7 +7731,7 @@ constexpr auto BattleActivityContext::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -6155,12 +7794,12 @@ constexpr RankedMatchContext::ParseTableT_ RankedMatchContext::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(RankedMatchContext, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
-      1,  // num_aux_entries
+      9,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -6220,6 +7859,8 @@ constexpr RankedMatchContext::ParseTableT_ RankedMatchContext::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(RankedMatchContext, _impl_.members_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool use_free_preset = 8;
       {PROTOBUF_FIELD_OFFSET(RankedMatchContext, _impl_.use_free_preset_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // map<uint64, uint32> member_win_streaks = 9;
+      {PROTOBUF_FIELD_OFFSET(RankedMatchContext, _impl_.member_win_streaks_), _Internal::kHasBitsOffset + 8, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -6227,6 +7868,8 @@ constexpr RankedMatchContext::ParseTableT_ RankedMatchContext::InternalGenerateP
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::RankedMemberLoadout_globals_},
         #endif
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 4, 13, 0)},
     }},
     {{
       "\22\0\12\0\0\0\22\0\0\0\0\0\0\0\0\0"
@@ -6257,7 +7900,12 @@ inline constexpr RankedMatchContext::Impl_::Impl_(
         rule_version_{0u},
         rank_generation_{::uint64_t{0u}},
         team_size_{0u},
-        use_free_preset_{false} {}
+        use_free_preset_{false},
+        member_win_streaks_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::RankedMatchContext,
+            PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.member_win_streaks_)>()
+         }
+     {}
 
 template <typename>
 constexpr RankedMatchContext::RankedMatchContext(::_pbi::ConstantInitialized,
@@ -6300,7 +7948,7 @@ constexpr auto RankedMatchContext::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -6451,7 +8099,7 @@ constexpr auto BattleRewardConfig::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -6514,11 +8162,11 @@ constexpr BattlePetSnapshot::ParseTableT_ BattlePetSnapshot::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      18, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294705152,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      18,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -6528,53 +8176,50 @@ constexpr BattlePetSnapshot::ParseTableT_ BattlePetSnapshot::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::BattlePetSnapshot>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 combat_pet_table_id = 16;
-      {::_pbi::TcParser::FastV32S2,
-       {384, 14, 0,
-        PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.combat_pet_table_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 pet_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.pet_id_), 4>(),
-       {8, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.pet_id_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_id_)}},
       // uint64 owner_player_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.owner_player_id_), 5>(),
-       {16, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.owner_player_id_), 6>(),
+       {16, 6, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.owner_player_id_)}},
       // string pet_name = 3;
       {::_pbi::TcParser::FastUS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_name_)}},
       // uint32 pet_table_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePetSnapshot, _impl_.pet_table_id_), 6>(),
-       {32, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePetSnapshot, _impl_.pet_table_id_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_table_id_)}},
       // uint32 level = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePetSnapshot, _impl_.level_), 7>(),
-       {40, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePetSnapshot, _impl_.level_), 8>(),
+       {40, 8, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.level_)}},
       // .BaseAttributesComp base_attributes = 6;
       {::_pbi::TcParser::FastMtS1,
-       {50, 2, 0,
+       {50, 3, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.base_attributes_)}},
       // uint64 max_health = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.max_health_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.max_health_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.max_health_)}},
       // uint64 max_mana = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.max_mana_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.max_mana_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.max_mana_)}},
       // uint64 physical_attack = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.physical_attack_), 10>(),
-       {72, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.physical_attack_), 11>(),
+       {72, 11, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.physical_attack_)}},
       // uint64 magic_attack = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.magic_attack_), 11>(),
-       {80, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.magic_attack_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.magic_attack_)}},
       // uint64 defense = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.defense_), 12>(),
-       {88, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePetSnapshot, _impl_.defense_), 13>(),
+       {88, 13, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.defense_)}},
       // repeated uint32 skill_table_ids = 12;
       {::_pbi::TcParser::FastV32P1,
@@ -6583,47 +8228,76 @@ constexpr BattlePetSnapshot::ParseTableT_ BattlePetSnapshot::InternalGeneratePar
       {::_pbi::TcParser::MiniParse, {}},
       // .PetCultivationEffects pet_cultivation = 14;
       {::_pbi::TcParser::FastMtS1,
-       {114, 3, 1,
+       {114, 4, 1,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_cultivation_)}},
       // bool competitive_temporary = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattlePetSnapshot, _impl_.competitive_temporary_), 13>(),
-       {120, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattlePetSnapshot, _impl_.competitive_temporary_), 14>(),
+       {120, 14, 0,
         PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.competitive_temporary_)}},
+      // uint32 combat_pet_table_id = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.combat_pet_table_id_)}},
+      // uint32 cosmetic_id = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.cosmetic_id_)}},
+      // string cosmetic_art_key = 18;
+      {::_pbi::TcParser::FastUS2,
+       {402, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.cosmetic_art_key_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 pet_id = 1;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 owner_player_id = 2;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.owner_player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.owner_player_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string pet_name = 3;
       {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 pet_table_id = 4;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 level = 5;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.level_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.level_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .BaseAttributesComp base_attributes = 6;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.base_attributes_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.base_attributes_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 max_health = 7;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.max_health_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.max_health_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 max_mana = 8;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.max_mana_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.max_mana_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 physical_attack = 9;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.physical_attack_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.physical_attack_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 magic_attack = 10;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.magic_attack_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.magic_attack_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 defense = 11;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.defense_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.defense_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated uint32 skill_table_ids = 12;
       {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.skill_table_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // map<uint32, uint32> skill_ranks = 13;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.skill_ranks_), _Internal::kHasBitsOffset + 15, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.skill_ranks_), _Internal::kHasBitsOffset + 17, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // .PetCultivationEffects pet_cultivation = 14;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_cultivation_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.pet_cultivation_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool competitive_temporary = 15;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.competitive_temporary_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.competitive_temporary_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 combat_pet_table_id = 16;
-      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.combat_pet_table_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.combat_pet_table_id_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 cosmetic_id = 17;
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.cosmetic_id_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string cosmetic_art_key = 18;
+      {PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.cosmetic_art_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -6640,9 +8314,10 @@ constexpr BattlePetSnapshot::ParseTableT_ BattlePetSnapshot::InternalGeneratePar
             0, 0, 13, 13, 0)},
     }},
     {{
-      "\21\0\0\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "\21\0\0\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\20\0\0\0\0\0"
       "BattlePetSnapshot"
       "pet_name"
+      "cosmetic_art_key"
     }},
   };
 }
@@ -6661,6 +8336,9 @@ inline constexpr BattlePetSnapshot::Impl_::Impl_(
         pet_name_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        cosmetic_art_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         base_attributes_{nullptr},
         pet_cultivation_{nullptr},
         pet_id_{::uint64_t{0u}},
@@ -6674,6 +8352,7 @@ inline constexpr BattlePetSnapshot::Impl_::Impl_(
         defense_{::uint64_t{0u}},
         competitive_temporary_{false},
         combat_pet_table_id_{0u},
+        cosmetic_id_{0u},
         skill_ranks_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BattlePetSnapshot,
             PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.skill_ranks_)>()
@@ -6721,7 +8400,7 @@ constexpr auto BattlePetSnapshot::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -6784,12 +8463,12 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      27, 248,  // max_field_number, fast_idx_mask
+      31, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4160749568,  // skipmap
+      2147483648,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      27,  // num_field_entries
-      10,  // num_aux_entries
+      31,  // num_field_entries
+      12,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -6800,28 +8479,28 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.player_id_), 13>(),
-       {8, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.player_id_), 14>(),
+       {8, 14, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.player_id_)}},
       // string player_name = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 6, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.player_name_)}},
       // uint32 level = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePlayerSnapshot, _impl_.level_), 16>(),
-       {24, 16, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePlayerSnapshot, _impl_.level_), 17>(),
+       {24, 17, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.level_)}},
       // .BaseAttributesComp base_attributes = 4;
       {::_pbi::TcParser::FastMtS1,
        {34, 9, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.base_attributes_)}},
       // uint64 max_health = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.max_health_), 14>(),
-       {40, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.max_health_), 15>(),
+       {40, 15, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.max_health_)}},
       // uint64 max_mana = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.max_mana_), 15>(),
-       {48, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.max_mana_), 16>(),
+       {48, 16, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.max_mana_)}},
       // repeated uint32 skill_table_ids = 7;
       {::_pbi::TcParser::FastV32P1,
@@ -6840,24 +8519,24 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
        {82, 10, 3,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.routing_)}},
       // uint32 team_index = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePlayerSnapshot, _impl_.team_index_), 17>(),
-       {88, 17, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattlePlayerSnapshot, _impl_.team_index_), 18>(),
+       {88, 18, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.team_index_)}},
       // string table_fingerprint = 12;
       {::_pbi::TcParser::FastUS1,
        {98, 7, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.table_fingerprint_)}},
       // uint64 physical_attack = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.physical_attack_), 18>(),
-       {104, 18, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.physical_attack_), 19>(),
+       {104, 19, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.physical_attack_)}},
       // uint64 magic_attack = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.magic_attack_), 19>(),
-       {112, 19, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.magic_attack_), 20>(),
+       {112, 20, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.magic_attack_)}},
       // uint64 defense = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.defense_), 20>(),
-       {120, 20, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattlePlayerSnapshot, _impl_.defense_), 21>(),
+       {120, 21, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.defense_)}},
       // repeated .BattlePetSnapshot pets = 16;
       {::_pbi::TcParser::FastMtR2,
@@ -6869,11 +8548,11 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.appearance_id_)}},
       // uint32 class_id = 18;
       {::_pbi::TcParser::FastV32S2,
-       {400, 21, 0,
+       {400, 22, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.class_id_)}},
       // uint32 gender = 19;
       {::_pbi::TcParser::FastV32S2,
-       {408, 22, 0,
+       {408, 23, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.gender_)}},
       // .CombatAttributes combat = 20;
       {::_pbi::TcParser::FastMtS2,
@@ -6882,7 +8561,7 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 pet_capture_slots = 22;
       {::_pbi::TcParser::FastV32S2,
-       {432, 23, 0,
+       {432, 24, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.pet_capture_slots_)}},
       // .EquipmentEffects equipment_effects = 23;
       {::_pbi::TcParser::FastMtS2,
@@ -6890,11 +8569,11 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.equipment_effects_)}},
       // uint32 active_season_id = 24;
       {::_pbi::TcParser::FastV32S2,
-       {448, 24, 0,
+       {448, 25, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.active_season_id_)}},
       // bool ai_controlled = 25;
       {::_pbi::TcParser::FastV8S2,
-       {456, 25, 0,
+       {456, 26, 0,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.ai_controlled_)}},
       // repeated .BattlePetSnapshot standby_pets = 26;
       {::_pbi::TcParser::FastMtR2,
@@ -6904,25 +8583,34 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
       {::_pbi::TcParser::FastMtR2,
        {474, 5, 8,
         PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.available_season_seals_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 formation_id = 28;
+      {::_pbi::TcParser::FastV32S2,
+       {480, 27, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.formation_id_)}},
+      // .WuxingTowerBattleContext tower_context = 29;
+      {::_pbi::TcParser::FastMtS2,
+       {490, 13, 9,
+        PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.tower_context_)}},
+      // uint32 season_weekly_affix_id = 30;
+      {::_pbi::TcParser::FastV32S2,
+       {496, 28, 0,
+        PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.season_weekly_affix_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.player_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.player_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string player_name = 2;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.player_name_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 level = 3;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.level_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.level_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .BaseAttributesComp base_attributes = 4;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.base_attributes_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 max_health = 5;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.max_health_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.max_health_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 max_mana = 6;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.max_mana_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.max_mana_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated uint32 skill_table_ids = 7;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.skill_table_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // repeated .BattleBuffEntry buffs = 8;
@@ -6932,39 +8620,47 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
       // .BattleRouting routing = 10;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.routing_), _Internal::kHasBitsOffset + 10, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 team_index = 11;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.team_index_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.team_index_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string table_fingerprint = 12;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.table_fingerprint_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 physical_attack = 13;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.physical_attack_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.physical_attack_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 magic_attack = 14;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.magic_attack_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.magic_attack_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 defense = 15;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.defense_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.defense_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated .BattlePetSnapshot pets = 16;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.pets_), _Internal::kHasBitsOffset + 3, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // string appearance_id = 17;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.appearance_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 class_id = 18;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.class_id_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.class_id_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 gender = 19;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.gender_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.gender_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .CombatAttributes combat = 20;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.combat_), _Internal::kHasBitsOffset + 11, 5, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // map<uint32, uint32> skill_ranks = 21;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.skill_ranks_), _Internal::kHasBitsOffset + 26, 9, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.skill_ranks_), _Internal::kHasBitsOffset + 29, 10, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // uint32 pet_capture_slots = 22;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.pet_capture_slots_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.pet_capture_slots_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .EquipmentEffects equipment_effects = 23;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.equipment_effects_), _Internal::kHasBitsOffset + 12, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 active_season_id = 24;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.active_season_id_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.active_season_id_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool ai_controlled = 25;
-      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.ai_controlled_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.ai_controlled_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // repeated .BattlePetSnapshot standby_pets = 26;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.standby_pets_), _Internal::kHasBitsOffset + 4, 7, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .SeasonSealEffect available_season_seals = 27;
       {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.available_season_seals_), _Internal::kHasBitsOffset + 5, 8, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 formation_id = 28;
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.formation_id_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .WuxingTowerBattleContext tower_context = 29;
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.tower_context_), _Internal::kHasBitsOffset + 13, 9, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 season_weekly_affix_id = 30;
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.season_weekly_affix_id_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // map<uint32, uint32> equipped_skill_vfx = 31;
+      {PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.equipped_skill_vfx_), _Internal::kHasBitsOffset + 30, 11, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -7012,6 +8708,13 @@ constexpr BattlePlayerSnapshot::ParseTableT_ BattlePlayerSnapshot::InternalGener
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::SeasonSealEffect_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::WuxingTowerBattleContext>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::WuxingTowerBattleContext_globals_},
+        #endif
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 13, 13, 0)},
         {::_pbi::TcParser::GetMapAuxInfo(
             0, 0, 13, 13, 0)},
     }},
@@ -7074,6 +8777,7 @@ inline constexpr BattlePlayerSnapshot::Impl_::Impl_(
         routing_{nullptr},
         combat_{nullptr},
         equipment_effects_{nullptr},
+        tower_context_{nullptr},
         player_id_{::uint64_t{0u}},
         max_health_{::uint64_t{0u}},
         max_mana_{::uint64_t{0u}},
@@ -7087,9 +8791,16 @@ inline constexpr BattlePlayerSnapshot::Impl_::Impl_(
         pet_capture_slots_{0u},
         active_season_id_{0u},
         ai_controlled_{false},
+        formation_id_{0u},
+        season_weekly_affix_id_{0u},
         skill_ranks_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BattlePlayerSnapshot,
             PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.skill_ranks_)>()
+         }
+        ,
+        equipped_skill_vfx_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattlePlayerSnapshot,
+            PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.equipped_skill_vfx_)>()
          }
      {}
 
@@ -7134,7 +8845,7 @@ constexpr auto BattlePlayerSnapshot::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -7197,12 +8908,12 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_._has_bits_),
       0, // no _extensions_
-      45, 248,  // max_field_number, fast_idx_mask
+      48, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      45,  // num_field_entries
-      12,  // num_aux_entries
+      48,  // num_field_entries
+      13,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -7335,7 +9046,7 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
         PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.capture_min_level_)}},
     }}, {{
       33, 0, 1,
-      57344, 32,
+      0, 32,
       65535, 65535
     }}, {{
       // uint64 actor_id = 1;
@@ -7405,29 +9116,35 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
       // repeated uint32 runtime_skills = 33;
       {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.runtime_skills_), _Internal::kHasBitsOffset + 33, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // uint32 withdraw_until_round = 34;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.withdraw_until_round_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.withdraw_until_round_), _Internal::kHasBitsOffset + 43, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // map<uint32, uint64> round_effect_usage = 35;
       {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.round_effect_usage_), _Internal::kHasBitsOffset + 34, 11, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // .EquipmentEffects equipment_effects = 36;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.equipment_effects_), _Internal::kHasBitsOffset + 36, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.equipment_effects_), _Internal::kHasBitsOffset + 38, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .BattleArtifactState artifact_states = 37;
       {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.artifact_states_), _Internal::kHasBitsOffset + 35, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 entry_max_health = 38;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.entry_max_health_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.entry_max_health_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 entry_max_mana = 39;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.entry_max_mana_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.entry_max_mana_), _Internal::kHasBitsOffset + 42, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .SupportEffectSummary support_effects = 40;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.support_effects_), _Internal::kHasBitsOffset + 37, 5, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.support_effects_), _Internal::kHasBitsOffset + 39, 5, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PetCultivationEffects pet_cultivation = 41;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.pet_cultivation_), _Internal::kHasBitsOffset + 38, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.pet_cultivation_), _Internal::kHasBitsOffset + 40, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool competitive_temporary = 42;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.competitive_temporary_), _Internal::kHasBitsOffset + 42, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.competitive_temporary_), _Internal::kHasBitsOffset + 44, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool is_boss = 43;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.is_boss_), _Internal::kHasBitsOffset + 43, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.is_boss_), _Internal::kHasBitsOffset + 45, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .BattleArtifactState season_seal_state = 44;
       {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.season_seal_state_), _Internal::kHasBitsOffset + 6, 7, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 charging_skill_id = 45;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.charging_skill_id_), _Internal::kHasBitsOffset + 44, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.charging_skill_id_), _Internal::kHasBitsOffset + 46, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string pet_cosmetic_art_key = 46;
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.pet_cosmetic_art_key_), _Internal::kHasBitsOffset + 37, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // map<uint32, uint32> equipped_skill_vfx = 47;
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.equipped_skill_vfx_), _Internal::kHasBitsOffset + 36, 12, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      // uint32 win_streak = 48;
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.win_streak_), _Internal::kHasBitsOffset + 47, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -7478,12 +9195,15 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
             0, 0, 13, 13, 0)},
         {::_pbi::TcParser::GetMapAuxInfo(
             0, 0, 13, 4, 0)},
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 13, 13, 0)},
     }},
     {{
-      "\20\0\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\15\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "\20\0\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\15\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\24\0\0\0\0\0\0\0\0\0"
       "BattleActorState"
       "name"
       "appearance_id"
+      "pet_cosmetic_art_key"
     }},
   };
 }
@@ -7567,6 +9287,14 @@ inline constexpr BattleActorState::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.artifact_states_)>()
          }
         ,
+        equipped_skill_vfx_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattleActorState,
+            PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.equipped_skill_vfx_)>()
+         }
+        ,
+        pet_cosmetic_art_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         equipment_effects_{nullptr},
         support_effects_{nullptr},
         pet_cultivation_{nullptr},
@@ -7575,7 +9303,8 @@ inline constexpr BattleActorState::Impl_::Impl_(
         withdraw_until_round_{0u},
         competitive_temporary_{false},
         is_boss_{false},
-        charging_skill_id_{0u} {}
+        charging_skill_id_{0u},
+        win_streak_{0u} {}
 
 template <typename>
 constexpr BattleActorState::BattleActorState(::_pbi::ConstantInitialized,
@@ -7618,7 +9347,7 @@ constexpr auto BattleActorState::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
@@ -7670,7 +9399,7 @@ const ::_pbi::ClassData* BattleActorState_get_class_data() {
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[8];
+    file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[11];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto = nullptr;
 const ::uint32_t
@@ -7749,8 +9478,15 @@ const ::uint32_t
         0,
         1,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_._has_bits_),
-        30, // hasbit index offset
+        34, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.player_name_),
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.level_),
@@ -7778,33 +9514,41 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.ai_controlled_),
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.standby_pets_),
         PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.available_season_seals_),
-        13,
-        6,
-        16,
-        9,
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.formation_id_),
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.tower_context_),
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.season_weekly_affix_id_),
+        PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.equipped_skill_vfx_),
         14,
+        6,
+        17,
+        9,
         15,
+        16,
         0,
         1,
         2,
         10,
-        17,
-        7,
         18,
+        7,
         19,
         20,
+        21,
         3,
         8,
-        21,
         22,
-        11,
-        26,
         23,
-        12,
+        11,
+        29,
         24,
+        12,
         25,
+        26,
         4,
         5,
+        27,
+        13,
+        28,
+        30,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot_SkillRanksEntry_DoNotUse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -7814,7 +9558,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_._has_bits_),
-        19, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.pet_id_),
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.owner_player_id_),
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.pet_name_),
@@ -7831,22 +9575,26 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.pet_cultivation_),
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.competitive_temporary_),
         PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.combat_pet_table_id_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.cosmetic_id_),
+        PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.cosmetic_art_key_),
         5,
-        1,
         6,
+        1,
         7,
-        2,
         8,
+        3,
         9,
         10,
         11,
         12,
-        0,
-        15,
-        3,
         13,
+        0,
+        17,
+        4,
         14,
+        15,
+        16,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleActorState_SkillCooldownRoundsEntry_DoNotUse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -7876,8 +9624,15 @@ const ::uint32_t
         0,
         1,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorState_EquippedSkillVfxEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_._has_bits_),
-        48, // hasbit index offset
+        51, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.actor_id_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.actor_type_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.team_index_),
@@ -7923,6 +9678,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.is_boss_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.season_seal_state_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.charging_skill_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.pet_cosmetic_art_key_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.equipped_skill_vfx_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.win_streak_),
         7,
         8,
         9,
@@ -7956,18 +9714,21 @@ const ::uint32_t
         29,
         32,
         33,
-        41,
-        34,
-        36,
-        35,
-        39,
-        40,
-        38,
-        37,
-        42,
         43,
-        6,
+        34,
+        38,
+        35,
+        41,
+        42,
+        40,
+        39,
         44,
+        45,
+        6,
+        46,
+        37,
+        36,
+        47,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleArtifactState, _impl_._has_bits_),
         9, // hasbit index offset
@@ -8137,6 +9898,17 @@ const ::uint32_t
         1,
         2,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BattleTacticalPing, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BattleTacticalPing, _impl_.sender_player_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleTacticalPing, _impl_.target_actor_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleTacticalPing, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::BattleTacticalPing, _impl_.round_index_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleMonsterDefeat, _impl_._has_bits_),
         5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleMonsterDefeat, _impl_.monster_config_id_),
@@ -8181,7 +9953,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_._has_bits_),
-        35, // hasbit index offset
+        45, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.outcome_),
@@ -8214,6 +9986,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.use_free_preset_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.festival_beast_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.surrendered_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.total_damage_dealt_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.total_healing_done_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.total_controls_landed_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.tower_settlement_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.primary_focus_damage_dealt_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.total_shield_granted_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.total_dispels_landed_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.damage_taken_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.highlight_kind_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.ended_opponent_streak_),
         8,
         9,
         10,
@@ -8245,7 +10027,17 @@ const ::uint32_t
         30,
         29,
         7,
+        33,
+        32,
+        35,
+        34,
         31,
+        36,
+        37,
+        39,
+        38,
+        40,
+        41,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattlePetSettlementData, _impl_._has_bits_),
         7, // hasbit index offset
@@ -8369,8 +10161,15 @@ const ::uint32_t
         1,
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::RankedMatchContext_MemberWinStreaksEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.season_id_),
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.season_key_),
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.rank_generation_),
@@ -8379,6 +10178,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.config_fingerprint_),
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.members_),
         PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.use_free_preset_),
+        PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.member_win_streaks_),
         3,
         1,
         5,
@@ -8387,6 +10187,7 @@ const ::uint32_t
         2,
         0,
         7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleParticipationFact, _impl_._has_bits_),
         8, // hasbit index offset
@@ -8466,6 +10267,111 @@ const ::uint32_t
         23,
         20,
         24,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_._has_bits_),
+        18, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.best_of_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.game_index_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.wins_a_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.wins_b_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.leyline_element_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.squad_a_id_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.squad_a_name_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.squad_b_id_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.squad_b_name_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.squad_a_emblem_id_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.squad_b_emblem_id_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.is_warmup_),
+        PROTOBUF_FIELD_OFFSET(::TournamentBattleContext, _impl_.is_third_place_),
+        3,
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        0,
+        10,
+        1,
+        11,
+        12,
+        13,
+        14,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.week_key_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.run_id_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.floor_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.leyline_element_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.active_sigil_ids_),
+        2,
+        1,
+        3,
+        4,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.week_key_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.run_id_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.floor_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.total_rounds_),
+        1,
+        0,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.use_free_preset_),
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.enable_polarity_rotation_),
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.round_limit_override_),
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.ban_control_skills_),
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.allow_public_spectate_),
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.challenger_character_preset_id_),
+        PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_.challenger_pet_preset_id_),
+        1,
+        2,
+        0,
+        3,
+        4,
+        5,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_._has_bits_),
+        17, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.team_index_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.class_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.level_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.formation_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.wuxing_element_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.season_seal_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.active_pet_table_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.active_pet_name_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.active_pet_element_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.skill_table_ids_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.wuxing_sigil_ids_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.used_free_preset_),
+        4,
+        2,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        3,
+        12,
+        0,
+        1,
+        13,
 };
 
 static const ::_pbi::MigrationSchema
@@ -8474,38 +10380,47 @@ static const ::_pbi::MigrationSchema
         {15, sizeof(::BattleBuffEntry)},
         {58, sizeof(::BattleItemEntry)},
         {65, sizeof(::BattlePlayerSnapshot_SkillRanksEntry_DoNotUse)},
-        {72, sizeof(::BattlePlayerSnapshot)},
-        {129, sizeof(::BattlePetSnapshot_SkillRanksEntry_DoNotUse)},
-        {136, sizeof(::BattlePetSnapshot)},
-        {171, sizeof(::BattleActorState_SkillCooldownRoundsEntry_DoNotUse)},
-        {178, sizeof(::BattleActorState_SkillRanksEntry_DoNotUse)},
-        {185, sizeof(::BattleActorState_AbilityUseCountsEntry_DoNotUse)},
-        {192, sizeof(::BattleActorState_RoundEffectUsageEntry_DoNotUse)},
-        {199, sizeof(::BattleActorState)},
-        {292, sizeof(::BattleArtifactState)},
-        {307, sizeof(::BattleAction)},
-        {318, sizeof(::BattleEventItem)},
-        {375, sizeof(::BattleSurrenderVoteState)},
-        {396, sizeof(::BattlePrepSealOption)},
-        {405, sizeof(::BattlePrepPetOption)},
-        {428, sizeof(::BattlePrepPlayerState)},
-        {445, sizeof(::BattlePrepState)},
-        {460, sizeof(::BattleMonsterDefeat)},
-        {467, sizeof(::BattleCurrencyGain)},
-        {474, sizeof(::BattleRandomItemReward)},
-        {483, sizeof(::BattleRewardProfile)},
-        {498, sizeof(::BattleRewardConfig)},
-        {503, sizeof(::BattleSettlementData)},
-        {570, sizeof(::BattlePetSettlementData)},
-        {581, sizeof(::GuildWarBattleContext)},
-        {608, sizeof(::FestivalBeastBattleContext)},
-        {657, sizeof(::BattleActivityContext)},
-        {678, sizeof(::RankedPresetSelection)},
-        {685, sizeof(::RankedMemberLoadout)},
-        {692, sizeof(::RankedMatchContext)},
-        {711, sizeof(::BattleParticipationFact)},
-        {724, sizeof(::TrialBattleContext)},
-        {737, sizeof(::BattleTrialJournalFacts)},
+        {72, sizeof(::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse)},
+        {79, sizeof(::BattlePlayerSnapshot)},
+        {144, sizeof(::BattlePetSnapshot_SkillRanksEntry_DoNotUse)},
+        {151, sizeof(::BattlePetSnapshot)},
+        {190, sizeof(::BattleActorState_SkillCooldownRoundsEntry_DoNotUse)},
+        {197, sizeof(::BattleActorState_SkillRanksEntry_DoNotUse)},
+        {204, sizeof(::BattleActorState_AbilityUseCountsEntry_DoNotUse)},
+        {211, sizeof(::BattleActorState_RoundEffectUsageEntry_DoNotUse)},
+        {218, sizeof(::BattleActorState_EquippedSkillVfxEntry_DoNotUse)},
+        {225, sizeof(::BattleActorState)},
+        {324, sizeof(::BattleArtifactState)},
+        {339, sizeof(::BattleAction)},
+        {350, sizeof(::BattleEventItem)},
+        {407, sizeof(::BattleSurrenderVoteState)},
+        {428, sizeof(::BattlePrepSealOption)},
+        {437, sizeof(::BattlePrepPetOption)},
+        {460, sizeof(::BattlePrepPlayerState)},
+        {477, sizeof(::BattlePrepState)},
+        {492, sizeof(::BattleTacticalPing)},
+        {503, sizeof(::BattleMonsterDefeat)},
+        {510, sizeof(::BattleCurrencyGain)},
+        {517, sizeof(::BattleRandomItemReward)},
+        {526, sizeof(::BattleRewardProfile)},
+        {541, sizeof(::BattleRewardConfig)},
+        {546, sizeof(::BattleSettlementData)},
+        {633, sizeof(::BattlePetSettlementData)},
+        {644, sizeof(::GuildWarBattleContext)},
+        {671, sizeof(::FestivalBeastBattleContext)},
+        {720, sizeof(::BattleActivityContext)},
+        {741, sizeof(::RankedPresetSelection)},
+        {748, sizeof(::RankedMemberLoadout)},
+        {755, sizeof(::RankedMatchContext_MemberWinStreaksEntry_DoNotUse)},
+        {762, sizeof(::RankedMatchContext)},
+        {783, sizeof(::BattleParticipationFact)},
+        {796, sizeof(::TrialBattleContext)},
+        {809, sizeof(::BattleTrialJournalFacts)},
+        {862, sizeof(::TournamentBattleContext)},
+        {895, sizeof(::WuxingTowerBattleContext)},
+        {908, sizeof(::WuxingTowerSettlementEcho)},
+        {919, sizeof(::CustomDuelRules)},
+        {936, sizeof(::BattleActorBuildSummary)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -8513,6 +10428,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::BattleBuffEntry_globals_,
         &::BattleItemEntry_globals_,
         &::BattlePlayerSnapshot_SkillRanksEntry_DoNotUse_globals_,
+        &::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_,
         &::BattlePlayerSnapshot_globals_,
         &::BattlePetSnapshot_SkillRanksEntry_DoNotUse_globals_,
         &::BattlePetSnapshot_globals_,
@@ -8520,6 +10436,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::BattleActorState_SkillRanksEntry_DoNotUse_globals_,
         &::BattleActorState_AbilityUseCountsEntry_DoNotUse_globals_,
         &::BattleActorState_RoundEffectUsageEntry_DoNotUse_globals_,
+        &::BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_,
         &::BattleActorState_globals_,
         &::BattleArtifactState_globals_,
         &::BattleAction_globals_,
@@ -8529,6 +10446,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::BattlePrepPetOption_globals_,
         &::BattlePrepPlayerState_globals_,
         &::BattlePrepState_globals_,
+        &::BattleTacticalPing_globals_,
         &::BattleMonsterDefeat_globals_,
         &::BattleCurrencyGain_globals_,
         &::BattleRandomItemReward_globals_,
@@ -8541,10 +10459,16 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::BattleActivityContext_globals_,
         &::RankedPresetSelection_globals_,
         &::RankedMemberLoadout_globals_,
+        &::RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_,
         &::RankedMatchContext_globals_,
         &::BattleParticipationFact_globals_,
         &::TrialBattleContext_globals_,
         &::BattleTrialJournalFacts_globals_,
+        &::TournamentBattleContext_globals_,
+        &::WuxingTowerBattleContext_globals_,
+        &::WuxingTowerSettlementEcho_globals_,
+        &::CustomDuelRules_globals_,
+        &::BattleActorBuildSummary_globals_,
 };
 const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -8572,8 +10496,8 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "n_stat\030\022 \001(\r\022\027\n\017secondary_value\030\023 \001(\004\022#\n"
     "\026outgoing_heal_snapshot\030\024 \001(\001H\000\210\001\001B\031\n\027_o"
     "utgoing_heal_snapshot\"7\n\017BattleItemEntry"
-    "\022\025\n\ritem_table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\320"
-    "\006\n\024BattlePlayerSnapshot\022\021\n\tplayer_id\030\001 \001"
+    "\022\025\n\ritem_table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\272"
+    "\010\n\024BattlePlayerSnapshot\022\021\n\tplayer_id\030\001 \001"
     "(\004\022\023\n\013player_name\030\002 \001(\t\022\r\n\005level\030\003 \001(\r\022,"
     "\n\017base_attributes\030\004 \001(\0132\023.BaseAttributes"
     "Comp\022\022\n\nmax_health\030\005 \001(\004\022\020\n\010max_mana\030\006 \001"
@@ -8592,259 +10516,331 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "EquipmentEffects\022\030\n\020active_season_id\030\030 \001"
     "(\r\022\025\n\rai_controlled\030\031 \001(\010\022(\n\014standby_pet"
     "s\030\032 \003(\0132\022.BattlePetSnapshot\0221\n\026available"
-    "_season_seals\030\033 \003(\0132\021.SeasonSealEffect\0321"
-    "\n\017SkillRanksEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030"
-    "\002 \001(\r:\0028\001\"\371\003\n\021BattlePetSnapshot\022\016\n\006pet_i"
-    "d\030\001 \001(\004\022\027\n\017owner_player_id\030\002 \001(\004\022\020\n\010pet_"
-    "name\030\003 \001(\t\022\024\n\014pet_table_id\030\004 \001(\r\022\r\n\005leve"
-    "l\030\005 \001(\r\022,\n\017base_attributes\030\006 \001(\0132\023.BaseA"
-    "ttributesComp\022\022\n\nmax_health\030\007 \001(\004\022\020\n\010max"
-    "_mana\030\010 \001(\004\022\027\n\017physical_attack\030\t \001(\004\022\024\n\014"
-    "magic_attack\030\n \001(\004\022\017\n\007defense\030\013 \001(\004\022\027\n\017s"
-    "kill_table_ids\030\014 \003(\r\0227\n\013skill_ranks\030\r \003("
-    "\0132\".BattlePetSnapshot.SkillRanksEntry\022/\n"
-    "\017pet_cultivation\030\016 \001(\0132\026.PetCultivationE"
-    "ffects\022\035\n\025competitive_temporary\030\017 \001(\010\022\033\n"
-    "\023combat_pet_table_id\030\020 \001(\r\0321\n\017SkillRanks"
-    "Entry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\300\014"
-    "\n\020BattleActorState\022\020\n\010actor_id\030\001 \001(\004\022%\n\n"
-    "actor_type\030\002 \001(\0162\021.eBattleActorType\022\022\n\nt"
-    "eam_index\030\003 \001(\r\022\014\n\004name\030\004 \001(\t\022\r\n\005level\030\005"
-    " \001(\r\022\'\n\nattributes\030\006 \001(\0132\023.BaseAttribute"
-    "sComp\022\022\n\nmax_health\030\007 \001(\004\022\020\n\010max_mana\030\010 "
-    "\001(\004\022\017\n\007is_dead\030\t \001(\010\022\024\n\014is_defending\030\n \001"
-    "(\010\022\014\n\004fled\030\013 \001(\010\022\037\n\005buffs\030\014 \003(\0132\020.Battle"
-    "BuffEntry\022\027\n\017skill_table_ids\030\r \003(\r\022\030\n\020mo"
-    "nster_table_id\030\016 \001(\r\022I\n\025skill_cooldown_r"
-    "ounds\030\017 \003(\0132*.BattleActorState.SkillCool"
-    "downRoundsEntry\022\017\n\007is_auto\030\020 \001(\010\022\026\n\016form"
-    "ation_slot\030\021 \001(\r\022\027\n\017physical_attack\030\022 \001("
-    "\004\022\024\n\014magic_attack\030\023 \001(\004\022\017\n\007defense\030\024 \001(\004"
-    "\022\027\n\017owner_player_id\030\025 \001(\004\022\024\n\014pet_table_i"
-    "d\030\026 \001(\r\022\016\n\006pet_id\030\027 \001(\004\022\025\n\rappearance_id"
-    "\030\030 \001(\t\022\020\n\010class_id\030\031 \001(\r\022\016\n\006gender\030\032 \001(\r"
-    "\022!\n\006combat\030\033 \001(\0132\021.CombatAttributes\0226\n\013s"
-    "kill_ranks\030\034 \003(\0132!.BattleActorState.Skil"
-    "lRanksEntry\022\034\n\024capture_pet_table_id\030\035 \001("
-    "\r\022\035\n\025captured_by_player_id\030\036 \001(\004\022\031\n\021capt"
-    "ure_min_level\030\037 \001(\r\022C\n\022ability_use_count"
-    "s\030  \003(\0132\'.BattleActorState.AbilityUseCou"
-    "ntsEntry\022\026\n\016runtime_skills\030! \003(\r\022\034\n\024with"
-    "draw_until_round\030\" \001(\r\022C\n\022round_effect_u"
-    "sage\030# \003(\0132\'.BattleActorState.RoundEffec"
-    "tUsageEntry\022,\n\021equipment_effects\030$ \001(\0132\021"
-    ".EquipmentEffects\022-\n\017artifact_states\030% \003"
-    "(\0132\024.BattleArtifactState\022\030\n\020entry_max_he"
-    "alth\030& \001(\004\022\026\n\016entry_max_mana\030\' \001(\004\022/\n\017pe"
-    "t_cultivation\030) \001(\0132\026.PetCultivationEffe"
-    "cts\022.\n\017support_effects\030( \001(\0132\025.SupportEf"
-    "fectSummary\022\035\n\025competitive_temporary\030* \001"
-    "(\010\022\017\n\007is_boss\030+ \001(\010\022/\n\021season_seal_state"
-    "\030, \001(\0132\024.BattleArtifactState\022\031\n\021charging"
-    "_skill_id\030- \001(\r\032:\n\030SkillCooldownRoundsEn"
+    "_season_seals\030\033 \003(\0132\021.SeasonSealEffect\022\024"
+    "\n\014formation_id\030\034 \001(\r\0220\n\rtower_context\030\035 "
+    "\001(\0132\031.WuxingTowerBattleContext\022\036\n\026season"
+    "_weekly_affix_id\030\036 \001(\r\022G\n\022equipped_skill"
+    "_vfx\030\037 \003(\0132+.BattlePlayerSnapshot.Equipp"
+    "edSkillVfxEntry\0321\n\017SkillRanksEntry\022\013\n\003ke"
+    "y\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025EquippedSk"
+    "illVfxEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:"
+    "\0028\001\"\250\004\n\021BattlePetSnapshot\022\016\n\006pet_id\030\001 \001("
+    "\004\022\027\n\017owner_player_id\030\002 \001(\004\022\020\n\010pet_name\030\003"
+    " \001(\t\022\024\n\014pet_table_id\030\004 \001(\r\022\r\n\005level\030\005 \001("
+    "\r\022,\n\017base_attributes\030\006 \001(\0132\023.BaseAttribu"
+    "tesComp\022\022\n\nmax_health\030\007 \001(\004\022\020\n\010max_mana\030"
+    "\010 \001(\004\022\027\n\017physical_attack\030\t \001(\004\022\024\n\014magic_"
+    "attack\030\n \001(\004\022\017\n\007defense\030\013 \001(\004\022\027\n\017skill_t"
+    "able_ids\030\014 \003(\r\0227\n\013skill_ranks\030\r \003(\0132\".Ba"
+    "ttlePetSnapshot.SkillRanksEntry\022/\n\017pet_c"
+    "ultivation\030\016 \001(\0132\026.PetCultivationEffects"
+    "\022\035\n\025competitive_temporary\030\017 \001(\010\022\033\n\023comba"
+    "t_pet_table_id\030\020 \001(\r\022\023\n\013cosmetic_id\030\021 \001("
+    "\r\022\030\n\020cosmetic_art_key\030\022 \001(\t\0321\n\017SkillRank"
+    "sEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\360"
+    "\r\n\020BattleActorState\022\020\n\010actor_id\030\001 \001(\004\022%\n"
+    "\nactor_type\030\002 \001(\0162\021.eBattleActorType\022\022\n\n"
+    "team_index\030\003 \001(\r\022\014\n\004name\030\004 \001(\t\022\r\n\005level\030"
+    "\005 \001(\r\022\'\n\nattributes\030\006 \001(\0132\023.BaseAttribut"
+    "esComp\022\022\n\nmax_health\030\007 \001(\004\022\020\n\010max_mana\030\010"
+    " \001(\004\022\017\n\007is_dead\030\t \001(\010\022\024\n\014is_defending\030\n "
+    "\001(\010\022\014\n\004fled\030\013 \001(\010\022\037\n\005buffs\030\014 \003(\0132\020.Battl"
+    "eBuffEntry\022\027\n\017skill_table_ids\030\r \003(\r\022\030\n\020m"
+    "onster_table_id\030\016 \001(\r\022I\n\025skill_cooldown_"
+    "rounds\030\017 \003(\0132*.BattleActorState.SkillCoo"
+    "ldownRoundsEntry\022\017\n\007is_auto\030\020 \001(\010\022\026\n\016for"
+    "mation_slot\030\021 \001(\r\022\027\n\017physical_attack\030\022 \001"
+    "(\004\022\024\n\014magic_attack\030\023 \001(\004\022\017\n\007defense\030\024 \001("
+    "\004\022\027\n\017owner_player_id\030\025 \001(\004\022\024\n\014pet_table_"
+    "id\030\026 \001(\r\022\016\n\006pet_id\030\027 \001(\004\022\025\n\rappearance_i"
+    "d\030\030 \001(\t\022\020\n\010class_id\030\031 \001(\r\022\016\n\006gender\030\032 \001("
+    "\r\022!\n\006combat\030\033 \001(\0132\021.CombatAttributes\0226\n\013"
+    "skill_ranks\030\034 \003(\0132!.BattleActorState.Ski"
+    "llRanksEntry\022\034\n\024capture_pet_table_id\030\035 \001"
+    "(\r\022\035\n\025captured_by_player_id\030\036 \001(\004\022\031\n\021cap"
+    "ture_min_level\030\037 \001(\r\022C\n\022ability_use_coun"
+    "ts\030  \003(\0132\'.BattleActorState.AbilityUseCo"
+    "untsEntry\022\026\n\016runtime_skills\030! \003(\r\022\034\n\024wit"
+    "hdraw_until_round\030\" \001(\r\022C\n\022round_effect_"
+    "usage\030# \003(\0132\'.BattleActorState.RoundEffe"
+    "ctUsageEntry\022,\n\021equipment_effects\030$ \001(\0132"
+    "\021.EquipmentEffects\022-\n\017artifact_states\030% "
+    "\003(\0132\024.BattleArtifactState\022\030\n\020entry_max_h"
+    "ealth\030& \001(\004\022\026\n\016entry_max_mana\030\' \001(\004\022/\n\017p"
+    "et_cultivation\030) \001(\0132\026.PetCultivationEff"
+    "ects\022.\n\017support_effects\030( \001(\0132\025.SupportE"
+    "ffectSummary\022\035\n\025competitive_temporary\030* "
+    "\001(\010\022\017\n\007is_boss\030+ \001(\010\022/\n\021season_seal_stat"
+    "e\030, \001(\0132\024.BattleArtifactState\022\031\n\021chargin"
+    "g_skill_id\030- \001(\r\022\034\n\024pet_cosmetic_art_key"
+    "\030. \001(\t\022C\n\022equipped_skill_vfx\030/ \003(\0132\'.Bat"
+    "tleActorState.EquippedSkillVfxEntry\022\022\n\nw"
+    "in_streak\0300 \001(\r\032:\n\030SkillCooldownRoundsEn"
     "try\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0321\n\017S"
     "killRanksEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001"
     "(\r:\0028\001\0327\n\025AbilityUseCountsEntry\022\013\n\003key\030\001"
     " \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025RoundEffectUs"
     "ageEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\004:\0028\001"
-    "\"\250\001\n\023BattleArtifactState\022\017\n\007item_id\030\001 \001("
-    "\004\022\022\n\nused_count\030\002 \001(\r\022\032\n\022last_trigger_ro"
-    "und\030\003 \001(\r\022\033\n\023round_trigger_count\030\004 \001(\r\022\034"
-    "\n\024pending_ailment_kind\030\005 \001(\r\022\025\n\rpending_"
-    "round\030\006 \001(\r\"y\n\014BattleAction\022\'\n\013action_ty"
-    "pe\030\001 \001(\0162\022.eBattleActionType\022\026\n\016skill_ta"
-    "ble_id\030\002 \001(\r\022\021\n\ttarget_id\030\003 \001(\004\022\025\n\ritem_"
-    "table_id\030\004 \001(\r\"\254\005\n\017BattleEventItem\022%\n\nev"
-    "ent_type\030\001 \001(\0162\021.eBattleEventType\022\021\n\tsou"
-    "rce_id\030\002 \001(\004\022\021\n\ttarget_id\030\003 \001(\004\022\026\n\016skill"
-    "_table_id\030\004 \001(\r\022\025\n\rbuff_table_id\030\005 \001(\r\022\r"
-    "\n\005value\030\006 \001(\004\022\023\n\013is_critical\030\007 \001(\010\022\017\n\007su"
-    "ccess\030\010 \001(\010\022\033\n\023target_health_after\030\t \001(\004"
-    "\022\025\n\ritem_table_id\030\n \001(\r\022\020\n\010group_id\030\013 \001("
-    "\r\022\021\n\thit_index\030\014 \001(\r\022\031\n\021target_mana_afte"
-    "r\030\r \001(\004\022!\n\010hit_kind\030\016 \001(\0162\017.eBattleHitKi"
-    "nd\022\027\n\nmana_delta\030\017 \001(\022H\000\210\001\001\022\030\n\020buff_inst"
-    "ance_id\030\020 \001(\004\022\020\n\010absorbed\030\021 \001(\004\022\024\n\014shiel"
-    "d_after\030\022 \001(\004\022\037\n\027target_max_health_after"
-    "\030\023 \001(\004\022\025\n\rdamage_origin\030\024 \001(\r\022\025\n\rinstiga"
-    "tor_id\030\025 \001(\004\022\030\n\020artifact_item_id\030\026 \001(\004\022\032"
-    "\n\022artifact_effect_id\030\027 \001(\r\022\026\n\016season_sea"
-    "l_id\030\030 \001(\r\022\025\n\rmechanic_kind\030\031 \001(\r\022\031\n\021is_"
-    "splash_reduced\030\032 \001(\010\022\030\n\020is_primary_focus"
-    "\030\033 \001(\010B\r\n\013_mana_delta\"\346\001\n\030BattleSurrende"
-    "rVoteState\022\016\n\006active\030\001 \001(\010\022\022\n\nteam_index"
-    "\030\002 \001(\r\022\033\n\023initiator_player_id\030\003 \001(\004\022\027\n\017i"
-    "nitiated_round\030\004 \001(\r\022\031\n\021agreed_player_id"
-    "s\030\005 \003(\004\022\027\n\017required_agrees\030\006 \001(\r\022\032\n\022next"
-    "_allowed_round\030\007 \001(\r\022\020\n\010rejected\030\010 \001(\010\022\016"
-    "\n\006passed\030\t \001(\010\"H\n\024BattlePrepSealOption\022\017"
-    "\n\007seal_id\030\001 \001(\r\022\021\n\teffect_id\030\002 \001(\r\022\014\n\004na"
-    "me\030\003 \001(\t\"\330\001\n\023BattlePrepPetOption\022\016\n\006pet_"
-    "id\030\001 \001(\004\022\024\n\014pet_table_id\030\002 \001(\r\022\020\n\010pet_na"
-    "me\030\003 \001(\t\022\r\n\005level\030\004 \001(\r\022\022\n\nmax_health\030\005 "
-    "\001(\004\022\r\n\005speed\030\006 \001(\004\022\027\n\017physical_attack\030\007 "
-    "\001(\004\022\024\n\014magic_attack\030\010 \001(\004\022\017\n\007defense\030\t \001"
-    "(\004\022\027\n\017skill_table_ids\030\n \003(\r\"\272\001\n\025BattlePr"
-    "epPlayerState\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nteam"
-    "_index\030\002 \001(\r\022\030\n\020selected_seal_id\030\003 \001(\r\022\027"
-    "\n\017selected_pet_id\030\004 \001(\004\022\035\n\025selected_pet_"
-    "table_id\030\005 \001(\r\022\031\n\021selected_pet_name\030\006 \001("
-    "\t\022\r\n\005ready\030\007 \001(\010\"\345\001\n\017BattlePrepState\022\016\n\006"
-    "active\030\001 \001(\010\022\023\n\013deadline_ms\030\002 \001(\004\022\030\n\020dur"
-    "ation_seconds\030\003 \001(\r\0223\n\024self_available_se"
-    "als\030\004 \003(\0132\025.BattlePrepSealOption\0221\n\023self"
-    "_available_pets\030\005 \003(\0132\024.BattlePrepPetOpt"
-    "ion\022+\n\013team_states\030\006 \003(\0132\026.BattlePrepPla"
-    "yerState\"\?\n\023BattleMonsterDefeat\022\031\n\021monst"
-    "er_config_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\";\n\022Bat"
-    "tleCurrencyGain\022\025\n\rcurrency_type\030\001 \001(\r\022\016"
-    "\n\006amount\030\002 \001(\004\"N\n\026BattleRandomItemReward"
-    "\022\025\n\ritem_table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\022\016"
-    "\n\006weight\030\003 \001(\r\"\303\001\n\023BattleRewardProfile\022\030"
-    "\n\020battle_config_id\030\001 \001(\r\022\024\n\014strategy_key"
-    "\030\002 \001(\t\022\020\n\010exp_gain\030\003 \001(\004\022\'\n\ncurrencies\030\004"
-    " \003(\0132\023.BattleCurrencyGain\022\022\n\nitem_draws\030"
-    "\005 \001(\r\022-\n\014random_items\030\006 \003(\0132\027.BattleRand"
-    "omItemReward\"<\n\022BattleRewardConfig\022&\n\010pr"
-    "ofiles\030\001 \003(\0132\024.BattleRewardProfile\"\234\007\n\024B"
-    "attleSettlementData\022\021\n\tbattle_id\030\001 \001(\004\022\021"
-    "\n\tplayer_id\030\002 \001(\004\022 \n\007outcome\030\003 \001(\0162\017.eBa"
-    "ttleOutcome\022\031\n\021player_team_index\030\004 \001(\r\022\016"
-    "\n\006health\030\005 \001(\004\022\014\n\004mana\030\006 \001(\004\022\020\n\010exp_gain"
-    "\030\007 \001(\004\022\021\n\tgold_gain\030\010 \001(\004\022(\n\016items_consu"
-    "med\030\t \003(\0132\020.BattleItemEntry\022&\n\014items_gai"
-    "ned\030\n \003(\0132\020.BattleItemEntry\022\017\n\007is_dead\030\013"
-    " \001(\010\022\014\n\004fled\030\014 \001(\010\022\024\n\014total_rounds\030\r \001(\r"
-    "\022&\n\004pets\030\016 \003(\0132\030.BattlePetSettlementData"
-    "\022/\n\021defeated_monsters\030\017 \003(\0132\024.BattleMons"
-    "terDefeat\022+\n\016currency_gains\030\020 \003(\0132\023.Batt"
-    "leCurrencyGain\022\026\n\016finished_at_ms\030\021 \001(\004\022\022"
-    "\n\nmatch_mode\030\022 \001(\r\022\030\n\020battle_config_id\030\023"
-    " \001(\r\022\036\n\026captured_pet_table_ids\030\024 \003(\r\022\032\n\022"
-    "competitive_ranked\030\025 \001(\010\022\021\n\tseason_id\030\026 "
-    "\001(\r\022\033\n\023ranked_rule_version\030\027 \001(\r\022\024\n\014part"
-    "icipated\030\030 \001(\010\022-\n\013trial_facts\030\031 \001(\0132\030.Ba"
-    "ttleTrialJournalFacts\022\034\n\024manual_action_r"
-    "ounds\030\032 \001(\r\022%\n\035effective_combat_contribu"
-    "tion\030\033 \001(\010\022\031\n\021battle_difficulty\030\034 \001(\r\022\027\n"
-    "\017boss_trial_kind\030\035 \001(\r\022\027\n\017use_free_prese"
-    "t\030\036 \001(\010\0223\n\016festival_beast\030\037 \001(\0132\033.Festiv"
-    "alBeastBattleContext\022\023\n\013surrendered\030  \001("
-    "\010\"X\n\027BattlePetSettlementData\022\016\n\006pet_id\030\001"
-    " \001(\004\022\016\n\006health\030\002 \001(\004\022\014\n\004mana\030\003 \001(\004\022\017\n\007is"
-    "_dead\030\004 \001(\010\"\264\002\n\025GuildWarBattleContext\022\017\n"
-    "\007zone_id\030\001 \001(\r\022\031\n\021attacker_guild_id\030\002 \001("
-    "\004\022\031\n\021defender_guild_id\030\003 \001(\004\022\022\n\nleyline_"
-    "id\030\004 \001(\r\022\027\n\017war_battle_kind\030\005 \001(\r\022\021\n\tbou"
-    "nty_id\030\006 \001(\004\022\020\n\010week_key\030\007 \001(\r\022\033\n\023attack"
-    "er_player_ids\030\010 \003(\004\022\033\n\023defender_player_i"
-    "ds\030\t \003(\004\022\032\n\022gold_leyline_bonus\030\n \001(\010\022\025\n\r"
-    "rivalry_bonus\030\013 \001(\010\022\025\n\rstarted_at_ms\030\014 \001"
-    "(\004\"\352\004\n\032FestivalBeastBattleContext\022\034\n\024act"
-    "ivity_instance_id\030\001 \001(\r\022\027\n\017config_revisi"
-    "on\030\002 \001(\r\022\027\n\017reward_identity\030\003 \001(\t\022!\n\031rew"
-    "ard_definition_version\030\004 \001(\r\022\033\n\023reward_p"
-    "et_table_id\030\005 \001(\r\022\025\n\rrequired_wins\030\006 \001(\r"
-    "\022\025\n\rlocked_pet_id\030\007 \001(\004\022\032\n\022locked_owner_"
-    "level\030\010 \001(\r\022\017\n\007tier_id\030\t \001(\r\022\023\n\013round_li"
-    "mit\030\n \001(\r\022\024\n\014cycle_rounds\030\013 \001(\r\022\031\n\021first"
-    "_heavy_round\030\014 \001(\r\022\035\n\025telegraph_lead_rou"
-    "nds\030\r \001(\r\022\034\n\024heavy_damage_percent\030\016 \001(\r\022"
-    "\021\n\tboss_name\030\017 \001(\t\022\023\n\013boss_health\030\020 \001(\004\022"
-    "\034\n\024boss_physical_attack\030\021 \001(\004\022\024\n\014boss_de"
-    "fense\030\022 \001(\004\022\027\n\017boss_resistance\030\023 \001(\004\022\022\n\n"
-    "boss_speed\030\024 \001(\004\022\035\n\025effective_start_at_m"
-    "s\030\025 \001(\004\022\033\n\023effective_end_at_ms\030\026 \001(\004\022\031\n\021"
-    "client_request_id\030\027 \001(\t\"\250\002\n\025BattleActivi"
-    "tyContext\022\"\n\004kind\030\001 \001(\0162\024.eBattleActivit"
-    "yKind\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003"
-    " \001(\r\022\022\n\nperiod_key\030\004 \001(\r\022\033\n\023initiator_pl"
-    "ayer_id\030\005 \001(\004\022\030\n\020guild_period_key\030\006 \001(\r\022"
-    "\031\n\021launch_request_id\030\007 \001(\004\0223\n\016festival_b"
-    "east\030\010 \001(\0132\033.FestivalBeastBattleContext\022"
-    ")\n\tguild_war\030\t \001(\0132\026.GuildWarBattleConte"
-    "xt\"K\n\025RankedPresetSelection\022\033\n\023character"
-    "_preset_id\030\001 \001(\r\022\025\n\rpet_preset_id\030\002 \001(\r\""
-    "Q\n\023RankedMemberLoadout\022\021\n\tplayer_id\030\001 \001("
-    "\004\022\'\n\007presets\030\002 \001(\0132\026.RankedPresetSelecti"
-    "on\"\331\001\n\022RankedMatchContext\022\021\n\tseason_id\030\001"
-    " \001(\r\022\022\n\nseason_key\030\002 \001(\t\022\027\n\017rank_generat"
-    "ion\030\003 \001(\004\022\024\n\014rule_version\030\004 \001(\r\022\021\n\tteam_"
-    "size\030\005 \001(\r\022\032\n\022config_fingerprint\030\006 \001(\t\022%"
-    "\n\007members\030\007 \003(\0132\024.RankedMemberLoadout\022\027\n"
-    "\017use_free_preset\030\010 \001(\010\"\240\001\n\027BattlePartici"
-    "pationFact\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014entered"
-    "_room\030\002 \001(\010\022\036\n\026manual_action_accepted\030\003 "
-    "\001(\010\022\035\n\025explicit_auto_enabled\030\004 \001(\010\022\035\n\025no"
-    "_action_opportunity\030\005 \001(\010\"\233\001\n\022TrialBattl"
-    "eContext\022\030\n\020journal_entry_id\030\001 \001(\r\022\032\n\022tr"
-    "ial_rule_version\030\002 \001(\r\022\021\n\tseason_id\030\003 \001("
-    "\r\022\036\n\026guard_monster_table_id\030\004 \001(\r\022\034\n\024gua"
-    "rd_stance_buff_id\030\005 \001(\r\"\325\006\n\027BattleTrialJ"
-    "ournalFacts\022\030\n\020journal_entry_id\030\001 \001(\r\022\032\n"
-    "\022trial_rule_version\030\002 \001(\r\022\033\n\023initial_hum"
-    "an_count\030\003 \001(\r\022\021\n\tseason_id\030\004 \001(\r\022\035\n\025sel"
-    "f_or_pet_ever_died\030\005 \001(\010\022\035\n\025boss_guard_h"
-    "eal_total\030\006 \001(\004\022\036\n\026guard_stance_dispelle"
-    "d\030\007 \001(\010\022)\n!team_dealt_physical_direct_da"
-    "mage\030\010 \001(\010\022&\n\036team_dealt_magic_direct_da"
-    "mage\030\t \001(\010\022\026\n\016guard_survived\030\n \001(\010\022#\n\033se"
-    "lf_triggered_shield_break\030\013 \001(\010\0223\n+self_"
-    "triggered_anti_control_or_season_skill\030\014"
-    " \001(\010\022\031\n\021used_pet_table_id\030\r \001(\r\022 \n\030used_"
-    "artifact_effect_ids\030\016 \003(\r\022\033\n\023used_season"
-    "_seal_id\030\017 \001(\r\022\026\n\016teammate_names\030\020 \003(\t\022\'"
-    "\n\037boss_wind_hit_unprotected_death\030\021 \001(\010\022"
-    "\'\n\037dealt_yang_bell_physical_damage\030\022 \001(\010"
-    "\022#\n\033dealt_yin_drum_magic_damage\030\023 \001(\010\022\034\n"
-    "\024finished_in_ebb_tide\030\024 \001(\010\022\032\n\022cleave_pa"
-    "rry_count\030\025 \001(\r\022%\n\035heal_interrupt_backla"
-    "sh_count\030\026 \001(\r\022\032\n\022stance_break_count\030\027 \001"
-    "(\r\022 \n\030all_self_cleaves_parried\030\030 \001(\010\022)\n!"
-    "self_parried_cleave_at_least_once\030\031 \001(\010*"
-    "\206\001\n\020eBattleActorType\022\032\n\026BATTLE_ACTOR_TYP"
-    "E_NONE\020\000\022\034\n\030BATTLE_ACTOR_TYPE_PLAYER\020\001\022\035"
-    "\n\031BATTLE_ACTOR_TYPE_MONSTER\020\002\022\031\n\025BATTLE_"
-    "ACTOR_TYPE_PET\020\003*\341\001\n\021eBattleActionType\022\026"
-    "\n\022BATTLE_ACTION_NONE\020\000\022\030\n\024BATTLE_ACTION_"
-    "ATTACK\020\001\022\027\n\023BATTLE_ACTION_SKILL\020\002\022\030\n\024BAT"
-    "TLE_ACTION_DEFEND\020\003\022\026\n\022BATTLE_ACTION_ITE"
-    "M\020\004\022\026\n\022BATTLE_ACTION_FLEE\020\005\022\031\n\025BATTLE_AC"
-    "TION_CAPTURE\020\006\022\034\n\030BATTLE_ACTION_RECALL_P"
-    "ET\020\007*\337\004\n\020eBattleEventType\022\025\n\021BATTLE_EVEN"
-    "T_NONE\020\000\022\027\n\023BATTLE_EVENT_ATTACK\020\001\022\026\n\022BAT"
-    "TLE_EVENT_SKILL\020\002\022\027\n\023BATTLE_EVENT_DAMAGE"
-    "\020\003\022\025\n\021BATTLE_EVENT_HEAL\020\004\022\031\n\025BATTLE_EVEN"
-    "T_BUFF_ADD\020\005\022\034\n\030BATTLE_EVENT_BUFF_REMOVE"
-    "\020\006\022\032\n\026BATTLE_EVENT_BUFF_TICK\020\007\022\026\n\022BATTLE"
-    "_EVENT_DEATH\020\010\022\027\n\023BATTLE_EVENT_DEFEND\020\t\022"
-    "\025\n\021BATTLE_EVENT_ITEM\020\n\022\025\n\021BATTLE_EVENT_F"
-    "LEE\020\013\022\025\n\021BATTLE_EVENT_MISS\020\014\022\026\n\022BATTLE_E"
-    "VENT_BLOCK\020\r\022\025\n\021BATTLE_EVENT_MANA\020\016\022\027\n\023B"
-    "ATTLE_EVENT_RESIST\020\017\022\030\n\024BATTLE_EVENT_CAP"
-    "TURE\020\020\022\027\n\023BATTLE_EVENT_REVIVE\020\021\022\033\n\027BATTL"
-    "E_EVENT_MAX_HEALTH\020\022\022\034\n\030BATTLE_EVENT_PET"
-    "_RETREAT\020\023\022\027\n\023BATTLE_EVENT_SHIELD\020\024\022\031\n\025B"
-    "ATTLE_EVENT_ARTIFACT\020\025\022\036\n\032BATTLE_EVENT_B"
-    "OSS_MECHANIC\020\026*\234\001\n\016eBattleHitKind\022\025\n\021BAT"
-    "TLE_HIT_NORMAL\020\000\022\024\n\020BATTLE_HIT_COMBO\020\001\022\026"
-    "\n\022BATTLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_HIT_REF"
-    "LECT\020\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n\021BATTLE"
-    "_HIT_MIRROR\020\005*\234\001\n\016eBattleOutcome\022\032\n\026BATT"
-    "LE_OUTCOME_ONGOING\020\000\022\035\n\031BATTLE_OUTCOME_S"
-    "IDE_A_WIN\020\001\022\035\n\031BATTLE_OUTCOME_SIDE_B_WIN"
-    "\020\002\022\027\n\023BATTLE_OUTCOME_DRAW\020\003\022\027\n\023BATTLE_OU"
-    "TCOME_VOID\020\004*\247\001\n\023eBattleActivityKind\022\035\n\031"
-    "BATTLE_ACTIVITY_KIND_NONE\020\000\022$\n BATTLE_AC"
-    "TIVITY_KIND_GUILD_TRIAL\020\001\022\'\n#BATTLE_ACTI"
-    "VITY_KIND_FESTIVAL_BEAST\020\002\022\"\n\036BATTLE_ACT"
-    "IVITY_KIND_GUILD_WAR\020\003*{\n\023eSpectateVisib"
-    "ility\022#\n\037SPECTATE_VISIBILITY_UNSPECIFIED"
-    "\020\000\022\037\n\033SPECTATE_VISIBILITY_PRIVATE\020\001\022\036\n\032S"
-    "PECTATE_VISIBILITY_PUBLIC\020\002*_\n\reSpectate"
-    "Tier\022\030\n\024SPECTATE_TIER_DIRECT\020\000\022\027\n\023SPECTA"
-    "TE_TIER_RELAY\020\001\022\033\n\027SPECTATE_TIER_BROADCA"
-    "ST\020\002B\010Z\006battleb\006proto3"
+    "\0327\n\025EquippedSkillVfxEntry\022\013\n\003key\030\001 \001(\r\022\r"
+    "\n\005value\030\002 \001(\r:\0028\001\"\250\001\n\023BattleArtifactStat"
+    "e\022\017\n\007item_id\030\001 \001(\004\022\022\n\nused_count\030\002 \001(\r\022\032"
+    "\n\022last_trigger_round\030\003 \001(\r\022\033\n\023round_trig"
+    "ger_count\030\004 \001(\r\022\034\n\024pending_ailment_kind\030"
+    "\005 \001(\r\022\025\n\rpending_round\030\006 \001(\r\"y\n\014BattleAc"
+    "tion\022\'\n\013action_type\030\001 \001(\0162\022.eBattleActio"
+    "nType\022\026\n\016skill_table_id\030\002 \001(\r\022\021\n\ttarget_"
+    "id\030\003 \001(\004\022\025\n\ritem_table_id\030\004 \001(\r\"\254\005\n\017Batt"
+    "leEventItem\022%\n\nevent_type\030\001 \001(\0162\021.eBattl"
+    "eEventType\022\021\n\tsource_id\030\002 \001(\004\022\021\n\ttarget_"
+    "id\030\003 \001(\004\022\026\n\016skill_table_id\030\004 \001(\r\022\025\n\rbuff"
+    "_table_id\030\005 \001(\r\022\r\n\005value\030\006 \001(\004\022\023\n\013is_cri"
+    "tical\030\007 \001(\010\022\017\n\007success\030\010 \001(\010\022\033\n\023target_h"
+    "ealth_after\030\t \001(\004\022\025\n\ritem_table_id\030\n \001(\r"
+    "\022\020\n\010group_id\030\013 \001(\r\022\021\n\thit_index\030\014 \001(\r\022\031\n"
+    "\021target_mana_after\030\r \001(\004\022!\n\010hit_kind\030\016 \001"
+    "(\0162\017.eBattleHitKind\022\027\n\nmana_delta\030\017 \001(\022H"
+    "\000\210\001\001\022\030\n\020buff_instance_id\030\020 \001(\004\022\020\n\010absorb"
+    "ed\030\021 \001(\004\022\024\n\014shield_after\030\022 \001(\004\022\037\n\027target"
+    "_max_health_after\030\023 \001(\004\022\025\n\rdamage_origin"
+    "\030\024 \001(\r\022\025\n\rinstigator_id\030\025 \001(\004\022\030\n\020artifac"
+    "t_item_id\030\026 \001(\004\022\032\n\022artifact_effect_id\030\027 "
+    "\001(\r\022\026\n\016season_seal_id\030\030 \001(\r\022\025\n\rmechanic_"
+    "kind\030\031 \001(\r\022\031\n\021is_splash_reduced\030\032 \001(\010\022\030\n"
+    "\020is_primary_focus\030\033 \001(\010B\r\n\013_mana_delta\"\346"
+    "\001\n\030BattleSurrenderVoteState\022\016\n\006active\030\001 "
+    "\001(\010\022\022\n\nteam_index\030\002 \001(\r\022\033\n\023initiator_pla"
+    "yer_id\030\003 \001(\004\022\027\n\017initiated_round\030\004 \001(\r\022\031\n"
+    "\021agreed_player_ids\030\005 \003(\004\022\027\n\017required_agr"
+    "ees\030\006 \001(\r\022\032\n\022next_allowed_round\030\007 \001(\r\022\020\n"
+    "\010rejected\030\010 \001(\010\022\016\n\006passed\030\t \001(\010\"H\n\024Battl"
+    "ePrepSealOption\022\017\n\007seal_id\030\001 \001(\r\022\021\n\teffe"
+    "ct_id\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\"\330\001\n\023BattlePrep"
+    "PetOption\022\016\n\006pet_id\030\001 \001(\004\022\024\n\014pet_table_i"
+    "d\030\002 \001(\r\022\020\n\010pet_name\030\003 \001(\t\022\r\n\005level\030\004 \001(\r"
+    "\022\022\n\nmax_health\030\005 \001(\004\022\r\n\005speed\030\006 \001(\004\022\027\n\017p"
+    "hysical_attack\030\007 \001(\004\022\024\n\014magic_attack\030\010 \001"
+    "(\004\022\017\n\007defense\030\t \001(\004\022\027\n\017skill_table_ids\030\n"
+    " \003(\r\"\272\001\n\025BattlePrepPlayerState\022\021\n\tplayer"
+    "_id\030\001 \001(\004\022\022\n\nteam_index\030\002 \001(\r\022\030\n\020selecte"
+    "d_seal_id\030\003 \001(\r\022\027\n\017selected_pet_id\030\004 \001(\004"
+    "\022\035\n\025selected_pet_table_id\030\005 \001(\r\022\031\n\021selec"
+    "ted_pet_name\030\006 \001(\t\022\r\n\005ready\030\007 \001(\010\"\345\001\n\017Ba"
+    "ttlePrepState\022\016\n\006active\030\001 \001(\010\022\023\n\013deadlin"
+    "e_ms\030\002 \001(\004\022\030\n\020duration_seconds\030\003 \001(\r\0223\n\024"
+    "self_available_seals\030\004 \003(\0132\025.BattlePrepS"
+    "ealOption\0221\n\023self_available_pets\030\005 \003(\0132\024"
+    ".BattlePrepPetOption\022+\n\013team_states\030\006 \003("
+    "\0132\026.BattlePrepPlayerState\"{\n\022BattleTacti"
+    "calPing\022\030\n\020sender_player_id\030\001 \001(\004\022\027\n\017tar"
+    "get_actor_id\030\002 \001(\004\022\035\n\004kind\030\003 \001(\0162\017.Battl"
+    "ePingKind\022\023\n\013round_index\030\004 \001(\r\"\?\n\023Battle"
+    "MonsterDefeat\022\031\n\021monster_config_id\030\001 \001(\r"
+    "\022\r\n\005count\030\002 \001(\r\";\n\022BattleCurrencyGain\022\025\n"
+    "\rcurrency_type\030\001 \001(\r\022\016\n\006amount\030\002 \001(\004\"N\n\026"
+    "BattleRandomItemReward\022\025\n\ritem_table_id\030"
+    "\001 \001(\r\022\r\n\005count\030\002 \001(\r\022\016\n\006weight\030\003 \001(\r\"\303\001\n"
+    "\023BattleRewardProfile\022\030\n\020battle_config_id"
+    "\030\001 \001(\r\022\024\n\014strategy_key\030\002 \001(\t\022\020\n\010exp_gain"
+    "\030\003 \001(\004\022\'\n\ncurrencies\030\004 \003(\0132\023.BattleCurre"
+    "ncyGain\022\022\n\nitem_draws\030\005 \001(\r\022-\n\014random_it"
+    "ems\030\006 \003(\0132\027.BattleRandomItemReward\"<\n\022Ba"
+    "ttleRewardConfig\022&\n\010profiles\030\001 \003(\0132\024.Bat"
+    "tleRewardProfile\"\354\t\n\024BattleSettlementDat"
+    "a\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022"
+    " \n\007outcome\030\003 \001(\0162\017.eBattleOutcome\022\031\n\021pla"
+    "yer_team_index\030\004 \001(\r\022\016\n\006health\030\005 \001(\004\022\014\n\004"
+    "mana\030\006 \001(\004\022\020\n\010exp_gain\030\007 \001(\004\022\021\n\tgold_gai"
+    "n\030\010 \001(\004\022(\n\016items_consumed\030\t \003(\0132\020.Battle"
+    "ItemEntry\022&\n\014items_gained\030\n \003(\0132\020.Battle"
+    "ItemEntry\022\017\n\007is_dead\030\013 \001(\010\022\014\n\004fled\030\014 \001(\010"
+    "\022\024\n\014total_rounds\030\r \001(\r\022&\n\004pets\030\016 \003(\0132\030.B"
+    "attlePetSettlementData\022/\n\021defeated_monst"
+    "ers\030\017 \003(\0132\024.BattleMonsterDefeat\022+\n\016curre"
+    "ncy_gains\030\020 \003(\0132\023.BattleCurrencyGain\022\026\n\016"
+    "finished_at_ms\030\021 \001(\004\022\022\n\nmatch_mode\030\022 \001(\r"
+    "\022\030\n\020battle_config_id\030\023 \001(\r\022\036\n\026captured_p"
+    "et_table_ids\030\024 \003(\r\022\032\n\022competitive_ranked"
+    "\030\025 \001(\010\022\021\n\tseason_id\030\026 \001(\r\022\033\n\023ranked_rule"
+    "_version\030\027 \001(\r\022\024\n\014participated\030\030 \001(\010\022-\n\013"
+    "trial_facts\030\031 \001(\0132\030.BattleTrialJournalFa"
+    "cts\022\034\n\024manual_action_rounds\030\032 \001(\r\022%\n\035eff"
+    "ective_combat_contribution\030\033 \001(\010\022\031\n\021batt"
+    "le_difficulty\030\034 \001(\r\022\027\n\017boss_trial_kind\030\035"
+    " \001(\r\022\027\n\017use_free_preset\030\036 \001(\010\0223\n\016festiva"
+    "l_beast\030\037 \001(\0132\033.FestivalBeastBattleConte"
+    "xt\022\023\n\013surrendered\030  \001(\010\022\032\n\022total_damage_"
+    "dealt\030! \001(\004\022\032\n\022total_healing_done\030\" \001(\004\022"
+    "\035\n\025total_controls_landed\030# \001(\r\0224\n\020tower_"
+    "settlement\030$ \001(\0132\032.WuxingTowerSettlement"
+    "Echo\022\"\n\032primary_focus_damage_dealt\030% \001(\004"
+    "\022\034\n\024total_shield_granted\030& \001(\004\022\034\n\024total_"
+    "dispels_landed\030\' \001(\r\022\024\n\014damage_taken\030( \001"
+    "(\004\022,\n\016highlight_kind\030) \001(\0162\024.BattleHighl"
+    "ightKind\022\035\n\025ended_opponent_streak\030* \001(\r\""
+    "X\n\027BattlePetSettlementData\022\016\n\006pet_id\030\001 \001"
+    "(\004\022\016\n\006health\030\002 \001(\004\022\014\n\004mana\030\003 \001(\004\022\017\n\007is_d"
+    "ead\030\004 \001(\010\"\264\002\n\025GuildWarBattleContext\022\017\n\007z"
+    "one_id\030\001 \001(\r\022\031\n\021attacker_guild_id\030\002 \001(\004\022"
+    "\031\n\021defender_guild_id\030\003 \001(\004\022\022\n\nleyline_id"
+    "\030\004 \001(\r\022\027\n\017war_battle_kind\030\005 \001(\r\022\021\n\tbount"
+    "y_id\030\006 \001(\004\022\020\n\010week_key\030\007 \001(\r\022\033\n\023attacker"
+    "_player_ids\030\010 \003(\004\022\033\n\023defender_player_ids"
+    "\030\t \003(\004\022\032\n\022gold_leyline_bonus\030\n \001(\010\022\025\n\rri"
+    "valry_bonus\030\013 \001(\010\022\025\n\rstarted_at_ms\030\014 \001(\004"
+    "\"\352\004\n\032FestivalBeastBattleContext\022\034\n\024activ"
+    "ity_instance_id\030\001 \001(\r\022\027\n\017config_revision"
+    "\030\002 \001(\r\022\027\n\017reward_identity\030\003 \001(\t\022!\n\031rewar"
+    "d_definition_version\030\004 \001(\r\022\033\n\023reward_pet"
+    "_table_id\030\005 \001(\r\022\025\n\rrequired_wins\030\006 \001(\r\022\025"
+    "\n\rlocked_pet_id\030\007 \001(\004\022\032\n\022locked_owner_le"
+    "vel\030\010 \001(\r\022\017\n\007tier_id\030\t \001(\r\022\023\n\013round_limi"
+    "t\030\n \001(\r\022\024\n\014cycle_rounds\030\013 \001(\r\022\031\n\021first_h"
+    "eavy_round\030\014 \001(\r\022\035\n\025telegraph_lead_round"
+    "s\030\r \001(\r\022\034\n\024heavy_damage_percent\030\016 \001(\r\022\021\n"
+    "\tboss_name\030\017 \001(\t\022\023\n\013boss_health\030\020 \001(\004\022\034\n"
+    "\024boss_physical_attack\030\021 \001(\004\022\024\n\014boss_defe"
+    "nse\030\022 \001(\004\022\027\n\017boss_resistance\030\023 \001(\004\022\022\n\nbo"
+    "ss_speed\030\024 \001(\004\022\035\n\025effective_start_at_ms\030"
+    "\025 \001(\004\022\033\n\023effective_end_at_ms\030\026 \001(\004\022\031\n\021cl"
+    "ient_request_id\030\027 \001(\t\"\250\002\n\025BattleActivity"
+    "Context\022\"\n\004kind\030\001 \001(\0162\024.eBattleActivityK"
+    "ind\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 \001"
+    "(\r\022\022\n\nperiod_key\030\004 \001(\r\022\033\n\023initiator_play"
+    "er_id\030\005 \001(\004\022\030\n\020guild_period_key\030\006 \001(\r\022\031\n"
+    "\021launch_request_id\030\007 \001(\004\0223\n\016festival_bea"
+    "st\030\010 \001(\0132\033.FestivalBeastBattleContext\022)\n"
+    "\tguild_war\030\t \001(\0132\026.GuildWarBattleContext"
+    "\"K\n\025RankedPresetSelection\022\033\n\023character_p"
+    "reset_id\030\001 \001(\r\022\025\n\rpet_preset_id\030\002 \001(\r\"Q\n"
+    "\023RankedMemberLoadout\022\021\n\tplayer_id\030\001 \001(\004\022"
+    "\'\n\007presets\030\002 \001(\0132\026.RankedPresetSelection"
+    "\"\331\002\n\022RankedMatchContext\022\021\n\tseason_id\030\001 \001"
+    "(\r\022\022\n\nseason_key\030\002 \001(\t\022\027\n\017rank_generatio"
+    "n\030\003 \001(\004\022\024\n\014rule_version\030\004 \001(\r\022\021\n\tteam_si"
+    "ze\030\005 \001(\r\022\032\n\022config_fingerprint\030\006 \001(\t\022%\n\007"
+    "members\030\007 \003(\0132\024.RankedMemberLoadout\022\027\n\017u"
+    "se_free_preset\030\010 \001(\010\022E\n\022member_win_strea"
+    "ks\030\t \003(\0132).RankedMatchContext.MemberWinS"
+    "treaksEntry\0327\n\025MemberWinStreaksEntry\022\013\n\003"
+    "key\030\001 \001(\004\022\r\n\005value\030\002 \001(\r:\0028\001\"\240\001\n\027BattleP"
+    "articipationFact\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014e"
+    "ntered_room\030\002 \001(\010\022\036\n\026manual_action_accep"
+    "ted\030\003 \001(\010\022\035\n\025explicit_auto_enabled\030\004 \001(\010"
+    "\022\035\n\025no_action_opportunity\030\005 \001(\010\"\233\001\n\022Tria"
+    "lBattleContext\022\030\n\020journal_entry_id\030\001 \001(\r"
+    "\022\032\n\022trial_rule_version\030\002 \001(\r\022\021\n\tseason_i"
+    "d\030\003 \001(\r\022\036\n\026guard_monster_table_id\030\004 \001(\r\022"
+    "\034\n\024guard_stance_buff_id\030\005 \001(\r\"\325\006\n\027Battle"
+    "TrialJournalFacts\022\030\n\020journal_entry_id\030\001 "
+    "\001(\r\022\032\n\022trial_rule_version\030\002 \001(\r\022\033\n\023initi"
+    "al_human_count\030\003 \001(\r\022\021\n\tseason_id\030\004 \001(\r\022"
+    "\035\n\025self_or_pet_ever_died\030\005 \001(\010\022\035\n\025boss_g"
+    "uard_heal_total\030\006 \001(\004\022\036\n\026guard_stance_di"
+    "spelled\030\007 \001(\010\022)\n!team_dealt_physical_dir"
+    "ect_damage\030\010 \001(\010\022&\n\036team_dealt_magic_dir"
+    "ect_damage\030\t \001(\010\022\026\n\016guard_survived\030\n \001(\010"
+    "\022#\n\033self_triggered_shield_break\030\013 \001(\010\0223\n"
+    "+self_triggered_anti_control_or_season_s"
+    "kill\030\014 \001(\010\022\031\n\021used_pet_table_id\030\r \001(\r\022 \n"
+    "\030used_artifact_effect_ids\030\016 \003(\r\022\033\n\023used_"
+    "season_seal_id\030\017 \001(\r\022\026\n\016teammate_names\030\020"
+    " \003(\t\022\'\n\037boss_wind_hit_unprotected_death\030"
+    "\021 \001(\010\022\'\n\037dealt_yang_bell_physical_damage"
+    "\030\022 \001(\010\022#\n\033dealt_yin_drum_magic_damage\030\023 "
+    "\001(\010\022\034\n\024finished_in_ebb_tide\030\024 \001(\010\022\032\n\022cle"
+    "ave_parry_count\030\025 \001(\r\022%\n\035heal_interrupt_"
+    "backlash_count\030\026 \001(\r\022\032\n\022stance_break_cou"
+    "nt\030\027 \001(\r\022 \n\030all_self_cleaves_parried\030\030 \001"
+    "(\010\022)\n!self_parried_cleave_at_least_once\030"
+    "\031 \001(\010\"\354\002\n\027TournamentBattleContext\022\021\n\tsea"
+    "son_id\030\001 \001(\r\022\020\n\010match_id\030\002 \001(\004\022\017\n\007best_o"
+    "f\030\003 \001(\r\022\022\n\ngame_index\030\004 \001(\r\022\016\n\006wins_a\030\005 "
+    "\001(\r\022\016\n\006wins_b\030\006 \001(\r\0222\n\017leyline_element\030\007"
+    " \001(\0162\031.TournamentLeylineElement\022\022\n\nsquad"
+    "_a_id\030\010 \001(\004\022\024\n\014squad_a_name\030\t \001(\t\022\022\n\nsqu"
+    "ad_b_id\030\n \001(\004\022\024\n\014squad_b_name\030\013 \001(\t\022\031\n\021s"
+    "quad_a_emblem_id\030\014 \001(\r\022\031\n\021squad_b_emblem"
+    "_id\030\r \001(\r\022\021\n\tis_warmup\030\016 \001(\010\022\026\n\016is_third"
+    "_place\030\017 \001(\010\"\231\001\n\030WuxingTowerBattleContex"
+    "t\022\020\n\010week_key\030\001 \001(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005f"
+    "loor\030\003 \001(\r\0222\n\017leyline_element\030\004 \001(\0162\031.To"
+    "urnamentLeylineElement\022\030\n\020active_sigil_i"
+    "ds\030\005 \003(\r\"b\n\031WuxingTowerSettlementEcho\022\020\n"
+    "\010week_key\030\001 \001(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005floor"
+    "\030\003 \001(\r\022\024\n\014total_rounds\030\004 \001(\r\"\357\001\n\017CustomD"
+    "uelRules\022\027\n\017use_free_preset\030\001 \001(\010\022 \n\030ena"
+    "ble_polarity_rotation\030\002 \001(\010\022\034\n\024round_lim"
+    "it_override\030\003 \001(\r\022\032\n\022ban_control_skills\030"
+    "\004 \001(\010\022\035\n\025allow_public_spectate\030\005 \001(\010\022&\n\036"
+    "challenger_character_preset_id\030\006 \001(\r\022 \n\030"
+    "challenger_pet_preset_id\030\007 \001(\r\"\324\002\n\027Battl"
+    "eActorBuildSummary\022\021\n\tplayer_id\030\001 \001(\004\022\014\n"
+    "\004name\030\002 \001(\t\022\022\n\nteam_index\030\003 \001(\r\022\020\n\010class"
+    "_id\030\004 \001(\r\022\r\n\005level\030\005 \001(\r\022\024\n\014formation_id"
+    "\030\006 \001(\r\022\026\n\016wuxing_element\030\007 \001(\r\022\026\n\016season"
+    "_seal_id\030\010 \001(\r\022\033\n\023active_pet_table_id\030\t "
+    "\001(\r\022\027\n\017active_pet_name\030\n \001(\t\022\032\n\022active_p"
+    "et_element\030\013 \001(\r\022\027\n\017skill_table_ids\030\014 \003("
+    "\r\022\030\n\020wuxing_sigil_ids\030\r \003(\r\022\030\n\020used_free"
+    "_preset\030\016 \001(\010*\206\001\n\020eBattleActorType\022\032\n\026BA"
+    "TTLE_ACTOR_TYPE_NONE\020\000\022\034\n\030BATTLE_ACTOR_T"
+    "YPE_PLAYER\020\001\022\035\n\031BATTLE_ACTOR_TYPE_MONSTE"
+    "R\020\002\022\031\n\025BATTLE_ACTOR_TYPE_PET\020\003*\341\001\n\021eBatt"
+    "leActionType\022\026\n\022BATTLE_ACTION_NONE\020\000\022\030\n\024"
+    "BATTLE_ACTION_ATTACK\020\001\022\027\n\023BATTLE_ACTION_"
+    "SKILL\020\002\022\030\n\024BATTLE_ACTION_DEFEND\020\003\022\026\n\022BAT"
+    "TLE_ACTION_ITEM\020\004\022\026\n\022BATTLE_ACTION_FLEE\020"
+    "\005\022\031\n\025BATTLE_ACTION_CAPTURE\020\006\022\034\n\030BATTLE_A"
+    "CTION_RECALL_PET\020\007*\200\005\n\020eBattleEventType\022"
+    "\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVENT_A"
+    "TTACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023BATTL"
+    "E_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEAL\020\004\022"
+    "\031\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE_EVE"
+    "NT_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUFF_TI"
+    "CK\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATTLE_E"
+    "VENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n\022\025\n\021"
+    "BATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EVENT_MISS"
+    "\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BATTLE_EVE"
+    "NT_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017\022\030\n\024BA"
+    "TTLE_EVENT_CAPTURE\020\020\022\027\n\023BATTLE_EVENT_REV"
+    "IVE\020\021\022\033\n\027BATTLE_EVENT_MAX_HEALTH\020\022\022\034\n\030BA"
+    "TTLE_EVENT_PET_RETREAT\020\023\022\027\n\023BATTLE_EVENT"
+    "_SHIELD\020\024\022\031\n\025BATTLE_EVENT_ARTIFACT\020\025\022\036\n\032"
+    "BATTLE_EVENT_BOSS_MECHANIC\020\026\022\037\n\033BATTLE_E"
+    "VENT_WUXING_SYNERGY\020\027*\234\001\n\016eBattleHitKind"
+    "\022\025\n\021BATTLE_HIT_NORMAL\020\000\022\024\n\020BATTLE_HIT_CO"
+    "MBO\020\001\022\026\n\022BATTLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_"
+    "HIT_REFLECT\020\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n"
+    "\021BATTLE_HIT_MIRROR\020\005*\216\001\n\016BattlePingKind\022"
+    "\033\n\027BATTLE_PING_UNSPECIFIED\020\000\022\025\n\021BATTLE_P"
+    "ING_FOCUS\020\001\022\027\n\023BATTLE_PING_CONTROL\020\002\022\027\n\023"
+    "BATTLE_PING_PROTECT\020\003\022\026\n\022BATTLE_PING_DIS"
+    "PEL\020\004*\347\001\n\023BattleHighlightKind\022\031\n\025BATTLE_"
+    "HIGHLIGHT_NONE\020\000\022\"\n\036BATTLE_HIGHLIGHT_PRI"
+    "MARY_FOCUS\020\001\022%\n!BATTLE_HIGHLIGHT_TACTICA"
+    "L_CONTROL\020\002\022#\n\037BATTLE_HIGHLIGHT_SAVIOR_S"
+    "UPPORT\020\003\022\037\n\033BATTLE_HIGHLIGHT_IRON_GUARD\020"
+    "\004\022$\n BATTLE_HIGHLIGHT_CLUTCH_COMEBACK\020\005*"
+    "\234\001\n\016eBattleOutcome\022\032\n\026BATTLE_OUTCOME_ONG"
+    "OING\020\000\022\035\n\031BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n"
+    "\031BATTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_O"
+    "UTCOME_DRAW\020\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*\247"
+    "\001\n\023eBattleActivityKind\022\035\n\031BATTLE_ACTIVIT"
+    "Y_KIND_NONE\020\000\022$\n BATTLE_ACTIVITY_KIND_GU"
+    "ILD_TRIAL\020\001\022\'\n#BATTLE_ACTIVITY_KIND_FEST"
+    "IVAL_BEAST\020\002\022\"\n\036BATTLE_ACTIVITY_KIND_GUI"
+    "LD_WAR\020\003*{\n\023eSpectateVisibility\022#\n\037SPECT"
+    "ATE_VISIBILITY_UNSPECIFIED\020\000\022\037\n\033SPECTATE"
+    "_VISIBILITY_PRIVATE\020\001\022\036\n\032SPECTATE_VISIBI"
+    "LITY_PUBLIC\020\002*_\n\reSpectateTier\022\030\n\024SPECTA"
+    "TE_TIER_DIRECT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020"
+    "\001\022\033\n\027SPECTATE_TIER_BROADCAST\020\002*\322\001\n\030Tourn"
+    "amentLeylineElement\022\"\n\036TOURNAMENT_LEYLIN"
+    "E_UNSPECIFIED\020\000\022\034\n\030TOURNAMENT_LEYLINE_ME"
+    "TAL\020\001\022\033\n\027TOURNAMENT_LEYLINE_WOOD\020\002\022\034\n\030TO"
+    "URNAMENT_LEYLINE_WATER\020\003\022\033\n\027TOURNAMENT_L"
+    "EYLINE_FIRE\020\004\022\034\n\030TOURNAMENT_LEYLINE_EART"
+    "H\020\005B\010Z\006battleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[5] = {
@@ -8858,13 +10854,13 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    11862,
+    14741,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps,
     5,
-    36,
+    45,
     schemas,
     file_message_globals,
     TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto::offsets,
@@ -8891,7 +10887,7 @@ eBattleEventType_descriptor() {
   return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[2];
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleEventType_internal_data_[] = {
-    1507328u, 0u, };
+    1572864u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleHitKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
@@ -8900,33 +10896,54 @@ eBattleHitKind_descriptor() {
 PROTOBUF_CONSTINIT const uint32_t eBattleHitKind_internal_data_[] = {
     393216u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-eBattleOutcome_descriptor() {
+BattlePingKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
   return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[4];
+}
+PROTOBUF_CONSTINIT const uint32_t BattlePingKind_internal_data_[] = {
+    327680u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+BattleHighlightKind_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[5];
+}
+PROTOBUF_CONSTINIT const uint32_t BattleHighlightKind_internal_data_[] = {
+    393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eBattleOutcome_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[6];
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleOutcome_internal_data_[] = {
     327680u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleActivityKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
-  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[5];
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[7];
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleActivityKind_internal_data_[] = {
     262144u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eSpectateVisibility_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
-  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[6];
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[8];
 }
 PROTOBUF_CONSTINIT const uint32_t eSpectateVisibility_internal_data_[] = {
     196608u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eSpectateTier_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
-  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[7];
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[9];
 }
 PROTOBUF_CONSTINIT const uint32_t eSpectateTier_internal_data_[] = {
     196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentLeylineElement_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[10];
+}
+PROTOBUF_CONSTINIT const uint32_t TournamentLeylineElement_internal_data_[] = {
+    393216u, 0u, };
 // ===================================================================
 
 BattleRouting::BattleRouting(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -10168,6 +12185,44 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattlePlayerSnapshot_SkillRanksEntry_DoN
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
 // ===================================================================
 
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse() : SuperType(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_get_class_data()) {}
+BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse() : SuperType() {}
+BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_ =
+        BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_.tc_table);
+  return BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_));
+  return BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::ParseTableT_
+    BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::_table_ =
+        BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse::InternalGenerateParseTable_(BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
 void BattlePlayerSnapshot::clear_base_attributes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.base_attributes_ != nullptr) _impl_.base_attributes_->Clear();
@@ -10255,6 +12310,13 @@ PROTOBUF_NDEBUG_INLINE BattlePlayerSnapshot::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.skill_ranks_)>()
           , from.skill_ranks_
         }
+        ,
+        equipped_skill_vfx_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::BattlePlayerSnapshot,
+              PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.equipped_skill_vfx_)>()
+          , from.equipped_skill_vfx_
+        }
      {}
 
 BattlePlayerSnapshot::BattlePlayerSnapshot(
@@ -10284,13 +12346,16 @@ BattlePlayerSnapshot::BattlePlayerSnapshot(
   _impl_.equipment_effects_ = (CheckHasBit(cached_has_bits, 0x00001000U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.equipment_effects_)
                 : nullptr;
+  _impl_.tower_context_ = (CheckHasBit(cached_has_bits, 0x00002000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tower_context_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, ai_controlled_) -
+           offsetof(Impl_, season_weekly_affix_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::ai_controlled_));
+               sizeof(Impl_::season_weekly_affix_id_));
 
   // @@protoc_insertion_point(copy_constructor:BattlePlayerSnapshot)
 }
@@ -10336,6 +12401,11 @@ PROTOBUF_NDEBUG_INLINE BattlePlayerSnapshot::Impl_::Impl_(
             ::BattlePlayerSnapshot,
             PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.skill_ranks_)>()
          }
+        ,
+        equipped_skill_vfx_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattlePlayerSnapshot,
+            PROTOBUF_FIELD_OFFSET(::BattlePlayerSnapshot, _impl_.equipped_skill_vfx_)>()
+         }
      {}
 
 inline void BattlePlayerSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
@@ -10343,9 +12413,9 @@ inline void BattlePlayerSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, base_attributes_),
            0,
-           offsetof(Impl_, ai_controlled_) -
+           offsetof(Impl_, season_weekly_affix_id_) -
                offsetof(Impl_, base_attributes_) +
-               sizeof(Impl_::ai_controlled_));
+               sizeof(Impl_::season_weekly_affix_id_));
 }
 BattlePlayerSnapshot::~BattlePlayerSnapshot() {
   // @@protoc_insertion_point(destructor:BattlePlayerSnapshot)
@@ -10365,6 +12435,7 @@ inline void BattlePlayerSnapshot::SharedDtor(MessageLite& self) {
   delete this_._impl_.routing_;
   delete this_._impl_.combat_;
   delete this_._impl_.equipment_effects_;
+  delete this_._impl_.tower_context_;
   this_._impl_.~Impl_();
 }
 
@@ -10428,7 +12499,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
       _impl_.table_fingerprint_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       _impl_.appearance_id_.ClearNonDefaultToEmpty();
     }
@@ -10448,23 +12519,30 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
       ABSL_DCHECK(_impl_.equipment_effects_ != nullptr);
       _impl_.equipment_effects_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      ABSL_DCHECK(_impl_.tower_context_ != nullptr);
+      _impl_.tower_context_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000e000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000c000U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.max_mana_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.max_mana_));
+        reinterpret_cast<char*>(&_impl_.max_health_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.max_health_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
-    ::memset(&_impl_.level_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.pet_capture_slots_) -
-        reinterpret_cast<char*>(&_impl_.level_)) + sizeof(_impl_.pet_capture_slots_));
+    ::memset(&_impl_.max_mana_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.gender_) -
+        reinterpret_cast<char*>(&_impl_.max_mana_)) + sizeof(_impl_.gender_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
-    ::memset(&_impl_.active_season_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.ai_controlled_) -
-        reinterpret_cast<char*>(&_impl_.active_season_id_)) + sizeof(_impl_.ai_controlled_));
-    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
+    ::memset(&_impl_.pet_capture_slots_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.season_weekly_affix_id_) -
+        reinterpret_cast<char*>(&_impl_.pet_capture_slots_)) + sizeof(_impl_.season_weekly_affix_id_));
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       _impl_.skill_ranks_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      _impl_.equipped_skill_vfx_.Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -10491,7 +12569,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10510,7 +12588,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint32 level = 3;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10526,7 +12604,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint64 max_health = 5;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_max_health() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10535,7 +12613,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint64 max_mana = 6;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_max_mana() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10588,7 +12666,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint32 team_index = 11;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_team_index() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10607,7 +12685,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint64 physical_attack = 13;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_physical_attack() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10616,7 +12694,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint64 magic_attack = 14;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_magic_attack() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10625,7 +12703,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint64 defense = 15;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (this_._internal_defense() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10657,7 +12735,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint32 class_id = 18;
-  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (this_._internal_class_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10666,7 +12744,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint32 gender = 19;
-  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
     if (this_._internal_gender() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10682,7 +12760,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // map<uint32, uint32> skill_ranks = 21;
-  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x20000000U)) {
     if (!this_._internal_skill_ranks().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -10705,7 +12783,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint32 pet_capture_slots = 22;
-  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
     if (this_._internal_pet_capture_slots() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10721,7 +12799,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // uint32 active_season_id = 24;
-  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
     if (this_._internal_active_season_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10730,7 +12808,7 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
   }
 
   // bool ai_controlled = 25;
-  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
     if (this_._internal_ai_controlled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -10761,6 +12839,54 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
           ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
               27, repfield, repfield.GetCachedSize(),
               target, stream);
+    }
+  }
+
+  // uint32 formation_id = 28;
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    if (this_._internal_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          28, this_._internal_formation_id(), target);
+    }
+  }
+
+  // .WuxingTowerBattleContext tower_context = 29;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        29, *this_._impl_.tower_context_, this_._impl_.tower_context_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint32 season_weekly_affix_id = 30;
+  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    if (this_._internal_season_weekly_affix_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          30, this_._internal_season_weekly_affix_id(), target);
+    }
+  }
+
+  // map<uint32, uint32> equipped_skill_vfx = 31;
+  if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+    if (!this_._internal_equipped_skill_vfx().empty()) {
+      using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                     _pbi::WireFormatLite::TYPE_UINT32,
+                                     _pbi::WireFormatLite::TYPE_UINT32>;
+      const auto& field = this_._internal_equipped_skill_vfx();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              31, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              31, entry.first, entry.second, target, stream);
+        }
+      }
     }
   }
 
@@ -10875,105 +13001,134 @@ PROTOBUF_NOINLINE void BattlePlayerSnapshot::Clear() {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.equipment_effects_);
     }
-    // uint64 player_id = 1;
+    // .WuxingTowerBattleContext tower_context = 29;
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.tower_context_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint64 max_health = 5;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_max_health() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_max_health());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint64 max_mana = 6;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_max_mana() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_max_mana());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 level = 3;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_level());
       }
     }
     // uint32 team_index = 11;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_team_index() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_team_index());
       }
     }
     // uint64 physical_attack = 13;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_physical_attack() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_physical_attack());
       }
     }
     // uint64 magic_attack = 14;
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_magic_attack() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_magic_attack());
       }
     }
     // uint64 defense = 15;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (this_._internal_defense() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_defense());
       }
     }
     // uint32 class_id = 18;
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (this_._internal_class_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_class_id());
       }
     }
     // uint32 gender = 19;
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (this_._internal_gender() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_gender());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
     // uint32 pet_capture_slots = 22;
-    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_pet_capture_slots() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_pet_capture_slots());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
     // uint32 active_season_id = 24;
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (this_._internal_active_season_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_active_season_id());
       }
     }
     // bool ai_controlled = 25;
-    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
       if (this_._internal_ai_controlled() != 0) {
         total_size += 3;
       }
     }
+    // uint32 formation_id = 28;
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (this_._internal_formation_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_formation_id());
+      }
+    }
+    // uint32 season_weekly_affix_id = 30;
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (this_._internal_season_weekly_affix_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_season_weekly_affix_id());
+      }
+    }
     // map<uint32, uint32> skill_ranks = 21;
-    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       total_size +=
           2 * ::google::protobuf::internal::FromIntSize(this_._internal_skill_ranks_size());
       for (const auto& entry : this_._internal_skill_ranks()) {
+        total_size += _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                       _pbi::WireFormatLite::TYPE_UINT32,
+                                       _pbi::WireFormatLite::TYPE_UINT32>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+    // map<uint32, uint32> equipped_skill_vfx = 31;
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      total_size +=
+          2 * ::google::protobuf::internal::FromIntSize(this_._internal_equipped_skill_vfx_size());
+      for (const auto& entry : this_._internal_equipped_skill_vfx()) {
         total_size += _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
                                        _pbi::WireFormatLite::TYPE_UINT32,
                                        _pbi::WireFormatLite::TYPE_UINT32>::ByteSizeLong(entry.first, entry.second);
@@ -11089,76 +13244,97 @@ void BattlePlayerSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      ABSL_DCHECK(from._impl_.tower_context_ != nullptr);
+      if (_this->_impl_.tower_context_ == nullptr) {
+        _this->_impl_.tower_context_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tower_context_);
+      } else {
+        _this->_impl_.tower_context_->MergeFrom(*from._impl_.tower_context_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_max_health() != 0) {
         _this->_impl_.max_health_ = from._impl_.max_health_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
-      if (from._internal_max_mana() != 0) {
-        _this->_impl_.max_mana_ = from._impl_.max_mana_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_max_mana() != 0) {
+        _this->_impl_.max_mana_ = from._impl_.max_mana_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_level() != 0) {
         _this->_impl_.level_ = from._impl_.level_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_team_index() != 0) {
         _this->_impl_.team_index_ = from._impl_.team_index_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_physical_attack() != 0) {
         _this->_impl_.physical_attack_ = from._impl_.physical_attack_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_magic_attack() != 0) {
         _this->_impl_.magic_attack_ = from._impl_.magic_attack_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_defense() != 0) {
         _this->_impl_.defense_ = from._impl_.defense_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (from._internal_class_id() != 0) {
         _this->_impl_.class_id_ = from._impl_.class_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (from._internal_gender() != 0) {
         _this->_impl_.gender_ = from._impl_.gender_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_pet_capture_slots() != 0) {
         _this->_impl_.pet_capture_slots_ = from._impl_.pet_capture_slots_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (from._internal_active_season_id() != 0) {
         _this->_impl_.active_season_id_ = from._impl_.active_season_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
       if (from._internal_ai_controlled() != 0) {
         _this->_impl_.ai_controlled_ = from._impl_.ai_controlled_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (from._internal_formation_id() != 0) {
+        _this->_impl_.formation_id_ = from._impl_.formation_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (from._internal_season_weekly_affix_id() != 0) {
+        _this->_impl_.season_weekly_affix_id_ = from._impl_.season_weekly_affix_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       _this->_impl_.skill_ranks_.MergeFrom(from._impl_.skill_ranks_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      _this->_impl_.equipped_skill_vfx_.MergeFrom(from._impl_.equipped_skill_vfx_);
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -11190,12 +13366,13 @@ void BattlePlayerSnapshot::InternalSwap(BattlePlayerSnapshot* PROTOBUF_RESTRICT 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.table_fingerprint_, &other->_impl_.table_fingerprint_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_id_, &other->_impl_.appearance_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.ai_controlled_)
-      + sizeof(BattlePlayerSnapshot::_impl_.ai_controlled_)
+      PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.season_weekly_affix_id_)
+      + sizeof(BattlePlayerSnapshot::_impl_.season_weekly_affix_id_)
       - PROTOBUF_FIELD_OFFSET(BattlePlayerSnapshot, _impl_.base_attributes_)>(
           reinterpret_cast<char*>(&_impl_.base_attributes_),
           reinterpret_cast<char*>(&other->_impl_.base_attributes_));
   _impl_.skill_ranks_.InternalSwap(&other->_impl_.skill_ranks_);
+  _impl_.equipped_skill_vfx_.InternalSwap(&other->_impl_.equipped_skill_vfx_);
 }
 
 ::google::protobuf::Metadata BattlePlayerSnapshot::GetMetadata() const {
@@ -11244,12 +13421,12 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattlePetSnapshot_SkillRanksEntry_DoNotU
 void BattlePetSnapshot::clear_base_attributes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.base_attributes_ != nullptr) _impl_.base_attributes_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 void BattlePetSnapshot::clear_pet_cultivation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.pet_cultivation_ != nullptr) _impl_.pet_cultivation_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 BattlePetSnapshot::BattlePetSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -11275,6 +13452,7 @@ PROTOBUF_NDEBUG_INLINE BattlePetSnapshot::Impl_::Impl_(
         ,
         _skill_table_ids_cached_byte_size_{0},
         pet_name_(arena, from.pet_name_),
+        cosmetic_art_key_(arena, from.cosmetic_art_key_),
         skill_ranks_ {
           visibility, ::_pbi::InternalMetadataOffset::Build<
               ::BattlePetSnapshot,
@@ -11298,19 +13476,19 @@ BattlePetSnapshot::BattlePetSnapshot(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.base_attributes_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.base_attributes_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.base_attributes_)
                 : nullptr;
-  _impl_.pet_cultivation_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+  _impl_.pet_cultivation_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pet_cultivation_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, pet_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, pet_id_),
-           offsetof(Impl_, combat_pet_table_id_) -
+           offsetof(Impl_, cosmetic_id_) -
                offsetof(Impl_, pet_id_) +
-               sizeof(Impl_::combat_pet_table_id_));
+               sizeof(Impl_::cosmetic_id_));
 
   // @@protoc_insertion_point(copy_constructor:BattlePetSnapshot)
 }
@@ -11325,6 +13503,7 @@ PROTOBUF_NDEBUG_INLINE BattlePetSnapshot::Impl_::Impl_(
         ,
         _skill_table_ids_cached_byte_size_{0},
         pet_name_(arena),
+        cosmetic_art_key_(arena),
         skill_ranks_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BattlePetSnapshot,
             PROTOBUF_FIELD_OFFSET(::BattlePetSnapshot, _impl_.skill_ranks_)>()
@@ -11336,9 +13515,9 @@ inline void BattlePetSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, base_attributes_),
            0,
-           offsetof(Impl_, combat_pet_table_id_) -
+           offsetof(Impl_, cosmetic_id_) -
                offsetof(Impl_, base_attributes_) +
-               sizeof(Impl_::combat_pet_table_id_));
+               sizeof(Impl_::cosmetic_id_));
 }
 BattlePetSnapshot::~BattlePetSnapshot() {
   // @@protoc_insertion_point(destructor:BattlePetSnapshot)
@@ -11352,6 +13531,7 @@ inline void BattlePetSnapshot::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.pet_name_.Destroy();
+  this_._impl_.cosmetic_art_key_.Destroy();
   delete this_._impl_.base_attributes_;
   delete this_._impl_.pet_cultivation_;
   this_._impl_.~Impl_();
@@ -11391,7 +13571,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.skill_table_ids_.Clear();
     }
@@ -11399,24 +13579,30 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
       _impl_.pet_name_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.cosmetic_art_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.base_attributes_ != nullptr);
       _impl_.base_attributes_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(_impl_.pet_cultivation_ != nullptr);
       _impl_.pet_cultivation_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.pet_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.level_) -
-        reinterpret_cast<char*>(&_impl_.pet_id_)) + sizeof(_impl_.level_));
+        reinterpret_cast<char*>(&_impl_.pet_table_id_) -
+        reinterpret_cast<char*>(&_impl_.pet_id_)) + sizeof(_impl_.pet_table_id_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.max_health_, 0, static_cast<::size_t>(
+    ::memset(&_impl_.level_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.combat_pet_table_id_) -
-        reinterpret_cast<char*>(&_impl_.max_health_)) + sizeof(_impl_.combat_pet_table_id_));
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+        reinterpret_cast<char*>(&_impl_.level_)) + sizeof(_impl_.combat_pet_table_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    _impl_.cosmetic_id_ = 0u;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       _impl_.skill_ranks_.Clear();
     }
   }
@@ -11444,7 +13630,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 pet_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_pet_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11453,7 +13639,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint64 owner_player_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_owner_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11472,7 +13658,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint32 pet_table_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_pet_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -11481,7 +13667,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint32 level = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -11490,14 +13676,14 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // .BaseAttributesComp base_attributes = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         6, *this_._impl_.base_attributes_, this_._impl_.base_attributes_->GetCachedSize(), target,
         stream);
   }
 
   // uint64 max_health = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_max_health() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11506,7 +13692,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint64 max_mana = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_max_mana() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11515,7 +13701,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint64 physical_attack = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_physical_attack() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11524,7 +13710,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint64 magic_attack = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_magic_attack() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11533,7 +13719,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint64 defense = 11;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_defense() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -11553,7 +13739,7 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // map<uint32, uint32> skill_ranks = 13;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (!this_._internal_skill_ranks().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -11576,14 +13762,14 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // .PetCultivationEffects pet_cultivation = 14;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         14, *this_._impl_.pet_cultivation_, this_._impl_.pet_cultivation_->GetCachedSize(), target,
         stream);
   }
 
   // bool competitive_temporary = 15;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_competitive_temporary() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -11592,11 +13778,30 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
   }
 
   // uint32 combat_pet_table_id = 16;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_combat_pet_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           16, this_._internal_combat_pet_table_id(), target);
+    }
+  }
+
+  // uint32 cosmetic_id = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_cosmetic_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_cosmetic_id(), target);
+    }
+  }
+
+  // string cosmetic_art_key = 18;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_cosmetic_art_key().empty()) {
+      const ::std::string& _s = this_._internal_cosmetic_art_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BattlePetSnapshot.cosmetic_art_key");
+      target = stream->WriteStringMaybeAliased(18, _s, target);
     }
   }
 
@@ -11640,96 +13845,112 @@ PROTOBUF_NOINLINE void BattlePetSnapshot::Clear() {
                                         this_._internal_pet_name());
       }
     }
-    // .BaseAttributesComp base_attributes = 6;
+    // string cosmetic_art_key = 18;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_cosmetic_art_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_cosmetic_art_key());
+      }
+    }
+    // .BaseAttributesComp base_attributes = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.base_attributes_);
     }
     // .PetCultivationEffects pet_cultivation = 14;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.pet_cultivation_);
     }
     // uint64 pet_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_pet_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_pet_id());
       }
     }
     // uint64 owner_player_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_owner_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_owner_player_id());
       }
     }
     // uint32 pet_table_id = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_pet_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pet_table_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 level = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_level());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 max_health = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_max_health() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_max_health());
       }
     }
     // uint64 max_mana = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_max_mana() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_max_mana());
       }
     }
     // uint64 physical_attack = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_physical_attack() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_physical_attack());
       }
     }
     // uint64 magic_attack = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_magic_attack() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_magic_attack());
       }
     }
     // uint64 defense = 11;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_defense() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_defense());
       }
     }
     // bool competitive_temporary = 15;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_competitive_temporary() != 0) {
         total_size += 2;
       }
     }
     // uint32 combat_pet_table_id = 16;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_combat_pet_table_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_combat_pet_table_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    // uint32 cosmetic_id = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_cosmetic_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_cosmetic_id());
+      }
+    }
     // map<uint32, uint32> skill_ranks = 13;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_skill_ranks_size());
       for (const auto& entry : this_._internal_skill_ranks()) {
@@ -11771,6 +13992,15 @@ void BattlePetSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_cosmetic_art_key().empty()) {
+        _this->_internal_set_cosmetic_art_key(from._internal_cosmetic_art_key());
+      } else {
+        if (_this->_impl_.cosmetic_art_key_.IsDefault()) {
+          _this->_internal_set_cosmetic_art_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(from._impl_.base_attributes_ != nullptr);
       if (_this->_impl_.base_attributes_ == nullptr) {
         _this->_impl_.base_attributes_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.base_attributes_);
@@ -11778,7 +14008,7 @@ void BattlePetSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.base_attributes_->MergeFrom(*from._impl_.base_attributes_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(from._impl_.pet_cultivation_ != nullptr);
       if (_this->_impl_.pet_cultivation_ == nullptr) {
         _this->_impl_.pet_cultivation_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pet_cultivation_);
@@ -11786,64 +14016,71 @@ void BattlePetSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.pet_cultivation_->MergeFrom(*from._impl_.pet_cultivation_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_pet_id() != 0) {
         _this->_impl_.pet_id_ = from._impl_.pet_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_owner_player_id() != 0) {
         _this->_impl_.owner_player_id_ = from._impl_.owner_player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_pet_table_id() != 0) {
         _this->_impl_.pet_table_id_ = from._impl_.pet_table_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_level() != 0) {
-        _this->_impl_.level_ = from._impl_.level_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_level() != 0) {
+        _this->_impl_.level_ = from._impl_.level_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_max_health() != 0) {
         _this->_impl_.max_health_ = from._impl_.max_health_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_max_mana() != 0) {
         _this->_impl_.max_mana_ = from._impl_.max_mana_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_physical_attack() != 0) {
         _this->_impl_.physical_attack_ = from._impl_.physical_attack_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_magic_attack() != 0) {
         _this->_impl_.magic_attack_ = from._impl_.magic_attack_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_defense() != 0) {
         _this->_impl_.defense_ = from._impl_.defense_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_competitive_temporary() != 0) {
         _this->_impl_.competitive_temporary_ = from._impl_.competitive_temporary_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_combat_pet_table_id() != 0) {
         _this->_impl_.combat_pet_table_id_ = from._impl_.combat_pet_table_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_cosmetic_id() != 0) {
+        _this->_impl_.cosmetic_id_ = from._impl_.cosmetic_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       _this->_impl_.skill_ranks_.MergeFrom(from._impl_.skill_ranks_);
     }
   }
@@ -11868,9 +14105,10 @@ void BattlePetSnapshot::InternalSwap(BattlePetSnapshot* PROTOBUF_RESTRICT PROTOB
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.skill_table_ids_.InternalSwap(&other->_impl_.skill_table_ids_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.pet_name_, &other->_impl_.pet_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.cosmetic_art_key_, &other->_impl_.cosmetic_art_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.combat_pet_table_id_)
-      + sizeof(BattlePetSnapshot::_impl_.combat_pet_table_id_)
+      PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.cosmetic_id_)
+      + sizeof(BattlePetSnapshot::_impl_.cosmetic_id_)
       - PROTOBUF_FIELD_OFFSET(BattlePetSnapshot, _impl_.base_attributes_)>(
           reinterpret_cast<char*>(&_impl_.base_attributes_),
           reinterpret_cast<char*>(&other->_impl_.base_attributes_));
@@ -12034,6 +14272,44 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattleActorState_RoundEffectUsageEntry_D
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
 // ===================================================================
 
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+BattleActorState_EquippedSkillVfxEntry_DoNotUse::BattleActorState_EquippedSkillVfxEntry_DoNotUse() : SuperType(BattleActorState_EquippedSkillVfxEntry_DoNotUse_get_class_data()) {}
+BattleActorState_EquippedSkillVfxEntry_DoNotUse::BattleActorState_EquippedSkillVfxEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, BattleActorState_EquippedSkillVfxEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+BattleActorState_EquippedSkillVfxEntry_DoNotUse::BattleActorState_EquippedSkillVfxEntry_DoNotUse() : SuperType() {}
+BattleActorState_EquippedSkillVfxEntry_DoNotUse::BattleActorState_EquippedSkillVfxEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_ =
+        BattleActorState_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleActorState_EquippedSkillVfxEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_.tc_table);
+  return BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleActorState_EquippedSkillVfxEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_));
+  return BattleActorState_EquippedSkillVfxEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattleActorState_EquippedSkillVfxEntry_DoNotUse::ParseTableT_
+    BattleActorState_EquippedSkillVfxEntry_DoNotUse::_table_ =
+        BattleActorState_EquippedSkillVfxEntry_DoNotUse::InternalGenerateParseTable_(BattleActorState_EquippedSkillVfxEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
 void BattleActorState::clear_attributes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.attributes_ != nullptr) _impl_.attributes_->Clear();
@@ -12047,17 +14323,17 @@ void BattleActorState::clear_combat() {
 void BattleActorState::clear_equipment_effects() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.equipment_effects_ != nullptr) _impl_.equipment_effects_->Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 void BattleActorState::clear_pet_cultivation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.pet_cultivation_ != nullptr) _impl_.pet_cultivation_->Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 void BattleActorState::clear_support_effects() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.support_effects_ != nullptr) _impl_.support_effects_->Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 BattleActorState::BattleActorState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -12133,7 +14409,15 @@ PROTOBUF_NDEBUG_INLINE BattleActorState::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.artifact_states_)>()
           , from.artifact_states_
         }
-     {}
+        ,
+        equipped_skill_vfx_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::BattleActorState,
+              PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.equipped_skill_vfx_)>()
+          , from.equipped_skill_vfx_
+        }
+        ,
+        pet_cosmetic_art_key_(arena, from.pet_cosmetic_art_key_) {}
 
 BattleActorState::BattleActorState(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -12167,22 +14451,22 @@ BattleActorState::BattleActorState(
                offsetof(Impl_, actor_id_) +
                sizeof(Impl_::capture_min_level_));
   cached_has_bits = _impl_._has_bits_[1];
-  _impl_.equipment_effects_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+  _impl_.equipment_effects_ = (CheckHasBit(cached_has_bits, 0x00000040U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.equipment_effects_)
                 : nullptr;
-  _impl_.support_effects_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+  _impl_.support_effects_ = (CheckHasBit(cached_has_bits, 0x00000080U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.support_effects_)
                 : nullptr;
-  _impl_.pet_cultivation_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+  _impl_.pet_cultivation_ = (CheckHasBit(cached_has_bits, 0x00000100U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pet_cultivation_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, entry_max_health_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, entry_max_health_),
-           offsetof(Impl_, charging_skill_id_) -
+           offsetof(Impl_, win_streak_) -
                offsetof(Impl_, entry_max_health_) +
-               sizeof(Impl_::charging_skill_id_));
+               sizeof(Impl_::win_streak_));
 
   // @@protoc_insertion_point(copy_constructor:BattleActorState)
 }
@@ -12233,7 +14517,13 @@ PROTOBUF_NDEBUG_INLINE BattleActorState::Impl_::Impl_(
             ::BattleActorState,
             PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.artifact_states_)>()
          }
-     {}
+        ,
+        equipped_skill_vfx_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattleActorState,
+            PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.equipped_skill_vfx_)>()
+         }
+        ,
+        pet_cosmetic_art_key_(arena) {}
 
 inline void BattleActorState::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -12246,9 +14536,9 @@ inline void BattleActorState::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, equipment_effects_),
            0,
-           offsetof(Impl_, charging_skill_id_) -
+           offsetof(Impl_, win_streak_) -
                offsetof(Impl_, equipment_effects_) +
-               sizeof(Impl_::charging_skill_id_));
+               sizeof(Impl_::win_streak_));
 }
 BattleActorState::~BattleActorState() {
   // @@protoc_insertion_point(destructor:BattleActorState)
@@ -12266,6 +14556,7 @@ inline void BattleActorState::SharedDtor(MessageLite& self) {
   delete this_._impl_.attributes_;
   delete this_._impl_.combat_;
   delete this_._impl_.season_seal_state_;
+  this_._impl_.pet_cosmetic_art_key_.Destroy();
   delete this_._impl_.equipment_effects_;
   delete this_._impl_.support_effects_;
   delete this_._impl_.pet_cultivation_;
@@ -12355,7 +14646,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
     }
   }
   cached_has_bits = _impl_._has_bits_[1];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.ability_use_counts_.Clear();
     }
@@ -12369,23 +14660,28 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
       _impl_.artifact_states_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.equipped_skill_vfx_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.pet_cosmetic_art_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(_impl_.equipment_effects_ != nullptr);
       _impl_.equipment_effects_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(_impl_.support_effects_ != nullptr);
       _impl_.support_effects_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      ABSL_DCHECK(_impl_.pet_cultivation_ != nullptr);
-      _impl_.pet_cultivation_->Clear();
-    }
   }
-  _impl_.entry_max_health_ = ::uint64_t{0u};
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    ::memset(&_impl_.entry_max_mana_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.charging_skill_id_) -
-        reinterpret_cast<char*>(&_impl_.entry_max_mana_)) + sizeof(_impl_.charging_skill_id_));
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    ABSL_DCHECK(_impl_.pet_cultivation_ != nullptr);
+    _impl_.pet_cultivation_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000fe00U)) {
+    ::memset(&_impl_.entry_max_health_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.win_streak_) -
+        reinterpret_cast<char*>(&_impl_.entry_max_health_)) + sizeof(_impl_.win_streak_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -12757,7 +15053,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // uint32 withdraw_until_round = 34;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_withdraw_until_round() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -12789,7 +15085,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // .EquipmentEffects equipment_effects = 36;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         36, *this_._impl_.equipment_effects_, this_._impl_.equipment_effects_->GetCachedSize(), target,
         stream);
@@ -12809,7 +15105,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // uint64 entry_max_health = 38;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_entry_max_health() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -12818,7 +15114,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // uint64 entry_max_mana = 39;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_entry_max_mana() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -12827,21 +15123,21 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // .SupportEffectSummary support_effects = 40;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         40, *this_._impl_.support_effects_, this_._impl_.support_effects_->GetCachedSize(), target,
         stream);
   }
 
   // .PetCultivationEffects pet_cultivation = 41;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         41, *this_._impl_.pet_cultivation_, this_._impl_.pet_cultivation_->GetCachedSize(), target,
         stream);
   }
 
   // bool competitive_temporary = 42;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_competitive_temporary() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -12850,7 +15146,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // bool is_boss = 43;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_is_boss() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -12868,11 +15164,53 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[1];
   // uint32 charging_skill_id = 45;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_charging_skill_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           45, this_._internal_charging_skill_id(), target);
+    }
+  }
+
+  // string pet_cosmetic_art_key = 46;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_pet_cosmetic_art_key().empty()) {
+      const ::std::string& _s = this_._internal_pet_cosmetic_art_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BattleActorState.pet_cosmetic_art_key");
+      target = stream->WriteStringMaybeAliased(46, _s, target);
+    }
+  }
+
+  // map<uint32, uint32> equipped_skill_vfx = 47;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_equipped_skill_vfx().empty()) {
+      using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                     _pbi::WireFormatLite::TYPE_UINT32,
+                                     _pbi::WireFormatLite::TYPE_UINT32>;
+      const auto& field = this_._internal_equipped_skill_vfx();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              47, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              47, entry.first, entry.second, target, stream);
+        }
+      }
+    }
+  }
+
+  // uint32 win_streak = 48;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_win_streak() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          48, this_._internal_win_streak(), target);
     }
   }
 
@@ -13165,61 +15503,85 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .EquipmentEffects equipment_effects = 36;
+    // map<uint32, uint32> equipped_skill_vfx = 47;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size +=
+          2 * ::google::protobuf::internal::FromIntSize(this_._internal_equipped_skill_vfx_size());
+      for (const auto& entry : this_._internal_equipped_skill_vfx()) {
+        total_size += _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                       _pbi::WireFormatLite::TYPE_UINT32,
+                                       _pbi::WireFormatLite::TYPE_UINT32>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+    // string pet_cosmetic_art_key = 46;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_pet_cosmetic_art_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_pet_cosmetic_art_key());
+      }
+    }
+    // .EquipmentEffects equipment_effects = 36;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.equipment_effects_);
     }
     // .SupportEffectSummary support_effects = 40;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.support_effects_);
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // .PetCultivationEffects pet_cultivation = 41;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.pet_cultivation_);
     }
     // uint64 entry_max_health = 38;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_entry_max_health() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_entry_max_health());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // uint64 entry_max_mana = 39;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_entry_max_mana() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_entry_max_mana());
       }
     }
     // uint32 withdraw_until_round = 34;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_withdraw_until_round() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_withdraw_until_round());
       }
     }
     // bool competitive_temporary = 42;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_competitive_temporary() != 0) {
         total_size += 3;
       }
     }
     // bool is_boss = 43;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_is_boss() != 0) {
         total_size += 3;
       }
     }
     // uint32 charging_skill_id = 45;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_charging_skill_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_charging_skill_id());
+      }
+    }
+    // uint32 win_streak = 48;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_win_streak() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_win_streak());
       }
     }
   }
@@ -13437,6 +15799,18 @@ void BattleActorState::MergeImpl(::google::protobuf::MessageLite& to_msg,
           from._internal_artifact_states());
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _this->_impl_.equipped_skill_vfx_.MergeFrom(from._impl_.equipped_skill_vfx_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_pet_cosmetic_art_key().empty()) {
+        _this->_internal_set_pet_cosmetic_art_key(from._internal_pet_cosmetic_art_key());
+      } else {
+        if (_this->_impl_.pet_cosmetic_art_key_.IsDefault()) {
+          _this->_internal_set_pet_cosmetic_art_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(from._impl_.equipment_effects_ != nullptr);
       if (_this->_impl_.equipment_effects_ == nullptr) {
         _this->_impl_.equipment_effects_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.equipment_effects_);
@@ -13444,7 +15818,7 @@ void BattleActorState::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.equipment_effects_->MergeFrom(*from._impl_.equipment_effects_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(from._impl_.support_effects_ != nullptr);
       if (_this->_impl_.support_effects_ == nullptr) {
         _this->_impl_.support_effects_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.support_effects_);
@@ -13452,7 +15826,9 @@ void BattleActorState::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.support_effects_->MergeFrom(*from._impl_.support_effects_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       ABSL_DCHECK(from._impl_.pet_cultivation_ != nullptr);
       if (_this->_impl_.pet_cultivation_ == nullptr) {
         _this->_impl_.pet_cultivation_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pet_cultivation_);
@@ -13460,36 +15836,39 @@ void BattleActorState::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.pet_cultivation_->MergeFrom(*from._impl_.pet_cultivation_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_entry_max_health() != 0) {
         _this->_impl_.entry_max_health_ = from._impl_.entry_max_health_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_entry_max_mana() != 0) {
         _this->_impl_.entry_max_mana_ = from._impl_.entry_max_mana_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_withdraw_until_round() != 0) {
         _this->_impl_.withdraw_until_round_ = from._impl_.withdraw_until_round_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_competitive_temporary() != 0) {
         _this->_impl_.competitive_temporary_ = from._impl_.competitive_temporary_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_is_boss() != 0) {
         _this->_impl_.is_boss_ = from._impl_.is_boss_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_charging_skill_id() != 0) {
         _this->_impl_.charging_skill_id_ = from._impl_.charging_skill_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_win_streak() != 0) {
+        _this->_impl_.win_streak_ = from._impl_.win_streak_;
       }
     }
   }
@@ -13529,9 +15908,11 @@ void BattleActorState::InternalSwap(BattleActorState* PROTOBUF_RESTRICT PROTOBUF
   _impl_.runtime_skills_.InternalSwap(&other->_impl_.runtime_skills_);
   _impl_.round_effect_usage_.InternalSwap(&other->_impl_.round_effect_usage_);
   _impl_.artifact_states_.InternalSwap(&other->_impl_.artifact_states_);
+  _impl_.equipped_skill_vfx_.InternalSwap(&other->_impl_.equipped_skill_vfx_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.pet_cosmetic_art_key_, &other->_impl_.pet_cosmetic_art_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.charging_skill_id_)
-      + sizeof(BattleActorState::_impl_.charging_skill_id_)
+      PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.win_streak_)
+      + sizeof(BattleActorState::_impl_.win_streak_)
       - PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.equipment_effects_)>(
           reinterpret_cast<char*>(&_impl_.equipment_effects_),
           reinterpret_cast<char*>(&other->_impl_.equipment_effects_));
@@ -16809,6 +19190,276 @@ void BattlePrepState::InternalSwap(BattlePrepState* PROTOBUF_RESTRICT PROTOBUF_N
 }
 // ===================================================================
 
+BattleTacticalPing::BattleTacticalPing(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BattleTacticalPing_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BattleTacticalPing)
+}
+BattleTacticalPing::BattleTacticalPing(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleTacticalPing& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BattleTacticalPing_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE BattleTacticalPing::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BattleTacticalPing::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, sender_player_id_),
+           0,
+           offsetof(Impl_, round_index_) -
+               offsetof(Impl_, sender_player_id_) +
+               sizeof(Impl_::round_index_));
+}
+BattleTacticalPing::~BattleTacticalPing() {
+  // @@protoc_insertion_point(destructor:BattleTacticalPing)
+  SharedDtor(*this);
+}
+inline void BattleTacticalPing::SharedDtor(MessageLite& self) {
+  BattleTacticalPing& this_ = static_cast<BattleTacticalPing&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BattleTacticalPing_class_data_ =
+        BattleTacticalPing::InternalGenerateClassData_(BattleTacticalPing_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleTacticalPing::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleTacticalPing_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BattleTacticalPing_class_data_.tc_table);
+  return BattleTacticalPing_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleTacticalPing::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleTacticalPing_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BattleTacticalPing_globals_));
+  return BattleTacticalPing_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattleTacticalPing::ParseTableT_
+    BattleTacticalPing::_table_ =
+        BattleTacticalPing::InternalGenerateParseTable_(BattleTacticalPing_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BattleTacticalPing::Clear() {
+// @@protoc_insertion_point(message_clear_start:BattleTacticalPing)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.sender_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.round_index_) -
+        reinterpret_cast<char*>(&_impl_.sender_player_id_)) + sizeof(_impl_.round_index_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BattleTacticalPing::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BattleTacticalPing& this_ = static_cast<const BattleTacticalPing&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BattleTacticalPing::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BattleTacticalPing& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BattleTacticalPing)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 sender_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_sender_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_sender_player_id(), target);
+    }
+  }
+
+  // uint64 target_actor_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_target_actor_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_target_actor_id(), target);
+    }
+  }
+
+  // .BattlePingKind kind = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          3, this_._internal_kind(), target);
+    }
+  }
+
+  // uint32 round_index = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_round_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_round_index(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BattleTacticalPing)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BattleTacticalPing::ByteSizeLong(const MessageLite& base) {
+  const BattleTacticalPing& this_ = static_cast<const BattleTacticalPing&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BattleTacticalPing::ByteSizeLong() const {
+  const BattleTacticalPing& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BattleTacticalPing)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 sender_player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_sender_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_sender_player_id());
+      }
+    }
+    // uint64 target_actor_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_target_actor_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_target_actor_id());
+      }
+    }
+    // .BattlePingKind kind = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_kind() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_kind());
+      }
+    }
+    // uint32 round_index = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_round_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_round_index());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BattleTacticalPing::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BattleTacticalPing*>(&to_msg);
+  auto& from = static_cast<const BattleTacticalPing&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:BattleTacticalPing)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_sender_player_id() != 0) {
+        _this->_impl_.sender_player_id_ = from._impl_.sender_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_target_actor_id() != 0) {
+        _this->_impl_.target_actor_id_ = from._impl_.target_actor_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_kind() != 0) {
+        _this->_impl_.kind_ = from._impl_.kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_round_index() != 0) {
+        _this->_impl_.round_index_ = from._impl_.round_index_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BattleTacticalPing::CopyFrom(const BattleTacticalPing& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BattleTacticalPing)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BattleTacticalPing::InternalSwap(BattleTacticalPing* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.round_index_)
+      + sizeof(BattleTacticalPing::_impl_.round_index_)
+      - PROTOBUF_FIELD_OFFSET(BattleTacticalPing, _impl_.sender_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.sender_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.sender_player_id_));
+}
+
+::google::protobuf::Metadata BattleTacticalPing::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 BattleMonsterDefeat::BattleMonsterDefeat(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, BattleMonsterDefeat_get_class_data()) {
@@ -18209,9 +20860,19 @@ BattleSettlementData::BattleSettlementData(
                offsetof(Impl_, battle_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, battle_id_),
-           offsetof(Impl_, surrendered_) -
+           offsetof(Impl_, boss_trial_kind_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::surrendered_));
+               sizeof(Impl_::boss_trial_kind_));
+  _impl_.tower_settlement_ = (CheckHasBit(cached_has_bits, 0x80000000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tower_settlement_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, total_damage_dealt_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, total_damage_dealt_),
+           offsetof(Impl_, ended_opponent_streak_) -
+               offsetof(Impl_, total_damage_dealt_) +
+               sizeof(Impl_::ended_opponent_streak_));
 
   // @@protoc_insertion_point(copy_constructor:BattleSettlementData)
 }
@@ -18256,9 +20917,9 @@ inline void BattleSettlementData::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, trial_facts_),
            0,
-           offsetof(Impl_, surrendered_) -
+           offsetof(Impl_, ended_opponent_streak_) -
                offsetof(Impl_, trial_facts_) +
-               sizeof(Impl_::surrendered_));
+               sizeof(Impl_::ended_opponent_streak_));
 }
 BattleSettlementData::~BattleSettlementData() {
   // @@protoc_insertion_point(destructor:BattleSettlementData)
@@ -18273,6 +20934,7 @@ inline void BattleSettlementData::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.trial_facts_;
   delete this_._impl_.festival_beast_;
+  delete this_._impl_.tower_settlement_;
   this_._impl_.~Impl_();
 }
 
@@ -18350,8 +21012,23 @@ PROTOBUF_NOINLINE void BattleSettlementData::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
     ::memset(&_impl_.season_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.surrendered_) -
-        reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.surrendered_));
+        reinterpret_cast<char*>(&_impl_.boss_trial_kind_) -
+        reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.boss_trial_kind_));
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      ABSL_DCHECK(_impl_.tower_settlement_ != nullptr);
+      _impl_.tower_settlement_->Clear();
+    }
+  }
+  cached_has_bits = _impl_._has_bits_[1];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    ::memset(&_impl_.total_damage_dealt_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.total_dispels_landed_) -
+        reinterpret_cast<char*>(&_impl_.total_damage_dealt_)) + sizeof(_impl_.total_dispels_landed_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.highlight_kind_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.ended_opponent_streak_) -
+        reinterpret_cast<char*>(&_impl_.highlight_kind_)) + sizeof(_impl_.ended_opponent_streak_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -18673,12 +21350,103 @@ PROTOBUF_NOINLINE void BattleSettlementData::Clear() {
         stream);
   }
 
+  cached_has_bits = this_._impl_._has_bits_[1];
   // bool surrendered = 32;
-  if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_surrendered() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           32, this_._internal_surrendered(), target);
+    }
+  }
+
+  // uint64 total_damage_dealt = 33;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_total_damage_dealt() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          33, this_._internal_total_damage_dealt(), target);
+    }
+  }
+
+  // uint64 total_healing_done = 34;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_total_healing_done() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          34, this_._internal_total_healing_done(), target);
+    }
+  }
+
+  // uint32 total_controls_landed = 35;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_total_controls_landed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          35, this_._internal_total_controls_landed(), target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .WuxingTowerSettlementEcho tower_settlement = 36;
+  if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        36, *this_._impl_.tower_settlement_, this_._impl_.tower_settlement_->GetCachedSize(), target,
+        stream);
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[1];
+  // uint64 primary_focus_damage_dealt = 37;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_primary_focus_damage_dealt() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          37, this_._internal_primary_focus_damage_dealt(), target);
+    }
+  }
+
+  // uint64 total_shield_granted = 38;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_total_shield_granted() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          38, this_._internal_total_shield_granted(), target);
+    }
+  }
+
+  // uint32 total_dispels_landed = 39;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_total_dispels_landed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          39, this_._internal_total_dispels_landed(), target);
+    }
+  }
+
+  // uint64 damage_taken = 40;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_damage_taken() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          40, this_._internal_damage_taken(), target);
+    }
+  }
+
+  // .BattleHighlightKind highlight_kind = 41;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_highlight_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          41, this_._internal_highlight_kind(), target);
+    }
+  }
+
+  // uint32 ended_opponent_streak = 42;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_ended_opponent_streak() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          42, this_._internal_ended_opponent_streak(), target);
     }
   }
 
@@ -18921,10 +21689,83 @@ PROTOBUF_NOINLINE void BattleSettlementData::Clear() {
                                         this_._internal_boss_trial_kind());
       }
     }
-    // bool surrendered = 32;
+    // .WuxingTowerSettlementEcho tower_settlement = 36;
     if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.tower_settlement_);
+    }
+  }
+  cached_has_bits = this_._impl_._has_bits_[1];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // uint64 total_damage_dealt = 33;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_total_damage_dealt() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_total_damage_dealt());
+      }
+    }
+    // bool surrendered = 32;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_surrendered() != 0) {
         total_size += 3;
+      }
+    }
+    // uint32 total_controls_landed = 35;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_total_controls_landed() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_total_controls_landed());
+      }
+    }
+    // uint64 total_healing_done = 34;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_total_healing_done() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_total_healing_done());
+      }
+    }
+    // uint64 primary_focus_damage_dealt = 37;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_primary_focus_damage_dealt() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_primary_focus_damage_dealt());
+      }
+    }
+    // uint64 total_shield_granted = 38;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_total_shield_granted() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_total_shield_granted());
+      }
+    }
+    // uint64 damage_taken = 40;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_damage_taken() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_damage_taken());
+      }
+    }
+    // uint32 total_dispels_landed = 39;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_total_dispels_landed() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_total_dispels_landed());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // .BattleHighlightKind highlight_kind = 41;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_highlight_kind() != 0) {
+        total_size += 2 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_highlight_kind());
+      }
+    }
+    // uint32 ended_opponent_streak = 42;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_ended_opponent_streak() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_ended_opponent_streak());
       }
     }
   }
@@ -19113,12 +21954,70 @@ void BattleSettlementData::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      ABSL_DCHECK(from._impl_.tower_settlement_ != nullptr);
+      if (_this->_impl_.tower_settlement_ == nullptr) {
+        _this->_impl_.tower_settlement_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tower_settlement_);
+      } else {
+        _this->_impl_.tower_settlement_->MergeFrom(*from._impl_.tower_settlement_);
+      }
+    }
+  }
+  cached_has_bits = from._impl_._has_bits_[1];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_total_damage_dealt() != 0) {
+        _this->_impl_.total_damage_dealt_ = from._impl_.total_damage_dealt_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_surrendered() != 0) {
         _this->_impl_.surrendered_ = from._impl_.surrendered_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_total_controls_landed() != 0) {
+        _this->_impl_.total_controls_landed_ = from._impl_.total_controls_landed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_total_healing_done() != 0) {
+        _this->_impl_.total_healing_done_ = from._impl_.total_healing_done_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_primary_focus_damage_dealt() != 0) {
+        _this->_impl_.primary_focus_damage_dealt_ = from._impl_.primary_focus_damage_dealt_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_total_shield_granted() != 0) {
+        _this->_impl_.total_shield_granted_ = from._impl_.total_shield_granted_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_damage_taken() != 0) {
+        _this->_impl_.damage_taken_ = from._impl_.damage_taken_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_total_dispels_landed() != 0) {
+        _this->_impl_.total_dispels_landed_ = from._impl_.total_dispels_landed_;
+      }
+    }
   }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_highlight_kind() != 0) {
+        _this->_impl_.highlight_kind_ = from._impl_.highlight_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_ended_opponent_streak() != 0) {
+        _this->_impl_.ended_opponent_streak_ = from._impl_.ended_opponent_streak_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_.Or(from._impl_._has_bits_);
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
 }
@@ -19135,6 +22034,7 @@ void BattleSettlementData::InternalSwap(BattleSettlementData* PROTOBUF_RESTRICT 
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_._has_bits_[1], other->_impl_._has_bits_[1]);
   _impl_.items_consumed_.InternalSwap(&other->_impl_.items_consumed_);
   _impl_.items_gained_.InternalSwap(&other->_impl_.items_gained_);
   _impl_.pets_.InternalSwap(&other->_impl_.pets_);
@@ -19142,8 +22042,8 @@ void BattleSettlementData::InternalSwap(BattleSettlementData* PROTOBUF_RESTRICT 
   _impl_.currency_gains_.InternalSwap(&other->_impl_.currency_gains_);
   _impl_.captured_pet_table_ids_.InternalSwap(&other->_impl_.captured_pet_table_ids_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.surrendered_)
-      + sizeof(BattleSettlementData::_impl_.surrendered_)
+      PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.ended_opponent_streak_)
+      + sizeof(BattleSettlementData::_impl_.ended_opponent_streak_)
       - PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.trial_facts_)>(
           reinterpret_cast<char*>(&_impl_.trial_facts_),
           reinterpret_cast<char*>(&other->_impl_.trial_facts_));
@@ -21564,6 +24464,44 @@ void RankedMemberLoadout::InternalSwap(RankedMemberLoadout* PROTOBUF_RESTRICT PR
 }
 // ===================================================================
 
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+RankedMatchContext_MemberWinStreaksEntry_DoNotUse::RankedMatchContext_MemberWinStreaksEntry_DoNotUse() : SuperType(RankedMatchContext_MemberWinStreaksEntry_DoNotUse_get_class_data()) {}
+RankedMatchContext_MemberWinStreaksEntry_DoNotUse::RankedMatchContext_MemberWinStreaksEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, RankedMatchContext_MemberWinStreaksEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+RankedMatchContext_MemberWinStreaksEntry_DoNotUse::RankedMatchContext_MemberWinStreaksEntry_DoNotUse() : SuperType() {}
+RankedMatchContext_MemberWinStreaksEntry_DoNotUse::RankedMatchContext_MemberWinStreaksEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_ =
+        RankedMatchContext_MemberWinStreaksEntry_DoNotUse::InternalGenerateClassData_(RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RankedMatchContext_MemberWinStreaksEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_.tc_table);
+  return RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RankedMatchContext_MemberWinStreaksEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_));
+  return RankedMatchContext_MemberWinStreaksEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RankedMatchContext_MemberWinStreaksEntry_DoNotUse::ParseTableT_
+    RankedMatchContext_MemberWinStreaksEntry_DoNotUse::_table_ =
+        RankedMatchContext_MemberWinStreaksEntry_DoNotUse::InternalGenerateParseTable_(RankedMatchContext_MemberWinStreaksEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
 RankedMatchContext::RankedMatchContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, RankedMatchContext_get_class_data()) {
@@ -21587,7 +24525,14 @@ PROTOBUF_NDEBUG_INLINE RankedMatchContext::Impl_::Impl_(
         }
         ,
         season_key_(arena, from.season_key_),
-        config_fingerprint_(arena, from.config_fingerprint_) {}
+        config_fingerprint_(arena, from.config_fingerprint_),
+        member_win_streaks_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::RankedMatchContext,
+              PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.member_win_streaks_)>()
+          , from.member_win_streaks_
+        }
+     {}
 
 RankedMatchContext::RankedMatchContext(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -21623,7 +24568,12 @@ PROTOBUF_NDEBUG_INLINE RankedMatchContext::Impl_::Impl_(
          }
         ,
         season_key_(arena),
-        config_fingerprint_(arena) {}
+        config_fingerprint_(arena),
+        member_win_streaks_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::RankedMatchContext,
+            PROTOBUF_FIELD_OFFSET(::RankedMatchContext, _impl_.member_win_streaks_)>()
+         }
+     {}
 
 inline void RankedMatchContext::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -21699,6 +24649,9 @@ PROTOBUF_NOINLINE void RankedMatchContext::Clear() {
     ::memset(&_impl_.season_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.use_free_preset_) -
         reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.use_free_preset_));
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    _impl_.member_win_streaks_.Clear();
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -21801,6 +24754,29 @@ PROTOBUF_NOINLINE void RankedMatchContext::Clear() {
     }
   }
 
+  // map<uint64, uint32> member_win_streaks = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (!this_._internal_member_win_streaks().empty()) {
+      using MapType = ::google::protobuf::Map<::uint64_t, ::uint32_t>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint64_t, ::uint32_t,
+                                     _pbi::WireFormatLite::TYPE_UINT64,
+                                     _pbi::WireFormatLite::TYPE_UINT32>;
+      const auto& field = this_._internal_member_win_streaks();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              9, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              9, entry.first, entry.second, target, stream);
+        }
+      }
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -21883,6 +24859,18 @@ PROTOBUF_NOINLINE void RankedMatchContext::Clear() {
       }
     }
   }
+   {
+    // map<uint64, uint32> member_win_streaks = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_member_win_streaks_size());
+      for (const auto& entry : this_._internal_member_win_streaks()) {
+        total_size += _pbi::MapEntryFuncs<::uint64_t, ::uint32_t,
+                                       _pbi::WireFormatLite::TYPE_UINT64,
+                                       _pbi::WireFormatLite::TYPE_UINT32>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -21951,6 +24939,9 @@ void RankedMatchContext::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    _this->_impl_.member_win_streaks_.MergeFrom(from._impl_.member_win_streaks_);
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -21979,6 +24970,7 @@ void RankedMatchContext::InternalSwap(RankedMatchContext* PROTOBUF_RESTRICT PROT
       - PROTOBUF_FIELD_OFFSET(RankedMatchContext, _impl_.season_id_)>(
           reinterpret_cast<char*>(&_impl_.season_id_),
           reinterpret_cast<char*>(&other->_impl_.season_id_));
+  _impl_.member_win_streaks_.InternalSwap(&other->_impl_.member_win_streaks_);
 }
 
 ::google::protobuf::Metadata RankedMatchContext::GetMetadata() const {
@@ -23339,6 +26331,2062 @@ void BattleTrialJournalFacts::InternalSwap(BattleTrialJournalFacts* PROTOBUF_RES
 }
 
 ::google::protobuf::Metadata BattleTrialJournalFacts::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TournamentBattleContext::TournamentBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TournamentBattleContext_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:TournamentBattleContext)
+}
+PROTOBUF_NDEBUG_INLINE TournamentBattleContext::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::TournamentBattleContext& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        squad_a_name_(arena, from.squad_a_name_),
+        squad_b_name_(arena, from.squad_b_name_) {}
+
+TournamentBattleContext::TournamentBattleContext(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const TournamentBattleContext& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TournamentBattleContext_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  TournamentBattleContext* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, match_id_),
+           offsetof(Impl_, is_third_place_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::is_third_place_));
+
+  // @@protoc_insertion_point(copy_constructor:TournamentBattleContext)
+}
+PROTOBUF_NDEBUG_INLINE TournamentBattleContext::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        squad_a_name_(arena),
+        squad_b_name_(arena) {}
+
+inline void TournamentBattleContext::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           0,
+           offsetof(Impl_, is_third_place_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::is_third_place_));
+}
+TournamentBattleContext::~TournamentBattleContext() {
+  // @@protoc_insertion_point(destructor:TournamentBattleContext)
+  SharedDtor(*this);
+}
+inline void TournamentBattleContext::SharedDtor(MessageLite& self) {
+  TournamentBattleContext& this_ = static_cast<TournamentBattleContext&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.squad_a_name_.Destroy();
+  this_._impl_.squad_b_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TournamentBattleContext_class_data_ =
+        TournamentBattleContext::InternalGenerateClassData_(TournamentBattleContext_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TournamentBattleContext::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TournamentBattleContext_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TournamentBattleContext_class_data_.tc_table);
+  return TournamentBattleContext_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TournamentBattleContext::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TournamentBattleContext_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TournamentBattleContext_globals_));
+  return TournamentBattleContext_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TournamentBattleContext::ParseTableT_
+    TournamentBattleContext::_table_ =
+        TournamentBattleContext::InternalGenerateParseTable_(TournamentBattleContext_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TournamentBattleContext::Clear() {
+// @@protoc_insertion_point(message_clear_start:TournamentBattleContext)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.squad_a_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.squad_b_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.wins_b_) -
+        reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.wins_b_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    ::memset(&_impl_.leyline_element_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.is_third_place_) -
+        reinterpret_cast<char*>(&_impl_.leyline_element_)) + sizeof(_impl_.is_third_place_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TournamentBattleContext::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TournamentBattleContext& this_ = static_cast<const TournamentBattleContext&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TournamentBattleContext::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TournamentBattleContext& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:TournamentBattleContext)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 season_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint64 match_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_match_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_match_id(), target);
+    }
+  }
+
+  // uint32 best_of = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_best_of() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_best_of(), target);
+    }
+  }
+
+  // uint32 game_index = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_game_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_game_index(), target);
+    }
+  }
+
+  // uint32 wins_a = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_wins_a() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_wins_a(), target);
+    }
+  }
+
+  // uint32 wins_b = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_wins_b() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_wins_b(), target);
+    }
+  }
+
+  // .TournamentLeylineElement leyline_element = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_leyline_element() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          7, this_._internal_leyline_element(), target);
+    }
+  }
+
+  // uint64 squad_a_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_squad_a_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_squad_a_id(), target);
+    }
+  }
+
+  // string squad_a_name = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_squad_a_name().empty()) {
+      const ::std::string& _s = this_._internal_squad_a_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TournamentBattleContext.squad_a_name");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // uint64 squad_b_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_squad_b_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_squad_b_id(), target);
+    }
+  }
+
+  // string squad_b_name = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_squad_b_name().empty()) {
+      const ::std::string& _s = this_._internal_squad_b_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TournamentBattleContext.squad_b_name");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // uint32 squad_a_emblem_id = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_squad_a_emblem_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_squad_a_emblem_id(), target);
+    }
+  }
+
+  // uint32 squad_b_emblem_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_squad_b_emblem_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_squad_b_emblem_id(), target);
+    }
+  }
+
+  // bool is_warmup = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_is_warmup() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_is_warmup(), target);
+    }
+  }
+
+  // bool is_third_place = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_is_third_place() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          15, this_._internal_is_third_place(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:TournamentBattleContext)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TournamentBattleContext::ByteSizeLong(const MessageLite& base) {
+  const TournamentBattleContext& this_ = static_cast<const TournamentBattleContext&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TournamentBattleContext::ByteSizeLong() const {
+  const TournamentBattleContext& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:TournamentBattleContext)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string squad_a_name = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_squad_a_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_squad_a_name());
+      }
+    }
+    // string squad_b_name = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_squad_b_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_squad_b_name());
+      }
+    }
+    // uint64 match_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_match_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_match_id());
+      }
+    }
+    // uint32 season_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 best_of = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_best_of() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_best_of());
+      }
+    }
+    // uint32 game_index = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_game_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_game_index());
+      }
+    }
+    // uint32 wins_a = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_wins_a() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_wins_a());
+      }
+    }
+    // uint32 wins_b = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_wins_b() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_wins_b());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    // .TournamentLeylineElement leyline_element = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_leyline_element() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_leyline_element());
+      }
+    }
+    // uint64 squad_a_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_squad_a_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_a_id());
+      }
+    }
+    // uint64 squad_b_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_squad_b_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_b_id());
+      }
+    }
+    // uint32 squad_a_emblem_id = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_squad_a_emblem_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_squad_a_emblem_id());
+      }
+    }
+    // uint32 squad_b_emblem_id = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_squad_b_emblem_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_squad_b_emblem_id());
+      }
+    }
+    // bool is_warmup = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_is_warmup() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool is_third_place = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_is_third_place() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TournamentBattleContext::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TournamentBattleContext*>(&to_msg);
+  auto& from = static_cast<const TournamentBattleContext&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:TournamentBattleContext)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_squad_a_name().empty()) {
+        _this->_internal_set_squad_a_name(from._internal_squad_a_name());
+      } else {
+        if (_this->_impl_.squad_a_name_.IsDefault()) {
+          _this->_internal_set_squad_a_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_squad_b_name().empty()) {
+        _this->_internal_set_squad_b_name(from._internal_squad_b_name());
+      } else {
+        if (_this->_impl_.squad_b_name_.IsDefault()) {
+          _this->_internal_set_squad_b_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_match_id() != 0) {
+        _this->_impl_.match_id_ = from._impl_.match_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_best_of() != 0) {
+        _this->_impl_.best_of_ = from._impl_.best_of_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_game_index() != 0) {
+        _this->_impl_.game_index_ = from._impl_.game_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_wins_a() != 0) {
+        _this->_impl_.wins_a_ = from._impl_.wins_a_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_wins_b() != 0) {
+        _this->_impl_.wins_b_ = from._impl_.wins_b_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_leyline_element() != 0) {
+        _this->_impl_.leyline_element_ = from._impl_.leyline_element_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_squad_a_id() != 0) {
+        _this->_impl_.squad_a_id_ = from._impl_.squad_a_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_squad_b_id() != 0) {
+        _this->_impl_.squad_b_id_ = from._impl_.squad_b_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_squad_a_emblem_id() != 0) {
+        _this->_impl_.squad_a_emblem_id_ = from._impl_.squad_a_emblem_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_squad_b_emblem_id() != 0) {
+        _this->_impl_.squad_b_emblem_id_ = from._impl_.squad_b_emblem_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_is_warmup() != 0) {
+        _this->_impl_.is_warmup_ = from._impl_.is_warmup_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_is_third_place() != 0) {
+        _this->_impl_.is_third_place_ = from._impl_.is_third_place_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TournamentBattleContext::CopyFrom(const TournamentBattleContext& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:TournamentBattleContext)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TournamentBattleContext::InternalSwap(TournamentBattleContext* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.squad_a_name_, &other->_impl_.squad_a_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.squad_b_name_, &other->_impl_.squad_b_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.is_third_place_)
+      + sizeof(TournamentBattleContext::_impl_.is_third_place_)
+      - PROTOBUF_FIELD_OFFSET(TournamentBattleContext, _impl_.match_id_)>(
+          reinterpret_cast<char*>(&_impl_.match_id_),
+          reinterpret_cast<char*>(&other->_impl_.match_id_));
+}
+
+::google::protobuf::Metadata TournamentBattleContext::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+WuxingTowerBattleContext::WuxingTowerBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, WuxingTowerBattleContext_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:WuxingTowerBattleContext)
+}
+PROTOBUF_NDEBUG_INLINE WuxingTowerBattleContext::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::WuxingTowerBattleContext& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        active_sigil_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::WuxingTowerBattleContext,
+              PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.active_sigil_ids_)>()
+          , from.active_sigil_ids_
+        }
+        ,
+        _active_sigil_ids_cached_byte_size_{0} {}
+
+WuxingTowerBattleContext::WuxingTowerBattleContext(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const WuxingTowerBattleContext& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, WuxingTowerBattleContext_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  WuxingTowerBattleContext* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, run_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, run_id_),
+           offsetof(Impl_, leyline_element_) -
+               offsetof(Impl_, run_id_) +
+               sizeof(Impl_::leyline_element_));
+
+  // @@protoc_insertion_point(copy_constructor:WuxingTowerBattleContext)
+}
+PROTOBUF_NDEBUG_INLINE WuxingTowerBattleContext::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        active_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::WuxingTowerBattleContext,
+            PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.active_sigil_ids_)>()
+         }
+        ,
+        _active_sigil_ids_cached_byte_size_{0} {}
+
+inline void WuxingTowerBattleContext::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, run_id_),
+           0,
+           offsetof(Impl_, leyline_element_) -
+               offsetof(Impl_, run_id_) +
+               sizeof(Impl_::leyline_element_));
+}
+WuxingTowerBattleContext::~WuxingTowerBattleContext() {
+  // @@protoc_insertion_point(destructor:WuxingTowerBattleContext)
+  SharedDtor(*this);
+}
+inline void WuxingTowerBattleContext::SharedDtor(MessageLite& self) {
+  WuxingTowerBattleContext& this_ = static_cast<WuxingTowerBattleContext&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull WuxingTowerBattleContext_class_data_ =
+        WuxingTowerBattleContext::InternalGenerateClassData_(WuxingTowerBattleContext_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+WuxingTowerBattleContext::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&WuxingTowerBattleContext_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(WuxingTowerBattleContext_class_data_.tc_table);
+  return WuxingTowerBattleContext_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+WuxingTowerBattleContext::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&WuxingTowerBattleContext_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&WuxingTowerBattleContext_globals_));
+  return WuxingTowerBattleContext_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const WuxingTowerBattleContext::ParseTableT_
+    WuxingTowerBattleContext::_table_ =
+        WuxingTowerBattleContext::InternalGenerateParseTable_(WuxingTowerBattleContext_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void WuxingTowerBattleContext::Clear() {
+// @@protoc_insertion_point(message_clear_start:WuxingTowerBattleContext)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.active_sigil_ids_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.run_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.leyline_element_) -
+        reinterpret_cast<char*>(&_impl_.run_id_)) + sizeof(_impl_.leyline_element_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL WuxingTowerBattleContext::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const WuxingTowerBattleContext& this_ = static_cast<const WuxingTowerBattleContext&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL WuxingTowerBattleContext::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const WuxingTowerBattleContext& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:WuxingTowerBattleContext)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 week_key = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_week_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_week_key(), target);
+    }
+  }
+
+  // uint64 run_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_run_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_run_id(), target);
+    }
+  }
+
+  // uint32 floor = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_floor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_floor(), target);
+    }
+  }
+
+  // .TournamentLeylineElement leyline_element = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_leyline_element() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          4, this_._internal_leyline_element(), target);
+    }
+  }
+
+  // repeated uint32 active_sigil_ids = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._active_sigil_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            5, this_._internal_active_sigil_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:WuxingTowerBattleContext)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t WuxingTowerBattleContext::ByteSizeLong(const MessageLite& base) {
+  const WuxingTowerBattleContext& this_ = static_cast<const WuxingTowerBattleContext&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t WuxingTowerBattleContext::ByteSizeLong() const {
+  const WuxingTowerBattleContext& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:WuxingTowerBattleContext)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // repeated uint32 active_sigil_ids = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_active_sigil_ids(), 1,
+              this_._impl_._active_sigil_ids_cached_byte_size_);
+    }
+    // uint64 run_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_run_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_run_id());
+      }
+    }
+    // uint32 week_key = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_week_key() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_week_key());
+      }
+    }
+    // uint32 floor = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_floor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_floor());
+      }
+    }
+    // .TournamentLeylineElement leyline_element = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_leyline_element() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_leyline_element());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void WuxingTowerBattleContext::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<WuxingTowerBattleContext*>(&to_msg);
+  auto& from = static_cast<const WuxingTowerBattleContext&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:WuxingTowerBattleContext)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_active_sigil_ids()->MergeFrom(from._internal_active_sigil_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_run_id() != 0) {
+        _this->_impl_.run_id_ = from._impl_.run_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_week_key() != 0) {
+        _this->_impl_.week_key_ = from._impl_.week_key_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_floor() != 0) {
+        _this->_impl_.floor_ = from._impl_.floor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_leyline_element() != 0) {
+        _this->_impl_.leyline_element_ = from._impl_.leyline_element_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void WuxingTowerBattleContext::CopyFrom(const WuxingTowerBattleContext& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:WuxingTowerBattleContext)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void WuxingTowerBattleContext::InternalSwap(WuxingTowerBattleContext* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.active_sigil_ids_.InternalSwap(&other->_impl_.active_sigil_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.leyline_element_)
+      + sizeof(WuxingTowerBattleContext::_impl_.leyline_element_)
+      - PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.run_id_)>(
+          reinterpret_cast<char*>(&_impl_.run_id_),
+          reinterpret_cast<char*>(&other->_impl_.run_id_));
+}
+
+::google::protobuf::Metadata WuxingTowerBattleContext::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+WuxingTowerSettlementEcho::WuxingTowerSettlementEcho(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, WuxingTowerSettlementEcho_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:WuxingTowerSettlementEcho)
+}
+WuxingTowerSettlementEcho::WuxingTowerSettlementEcho(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WuxingTowerSettlementEcho& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, WuxingTowerSettlementEcho_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE WuxingTowerSettlementEcho::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void WuxingTowerSettlementEcho::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, run_id_),
+           0,
+           offsetof(Impl_, total_rounds_) -
+               offsetof(Impl_, run_id_) +
+               sizeof(Impl_::total_rounds_));
+}
+WuxingTowerSettlementEcho::~WuxingTowerSettlementEcho() {
+  // @@protoc_insertion_point(destructor:WuxingTowerSettlementEcho)
+  SharedDtor(*this);
+}
+inline void WuxingTowerSettlementEcho::SharedDtor(MessageLite& self) {
+  WuxingTowerSettlementEcho& this_ = static_cast<WuxingTowerSettlementEcho&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull WuxingTowerSettlementEcho_class_data_ =
+        WuxingTowerSettlementEcho::InternalGenerateClassData_(WuxingTowerSettlementEcho_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+WuxingTowerSettlementEcho::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&WuxingTowerSettlementEcho_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(WuxingTowerSettlementEcho_class_data_.tc_table);
+  return WuxingTowerSettlementEcho_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+WuxingTowerSettlementEcho::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&WuxingTowerSettlementEcho_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&WuxingTowerSettlementEcho_globals_));
+  return WuxingTowerSettlementEcho_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const WuxingTowerSettlementEcho::ParseTableT_
+    WuxingTowerSettlementEcho::_table_ =
+        WuxingTowerSettlementEcho::InternalGenerateParseTable_(WuxingTowerSettlementEcho_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void WuxingTowerSettlementEcho::Clear() {
+// @@protoc_insertion_point(message_clear_start:WuxingTowerSettlementEcho)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.run_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.total_rounds_) -
+        reinterpret_cast<char*>(&_impl_.run_id_)) + sizeof(_impl_.total_rounds_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL WuxingTowerSettlementEcho::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const WuxingTowerSettlementEcho& this_ = static_cast<const WuxingTowerSettlementEcho&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL WuxingTowerSettlementEcho::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const WuxingTowerSettlementEcho& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:WuxingTowerSettlementEcho)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 week_key = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_week_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_week_key(), target);
+    }
+  }
+
+  // uint64 run_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_run_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_run_id(), target);
+    }
+  }
+
+  // uint32 floor = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_floor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_floor(), target);
+    }
+  }
+
+  // uint32 total_rounds = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_total_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_total_rounds(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:WuxingTowerSettlementEcho)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t WuxingTowerSettlementEcho::ByteSizeLong(const MessageLite& base) {
+  const WuxingTowerSettlementEcho& this_ = static_cast<const WuxingTowerSettlementEcho&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t WuxingTowerSettlementEcho::ByteSizeLong() const {
+  const WuxingTowerSettlementEcho& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:WuxingTowerSettlementEcho)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 run_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_run_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_run_id());
+      }
+    }
+    // uint32 week_key = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_week_key() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_week_key());
+      }
+    }
+    // uint32 floor = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_floor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_floor());
+      }
+    }
+    // uint32 total_rounds = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_total_rounds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_total_rounds());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void WuxingTowerSettlementEcho::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<WuxingTowerSettlementEcho*>(&to_msg);
+  auto& from = static_cast<const WuxingTowerSettlementEcho&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:WuxingTowerSettlementEcho)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_run_id() != 0) {
+        _this->_impl_.run_id_ = from._impl_.run_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_week_key() != 0) {
+        _this->_impl_.week_key_ = from._impl_.week_key_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_floor() != 0) {
+        _this->_impl_.floor_ = from._impl_.floor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_total_rounds() != 0) {
+        _this->_impl_.total_rounds_ = from._impl_.total_rounds_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void WuxingTowerSettlementEcho::CopyFrom(const WuxingTowerSettlementEcho& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:WuxingTowerSettlementEcho)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void WuxingTowerSettlementEcho::InternalSwap(WuxingTowerSettlementEcho* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_)
+      + sizeof(WuxingTowerSettlementEcho::_impl_.total_rounds_)
+      - PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.run_id_)>(
+          reinterpret_cast<char*>(&_impl_.run_id_),
+          reinterpret_cast<char*>(&other->_impl_.run_id_));
+}
+
+::google::protobuf::Metadata WuxingTowerSettlementEcho::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CustomDuelRules::CustomDuelRules(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CustomDuelRules_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:CustomDuelRules)
+}
+CustomDuelRules::CustomDuelRules(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CustomDuelRules& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CustomDuelRules_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE CustomDuelRules::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void CustomDuelRules::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, round_limit_override_),
+           0,
+           offsetof(Impl_, challenger_pet_preset_id_) -
+               offsetof(Impl_, round_limit_override_) +
+               sizeof(Impl_::challenger_pet_preset_id_));
+}
+CustomDuelRules::~CustomDuelRules() {
+  // @@protoc_insertion_point(destructor:CustomDuelRules)
+  SharedDtor(*this);
+}
+inline void CustomDuelRules::SharedDtor(MessageLite& self) {
+  CustomDuelRules& this_ = static_cast<CustomDuelRules&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CustomDuelRules_class_data_ =
+        CustomDuelRules::InternalGenerateClassData_(CustomDuelRules_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CustomDuelRules::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CustomDuelRules_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CustomDuelRules_class_data_.tc_table);
+  return CustomDuelRules_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CustomDuelRules::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CustomDuelRules_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CustomDuelRules_globals_));
+  return CustomDuelRules_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CustomDuelRules::ParseTableT_
+    CustomDuelRules::_table_ =
+        CustomDuelRules::InternalGenerateParseTable_(CustomDuelRules_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CustomDuelRules::Clear() {
+// @@protoc_insertion_point(message_clear_start:CustomDuelRules)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    ::memset(&_impl_.round_limit_override_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.challenger_pet_preset_id_) -
+        reinterpret_cast<char*>(&_impl_.round_limit_override_)) + sizeof(_impl_.challenger_pet_preset_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CustomDuelRules::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CustomDuelRules& this_ = static_cast<const CustomDuelRules&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CustomDuelRules::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CustomDuelRules& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:CustomDuelRules)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool use_free_preset = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_use_free_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_use_free_preset(), target);
+    }
+  }
+
+  // bool enable_polarity_rotation = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_enable_polarity_rotation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_enable_polarity_rotation(), target);
+    }
+  }
+
+  // uint32 round_limit_override = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_round_limit_override() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_round_limit_override(), target);
+    }
+  }
+
+  // bool ban_control_skills = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_ban_control_skills() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_ban_control_skills(), target);
+    }
+  }
+
+  // bool allow_public_spectate = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_allow_public_spectate() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_allow_public_spectate(), target);
+    }
+  }
+
+  // uint32 challenger_character_preset_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_challenger_character_preset_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_challenger_character_preset_id(), target);
+    }
+  }
+
+  // uint32 challenger_pet_preset_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_challenger_pet_preset_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_challenger_pet_preset_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:CustomDuelRules)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CustomDuelRules::ByteSizeLong(const MessageLite& base) {
+  const CustomDuelRules& this_ = static_cast<const CustomDuelRules&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CustomDuelRules::ByteSizeLong() const {
+  const CustomDuelRules& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:CustomDuelRules)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // uint32 round_limit_override = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_round_limit_override() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_round_limit_override());
+      }
+    }
+    // bool use_free_preset = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_use_free_preset() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool enable_polarity_rotation = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_enable_polarity_rotation() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool ban_control_skills = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_ban_control_skills() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool allow_public_spectate = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_allow_public_spectate() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 challenger_character_preset_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_challenger_character_preset_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_challenger_character_preset_id());
+      }
+    }
+    // uint32 challenger_pet_preset_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_challenger_pet_preset_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_challenger_pet_preset_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CustomDuelRules::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CustomDuelRules*>(&to_msg);
+  auto& from = static_cast<const CustomDuelRules&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:CustomDuelRules)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_round_limit_override() != 0) {
+        _this->_impl_.round_limit_override_ = from._impl_.round_limit_override_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_use_free_preset() != 0) {
+        _this->_impl_.use_free_preset_ = from._impl_.use_free_preset_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_enable_polarity_rotation() != 0) {
+        _this->_impl_.enable_polarity_rotation_ = from._impl_.enable_polarity_rotation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_ban_control_skills() != 0) {
+        _this->_impl_.ban_control_skills_ = from._impl_.ban_control_skills_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_allow_public_spectate() != 0) {
+        _this->_impl_.allow_public_spectate_ = from._impl_.allow_public_spectate_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_challenger_character_preset_id() != 0) {
+        _this->_impl_.challenger_character_preset_id_ = from._impl_.challenger_character_preset_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_challenger_pet_preset_id() != 0) {
+        _this->_impl_.challenger_pet_preset_id_ = from._impl_.challenger_pet_preset_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CustomDuelRules::CopyFrom(const CustomDuelRules& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:CustomDuelRules)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CustomDuelRules::InternalSwap(CustomDuelRules* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.challenger_pet_preset_id_)
+      + sizeof(CustomDuelRules::_impl_.challenger_pet_preset_id_)
+      - PROTOBUF_FIELD_OFFSET(CustomDuelRules, _impl_.round_limit_override_)>(
+          reinterpret_cast<char*>(&_impl_.round_limit_override_),
+          reinterpret_cast<char*>(&other->_impl_.round_limit_override_));
+}
+
+::google::protobuf::Metadata CustomDuelRules::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+BattleActorBuildSummary::BattleActorBuildSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BattleActorBuildSummary_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BattleActorBuildSummary)
+}
+PROTOBUF_NDEBUG_INLINE BattleActorBuildSummary::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::BattleActorBuildSummary& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        skill_table_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::BattleActorBuildSummary,
+              PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.skill_table_ids_)>()
+          , from.skill_table_ids_
+        }
+        ,
+        _skill_table_ids_cached_byte_size_{0},
+        wuxing_sigil_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::BattleActorBuildSummary,
+              PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.wuxing_sigil_ids_)>()
+          , from.wuxing_sigil_ids_
+        }
+        ,
+        _wuxing_sigil_ids_cached_byte_size_{0},
+        name_(arena, from.name_),
+        active_pet_name_(arena, from.active_pet_name_) {}
+
+BattleActorBuildSummary::BattleActorBuildSummary(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BattleActorBuildSummary& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BattleActorBuildSummary_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BattleActorBuildSummary* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, used_free_preset_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::used_free_preset_));
+
+  // @@protoc_insertion_point(copy_constructor:BattleActorBuildSummary)
+}
+PROTOBUF_NDEBUG_INLINE BattleActorBuildSummary::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        skill_table_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattleActorBuildSummary,
+            PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.skill_table_ids_)>()
+         }
+        ,
+        _skill_table_ids_cached_byte_size_{0},
+        wuxing_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BattleActorBuildSummary,
+            PROTOBUF_FIELD_OFFSET(::BattleActorBuildSummary, _impl_.wuxing_sigil_ids_)>()
+         }
+        ,
+        _wuxing_sigil_ids_cached_byte_size_{0},
+        name_(arena),
+        active_pet_name_(arena) {}
+
+inline void BattleActorBuildSummary::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, used_free_preset_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::used_free_preset_));
+}
+BattleActorBuildSummary::~BattleActorBuildSummary() {
+  // @@protoc_insertion_point(destructor:BattleActorBuildSummary)
+  SharedDtor(*this);
+}
+inline void BattleActorBuildSummary::SharedDtor(MessageLite& self) {
+  BattleActorBuildSummary& this_ = static_cast<BattleActorBuildSummary&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.active_pet_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BattleActorBuildSummary_class_data_ =
+        BattleActorBuildSummary::InternalGenerateClassData_(BattleActorBuildSummary_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleActorBuildSummary::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleActorBuildSummary_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BattleActorBuildSummary_class_data_.tc_table);
+  return BattleActorBuildSummary_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleActorBuildSummary::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleActorBuildSummary_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BattleActorBuildSummary_globals_));
+  return BattleActorBuildSummary_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattleActorBuildSummary::ParseTableT_
+    BattleActorBuildSummary::_table_ =
+        BattleActorBuildSummary::InternalGenerateParseTable_(BattleActorBuildSummary_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BattleActorBuildSummary::Clear() {
+// @@protoc_insertion_point(message_clear_start:BattleActorBuildSummary)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.skill_table_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.wuxing_sigil_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.active_pet_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.level_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.level_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    ::memset(&_impl_.formation_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.used_free_preset_) -
+        reinterpret_cast<char*>(&_impl_.formation_id_)) + sizeof(_impl_.used_free_preset_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BattleActorBuildSummary::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BattleActorBuildSummary& this_ = static_cast<const BattleActorBuildSummary&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BattleActorBuildSummary::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BattleActorBuildSummary& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BattleActorBuildSummary)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BattleActorBuildSummary.name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 team_index = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_team_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_team_index(), target);
+    }
+  }
+
+  // uint32 class_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_class_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_class_id(), target);
+    }
+  }
+
+  // uint32 level = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_level(), target);
+    }
+  }
+
+  // uint32 formation_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_formation_id(), target);
+    }
+  }
+
+  // uint32 wuxing_element = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_wuxing_element() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_wuxing_element(), target);
+    }
+  }
+
+  // uint32 season_seal_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_season_seal_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_season_seal_id(), target);
+    }
+  }
+
+  // uint32 active_pet_table_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_active_pet_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_active_pet_table_id(), target);
+    }
+  }
+
+  // string active_pet_name = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_active_pet_name().empty()) {
+      const ::std::string& _s = this_._internal_active_pet_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BattleActorBuildSummary.active_pet_name");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // uint32 active_pet_element = 11;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_active_pet_element() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_active_pet_element(), target);
+    }
+  }
+
+  // repeated uint32 skill_table_ids = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._skill_table_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            12, this_._internal_skill_table_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint32 wuxing_sigil_ids = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._wuxing_sigil_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            13, this_._internal_wuxing_sigil_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // bool used_free_preset = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_used_free_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_used_free_preset(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BattleActorBuildSummary)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BattleActorBuildSummary::ByteSizeLong(const MessageLite& base) {
+  const BattleActorBuildSummary& this_ = static_cast<const BattleActorBuildSummary&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BattleActorBuildSummary::ByteSizeLong() const {
+  const BattleActorBuildSummary& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BattleActorBuildSummary)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated uint32 skill_table_ids = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_skill_table_ids(), 1,
+              this_._impl_._skill_table_ids_cached_byte_size_);
+    }
+    // repeated uint32 wuxing_sigil_ids = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_wuxing_sigil_ids(), 1,
+              this_._impl_._wuxing_sigil_ids_cached_byte_size_);
+    }
+    // string name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // string active_pet_name = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_active_pet_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_active_pet_name());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 team_index = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_team_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_index());
+      }
+    }
+    // uint32 class_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_class_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_class_id());
+      }
+    }
+    // uint32 level = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_level() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_level());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    // uint32 formation_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_formation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_formation_id());
+      }
+    }
+    // uint32 wuxing_element = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_wuxing_element() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_wuxing_element());
+      }
+    }
+    // uint32 season_seal_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_season_seal_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_seal_id());
+      }
+    }
+    // uint32 active_pet_table_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_active_pet_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_pet_table_id());
+      }
+    }
+    // uint32 active_pet_element = 11;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_active_pet_element() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_pet_element());
+      }
+    }
+    // bool used_free_preset = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_used_free_preset() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BattleActorBuildSummary::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BattleActorBuildSummary*>(&to_msg);
+  auto& from = static_cast<const BattleActorBuildSummary&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:BattleActorBuildSummary)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_skill_table_ids()->MergeFrom(from._internal_skill_table_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_wuxing_sigil_ids()->MergeFrom(from._internal_wuxing_sigil_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_active_pet_name().empty()) {
+        _this->_internal_set_active_pet_name(from._internal_active_pet_name());
+      } else {
+        if (_this->_impl_.active_pet_name_.IsDefault()) {
+          _this->_internal_set_active_pet_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_team_index() != 0) {
+        _this->_impl_.team_index_ = from._impl_.team_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_class_id() != 0) {
+        _this->_impl_.class_id_ = from._impl_.class_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_level() != 0) {
+        _this->_impl_.level_ = from._impl_.level_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_formation_id() != 0) {
+        _this->_impl_.formation_id_ = from._impl_.formation_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_wuxing_element() != 0) {
+        _this->_impl_.wuxing_element_ = from._impl_.wuxing_element_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_season_seal_id() != 0) {
+        _this->_impl_.season_seal_id_ = from._impl_.season_seal_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_active_pet_table_id() != 0) {
+        _this->_impl_.active_pet_table_id_ = from._impl_.active_pet_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_active_pet_element() != 0) {
+        _this->_impl_.active_pet_element_ = from._impl_.active_pet_element_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_used_free_preset() != 0) {
+        _this->_impl_.used_free_preset_ = from._impl_.used_free_preset_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BattleActorBuildSummary::CopyFrom(const BattleActorBuildSummary& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BattleActorBuildSummary)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BattleActorBuildSummary::InternalSwap(BattleActorBuildSummary* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.skill_table_ids_.InternalSwap(&other->_impl_.skill_table_ids_);
+  _impl_.wuxing_sigil_ids_.InternalSwap(&other->_impl_.wuxing_sigil_ids_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.active_pet_name_, &other->_impl_.active_pet_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.used_free_preset_)
+      + sizeof(BattleActorBuildSummary::_impl_.used_free_preset_)
+      - PROTOBUF_FIELD_OFFSET(BattleActorBuildSummary, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata BattleActorBuildSummary::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

@@ -44,6 +44,28 @@ message SeasonSkillSummary {
   uint32 action_tags = 16;
 }
 
+// 单季永久零数值纪念印记与称谓展示视图（源自 PlayerSeasonComp.records，换季永久留存且零战斗属性）。
+message SeasonHonorView {
+  uint32 season_id = 1;
+  string season_name = 2;
+  string honor_title_name = 3;
+  string honor_badge_icon_key = 4;
+  uint32 progress_points = 5;
+  uint32 max_points = 6;
+  bool unlocked = 7;
+  bool is_current_season = 8;
+}
+
+// 当前活跃赛季的全员对称周环境词缀视图（不卖数值、零养成门槛，每周自动轮换）。
+message SeasonWeeklyAffixView {
+  uint32 week_index = 1;
+  uint32 affix_id = 2; // 0=无，1护盾过载/2灵息充盈/3先机守势/4锋芒竞速
+  string name = 3;
+  string description = 4;
+  string strategy_tip = 5;
+  repeated uint32 recommended_seal_ids = 6;
+}
+
 message SeasonStateSnapshot {
   bool available = 1;
   string unavailable_reason = 2;
@@ -81,6 +103,120 @@ message SeasonStateSnapshot {
 
   repeated SeasonSealOption seals = 29;
   repeated SeasonSkillSummary season_skills = 30;
+  // 五行阵法当前装配（0=无/默认，1天覆/2地载/3风扬/4云垂/5虎翼；免费切换）。
+  uint32 equipped_formation_id = 31;
+  // 战报一键收藏的脱敏公开配装列表（上限 12 条）。
+  repeated SavedBattleBuildBookmarkView saved_builds = 32;
+  // 历季与当季零数值永久纪念印记与称谓（休赛期亦返回已达成历史荣誉）。
+  repeated SeasonHonorView honors = 33;
+  // 本周全员对称环境词缀（无活跃赛季时为空）。
+  SeasonWeeklyAffixView weekly_affix = 34;
+}
+
+message SavedBattleBuildBookmarkView {
+  uint64 bookmark_id = 1;
+  string title = 2;
+  uint64 source_battle_id = 3;
+  uint64 source_player_id = 4;
+  string source_player_name = 5;
+  uint32 class_id = 6;
+  uint32 formation_id = 7;
+  uint32 season_seal_id = 8;
+  uint32 active_pet_table_id = 9;
+  string active_pet_name = 10;
+  repeated uint32 skill_table_ids = 11;
+  repeated uint32 wuxing_sigil_ids = 12;
+  uint64 saved_at_ms = 13;
+}
+
+message EquipWuxingFormationRequest {
+  uint32 formation_id = 1; // 0..5，免费切换
+}
+
+message EquipWuxingFormationResponse {
+  TipInfoMessage error_message = 1;
+  uint32 equipped_formation_id = 2;
+  SeasonStateSnapshot state = 3;
+}
+
+message WuxingTowerLeaderboardEntry {
+  uint32 rank = 1;
+  uint64 player_id = 2;
+  string player_name = 3;
+  uint32 best_floor = 4;
+  uint32 best_rounds = 5;
+  uint32 formation_id = 6;
+  repeated uint32 sigil_ids = 7;
+}
+
+message WuxingTowerStateSnapshot {
+  uint32 week_key = 1;
+  bool run_active = 2;
+  uint64 run_id = 3;
+  uint32 current_floor = 4;                  // 当前待挑战层（1..10）
+  uint32 max_floors = 5;                     // 固定 10 层
+  uint32 current_floor_dungeon_id = 6;       // 当前层开战应传入的 PVE_SOLO battle_config_id
+  uint32 current_floor_leyline_element = 7;  // 本层环境五行灵脉（1..5）
+  uint32 run_total_rounds = 8;
+  repeated uint32 active_sigil_ids = 9;
+  repeated uint32 pending_offer_sigil_ids = 10;
+  uint32 weekly_cleared_mask = 11;
+  uint32 weekly_best_floor = 12;
+  uint32 weekly_best_rounds = 13;
+  uint64 revision = 14;
+  repeated WuxingTowerLeaderboardEntry weekly_leaderboard = 15;
+}
+
+message GetWuxingTowerStateRequest {}
+
+message GetWuxingTowerStateResponse {
+  TipInfoMessage error_message = 1;
+  WuxingTowerStateSnapshot state = 2;
+}
+
+message StartWuxingTowerRunRequest {}
+
+message StartWuxingTowerRunResponse {
+  TipInfoMessage error_message = 1;
+  WuxingTowerStateSnapshot state = 2;
+}
+
+message PickWuxingTowerSigilRequest {
+  uint64 expected_run_id = 1;
+  uint32 sigil_id = 2;
+}
+
+message PickWuxingTowerSigilResponse {
+  TipInfoMessage error_message = 1;
+  WuxingTowerStateSnapshot state = 2;
+}
+
+message AbandonWuxingTowerRunRequest {
+  uint64 expected_run_id = 1;
+}
+
+message AbandonWuxingTowerRunResponse {
+  TipInfoMessage error_message = 1;
+  WuxingTowerStateSnapshot state = 2;
+}
+
+message SaveBattleBuildBookmarkRequest {
+  SavedBattleBuildBookmarkView bookmark = 1;
+}
+
+message SaveBattleBuildBookmarkResponse {
+  TipInfoMessage error_message = 1;
+  SavedBattleBuildBookmarkView saved = 2;
+  repeated SavedBattleBuildBookmarkView all_bookmarks = 3;
+}
+
+message DeleteBattleBuildBookmarkRequest {
+  uint64 bookmark_id = 1;
+}
+
+message DeleteBattleBuildBookmarkResponse {
+  TipInfoMessage error_message = 1;
+  repeated SavedBattleBuildBookmarkView all_bookmarks = 2;
 }
 
 message GetSeasonStateRequest {}
@@ -127,4 +263,11 @@ service SceneSeasonClientPlayer {
   rpc EquipSeasonSeal (EquipSeasonSealRequest) returns (EquipSeasonSealResponse);
   rpc CatchupSeasonSeal (CatchupSeasonSealRequest) returns (CatchupSeasonSealResponse);
   // ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+  rpc EquipWuxingFormation (EquipWuxingFormationRequest) returns (EquipWuxingFormationResponse);
+  rpc GetWuxingTowerState (GetWuxingTowerStateRequest) returns (GetWuxingTowerStateResponse);
+  rpc StartWuxingTowerRun (StartWuxingTowerRunRequest) returns (StartWuxingTowerRunResponse);
+  rpc PickWuxingTowerSigil (PickWuxingTowerSigilRequest) returns (PickWuxingTowerSigilResponse);
+  rpc AbandonWuxingTowerRun (AbandonWuxingTowerRunRequest) returns (AbandonWuxingTowerRunResponse);
+  rpc SaveBattleBuildBookmark (SaveBattleBuildBookmarkRequest) returns (SaveBattleBuildBookmarkResponse);
+  rpc DeleteBattleBuildBookmark (DeleteBattleBuildBookmarkRequest) returns (DeleteBattleBuildBookmarkResponse);
 }

@@ -223,7 +223,7 @@ message PlayerAttributeComp {
 代价:表里真删了一个维度之后,点数不会再自动返还,要靠洗点(未知键不归任何池,洗点也不清它)或一次性迁移;
 项目未上线,当前不写迁移。用例:`attribute_allocation_rules_test.cpp` 的 `StoredAllocationRulesTest`(含单项上限分支,
 当前表里 `dimension_cap` 都是 0)、`player_equip_attribute_test.cpp` 的 `OverAllocatedPoolIsCarriedButIneffectiveOnEveryRecalculation`
-等 8 条集成用例(未编译,待 Codex 验证)。
+等 8 条集成用例(未编译,待 Gemini 验证)。
 
 ## 4. 协议(`proto/scene/player_attribute.proto`,service `SceneAttributeClientPlayer`,消息号 167-175)
 
@@ -323,7 +323,7 @@ message PlayerAttributeComp {
 - **`class_id` 下发 scene 已打通(2026-09-13,commit f5983bd86)**:login 入场前 `backfillPlayerIdentity`(`player_class_backfill.go`;2026-09-20 B3a-2 起同一次 CAS 也补名字,原名 `backfillPlayerClass`)
   把账号角色记录里的职业补进 `PlayerAllData.uint32_pb_component.class`,scene 加载后 `ResolveClassRow` / `AutoAllocate` /
   `FindAllocRatio` 按真实职业取行，当前破军全投力量拿标准基础物伤的 +125%。账号记录里职业本身为 0 的老号不猜测职业，仍走 `class_id=0` 兜底档。
-  **尚未实测验证**(随本轮其它改动一起待 Codex 冒烟)。
+  **尚未实测验证**(随本轮其它改动一起待 Gemini 冒烟)。
 - **`bonus_values` / `bonus_points` 无写入方**：丹药、额外点奖励待接；装备已有独立现算输入，不通过这两个持久字段。
 - **GM 鉴权(2026-09-18 已收口,未编译)**:`GmSetPlayerLevel`(175)与另外五条客户端 GM 消息
   (37 / 49 / 94 / 95 / 187)一起进了 gate 的按消息号白名单

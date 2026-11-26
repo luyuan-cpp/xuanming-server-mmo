@@ -100,3 +100,164 @@ func (sceneSeasonClientPlayerRpc) decodeCatchupSeasonSeal(reply *base.MessageCon
 	}
 	return resp, nil
 }
+
+// EquipWuxingFormation 异步调用 SceneSeasonClientPlayer.EquipWuxingFormation(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) EquipWuxingFormation(c *pkg.GameClient, req *scene.EquipWuxingFormationRequest, timeout time.Duration, done func(*scene.EquipWuxingFormationResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerEquipWuxingFormationMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeEquipWuxingFormation(reply, err))
+	})
+}
+
+// EquipWuxingFormationSync 同步调用 SceneSeasonClientPlayer.EquipWuxingFormation(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) EquipWuxingFormationSync(ctx context.Context, c *pkg.GameClient, req *scene.EquipWuxingFormationRequest, timeout time.Duration) (*scene.EquipWuxingFormationResponse, error) {
+	return r.decodeEquipWuxingFormation(c.CallSync(ctx, game.SceneSeasonClientPlayerEquipWuxingFormationMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeEquipWuxingFormation(reply *base.MessageContent, err error) (*scene.EquipWuxingFormationResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.EquipWuxingFormationResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.EquipWuxingFormation reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetWuxingTowerState 异步调用 SceneSeasonClientPlayer.GetWuxingTowerState(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) GetWuxingTowerState(c *pkg.GameClient, req *scene.GetWuxingTowerStateRequest, timeout time.Duration, done func(*scene.GetWuxingTowerStateResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerGetWuxingTowerStateMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetWuxingTowerState(reply, err))
+	})
+}
+
+// GetWuxingTowerStateSync 同步调用 SceneSeasonClientPlayer.GetWuxingTowerState(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) GetWuxingTowerStateSync(ctx context.Context, c *pkg.GameClient, req *scene.GetWuxingTowerStateRequest, timeout time.Duration) (*scene.GetWuxingTowerStateResponse, error) {
+	return r.decodeGetWuxingTowerState(c.CallSync(ctx, game.SceneSeasonClientPlayerGetWuxingTowerStateMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeGetWuxingTowerState(reply *base.MessageContent, err error) (*scene.GetWuxingTowerStateResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetWuxingTowerStateResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.GetWuxingTowerState reply: %w", err)
+	}
+	return resp, nil
+}
+
+// StartWuxingTowerRun 异步调用 SceneSeasonClientPlayer.StartWuxingTowerRun(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) StartWuxingTowerRun(c *pkg.GameClient, req *scene.StartWuxingTowerRunRequest, timeout time.Duration, done func(*scene.StartWuxingTowerRunResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerStartWuxingTowerRunMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeStartWuxingTowerRun(reply, err))
+	})
+}
+
+// StartWuxingTowerRunSync 同步调用 SceneSeasonClientPlayer.StartWuxingTowerRun(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) StartWuxingTowerRunSync(ctx context.Context, c *pkg.GameClient, req *scene.StartWuxingTowerRunRequest, timeout time.Duration) (*scene.StartWuxingTowerRunResponse, error) {
+	return r.decodeStartWuxingTowerRun(c.CallSync(ctx, game.SceneSeasonClientPlayerStartWuxingTowerRunMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeStartWuxingTowerRun(reply *base.MessageContent, err error) (*scene.StartWuxingTowerRunResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.StartWuxingTowerRunResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.StartWuxingTowerRun reply: %w", err)
+	}
+	return resp, nil
+}
+
+// PickWuxingTowerSigil 异步调用 SceneSeasonClientPlayer.PickWuxingTowerSigil(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) PickWuxingTowerSigil(c *pkg.GameClient, req *scene.PickWuxingTowerSigilRequest, timeout time.Duration, done func(*scene.PickWuxingTowerSigilResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerPickWuxingTowerSigilMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodePickWuxingTowerSigil(reply, err))
+	})
+}
+
+// PickWuxingTowerSigilSync 同步调用 SceneSeasonClientPlayer.PickWuxingTowerSigil(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) PickWuxingTowerSigilSync(ctx context.Context, c *pkg.GameClient, req *scene.PickWuxingTowerSigilRequest, timeout time.Duration) (*scene.PickWuxingTowerSigilResponse, error) {
+	return r.decodePickWuxingTowerSigil(c.CallSync(ctx, game.SceneSeasonClientPlayerPickWuxingTowerSigilMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodePickWuxingTowerSigil(reply *base.MessageContent, err error) (*scene.PickWuxingTowerSigilResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.PickWuxingTowerSigilResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.PickWuxingTowerSigil reply: %w", err)
+	}
+	return resp, nil
+}
+
+// AbandonWuxingTowerRun 异步调用 SceneSeasonClientPlayer.AbandonWuxingTowerRun(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) AbandonWuxingTowerRun(c *pkg.GameClient, req *scene.AbandonWuxingTowerRunRequest, timeout time.Duration, done func(*scene.AbandonWuxingTowerRunResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerAbandonWuxingTowerRunMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeAbandonWuxingTowerRun(reply, err))
+	})
+}
+
+// AbandonWuxingTowerRunSync 同步调用 SceneSeasonClientPlayer.AbandonWuxingTowerRun(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) AbandonWuxingTowerRunSync(ctx context.Context, c *pkg.GameClient, req *scene.AbandonWuxingTowerRunRequest, timeout time.Duration) (*scene.AbandonWuxingTowerRunResponse, error) {
+	return r.decodeAbandonWuxingTowerRun(c.CallSync(ctx, game.SceneSeasonClientPlayerAbandonWuxingTowerRunMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeAbandonWuxingTowerRun(reply *base.MessageContent, err error) (*scene.AbandonWuxingTowerRunResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.AbandonWuxingTowerRunResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.AbandonWuxingTowerRun reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SaveBattleBuildBookmark 异步调用 SceneSeasonClientPlayer.SaveBattleBuildBookmark(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) SaveBattleBuildBookmark(c *pkg.GameClient, req *scene.SaveBattleBuildBookmarkRequest, timeout time.Duration, done func(*scene.SaveBattleBuildBookmarkResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSaveBattleBuildBookmark(reply, err))
+	})
+}
+
+// SaveBattleBuildBookmarkSync 同步调用 SceneSeasonClientPlayer.SaveBattleBuildBookmark(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) SaveBattleBuildBookmarkSync(ctx context.Context, c *pkg.GameClient, req *scene.SaveBattleBuildBookmarkRequest, timeout time.Duration) (*scene.SaveBattleBuildBookmarkResponse, error) {
+	return r.decodeSaveBattleBuildBookmark(c.CallSync(ctx, game.SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeSaveBattleBuildBookmark(reply *base.MessageContent, err error) (*scene.SaveBattleBuildBookmarkResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SaveBattleBuildBookmarkResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.SaveBattleBuildBookmark reply: %w", err)
+	}
+	return resp, nil
+}
+
+// DeleteBattleBuildBookmark 异步调用 SceneSeasonClientPlayer.DeleteBattleBuildBookmark(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) DeleteBattleBuildBookmark(c *pkg.GameClient, req *scene.DeleteBattleBuildBookmarkRequest, timeout time.Duration, done func(*scene.DeleteBattleBuildBookmarkResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeDeleteBattleBuildBookmark(reply, err))
+	})
+}
+
+// DeleteBattleBuildBookmarkSync 同步调用 SceneSeasonClientPlayer.DeleteBattleBuildBookmark(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) DeleteBattleBuildBookmarkSync(ctx context.Context, c *pkg.GameClient, req *scene.DeleteBattleBuildBookmarkRequest, timeout time.Duration) (*scene.DeleteBattleBuildBookmarkResponse, error) {
+	return r.decodeDeleteBattleBuildBookmark(c.CallSync(ctx, game.SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeDeleteBattleBuildBookmark(reply *base.MessageContent, err error) (*scene.DeleteBattleBuildBookmarkResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.DeleteBattleBuildBookmarkResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.DeleteBattleBuildBookmark reply: %w", err)
+	}
+	return resp, nil
+}

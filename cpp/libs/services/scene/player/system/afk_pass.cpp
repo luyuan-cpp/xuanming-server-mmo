@@ -1,5 +1,7 @@
 #include "afk_pass.h"
 
+#include <algorithm>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -14,6 +16,7 @@
 #include "player/comp/player_ownership_comp.h" // AfkPassRedisKey
 #include "player/system/afk_pass_rules.h"
 #include "player/system/client_request_ledger.h"
+#include "player/system/connection_lost_hold.h" // PlayerConnectionLostComp:判定战斗结算是否处于离线托管中
 #include "player/system/player_lifecycle.h" // RequestKeyProgressSave
 #include "player/system/player_mutability.h"
 #include "thread_context/ecs_context.h"
@@ -111,6 +114,41 @@ namespace
 					 << " reason=" << reason << " cause=not_sent failures_total=" << tlsProjectionFailures;
 		}
 	}
+	template <typename Unsigned>
+	Unsigned SaturatingAdd(Unsigned base, Unsigned delta)
+	{
+		constexpr Unsigned kMax = std::numeric_limits<Unsigned>::max();
+		return delta > kMax - base ? kMax : static_cast<Unsigned>(base + delta);
+	}
+
+	void ClearHostedRecapFields(PlayerUint64Comp &profile)
+	{
+		profile.set_hosted_recap_started_at(0);
+		profile.set_hosted_recap_ended_at(0);
+		profile.set_hosted_recap_battle_count(0);
+		profile.set_hosted_recap_win_count(0);
+		profile.set_hosted_recap_exp_gained(0);
+		profile.set_hosted_recap_silver_gained(0);
+		profile.set_hosted_recap_item_count(0);
+		profile.set_hosted_recap_pending_ack(false);
+	}
+
+	void FillHostedRecap(const PlayerUint64Comp &profile, AfkPassInfo &info)
+	{
+		if (profile.hosted_recap_started_at() == 0)
+		{
+			return;
+		}
+		auto *recap = info.mutable_hosted_recap();
+		recap->set_started_at(profile.hosted_recap_started_at());
+		recap->set_ended_at(profile.hosted_recap_ended_at());
+		recap->set_battle_count(profile.hosted_recap_battle_count());
+		recap->set_win_count(profile.hosted_recap_win_count());
+		recap->set_exp_gained(profile.hosted_recap_exp_gained());
+		recap->set_silver_gained(profile.hosted_recap_silver_gained());
+		recap->set_item_count(profile.hosted_recap_item_count());
+		recap->set_pending_ack(profile.hosted_recap_pending_ack());
+	}
 } // namespace
 
 bool AfkPassSystem::ValidateTables()
@@ -136,11 +174,30 @@ uint64_t AfkPassSystem::ExpiresAt(entt::entity player)
 	return profile != nullptr ? profile->afk_pass_expires_at() : 0;
 }
 
+bool AfkPassSystem::AutoReturnCityOnTeamEnd(entt::entity player)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return false;
+	}
+	const auto *profile = registry.try_get<PlayerUint64Comp>(player);
+	return profile != nullptr && profile->afk_auto_return_city_on_team_end();
+}
+
 void AfkPassSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, AfkPassInfo &info)
 {
 	info.Clear();
 	info.set_expires_at(ExpiresAt(player));
 	info.set_server_now(nowUnixSec);
+	if (auto &registry = tlsEcs.actorRegistry; registry.valid(player))
+	{
+		if (const auto *profile = registry.try_get<PlayerUint64Comp>(player))
+		{
+			info.set_auto_return_city_on_team_end(profile->afk_auto_return_city_on_team_end());
+			FillHostedRecap(*profile, info);
+		}
+	}
 	afk_pass::Rule rule;
 	const char *problem = nullptr;
 	if (!CurrentRule(rule, problem))
@@ -293,6 +350,148 @@ uint32_t AfkPassSystem::GmSet(entt::entity player, uint32_t remainingSeconds, ui
 			 << " expires_after=" << after << " remaining_seconds=" << remainingSeconds;
 	FillInfo(player, nowUnixSec, info);
 	return kSuccess;
+}
+
+uint32_t AfkPassSystem::SetSettings(entt::entity player, bool autoReturnCityOnTeamEnd, uint64_t nowUnixSec,
+									AfkPassInfo &info)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	if (!player_mutability::IsPlayerMutable(player))
+	{
+		return kAfkPassFrozen;
+	}
+	auto *profile = registry.try_get<PlayerUint64Comp>(player);
+	if (profile == nullptr)
+	{
+		LOG_ERROR << "[AfkPass] set settings refused: player has no PlayerUint64Comp (load invariant broken)";
+		return kAfkPassUnavailable;
+	}
+	if (profile->afk_auto_return_city_on_team_end() != autoReturnCityOnTeamEnd)
+	{
+		profile->set_afk_auto_return_city_on_team_end(autoReturnCityOnTeamEnd);
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_pass_settings");
+		const auto *guid = registry.try_get<PlayerGuidComp>(player);
+		LOG_INFO << "[AfkPass] metric=afk_pass_settings_updated player_id="
+				 << (guid != nullptr ? guid->value : kInvalidGuid)
+				 << " auto_return_city=" << (autoReturnCityOnTeamEnd ? 1 : 0);
+	}
+	FillInfo(player, nowUnixSec, info);
+	return kSuccess;
+}
+
+uint32_t AfkPassSystem::AckHostedRecap(entt::entity player, uint64_t startedAt, uint64_t nowUnixSec, AfkPassInfo &info)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	if (!player_mutability::IsPlayerMutable(player))
+	{
+		return kAfkPassFrozen;
+	}
+	auto *profile = registry.try_get<PlayerUint64Comp>(player);
+	if (profile == nullptr)
+	{
+		LOG_ERROR << "[AfkPass] ack hosted recap refused: player has no PlayerUint64Comp (load invariant broken)";
+		return kAfkPassUnavailable;
+	}
+	if (profile->hosted_recap_pending_ack() &&
+		(startedAt == 0 || profile->hosted_recap_started_at() == startedAt))
+	{
+		const uint64_t ackedStart = profile->hosted_recap_started_at();
+		ClearHostedRecapFields(*profile);
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_hosted_recap_ack");
+		const auto *guid = registry.try_get<PlayerGuidComp>(player);
+		LOG_INFO << "[AfkPass] metric=afk_hosted_recap_acked player_id="
+				 << (guid != nullptr ? guid->value : kInvalidGuid) << " started_at=" << ackedStart;
+	}
+	FillInfo(player, nowUnixSec, info);
+	return kSuccess;
+}
+
+void AfkPassSystem::OnHostingStarted(entt::entity player, uint64_t nowUnixSec)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return;
+	}
+	auto *profile = registry.try_get<PlayerUint64Comp>(player);
+	if (profile == nullptr)
+	{
+		return;
+	}
+	// 跨节点托管落点或排空疏散重建保留时,原会话尚未结束(started_at != 0 && ended_at == 0):沿用原起点与累计收益。
+	if (profile->hosted_recap_started_at() != 0 && profile->hosted_recap_ended_at() == 0)
+	{
+		return;
+	}
+	ClearHostedRecapFields(*profile);
+	profile->set_hosted_recap_started_at(nowUnixSec != 0 ? nowUnixSec : 1);
+	if (player_mutability::IsPlayerMutable(player))
+	{
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_hosting_recap_start");
+	}
+}
+
+void AfkPassSystem::RecordHostedBattleSettlement(entt::entity player, bool won, uint64_t expGained,
+												 uint64_t silverGained, uint32_t itemCount, uint64_t nowUnixSec)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return;
+	}
+	const auto *held = registry.try_get<PlayerConnectionLostComp>(player);
+	if (held == nullptr || !held->hostingStarted)
+	{
+		return; // 仅统计离线托管期间的真实战斗结算
+	}
+	auto *profile = registry.try_get<PlayerUint64Comp>(player);
+	if (profile == nullptr)
+	{
+		return;
+	}
+	if (profile->hosted_recap_started_at() == 0 || profile->hosted_recap_ended_at() != 0)
+	{
+		ClearHostedRecapFields(*profile);
+		profile->set_hosted_recap_started_at(nowUnixSec != 0 ? nowUnixSec : 1);
+	}
+	profile->set_hosted_recap_battle_count(SaturatingAdd<uint32_t>(profile->hosted_recap_battle_count(), 1));
+	if (won)
+	{
+		profile->set_hosted_recap_win_count(SaturatingAdd<uint32_t>(profile->hosted_recap_win_count(), 1));
+	}
+	profile->set_hosted_recap_exp_gained(SaturatingAdd<uint64_t>(profile->hosted_recap_exp_gained(), expGained));
+	profile->set_hosted_recap_silver_gained(
+		SaturatingAdd<uint64_t>(profile->hosted_recap_silver_gained(), silverGained));
+	profile->set_hosted_recap_item_count(SaturatingAdd<uint32_t>(profile->hosted_recap_item_count(), itemCount));
+}
+
+void AfkPassSystem::OnHostingEnded(entt::entity player, uint64_t nowUnixSec, bool requestSave)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return;
+	}
+	auto *profile = registry.try_get<PlayerUint64Comp>(player);
+	if (profile == nullptr || profile->hosted_recap_started_at() == 0 || profile->hosted_recap_ended_at() != 0)
+	{
+		return;
+	}
+	const uint64_t endedAt = std::max(nowUnixSec, profile->hosted_recap_started_at());
+	profile->set_hosted_recap_ended_at(endedAt);
+	profile->set_hosted_recap_pending_ack(true);
+	if (requestSave && player_mutability::IsPlayerMutable(player))
+	{
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_hosting_recap_end");
+	}
 }
 
 void AfkPassSystem::OnPlayerLoaded(entt::entity player, uint64_t nowUnixSec)

@@ -358,6 +358,25 @@ func (s *Service) confirmRankedPreset(ctx context.Context, caller uint64, in *te
 	return resp
 }
 
+// SetTeamFormation 队长切换跑图跟随队形(长蛇 / 雁行 / 五行);成功广播 FORMATION_CHANGED 并刷新全员 scene 跟随队形。
+func (s *Service) setTeamFormation(ctx context.Context, caller uint64, in *teampb.SetTeamFormationRequest) *teampb.TeamResponse {
+	if !IsValidFollowFormation(in.GetFormation()) {
+		return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
+	}
+	resp, _ := s.runMutate(ctx, caller, BindCaller(caller, in.GetExpectedTeamId()),
+		SetFormationOp(caller, in.GetFormation()),
+		mutateSpec{method: methodSetTeamFormation})
+	return resp
+}
+
+// RecallTeamMembers 队长一键召集队员归队(15 秒团队级冷却,按 SQL 时钟跨副本一致判定)。
+func (s *Service) recallTeamMembers(ctx context.Context, caller uint64, in *teampb.RecallTeamMembersRequest) *teampb.TeamResponse {
+	resp, _ := s.runMutate(ctx, caller, BindCaller(caller, in.GetExpectedTeamId()),
+		RecallMembersOp(caller),
+		mutateSpec{method: methodRecallTeamMembers})
+	return resp
+}
+
 // preflightMatch 逐成员只读预检(§E.1 第 5 步,按 roster 顺序,fail-closed)。
 // 返回 (tip, parameters[0])。顺序固定为会话 → 战斗锁 → 位置 → 票据,与 JoinQueue 同序。
 // 位置只判「人在不在场景」:它的 zone 是物理节点,不是归属,开战原件记的归属在 createLaunch 的路由锁内读。

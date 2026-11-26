@@ -4,7 +4,7 @@ PowerShell and shell scripts for common development tasks.
 
 ### 69项自由技能源表（2026-11-17）
 
-`skill_catalog.py plan --output <计划.json>` 生成完整69项和72条Buff的增量计划；`skill_catalog_xlsx.mjs <计划.json>` 使用现有 `@oai/artifact-tool` 依赖写入Skill/Buff/Pet目标格，通过 `skill_catalog_merge.py` 保留原OOXML包的非目标内容。`python tools/scripts/skill_catalog.py check` 校验正式目录、schema绑定、效果引用和宝宝资格。重复执行不重写相同内容；源文件改变或已有值不符会拒绝覆盖。完整命令、ID与首测参数见[首测参数文档](../../docs/design/skill-planning/first-test-parameters.md)，正式产物仍走项目统一导表入口。
+`skill_catalog.py plan --output <计划.json>` 生成完整69项和72条Buff的增量计划；`skill_catalog_xlsx.mjs <计划.json>` 使用现有 `@oai/artifact-tool` 依赖写入Skill/Buff/Pet目标格，通过 `skill_catalog_merge.py` 保留原OOXML包的非目标内容。`python tools/scripts/skill_catalog.py check` 校验正式目录、schema绑定、效果引用和宝宝资格。重复执行不重写相同内容；源文件改变或已有值不符会拒绝覆盖。完整命令、ID与首测参数见[首测参数文档](../../docs/planning/skill-planning/first-test-parameters.md)，正式产物仍走项目统一导表入口。
 
 ### R双区Mall/Gateway四副本（2026-11-02，待实际验收）
 
@@ -17,7 +17,7 @@ PowerShell and shell scripts for common development tasks.
 - `jarSha256`：本轮R构建的运行包SHA。固定路径为`java/mall_game/target/mall-game-0.1.0-SNAPSHOT.jar`及`java/gateway_node/target/gateway-node-0.0.1-SNAPSHOT.jar`。
 - Gateway额外必填`loginGrpcEndpoints`（如`990017=127.0.0.1:53000,990018=127.0.0.1:54000`，必须取本轮真实Go计划）、`redisEndpoint`、`etcdEndpoint`和`mallAdminUrl`；后两者仅显式`http://127.0.0.1:<端口>`根地址，商城端口必须属于同计划Mall。计划不写口令、DSN或签名密钥。
 
-先由Codex在资源槽中构建`go/data_service/cmd/writer_authority`，并在合法Authority测试夹具准备齐备后执行R reactor `mvn -f java/pom.xml -pl gateway_node,mall_game -am clean package`；Gateway需要JDK23及显式已核protoc。保留默认测试，不用`skipTests`。`AuthorityHikariTiDbTest`缺真实NORMAL夹具即失败；Mall真TiDB随机库用例还须逐库NORMAL授权，不能用一份外部grant或root写连接冒充。
+先由 Gemini 在资源槽中构建`go/data_service/cmd/writer_authority`，并在合法Authority测试夹具准备齐备后执行R reactor `mvn -f java/pom.xml -pl gateway_node,mall_game -am clean package`；Gateway需要JDK23及显式已核protoc。保留默认测试，不用`skipTests`。`AuthorityHikariTiDbTest`缺真实NORMAL夹具即失败；Mall真TiDB随机库用例还须逐库NORMAL授权，不能用一份外部grant或root写连接冒充。
 
 一次生成全部Go及四Java的目录，不能对每个zone/Java角色循环调用producer：
 
@@ -36,7 +36,7 @@ pwsh -NoProfile -File tools/scripts/start_game.ps1 -JavaOnly -JavaInstancePlanPa
 
 每实例先经`Get-SqlWriterBootEnvironment`，只给自身资格和固定私密文件helper，剥离Schema/registrar/maintenance控制环境，再以完整私有配置启动。每boot记录实际PID、创建FILETIME、JAR/Java SHA与端口；启动失败仅结束本批原句柄并保留尝试，不自动重试。监听就绪不是业务通过，之后仍须同轮双区业务与真实SQL故障恢复断言。玩家持久化实现没有因此修改，仍走SQL `player_store`，Redis只保留既有协调用途。
 
-受影响验证命令由Codex在源码稳定后执行：`tools/scripts/tests/sql_boot_catalog_local.tests.ps1`、`sql_boot_catalog_java.tests.ps1`、`start_game_java.tests.ps1`；Go在`go/data_service`执行`go test -count=1 ./cmd/writer_authority`。新增脚本以无功能假产物和启动替身检查合同，不执行JVM、SQL或容器。本文是接线与待执行口径，不宣称这些命令已经通过。
+受影响验证命令由 Gemini 在源码稳定后执行：`tools/scripts/tests/sql_boot_catalog_local.tests.ps1`、`sql_boot_catalog_java.tests.ps1`、`start_game_java.tests.ps1`；Go在`go/data_service`执行`go test -count=1 ./cmd/writer_authority`。新增脚本以无功能假产物和启动替身检查合同，不执行JVM、SQL或容器。本文是接线与待执行口径，不宣称这些命令已经通过。
 
 ## Directory Rules
 

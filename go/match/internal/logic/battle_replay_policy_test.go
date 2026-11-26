@@ -22,6 +22,8 @@ func TestRecordReplayOnlyPVP(t *testing.T) {
 		matchpb.MatchMode_MATCH_MODE_5V5:           true,
 		matchpb.MatchMode_MATCH_MODE_PVP_TEAM:      true,
 		matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:      true,
+		matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP:     true,
+		matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE:   false,
 		matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT: true,
 		matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:     true,
 		matchpb.MatchMode_MATCH_MODE_3V3:           true,

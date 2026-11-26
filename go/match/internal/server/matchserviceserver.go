@@ -189,3 +189,45 @@ func (s *MatchServiceServer) CheerTournamentSquad(ctx context.Context, in *match
 func (s *MatchServiceServer) ClaimTournamentReward(ctx context.Context, in *matchpb.ClaimTournamentRewardRequest) (*matchpb.ClaimTournamentRewardResponse, error) {
 	return logic.NewTournamentLogic(ctx, s.svcCtx).ClaimTournamentReward(in)
 }
+
+// ---- 全服赛季战队锦标赛《群仙问道赛》V2(506..508) ----
+
+func (s *MatchServiceServer) SaluteTournamentChampion(ctx context.Context, in *matchpb.SaluteTournamentChampionRequest) (*matchpb.SaluteTournamentChampionResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).SaluteTournamentChampion(in)
+}
+
+func (s *MatchServiceServer) SendTournamentSpectateCheer(ctx context.Context, in *matchpb.SendTournamentSpectateCheerRequest) (*matchpb.SendTournamentSpectateCheerResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).SendTournamentSpectateCheer(in)
+}
+
+func (s *MatchServiceServer) GetTournamentSpectateCheer(ctx context.Context, in *matchpb.GetTournamentSpectateCheerRequest) (*matchpb.GetTournamentSpectateCheerResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).GetTournamentSpectateCheer(in)
+}
+
+// ---- 全服赛季战队锦标赛《群仙问道赛》V3 ----
+
+func (s *MatchServiceServer) UpdateTournamentSquadEmblem(ctx context.Context, in *matchpb.UpdateTournamentSquadEmblemRequest) (*matchpb.UpdateTournamentSquadEmblemResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).UpdateTournamentSquadEmblem(in)
+}
+
+func (s *MatchServiceServer) StartTournamentWarmup(ctx context.Context, in *matchpb.StartTournamentWarmupRequest) (*matchpb.StartTournamentWarmupResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).StartTournamentWarmup(in)
+}
+
+func (s *MatchServiceServer) PredictTournamentMatch(ctx context.Context, in *matchpb.PredictTournamentMatchRequest) (*matchpb.PredictTournamentMatchResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).PredictTournamentMatch(in)
+}
+
+func (s *MatchServiceServer) GetTournamentPredictionBoard(ctx context.Context, in *matchpb.GetTournamentPredictionBoardRequest) (*matchpb.GetTournamentPredictionBoardResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).GetTournamentPredictionBoard(in)
+}
+
+// ---- 全服赛季战队锦标赛《群仙问道赛》V4 ----
+
+func (s *MatchServiceServer) BanTournamentLeyline(ctx context.Context, in *matchpb.BanTournamentLeylineRequest) (*matchpb.BanTournamentLeylineResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).BanTournamentLeyline(in)
+}
+
+func (s *MatchServiceServer) GetTournamentHighlights(ctx context.Context, in *matchpb.GetTournamentHighlightsRequest) (*matchpb.GetTournamentHighlightsResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).GetTournamentHighlights(in)
+}

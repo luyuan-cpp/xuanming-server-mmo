@@ -1,4 +1,4 @@
-# 在线身份简化第 1 批：Codex 执行清单（2026-11-06）
+# 在线身份简化第 1 批：Gemini 执行清单（2026-11-06）
 
 本批由 Claude 改代码，**未编译、未运行任何测试**（只对改动文件跑过 `gofmt -l`，无输出）。设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.2，计划见同目录 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`（已清理，见 `ccf2840b2`）。
 
@@ -221,7 +221,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
      - `go/shared/generated/clientrpc/methods.go` 无差异。
      - 其它新差异按第 1 节的口径处理。
 
-2. **客户端**（`../mmorpg-client`，代码 2026-11-11 已由 Claude 改好，Codex 只生成、编译、测试，不再改代码）：
+2. **客户端**（`../mmorpg-client`，代码 2026-11-11 已由 Claude 改好，Gemini 只生成、编译、测试，不再改代码）：
    - 第 1 步按默认配置生成后，在客户端仓跑 `tools/client_compile_check.ps1`，应无错误。
    - Unity EditMode：`MmorpgClient.Tests.EditMode.Net.GameClientReconnectTests` 全类（新增 `RecoveryRetriesPastAStoppedGateWithinTheBudget`、`DefinitiveAssignGateResultEndsRecoveryWithoutRetry`，原有用例不应变化）与 `MmorpgClient.Tests.EditMode.Guild` 全部（`GuildUiTests.ZoneAndNameRejectionsKeepTheEmptyStateWithReadableMessages` 已改为不带区）。有本机栈时跑 PlayMode GuildNetwork 冒烟（`MMORPG_GUILD_SMOKE_ZONE` 照旧）。
    - 改动文件：`Assets/Scripts/Game/Guild/GuildClient.cs`（帮会榜 / 建帮不带区与身份，公告去 `PlayerId`；退帮、解散、任免、踢人、转让带 `ExpectedGuildId`，退帮与解散被拒走 `AcceptWrite` 排队重拉）、`Assets/Scripts/UI/Ugui/Guild/GuildUiRoot.cs`、`Assets/Scripts/Game/GameClient.cs`（`ConnectAndEnter` 记录本连接 gate 已接受票据）、`Assets/Scripts/Game/GameClient.Reconnect.cs`（gate 断线重连在 20 秒期限内对还没连上新 gate 的暂时故障退避重试）、`Assets/Tests/EditMode/Guild/GuildUiTests.cs`、`Assets/Tests/PlayMode/GuildNetwork/GuildEconomyNetworkSmokeTests.cs`（只改第 112 行）、`Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`。`GuildClient.cs` 与两份帮会测试里另有「帮会恢复结论」会话未提交的改动，不属本批；失败时按这份清单判归属。
@@ -678,7 +678,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 - **2026-11-19 核对（Claude，只读）**：第 9～11 节的代码都已随 11-13～11-18 的快照提交进 main。
   - 第 10 节第 1 步的生成已经有人做过：`go/proto/login` 有 `RenewSession`，`cpp/generated` 有 `ClientPlayerLoginRenewSessionMessageId`，login 的 goctl 包装 `clientplayerloginserver.go` 已把 `RenewSession` 接到 `NewRenewSessionLogic`，`RequestGateMigration` 也接上了。
   - 11-18 的 Docker 全量重建 `build/verification/docker-rebuild-all-20261118T082435.788540Z/` 里 C++、Go、Java 三段都退出 0，gate 的链接行含 `login_session_renewal.cpp.o`。这一轮失败在之后的运行时核对（gateway 的挂载变了），与本清单无关。
-  - 所以编译这一项在 Linux 上有证据；**测试一个都没跑**（Go 单测、`routing_identity_test`、两份 ps1 契约测试、kind 实测）。Windows 的 `msbuild /m:1` 整解也没有证据。Codex 从第 10 节第 2 步与第 11 节第 2 步往下做即可，第 1 步只需重跑一次生成确认没有差异。
+  - 所以编译这一项在 Linux 上有证据；**测试一个都没跑**（Go 单测、`routing_identity_test`、两份 ps1 契约测试、kind 实测）。Windows 的 `msbuild /m:1` 整解也没有证据。Gemini 从第 10 节第 2 步与第 11 节第 2 步往下做即可，第 1 步只需重跑一次生成确认没有差异。
 
 - 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批、第 9 节的 §7 批 1（Ed25519 签名），第 10 节的 §7 批 2～4 与读路径归属预检，还是第 11 节的残余收尾。第 11 节不改协议、不改 C++，跟着第 10 节的 Go 与部署脚本步骤一起跑，另有一步 kind 实测。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。第 10 节改了 `login.proto`，要先生成并跑 `go/build.ps1`，再整解重编 C++；第 9、10 两节可以合在一次生成与一次整解里验证。
 - 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。（2026-11-11 补注：`proto/guild/guild_db.proto` 加了 `GuildRecord.score_version = 12`，所以 `cpp/generated/proto/guild/guild_db.pb.{h,cc}` 与 `go/proto/guild/guild_db.pb.go` 的差异也是预期的，见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）

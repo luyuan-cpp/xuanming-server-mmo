@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "243c1949baf529dc"
+const SchemaDigest = "55d900397a301fa1"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -33,6 +33,10 @@ var hotReloadableTables = map[string]bool{
 	"Skill": true,
 	"SkillPermission": true,
 	"SkillScrollCraft": true,
+	"SpiritShopGoods": true,
+	"SpiritShopLimitGroup": true,
+	"TravelPassSeason": true,
+	"TravelPassTier": true,
 	"TrialJournalEntry": true,
 	"TrialJournalMilestone": true,
 	"TrialJournalSeal": true,
@@ -89,6 +93,7 @@ var allTableNames = []string{
 	"MysteryMerchantRule",
 	"MysteryMerchantSpot",
 	"Pet",
+	"PetCosmetic",
 	"PetEntry",
 	"PetRule",
 	"PetTier",
@@ -102,10 +107,15 @@ var allTableNames = []string{
 	"Skill",
 	"SkillPermission",
 	"SkillScrollCraft",
+	"SkillVfxCosmetic",
+	"SpiritShopGoods",
+	"SpiritShopLimitGroup",
 	"Test",
 	"TestMultiKey",
 	"TournamentReward",
 	"TournamentRule",
+	"TravelPassSeason",
+	"TravelPassTier",
 	"TrialJournalEntry",
 	"TrialJournalMilestone",
 	"TrialJournalSeal",
@@ -187,6 +197,7 @@ type TableSet struct {
 	MysteryMerchantRule *MysteryMerchantRuleTableManager
 	MysteryMerchantSpot *MysteryMerchantSpotTableManager
 	Pet *PetTableManager
+	PetCosmetic *PetCosmeticTableManager
 	PetEntry *PetEntryTableManager
 	PetRule *PetRuleTableManager
 	PetTier *PetTierTableManager
@@ -200,10 +211,15 @@ type TableSet struct {
 	Skill *SkillTableManager
 	SkillPermission *SkillPermissionTableManager
 	SkillScrollCraft *SkillScrollCraftTableManager
+	SkillVfxCosmetic *SkillVfxCosmeticTableManager
+	SpiritShopGoods *SpiritShopGoodsTableManager
+	SpiritShopLimitGroup *SpiritShopLimitGroupTableManager
 	Test *TestTableManager
 	TestMultiKey *TestMultiKeyTableManager
 	TournamentReward *TournamentRewardTableManager
 	TournamentRule *TournamentRuleTableManager
+	TravelPassSeason *TravelPassSeasonTableManager
+	TravelPassTier *TravelPassTierTableManager
 	TrialJournalEntry *TrialJournalEntryTableManager
 	TrialJournalMilestone *TrialJournalMilestoneTableManager
 	TrialJournalSeal *TrialJournalSealTableManager
@@ -281,6 +297,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		MysteryMerchantRule: NewMysteryMerchantRuleTableManager(),
 		MysteryMerchantSpot: NewMysteryMerchantSpotTableManager(),
 		Pet: NewPetTableManager(),
+		PetCosmetic: NewPetCosmeticTableManager(),
 		PetEntry: NewPetEntryTableManager(),
 		PetRule: NewPetRuleTableManager(),
 		PetTier: NewPetTierTableManager(),
@@ -294,10 +311,15 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		Skill: NewSkillTableManager(),
 		SkillPermission: NewSkillPermissionTableManager(),
 		SkillScrollCraft: NewSkillScrollCraftTableManager(),
+		SkillVfxCosmetic: NewSkillVfxCosmeticTableManager(),
+		SpiritShopGoods: NewSpiritShopGoodsTableManager(),
+		SpiritShopLimitGroup: NewSpiritShopLimitGroupTableManager(),
 		Test: NewTestTableManager(),
 		TestMultiKey: NewTestMultiKeyTableManager(),
 		TournamentReward: NewTournamentRewardTableManager(),
 		TournamentRule: NewTournamentRuleTableManager(),
+		TravelPassSeason: NewTravelPassSeasonTableManager(),
+		TravelPassTier: NewTravelPassTierTableManager(),
 		TrialJournalEntry: NewTrialJournalEntryTableManager(),
 		TrialJournalMilestone: NewTrialJournalMilestoneTableManager(),
 		TrialJournalSeal: NewTrialJournalSealTableManager(),
@@ -454,6 +476,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	if err := ts.Pet.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Pet table failed: %w", err)
 	}
+	if err := ts.PetCosmetic.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare PetCosmetic table failed: %w", err)
+	}
 	if err := ts.PetEntry.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare PetEntry table failed: %w", err)
 	}
@@ -493,6 +518,15 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	if err := ts.SkillScrollCraft.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare SkillScrollCraft table failed: %w", err)
 	}
+	if err := ts.SkillVfxCosmetic.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SkillVfxCosmetic table failed: %w", err)
+	}
+	if err := ts.SpiritShopGoods.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SpiritShopGoods table failed: %w", err)
+	}
+	if err := ts.SpiritShopLimitGroup.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SpiritShopLimitGroup table failed: %w", err)
+	}
 	if err := ts.Test.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Test table failed: %w", err)
 	}
@@ -504,6 +538,12 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.TournamentRule.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare TournamentRule table failed: %w", err)
+	}
+	if err := ts.TravelPassSeason.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TravelPassSeason table failed: %w", err)
+	}
+	if err := ts.TravelPassTier.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TravelPassTier table failed: %w", err)
 	}
 	if err := ts.TrialJournalEntry.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare TrialJournalEntry table failed: %w", err)
@@ -680,6 +720,9 @@ func Commit(ts *TableSet) {
 	if ts.Pet != nil {
 		PetTableManagerInstance.swapSnapshot(ts.Pet.snap.Load())
 	}
+	if ts.PetCosmetic != nil {
+		PetCosmeticTableManagerInstance.swapSnapshot(ts.PetCosmetic.snap.Load())
+	}
 	if ts.PetEntry != nil {
 		PetEntryTableManagerInstance.swapSnapshot(ts.PetEntry.snap.Load())
 	}
@@ -719,6 +762,15 @@ func Commit(ts *TableSet) {
 	if ts.SkillScrollCraft != nil {
 		SkillScrollCraftTableManagerInstance.swapSnapshot(ts.SkillScrollCraft.snap.Load())
 	}
+	if ts.SkillVfxCosmetic != nil {
+		SkillVfxCosmeticTableManagerInstance.swapSnapshot(ts.SkillVfxCosmetic.snap.Load())
+	}
+	if ts.SpiritShopGoods != nil {
+		SpiritShopGoodsTableManagerInstance.swapSnapshot(ts.SpiritShopGoods.snap.Load())
+	}
+	if ts.SpiritShopLimitGroup != nil {
+		SpiritShopLimitGroupTableManagerInstance.swapSnapshot(ts.SpiritShopLimitGroup.snap.Load())
+	}
 	if ts.Test != nil {
 		TestTableManagerInstance.swapSnapshot(ts.Test.snap.Load())
 	}
@@ -730,6 +782,12 @@ func Commit(ts *TableSet) {
 	}
 	if ts.TournamentRule != nil {
 		TournamentRuleTableManagerInstance.swapSnapshot(ts.TournamentRule.snap.Load())
+	}
+	if ts.TravelPassSeason != nil {
+		TravelPassSeasonTableManagerInstance.swapSnapshot(ts.TravelPassSeason.snap.Load())
+	}
+	if ts.TravelPassTier != nil {
+		TravelPassTierTableManagerInstance.swapSnapshot(ts.TravelPassTier.snap.Load())
 	}
 	if ts.TrialJournalEntry != nil {
 		TrialJournalEntryTableManagerInstance.swapSnapshot(ts.TrialJournalEntry.snap.Load())
@@ -840,6 +898,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		MysteryMerchantRule: NewMysteryMerchantRuleTableManager(),
 		MysteryMerchantSpot: NewMysteryMerchantSpotTableManager(),
 		Pet: NewPetTableManager(),
+		PetCosmetic: NewPetCosmeticTableManager(),
 		PetEntry: NewPetEntryTableManager(),
 		PetRule: NewPetRuleTableManager(),
 		PetTier: NewPetTierTableManager(),
@@ -853,10 +912,15 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		Skill: NewSkillTableManager(),
 		SkillPermission: NewSkillPermissionTableManager(),
 		SkillScrollCraft: NewSkillScrollCraftTableManager(),
+		SkillVfxCosmetic: NewSkillVfxCosmeticTableManager(),
+		SpiritShopGoods: NewSpiritShopGoodsTableManager(),
+		SpiritShopLimitGroup: NewSpiritShopLimitGroupTableManager(),
 		Test: NewTestTableManager(),
 		TestMultiKey: NewTestMultiKeyTableManager(),
 		TournamentReward: NewTournamentRewardTableManager(),
 		TournamentRule: NewTournamentRuleTableManager(),
+		TravelPassSeason: NewTravelPassSeasonTableManager(),
+		TravelPassTier: NewTravelPassTierTableManager(),
 		TrialJournalEntry: NewTrialJournalEntryTableManager(),
 		TrialJournalMilestone: NewTrialJournalMilestoneTableManager(),
 		TrialJournalSeal: NewTrialJournalSealTableManager(),
@@ -864,7 +928,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(72)
+	wg.Add(78)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1167,6 +1231,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 	}()
 	go func() {
 		defer wg.Done()
+		if err := ts.PetCosmetic.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load PetCosmetic table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
 		if err := ts.PetEntry.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load PetEntry table: %v", err)
 		}
@@ -1245,6 +1315,24 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 	}()
 	go func() {
 		defer wg.Done()
+		if err := ts.SkillVfxCosmetic.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SkillVfxCosmetic table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.SpiritShopGoods.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SpiritShopGoods table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.SpiritShopLimitGroup.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SpiritShopLimitGroup table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
 		if err := ts.Test.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load Test table: %v", err)
 		}
@@ -1265,6 +1353,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.TournamentRule.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load TournamentRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TravelPassSeason.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TravelPassSeason table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TravelPassTier.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TravelPassTier table: %v", err)
 		}
 	}()
 	go func() {

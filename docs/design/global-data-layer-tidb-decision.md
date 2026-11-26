@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS `player_database` (
 - `sql_mode=STRICT_TRANS_TABLES` 连接参数: TiDB 完全支持且本就在其默认 sql_mode 里,保留现有代码不变(防 blob 静默截断的语义在 TiDB 下同样成立)。
 
 > **2026-10-15 修订(负责人 2026-10-13 拍板「④ 先做并修订 D5」;第 1 条措辞按 S1 修订稿（原 `docs/handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md`，已清理，见 `ccf2840b2`） §8 定稿,2026-10-17 写入本文)**
-> 状态:④ 与 WAITAOF 已落码,未编译、未测试,待 Codex 验证。验证与上线项见 [上线待做](../ops/godb-pipeline-launch-todo.md) §9。
+> 状态:④ 与 WAITAOF 已落码,未编译、未测试,待 Gemini 验证。验证与上线项见 [上线待做](../ops/godb-pipeline-launch-todo.md) §9。
 > 1. 「retry/dead 队列全不动」改为允许两项改动:④ 重试只交给分区属主(新增键族 `kafka:retry:queue:{topic}:p{N}`,开关 `ServerConfig.Kafka.RetryRouting`,见 [db-retry-owner-routing.md](./db-retry-owner-routing.md))与重试 / 死信 / 毒消息入队补 WAITAOF(`ServerConfig.RedisClient.WaitAOF*`)。两项随同一个 S1 镜像发布,S1 整体作为一个**独立发布单元**,不得与 TiDB Phase 1 任何迁移批次同窗口,也不得在同一次滚动里发布;两项的开关与指标各自独立,出问题时按 `db_retry_route_total` / `db_durable_enqueue_*` 归因。
 >    - 开关:④ 是 `RetryRouting`(`shared` | `owner`,缺省 `shared`;环境变量 `DB_RETRY_ROUTING` 优先,只用于单 zone 金丝雀);WAITAOF 是 `WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`(代码缺省 1 / 0 / 1500,两个份数都写 0 才关闭)。取值只在启动时读:K8s 上只改 ConfigMap 不会滚动 go/db,改值后必须 `rollout restart statefulset/db`。
 >    - 不拆成「先 0/0 发镜像、再开 1/0」两步:ConfigMap 由契约测试强制镜像 `go/db/etc/db.yaml`,拆步要改两次配置、多一次发布;S2 之前每多一次滚动就多一轮全服 eager 再平衡;第 2 步 ④ 处于 `shared`,行为基本等于今天,WAITAOF 的影响能单独从 `db_durable_enqueue_*` 看出来。
@@ -238,8 +238,8 @@ TiDB 方言在 proto2mysql 侧新增表选项(生成 §D3 的 DDL 形态):
 
 **Phase 1(按依赖顺序)**:
 
-1. proto2mysql: TiDB 方言表选项 + 单测(库仓库,`main` 分支) — **已完成**(commit `2aca007` 已推送 main;`go test` 待 Codex)
-2. proto2mysql: 打 tag(旧世系 v0.0.18 已断,新版从 v0.1.0 起) — **已完成**(Codex 测试绿后,`v0.1.0` 已打在 `2aca007` 并推送远端。注意:仓库实际已迁至 `github.com/luyuan-cpp/proto2mysql`,module 路径仍声明旧名 `luyuancpp`,靠 GitHub 重定向工作——一旦旧用户名被抢注,go get 链路即断,建议后续统一 module 路径)。**2026-09-15 更正**:Go 代理与 sumdb 永久缓存的 `v0.1.0` 是 `9ad991c`(07-29 首次缓存),tag 之后才被移到 `2aca007`,缓存不可改——任何 require `v0.1.0` 的 module 都拿不到 TiDB 选项。版本口径改为不可变的 ≥ `v0.1.1`(D-14 第 7 条)
+1. proto2mysql: TiDB 方言表选项 + 单测(库仓库,`main` 分支) — **已完成**(commit `2aca007` 已推送 main;`go test` 待 Gemini)
+2. proto2mysql: 打 tag(旧世系 v0.0.18 已断,新版从 v0.1.0 起) — **已完成**(Gemini 测试绿后,`v0.1.0` 已打在 `2aca007` 并推送远端。注意:仓库实际已迁至 `github.com/luyuan-cpp/proto2mysql`,module 路径仍声明旧名 `luyuancpp`,靠 GitHub 重定向工作——一旦旧用户名被抢注,go get 链路即断,建议后续统一 module 路径)。**2026-09-15 更正**:Go 代理与 sumdb 永久缓存的 `v0.1.0` 是 `9ad991c`(07-29 首次缓存),tag 之后才被移到 `2aca007`,缓存不可改——任何 require `v0.1.0` 的 module 都拿不到 TiDB 选项。版本口径改为不可变的 ≥ `v0.1.1`(D-14 第 7 条)
 3. go/db: 升级依赖 + `NewDB` 迁移 + 逐表 `table_name` 锁定 + 玩家表加 TiDB 方言 option(proto 侧) — **代码已落,2026-08-16/17 编译、单测、起服冒烟通过;但 TiDB 选项在服务产出的 DDL 里并未生效**(2026-09-15 更正:当时 go/db 经代理拉到的 `v0.1.0` 实为 `9ad991c`,不含 TiDB 选项;08-17 的 TiDB 真集群验证用的是手写 DDL,只证明了方言语法,没有证明服务产出。现状:go/db 以 replace 指向本机 proto2mysql 分支 `f3b308f`(含 TiDB 选项 + 字符串主键 VARCHAR(191) 修复),data_service 仍在 `9ad991c`;收口 = 主键修复进不可变 tag 后各 module 统一 require,由人执行,见 xuanming-port-decisions-20260910.md D-14 遗留。原始记录见 PROGRESS.md 2026-08-15 续二):`NewDB` 迁移 + 启动期表名守卫(`assertTableNameLocked`,风险 #3 兜底);表名锁定由既有 `OptionTableName`(与新版选项同号 500001,库按字段号读取)天然满足,守卫防回归;proto 侧 5 表加 TiDB 选项(player_database / player_database_1 / player_centre_database / player_snapshot / rollback_audit_log);另按 §D3 同理覆盖 data_service 裸 DDL 3 表(player_snapshot / rollback_audit_log / **transaction_log**——tx_id 雪花主键、全服最高频追加写,虽未在 §D3 点名但同属其处方范围)
 4. deploy: TiDB 集群清单(docker-compose dev / k8s prod)+ §D4 配置;`CREATE DATABASE` 权限策略重议 — **dev 已落**(`deploy/docker-compose.tidb.yml` + `deploy/tidb-config/`,与 MySQL 并存可回退);k8s prod 清单与权限策略未做
 5. 迁移工具: 开发环境直接重建;有存量数据的环境用 Dumpling + Lightning(逻辑库对逻辑库)

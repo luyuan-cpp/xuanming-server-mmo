@@ -266,11 +266,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      29, 248,  // max_field_number, fast_idx_mask
+      30, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      3758096384,  // skipmap
+      3221225472,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      29,  // num_field_entries
+      30,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -397,7 +397,10 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {::_pbi::TcParser::FastV32S2,
        {488, 28, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_bonus_fragments_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 travel_pass_claimed_count = 30;
+      {::_pbi::TcParser::FastV32S2,
+       {496, 29, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.travel_pass_claimed_count_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -460,6 +463,8 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_craft_revision_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 scroll_bonus_fragments = 29;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_bonus_fragments_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 travel_pass_claimed_count = 30;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.travel_pass_claimed_count_), _Internal::kHasBitsOffset + 29, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -502,7 +507,8 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         crafted_skill_book_id_{::uint64_t{0u}},
         scroll_craft_revision_{::uint64_t{0u}},
         crafted_skill_table_id_{0u},
-        scroll_bonus_fragments_{0u} {}
+        scroll_bonus_fragments_{0u},
+        travel_pass_claimed_count_{0u} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -782,7 +788,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        32, // hasbit index offset
+        33, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -812,6 +818,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.crafted_skill_table_id_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.scroll_craft_revision_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.scroll_bonus_fragments_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.travel_pass_claimed_count_),
         1,
         3,
         0,
@@ -841,6 +848,7 @@ const ::uint32_t
         27,
         26,
         28,
+        29,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         14, // hasbit index offset
@@ -882,8 +890,8 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {61, sizeof(::EquipmentMaterialRewardLedger)},
-        {86, sizeof(::ClientRequestLedgerComp)},
+        {63, sizeof(::EquipmentMaterialRewardLedger)},
+        {88, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -894,7 +902,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\352\006\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\215\007\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -916,26 +924,27 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "ty\030\031 \001(\010\022\035\n\025crafted_skill_book_id\030\032 \001(\004\022"
     "\036\n\026crafted_skill_table_id\030\033 \001(\r\022\035\n\025scrol"
     "l_craft_revision\030\034 \001(\004\022\036\n\026scroll_bonus_f"
-    "ragments\030\035 \001(\r\"\304\002\n\035EquipmentMaterialRewa"
-    "rdLedger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014ea"
-    "rned_today\030\002 \001(\r\022\027\n\017available_units\030\003 \001("
-    "\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetime_earned\030\005"
-    " \001(\r\022\035\n\025tradable_earned_total\030\006 \001(\r\022 \n\030a"
-    "vailable_tradable_units\030\007 \001(\004\022\031\n\021week_st"
-    "arts_at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001"
-    "(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n\031stage1_tra"
-    "dable_confirmed\030\013 \001(\r\"\243\001\n\027ClientRequestL"
-    "edgerComp\022%\n\007records\030\001 \003(\0132\024.ClientReque"
-    "stRecord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revi"
-    "sion\030\003 \001(\004\0227\n\017material_reward\030\004 \001(\0132\036.Eq"
-    "uipmentMaterialRewardLedgerB\022Z\020common/co"
-    "mponentb\006proto3"
+    "ragments\030\035 \001(\r\022!\n\031travel_pass_claimed_co"
+    "unt\030\036 \001(\r\"\304\002\n\035EquipmentMaterialRewardLed"
+    "ger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014earned_"
+    "today\030\002 \001(\r\022\027\n\017available_units\030\003 \001(\004\022\020\n\010"
+    "revision\030\004 \001(\004\022\027\n\017lifetime_earned\030\005 \001(\r\022"
+    "\035\n\025tradable_earned_total\030\006 \001(\r\022 \n\030availa"
+    "ble_tradable_units\030\007 \001(\004\022\031\n\021week_starts_"
+    "at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001(\r\022\026\n"
+    "\016migrated_to_v2\030\n \001(\010\022!\n\031stage1_tradable"
+    "_confirmed\030\013 \001(\r\"\243\001\n\027ClientRequestLedger"
+    "Comp\022%\n\007records\030\001 \003(\0132\024.ClientRequestRec"
+    "ord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revision\030"
+    "\003 \001(\004\0227\n\017material_reward\030\004 \001(\0132\036.Equipme"
+    "ntMaterialRewardLedgerB\022Z\020common/compone"
+    "ntb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    1455,
+    1490,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -985,9 +994,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, scroll_bonus_fragments_) -
+           offsetof(Impl_, travel_pass_claimed_count_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::scroll_bonus_fragments_));
+               sizeof(Impl_::travel_pass_claimed_count_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -1002,9 +1011,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, scroll_bonus_fragments_) -
+           offsetof(Impl_, travel_pass_claimed_count_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::scroll_bonus_fragments_));
+               sizeof(Impl_::travel_pass_claimed_count_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -1073,10 +1082,10 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.equipment_quality_tier_) -
         reinterpret_cast<char*>(&_impl_.trial_milestone_sand_count_)) + sizeof(_impl_.equipment_quality_tier_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x3f000000U)) {
     ::memset(&_impl_.equipment_polish_pity_count_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.scroll_bonus_fragments_) -
-        reinterpret_cast<char*>(&_impl_.equipment_polish_pity_count_)) + sizeof(_impl_.scroll_bonus_fragments_));
+        reinterpret_cast<char*>(&_impl_.travel_pass_claimed_count_) -
+        reinterpret_cast<char*>(&_impl_.equipment_polish_pity_count_)) + sizeof(_impl_.travel_pass_claimed_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1361,6 +1370,15 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint32 travel_pass_claimed_count = 30;
+  if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+    if (this_._internal_travel_pass_claimed_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          30, this_._internal_travel_pass_claimed_count(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1558,7 +1576,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x3f000000U)) {
     // uint32 equipment_polish_pity_count = 24;
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_equipment_polish_pity_count() != 0) {
@@ -1592,6 +1610,13 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       if (this_._internal_scroll_bonus_fragments() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_scroll_bonus_fragments());
+      }
+    }
+    // uint32 travel_pass_claimed_count = 30;
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      if (this_._internal_travel_pass_claimed_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_travel_pass_claimed_count());
       }
     }
   }
@@ -1742,7 +1767,7 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x3f000000U)) {
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_equipment_polish_pity_count() != 0) {
         _this->_impl_.equipment_polish_pity_count_ = from._impl_.equipment_polish_pity_count_;
@@ -1768,6 +1793,11 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.scroll_bonus_fragments_ = from._impl_.scroll_bonus_fragments_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      if (from._internal_travel_pass_claimed_count() != 0) {
+        _this->_impl_.travel_pass_claimed_count_ = from._impl_.travel_pass_claimed_count_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1790,8 +1820,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_bonus_fragments_)
-      + sizeof(ClientRequestRecord::_impl_.scroll_bonus_fragments_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.travel_pass_claimed_count_)
+      + sizeof(ClientRequestRecord::_impl_.travel_pass_claimed_count_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));

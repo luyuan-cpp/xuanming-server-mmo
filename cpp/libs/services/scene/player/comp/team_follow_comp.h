@@ -49,6 +49,13 @@ struct TeamFollowJoinSeqComp
 	uint32_t joinSeq{0};
 };
 
+// 最近一次从组队权威读到的本队跑图队形样式(挂在队长身上,跨场景 / 重建队形保持一致)。
+// 写:PlayerTeamSystem 刷新成员关系时写入;读:TeamFollowSystem(建队形与热切样式)。缺失按长蛇纵队处理。
+struct TeamFollowStyleComp
+{
+	TeamFollowStyle style{TeamFollowStyle::kColumn};
+};
+
 // 队形因"队长离开本节点"(交接、退出、实体没了)解散后,原随从在等队长的去留有结论(team-follow-server-trail.md §3.7)。
 // 有结论 = 队长实体已不在本节点(交接放行 / 退出完成,location 已指向新落点或已删)、或队长不再处于离开中(交接作废、
 // 原地解冻);那时 PlayerTeamSystem 对他重新走一遍跟随检查 —— 队长去了本 zone 的别的节点就跟过去。

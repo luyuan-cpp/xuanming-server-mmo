@@ -1597,12 +1597,12 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(player_database, _impl_._has_bits_),
       0, // no _extensions_
-      33, 248,  // max_field_number, fast_idx_mask
+      35, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       459264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      29,  // num_field_entries
-      27,  // num_aux_entries
+      31,  // num_field_entries
+      29,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1613,8 +1613,8 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database, _impl_.player_id_), 27>(),
-       {8, 27, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database, _impl_.player_id_), 29>(),
+       {8, 29, 0,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_)}},
       // .Transform transform = 2 [(.OptionPersistGroup) = 9];
       {::_pbi::TcParser::FastMtS1,
@@ -1677,15 +1677,21 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       {::_pbi::TcParser::FastMtS2,
        {650, 26, 26,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.festival_beast_component_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .PlayerSpiritShopComp spirit_shop = 34 [(.OptionPersistGroup) = 7];
+      {::_pbi::TcParser::FastMtS2,
+       {658, 27, 27,
+        PROTOBUF_FIELD_OFFSET(player_database, _impl_.spirit_shop_)}},
+      // .PlayerTravelPassComp travel_pass = 35 [(.OptionPersistGroup) = 7];
+      {::_pbi::TcParser::FastMtS2,
+       {666, 28, 28,
+        PROTOBUF_FIELD_OFFSET(player_database, _impl_.travel_pass_)}},
       // .PlayerInboxLedgerComp inbox_ledger = 20 [(.OptionPersistGroup) = 7];
       {::_pbi::TcParser::FastMtS2,
        {418, 15, 14,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.inbox_ledger_)}},
       // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
       {::_pbi::TcParser::FastV32S2,
-       {424, 28, 0,
+       {424, 30, 0,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_)}},
       // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
       {::_pbi::TcParser::FastMtS2,
@@ -1729,11 +1735,11 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.trial_journal_component_)}},
     }}, {{
       33, 0, 1,
-      65534, 28,
+      65528, 28,
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_), _Internal::kHasBitsOffset + 29, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .Transform transform = 2 [(.OptionPersistGroup) = 9];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.transform_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerUint64Comp uint64_pb_component = 3 [(.OptionPersistGroup) = 4];
@@ -1765,7 +1771,7 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       // .PlayerInboxLedgerComp inbox_ledger = 20 [(.OptionPersistGroup) = 7];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.inbox_ledger_), _Internal::kHasBitsOffset + 15, 14, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 30, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.mystery_merchant_), _Internal::kHasBitsOffset + 16, 15, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerBattleResultComp battle_results = 23 [(.OptionPersistGroup) = 4];
@@ -1790,6 +1796,10 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.craft_component_), _Internal::kHasBitsOffset + 25, 25, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerFestivalBeastComp festival_beast_component = 33 [(.OptionPersistGroup) = 3];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.festival_beast_component_), _Internal::kHasBitsOffset + 26, 26, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .PlayerSpiritShopComp spirit_shop = 34 [(.OptionPersistGroup) = 7];
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.spirit_shop_), _Internal::kHasBitsOffset + 27, 27, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .PlayerTravelPassComp travel_pass = 35 [(.OptionPersistGroup) = 7];
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.travel_pass_), _Internal::kHasBitsOffset + 28, 28, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1927,6 +1937,16 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PlayerFestivalBeastComp_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PlayerSpiritShopComp>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PlayerSpiritShopComp_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PlayerTravelPassComp>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PlayerTravelPassComp_globals_},
+        #endif
     }},
     {{
     }},
@@ -1969,6 +1989,8 @@ inline constexpr player_database::Impl_::Impl_(
         trial_journal_component_{nullptr},
         craft_component_{nullptr},
         festival_beast_component_{nullptr},
+        spirit_shop_{nullptr},
+        travel_pass_{nullptr},
         player_id_{::uint64_t{0u}},
         persist_schema_gen_{0u} {}
 
@@ -2136,7 +2158,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_._has_bits_),
-        32, // hasbit index offset
+        34, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.transform_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.uint64_pb_component_),
@@ -2166,7 +2188,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.trial_journal_component_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.craft_component_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.festival_beast_component_),
-        27,
+        PROTOBUF_FIELD_OFFSET(::player_database, _impl_.spirit_shop_),
+        PROTOBUF_FIELD_OFFSET(::player_database, _impl_.travel_pass_),
+        29,
         1,
         2,
         3,
@@ -2182,7 +2206,7 @@ const ::uint32_t
         13,
         14,
         15,
-        28,
+        30,
         16,
         17,
         18,
@@ -2195,6 +2219,8 @@ const ::uint32_t
         24,
         25,
         26,
+        27,
+        28,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_store, _impl_._has_bits_),
         12, // hasbit index offset
@@ -2245,8 +2271,8 @@ static const ::_pbi::MigrationSchema
         {51, sizeof(::account_share_database)},
         {56, sizeof(::player_centre_database)},
         {63, sizeof(::player_database)},
-        {124, sizeof(::player_store)},
-        {145, sizeof(::player_audit_outbox)},
+        {128, sizeof(::player_store)},
+        {149, sizeof(::player_audit_outbox)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2290,86 +2316,91 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabas
     "r_trial_journal_comp.proto\032.proto/common"
     "/component/player_craft_comp.proto\0327prot"
     "o/common/component/player_festival_beast"
-    "_comp.proto\032&proto/common/component/time"
-    "_comp.proto\032&proto/common/component/buff"
-    "_comp.proto\032/proto/common/database/bag_q"
-    "uest_mail_data.proto\"\204\001\n\004user\022\n\n\002id\030\001 \001("
-    "\004\022\024\n\014display_name\030\002 \001(\t\022\020\n\010is_guest\030\003 \001("
-    "\010\022\023\n\013create_time\030\004 \001(\004\022\022\n\nlast_login\030\005 \001"
-    "(\004:\037\212\222\364\001\004user\222\222\364\001\002id\332\222\364\001\nlast_login\"\230\001\n\n"
-    "user_oauth\022\017\n\007user_id\030\001 \001(\004\022\020\n\010provider\030"
-    "\002 \001(\t\022\023\n\013provider_id\030\003 \001(\t\022\023\n\013create_tim"
-    "e\030\004 \001(\004:=\212\222\364\001\nuser_oauth\222\222\364\001\020user_id,pro"
-    "vider\342\222\364\001\024provider,provider_id\"h\n\nuser_p"
-    "hone\022\017\n\007user_id\030\001 \001(\004\022\r\n\005phone\030\002 \001(\t\022\023\n\013"
-    "create_time\030\003 \001(\004:%\212\222\364\001\nuser_phone\222\222\364\001\007u"
-    "ser_id\342\222\364\001\005phone\"c\n\ruser_password\022\017\n\007use"
-    "r_id\030\001 \001(\004\022\014\n\004hash\030\002 \001(\t\022\023\n\013create_time\030"
-    "\003 \001(\004:\036\212\222\364\001\ruser_password\222\222\364\001\007user_id\"\204\001"
-    "\n\ruser_accounts\022\017\n\007account\030\001 \001(\t\022\020\n\010pass"
-    "word\030\002 \001(\t\0220\n\016simple_players\030\003 \001(\0132\030.Acc"
-    "ountSimplePlayerList:\036\212\222\364\001\ruser_accounts"
-    "\222\222\364\001\007account\"R\n\026account_share_database\022\017"
-    "\n\007account\030\001 \001(\t:\'\212\222\364\001\026account_share_data"
-    "base\222\222\364\001\007account\"\240\001\n\026player_centre_datab"
-    "ase\022\021\n\tplayer_id\030\001 \001(\004\022+\n\nscene_info\030\002 \001"
-    "(\0132\027.PlayerSceneContextComp:F\212\222\364\001\026player"
-    "_centre_database\222\222\364\001\tplayer_id\262\222\364\001\tplaye"
-    "r_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\217\014\n\017player_database\022"
-    "\030\n\tplayer_id\030\001 \001(\004B\005\310\376\244\002\000\022$\n\ttransform\030\002"
-    " \001(\0132\n.TransformB\005\310\376\244\002\t\0225\n\023uint64_pb_com"
-    "ponent\030\003 \001(\0132\021.PlayerUint64CompB\005\310\376\244\002\004\022/"
-    "\n\nskill_list\030\004 \001(\0132\024.PlayerSkillListComp"
-    "B\005\310\376\244\002\003\0225\n\023uint32_pb_component\030\005 \001(\0132\021.P"
-    "layerUint32CompB\005\310\376\244\002\004\022@\n\034derived_attrib"
-    "utes_component\030\006 \001(\0132\023.BaseAttributesCom"
-    "pB\005\310\376\244\002\006\022*\n\017level_component\030\007 \001(\0132\n.Leve"
-    "lCompB\005\310\376\244\002\006\022&\n\010currency\030\010 \001(\0132\r.Currenc"
-    "yCompB\005\310\376\244\002\007\022=\n\021stress_test_probe\030\t \001(\0132"
-    "\026.PlayerStressTestProbeB\n\300\376\244\002\001\310\376\244\002\004\0228\n\023a"
-    "ttribute_component\030\013 \001(\0132\024.PlayerAttribu"
-    "teCompB\005\310\376\244\002\003\022,\n\rpet_component\030\014 \001(\0132\016.P"
-    "layerPetCompB\005\310\376\244\002\003\022)\n\rbag_component\030\r \001"
-    "(\0132\013.BagAllDataB\005\310\376\244\002\010\022/\n\021mission_compon"
-    "ent\030\016 \001(\0132\r.QuestAllDataB\005\310\376\244\002\003\0224\n\021profi"
-    "le_component\030\017 \001(\0132\022.PlayerProfileCompB\005"
-    "\310\376\244\002\004\0228\n\017asset_op_ledger\030\020 \001(\0132\030.PlayerA"
-    "ssetOpLedgerCompB\005\310\376\244\002\007\0223\n\014inbox_ledger\030"
-    "\024 \001(\0132\026.PlayerInboxLedgerCompB\005\310\376\244\002\007\022!\n\022"
-    "persist_schema_gen\030\025 \001(\rB\005\310\376\244\002\000\022;\n\020myste"
-    "ry_merchant\030\026 \001(\0132\032.PlayerMysteryMerchan"
-    "tCompB\005\310\376\244\002\007\0226\n\016battle_results\030\027 \001(\0132\027.P"
-    "layerBattleResultCompB\005\310\376\244\002\004\0228\n\017item_gai"
-    "n_block\030\030 \001(\0132\030.PlayerItemGainBlockCompB"
-    "\005\310\376\244\002\004\022>\n\025client_request_ledger\030\031 \001(\0132\030."
-    "ClientRequestLedgerCompB\005\310\376\244\002\007\022.\n\nitem_h"
-    "olds\030\032 \001(\0132\023.PlayerItemHoldCompB\005\310\376\244\002\004\0221"
-    "\n\013mail_outbox\030\033 \001(\0132\025.PlayerMailOutboxCo"
-    "mpB\005\310\376\244\002\007\0225\n\017skill_cooldowns\030\034 \001(\0132\025.Coo"
-    "ldownTimeListCompB\005\310\376\244\002\006\022*\n\013saved_buffs\030"
-    "\035 \003(\0132\016.SavedBuffCompB\005\310\376\244\002\006\0222\n\020season_c"
-    "omponent\030\036 \001(\0132\021.PlayerSeasonCompB\005\310\376\244\002\003"
-    "\022\?\n\027trial_journal_component\030\037 \001(\0132\027.Play"
-    "erTrialJournalCompB\005\310\376\244\002\003\0220\n\017craft_compo"
-    "nent\030  \001(\0132\020.PlayerCraftCompB\005\310\376\244\002\003\022A\n\030f"
-    "estival_beast_component\030! \001(\0132\030.PlayerFe"
-    "stivalBeastCompB\005\310\376\244\002\003:\005\350\222\364\001\001J\004\010\n\020\013J\004\010\021\020"
-    "\022J\004\010\022\020\023J\004\010\023\020\024\"\337\001\n\014player_store\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013owner_epoch\030\003"
-    " \001(\004\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nschema_gen\030\005 \001"
-    "(\r\022\027\n\017holder_instance\030\006 \001(\014\022\020\n\010released\030"
-    "\007 \001(\r\022\017\n\007payload\030\010 \001(\014\022\021\n\tclaim_seq\030\t \001("
-    "\004:$\212\222\364\001\014player_store\222\222\364\001\016player_id,kind\""
-    "\327\001\n\023player_audit_outbox\022\r\n\005shard\030\001 \001(\r\022\014"
-    "\n\004kind\030\002 \001(\r\022\022\n\ncreated_ms\030\003 \001(\004\022\021\n\tplay"
-    "er_id\030\004 \001(\004\022\021\n\trecord_id\030\005 \001(\004\022\020\n\010save_s"
-    "eq\030\006 \001(\004\022\017\n\007payload\030\007 \001(\014:F\212\222\364\001\023player_a"
-    "udit_outbox\222\222\364\001)shard,kind,created_ms,pl"
-    "ayer_id,record_idB\021Z\017common/databaseb\006pr"
-    "oto3"
+    "_comp.proto\0324proto/common/component/play"
+    "er_spirit_shop_comp.proto\0324proto/common/"
+    "component/player_travel_pass_comp.proto\032"
+    "&proto/common/component/time_comp.proto\032"
+    "&proto/common/component/buff_comp.proto\032"
+    "/proto/common/database/bag_quest_mail_da"
+    "ta.proto\"\204\001\n\004user\022\n\n\002id\030\001 \001(\004\022\024\n\014display"
+    "_name\030\002 \001(\t\022\020\n\010is_guest\030\003 \001(\010\022\023\n\013create_"
+    "time\030\004 \001(\004\022\022\n\nlast_login\030\005 \001(\004:\037\212\222\364\001\004use"
+    "r\222\222\364\001\002id\332\222\364\001\nlast_login\"\230\001\n\nuser_oauth\022\017"
+    "\n\007user_id\030\001 \001(\004\022\020\n\010provider\030\002 \001(\t\022\023\n\013pro"
+    "vider_id\030\003 \001(\t\022\023\n\013create_time\030\004 \001(\004:=\212\222\364"
+    "\001\nuser_oauth\222\222\364\001\020user_id,provider\342\222\364\001\024pr"
+    "ovider,provider_id\"h\n\nuser_phone\022\017\n\007user"
+    "_id\030\001 \001(\004\022\r\n\005phone\030\002 \001(\t\022\023\n\013create_time\030"
+    "\003 \001(\004:%\212\222\364\001\nuser_phone\222\222\364\001\007user_id\342\222\364\001\005p"
+    "hone\"c\n\ruser_password\022\017\n\007user_id\030\001 \001(\004\022\014"
+    "\n\004hash\030\002 \001(\t\022\023\n\013create_time\030\003 \001(\004:\036\212\222\364\001\r"
+    "user_password\222\222\364\001\007user_id\"\204\001\n\ruser_accou"
+    "nts\022\017\n\007account\030\001 \001(\t\022\020\n\010password\030\002 \001(\t\0220"
+    "\n\016simple_players\030\003 \001(\0132\030.AccountSimplePl"
+    "ayerList:\036\212\222\364\001\ruser_accounts\222\222\364\001\007account"
+    "\"R\n\026account_share_database\022\017\n\007account\030\001 "
+    "\001(\t:\'\212\222\364\001\026account_share_database\222\222\364\001\007acc"
+    "ount\"\240\001\n\026player_centre_database\022\021\n\tplaye"
+    "r_id\030\001 \001(\004\022+\n\nscene_info\030\002 \001(\0132\027.PlayerS"
+    "ceneContextComp:F\212\222\364\001\026player_centre_data"
+    "base\222\222\364\001\tplayer_id\262\222\364\001\tplayer_id\250\223\364\001\001\260\223\364"
+    "\001\004\270\223\364\001\004\"\365\014\n\017player_database\022\030\n\tplayer_id"
+    "\030\001 \001(\004B\005\310\376\244\002\000\022$\n\ttransform\030\002 \001(\0132\n.Trans"
+    "formB\005\310\376\244\002\t\0225\n\023uint64_pb_component\030\003 \001(\013"
+    "2\021.PlayerUint64CompB\005\310\376\244\002\004\022/\n\nskill_list"
+    "\030\004 \001(\0132\024.PlayerSkillListCompB\005\310\376\244\002\003\0225\n\023u"
+    "int32_pb_component\030\005 \001(\0132\021.PlayerUint32C"
+    "ompB\005\310\376\244\002\004\022@\n\034derived_attributes_compone"
+    "nt\030\006 \001(\0132\023.BaseAttributesCompB\005\310\376\244\002\006\022*\n\017"
+    "level_component\030\007 \001(\0132\n.LevelCompB\005\310\376\244\002\006"
+    "\022&\n\010currency\030\010 \001(\0132\r.CurrencyCompB\005\310\376\244\002\007"
+    "\022=\n\021stress_test_probe\030\t \001(\0132\026.PlayerStre"
+    "ssTestProbeB\n\300\376\244\002\001\310\376\244\002\004\0228\n\023attribute_com"
+    "ponent\030\013 \001(\0132\024.PlayerAttributeCompB\005\310\376\244\002"
+    "\003\022,\n\rpet_component\030\014 \001(\0132\016.PlayerPetComp"
+    "B\005\310\376\244\002\003\022)\n\rbag_component\030\r \001(\0132\013.BagAllD"
+    "ataB\005\310\376\244\002\010\022/\n\021mission_component\030\016 \001(\0132\r."
+    "QuestAllDataB\005\310\376\244\002\003\0224\n\021profile_component"
+    "\030\017 \001(\0132\022.PlayerProfileCompB\005\310\376\244\002\004\0228\n\017ass"
+    "et_op_ledger\030\020 \001(\0132\030.PlayerAssetOpLedger"
+    "CompB\005\310\376\244\002\007\0223\n\014inbox_ledger\030\024 \001(\0132\026.Play"
+    "erInboxLedgerCompB\005\310\376\244\002\007\022!\n\022persist_sche"
+    "ma_gen\030\025 \001(\rB\005\310\376\244\002\000\022;\n\020mystery_merchant\030"
+    "\026 \001(\0132\032.PlayerMysteryMerchantCompB\005\310\376\244\002\007"
+    "\0226\n\016battle_results\030\027 \001(\0132\027.PlayerBattleR"
+    "esultCompB\005\310\376\244\002\004\0228\n\017item_gain_block\030\030 \001("
+    "\0132\030.PlayerItemGainBlockCompB\005\310\376\244\002\004\022>\n\025cl"
+    "ient_request_ledger\030\031 \001(\0132\030.ClientReques"
+    "tLedgerCompB\005\310\376\244\002\007\022.\n\nitem_holds\030\032 \001(\0132\023"
+    ".PlayerItemHoldCompB\005\310\376\244\002\004\0221\n\013mail_outbo"
+    "x\030\033 \001(\0132\025.PlayerMailOutboxCompB\005\310\376\244\002\007\0225\n"
+    "\017skill_cooldowns\030\034 \001(\0132\025.CooldownTimeLis"
+    "tCompB\005\310\376\244\002\006\022*\n\013saved_buffs\030\035 \003(\0132\016.Save"
+    "dBuffCompB\005\310\376\244\002\006\0222\n\020season_component\030\036 \001"
+    "(\0132\021.PlayerSeasonCompB\005\310\376\244\002\003\022\?\n\027trial_jo"
+    "urnal_component\030\037 \001(\0132\027.PlayerTrialJourn"
+    "alCompB\005\310\376\244\002\003\0220\n\017craft_component\030  \001(\0132\020"
+    ".PlayerCraftCompB\005\310\376\244\002\003\022A\n\030festival_beas"
+    "t_component\030! \001(\0132\030.PlayerFestivalBeastC"
+    "ompB\005\310\376\244\002\003\0221\n\013spirit_shop\030\" \001(\0132\025.Player"
+    "SpiritShopCompB\005\310\376\244\002\007\0221\n\013travel_pass\030# \001"
+    "(\0132\025.PlayerTravelPassCompB\005\310\376\244\002\007:\005\350\222\364\001\001J"
+    "\004\010\n\020\013J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024\"\337\001\n\014player_store"
+    "\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013own"
+    "er_epoch\030\003 \001(\004\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nsche"
+    "ma_gen\030\005 \001(\r\022\027\n\017holder_instance\030\006 \001(\014\022\020\n"
+    "\010released\030\007 \001(\r\022\017\n\007payload\030\010 \001(\014\022\021\n\tclai"
+    "m_seq\030\t \001(\004:$\212\222\364\001\014player_store\222\222\364\001\016playe"
+    "r_id,kind\"\327\001\n\023player_audit_outbox\022\r\n\005sha"
+    "rd\030\001 \001(\r\022\014\n\004kind\030\002 \001(\r\022\022\n\ncreated_ms\030\003 \001"
+    "(\004\022\021\n\tplayer_id\030\004 \001(\004\022\021\n\trecord_id\030\005 \001(\004"
+    "\022\020\n\010save_seq\030\006 \001(\004\022\017\n\007payload\030\007 \001(\014:F\212\222\364"
+    "\001\023player_audit_outbox\222\222\364\001)shard,kind,cre"
+    "ated_ms,player_id,record_idB\021Z\017common/da"
+    "tabaseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps[24] = {
+    descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps[26] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fasset_5fop_5fledger_5fcomp_2eproto,
@@ -2390,6 +2421,8 @@ static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fscene_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fspirit_5fshop_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5ftravel_5fpass_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5ftrial_5fjournal_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2ftime_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto,
@@ -2399,12 +2432,12 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fda
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto = {
     false,
     false,
-    4124,
+    4334,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto,
     "proto/common/database/mysql_database_table.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_once,
     descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps,
-    24,
+    26,
     10,
     schemas,
     file_message_globals,
@@ -4512,6 +4545,16 @@ void player_database::clear_festival_beast_component() {
   if (_impl_.festival_beast_component_ != nullptr) _impl_.festival_beast_component_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
+void player_database::clear_spirit_shop() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.spirit_shop_ != nullptr) _impl_.spirit_shop_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+void player_database::clear_travel_pass() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.travel_pass_ != nullptr) _impl_.travel_pass_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
 player_database::player_database(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, player_database_get_class_data()) {
@@ -4628,6 +4671,12 @@ player_database::player_database(
   _impl_.festival_beast_component_ = (CheckHasBit(cached_has_bits, 0x04000000U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.festival_beast_component_)
                 : nullptr;
+  _impl_.spirit_shop_ = (CheckHasBit(cached_has_bits, 0x08000000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.spirit_shop_)
+                : nullptr;
+  _impl_.travel_pass_ = (CheckHasBit(cached_has_bits, 0x10000000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.travel_pass_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -4694,6 +4743,8 @@ inline void player_database::SharedDtor(MessageLite& self) {
   delete this_._impl_.trial_journal_component_;
   delete this_._impl_.craft_component_;
   delete this_._impl_.festival_beast_component_;
+  delete this_._impl_.spirit_shop_;
+  delete this_._impl_.travel_pass_;
   this_._impl_.~Impl_();
 }
 
@@ -4832,7 +4883,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       _impl_.season_component_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       ABSL_DCHECK(_impl_.trial_journal_component_ != nullptr);
       _impl_.trial_journal_component_->Clear();
@@ -4845,8 +4896,16 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       ABSL_DCHECK(_impl_.festival_beast_component_ != nullptr);
       _impl_.festival_beast_component_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      ABSL_DCHECK(_impl_.spirit_shop_ != nullptr);
+      _impl_.spirit_shop_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      ABSL_DCHECK(_impl_.travel_pass_ != nullptr);
+      _impl_.travel_pass_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x18000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x60000000U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.persist_schema_gen_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.persist_schema_gen_));
@@ -4875,7 +4934,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x20000000U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4989,7 +5048,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
   }
 
   // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x40000000U)) {
     if (this_._internal_persist_schema_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5084,6 +5143,20 @@ PROTOBUF_NOINLINE void player_database::Clear() {
   if (CheckHasBit(cached_has_bits, 0x04000000U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         33, *this_._impl_.festival_beast_component_, this_._impl_.festival_beast_component_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .PlayerSpiritShopComp spirit_shop = 34 [(.OptionPersistGroup) = 7];
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        34, *this_._impl_.spirit_shop_, this_._impl_.spirit_shop_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .PlayerTravelPassComp travel_pass = 35 [(.OptionPersistGroup) = 7];
+  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        35, *this_._impl_.travel_pass_, this_._impl_.travel_pass_->GetCachedSize(), target,
         stream);
   }
 
@@ -5240,7 +5313,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.season_component_);
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
     // .PlayerTrialJournalComp trial_journal_component = 31 [(.OptionPersistGroup) = 3];
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       total_size += 2 +
@@ -5256,15 +5329,25 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.festival_beast_component_);
     }
-    // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
+    // .PlayerSpiritShopComp spirit_shop = 34 [(.OptionPersistGroup) = 7];
     if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.spirit_shop_);
+    }
+    // .PlayerTravelPassComp travel_pass = 35 [(.OptionPersistGroup) = 7];
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.travel_pass_);
+    }
+    // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
       if (this_._internal_persist_schema_gen() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_persist_schema_gen());
@@ -5484,7 +5567,7 @@ void player_database::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       ABSL_DCHECK(from._impl_.trial_journal_component_ != nullptr);
       if (_this->_impl_.trial_journal_component_ == nullptr) {
@@ -5510,11 +5593,27 @@ void player_database::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      ABSL_DCHECK(from._impl_.spirit_shop_ != nullptr);
+      if (_this->_impl_.spirit_shop_ == nullptr) {
+        _this->_impl_.spirit_shop_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.spirit_shop_);
+      } else {
+        _this->_impl_.spirit_shop_->MergeFrom(*from._impl_.spirit_shop_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      ABSL_DCHECK(from._impl_.travel_pass_ != nullptr);
+      if (_this->_impl_.travel_pass_ == nullptr) {
+        _this->_impl_.travel_pass_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.travel_pass_);
+      } else {
+        _this->_impl_.travel_pass_->MergeFrom(*from._impl_.travel_pass_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
       if (from._internal_persist_schema_gen() != 0) {
         _this->_impl_.persist_schema_gen_ = from._impl_.persist_schema_gen_;
       }

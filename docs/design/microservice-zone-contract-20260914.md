@@ -476,7 +476,7 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
 
 ---
 
-## §12 Codex 验证清单(按序执行)
+## §12 Gemini 验证清单(按序执行)
 
 > 约定:
 > - 仓库根 = `E:\work\xuanming-server-mmo`;命令在 PowerShell 7 下执行。
@@ -686,7 +686,7 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 4. **ChatRedis 与 match 共用 `redis-match-cluster`**(512mb,volatile-lru):聊天历史可能被提前淘汰,并与 match 争内存。chat 数据一旦成为唯一权威,必须换独立的 noeviction 实例。
 5. **正常停机顺序已修复并活体验证（2026-09-15）**：chat持有真实gRPC Server，在注销尝试返回后主动排空，再关闭依赖和框架；Linux默认1s自动停止推迟到24s硬截止，Windows使用同一主动清理路径。真实Linux SIGTERM、慢注销超过1.5s、在途/永久阻塞请求及启动期信号均验证通过；最终K8s容器收到SIGTERM后exit=0，旧注册身份已清理并恢复Ready。硬截止/SIGKILL不保证在途业务完成，注销传输失败仍依赖租约TTL；详细边界见§16。
 6. **go-zero 版本不一致**:shared 模块实际依赖 go-zero v1.9.2,chat 是 v1.10.0。chat 模块内经 MVS 统一到 v1.10.0;noderegistry 用到的 logx API 两个版本都有。
-7. **`start_game.ps1` 的 chat / guild 均为可选服务**:缺 exe 时告警并跳过。Codex 实跑修复了警告内弯引号导致的 PowerShell 参数绑定失败，修复后缺 chat.exe 的 CheckOnly 已通过。
+7. **`start_game.ps1` 的 chat / guild 均为可选服务**:缺 exe 时告警并跳过。Gemini 实跑修复了警告内弯引号导致的 PowerShell 参数绑定失败，修复后缺 chat.exe 的 CheckOnly 已通过。
 8. **`dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`**,只能直接调 `k8s_deploy.ps1`。(2026-09-29 已关闭,见 §18)
 9. **服务清单文档未同步**:`tools/scripts/README.md`、`deploy/k8s/AGENTS.md`、`deploy/k8s/README.md` 不在本批范围。
 10. **`OnNodeIDChanged` 回调里调 `Close()` 不会死锁**,但会等满 closeTimeout(5s)。
@@ -775,7 +775,7 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
   **回退态不粘滞**:之后每一次重新部署(zone-up / release-zone / 合服后 zone-up / 回滚 Step 6 / 各包装入口)都要显式再传 `-GateRouterMode 0`。
 - **§13.2「D34 何时删直连旧路径」**:触发点"K8s 翻转且稳定之后"中的"翻转"已发生、"稳定"尚待补验;另见 `client-access-band-routing.md` D61 计划删除直连模式与开关本身,
   与本批"保留 `"0"` 回退、C++ 默认值不改"的口径存在未来冲突,留待该文档的属主协调。
-- **验证状态**:部署脚本与契约测试的改动均未运行,待 Codex 执行 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`
+- **验证状态**:部署脚本与契约测试的改动均未运行,待 Gemini 执行 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`
   (用例"gate 默认以路由模式部署…""`-GateRouterMode 0` 回退路径仍可生成…""dev_tools / k8s_image 的 `-GateRouterMode`:留空不透传…"须 PASS)。
 
 ## §19 2026-10-21 聊天角色过户与SQL权威修订

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"math"
 	"time"
@@ -30,7 +31,8 @@ import (
 //   - 计分模式（1V1 / 5V5）读不到评分就拒绝入队，不按默认分进池（计分池不能混进错误的分数）；
 //   - 单人档（PVE_SOLO、PVE_TEAM 1 人档）入队提交后立即尝试成局，失败的票留给池写者兜底。
 func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*pb.JoinQueueResponse, error) {
-	if parsed, e := uuid.Parse(in.RequestId); e != nil || parsed == uuid.Nil || parsed.String() != in.RequestId {
+	parsed, e := uuid.Parse(in.RequestId)
+	if e != nil || parsed == uuid.Nil || parsed.String() != in.RequestId {
 		return nil, status.Error(codes.InvalidArgument, "匹配请求编号无效")
 	}
 	if old, e := l.svcCtx.Authority.Ticket(l.ctx, authoritativePlayerID(l.ctx, in.PlayerId)); e != nil {
@@ -45,6 +47,25 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*p
 	if binding == "" || in.RequestId == "" || len(in.RequestId) > 64 || in.NetworkPlanId == "" {
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrProbeRequired, ErrorMessage: tipErr(constants.ErrProbeRequired, "请完成地域延迟探测后重试")}, nil
 	}
+	if in.GetIsWuxingTower() {
+		reqHigh := binary.BigEndian.Uint64(parsed[:8])
+		reqLow := binary.BigEndian.Uint64(parsed[8:])
+		key := &pb.MatchDirectIntentRecord{Kind: 1, OwnerId: d.PlayerId, RequestHigh: reqHigh, RequestLow: reqLow}
+		payload, merr := proto.MarshalOptions{Deterministic: true}.Marshal(in)
+		if merr != nil {
+			return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "五行幻境开战编码失败")}, nil
+		}
+		f, derr := reserveGlobalDirect(l.ctx, l.svcCtx, key, payload, pb.MatchMode_MATCH_MODE_PVE_SOLO, in.BattleConfigId, []uint64{d.PlayerId}, directOptions{isWuxingTower: true})
+		if derr != nil {
+			return joinRejection(derr, "五行幻境开战暂不可用"), nil
+		}
+		if f != nil && f.State < 4 {
+			launchGlobalFormation(l.svcCtx, f)
+		}
+		metrics.ObserveGlobalFlow("join", "wuxing_tower_accepted")
+		return &pb.JoinQueueResponse{QueueTicket: f.GetOperationId()}, nil
+	}
+
 	home, e := l.svcCtx.Authority.PlayerHomeZone(l.ctx, d.PlayerId)
 	if e != nil {
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "角色归属暂不可用")}, nil
@@ -119,12 +140,22 @@ func joinRejection(err error, fallback string) *pb.JoinQueueResponse {
 	}
 }
 
-// directOptions 点名成局(切磋、活动、整队直接开战)的附加参数。
+// directOptions 点名成局(切磋、活动、整队直接开战、帮会帮战)的附加参数。
 type directOptions struct {
 	// teamID 整队直接开战的队伍 id,写进每名成员的票据。
 	teamID uint64
 	// activityContext 非空:写进成局原件,建房时原样放进 CreateBattleRequest.activity_context。
 	activityContext *battlepb.BattleActivityContext
+	// tournamentContext 非空:写进成局原件,建房时原样放进 CreateBattleRequest.tournament_context(V2 BO3/五行灵脉)。
+	tournamentContext *battlepb.TournamentBattleContext
+	// memberTeams 非空:显式按玩家指定的阵营(0/1),写入 f.Members.TeamIndex 供 claimTx 与 gatherTeamAssignment 保留。
+	memberTeams map[uint64]uint32
+	// rankedContext 非空:写进成局原件（如道友切磋坊公平 3×3 免费模板, season_id=0, use_free_preset=true）。
+	rankedContext *battlepb.RankedMatchContext
+	// customDuelRules 非空:写进成局原件,建房时原样放进 PrepareBattleRequest / CreateBattleRequest。
+	customDuelRules *battlepb.CustomDuelRules
+	// isWuxingTower 为真:五行幻境单人周常爬塔,由 Scene 权威注入层数与符印上下文。
+	isWuxingTower bool
 }
 
 func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.MatchDirectIntentRecord, payload []byte, mode pb.MatchMode, config uint32, members []uint64, opts directOptions) (*pb.MatchFormationRecord, error) {
@@ -213,11 +244,38 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 			return nil, nil, e
 		}
 	}
+	if opts.tournamentContext != nil {
+		f.TournamentContext, e = proto.MarshalOptions{Deterministic: true}.Marshal(opts.tournamentContext)
+		if e != nil {
+			return nil, nil, e
+		}
+	}
+	if opts.rankedContext != nil {
+		f.RankedContext, e = proto.MarshalOptions{Deterministic: true}.Marshal(opts.rankedContext)
+		if e != nil {
+			return nil, nil, e
+		}
+		f.RankedSeasonId = opts.rankedContext.GetSeasonId()
+	}
+	if opts.customDuelRules != nil {
+		f.CustomDuelRules, e = proto.MarshalOptions{Deterministic: true}.Marshal(opts.customDuelRules)
+		if e != nil {
+			return nil, nil, e
+		}
+	}
+	f.IsWuxingTower = opts.isWuxingTower
 	var group []*pb.MatchAuthorityTicketRecord
 	for _, pid := range members {
 		ticket := tickets[pid]
 		if ticket == "" {
 			ticket = uuid.NewString()
+		}
+		if opts.memberTeams != nil {
+			f.Members = append(f.Members, &pb.MatchFormationMember{
+				PlayerId:  pid,
+				Ticket:    ticket,
+				TeamIndex: opts.memberTeams[pid],
+			})
 		}
 		group = append(group, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: ticket, RequestId: f.OperationId, Mode: uint32(mode), ConfigId: config, TeamSize: uint32(len(members)), TeamId: opts.teamID, OwnerAccount: profiles[pid].OwnerAccount, OwnerRevision: profiles[pid].OwnerRevision, RatingCenti: ratingSnapshotCenti(s, mode, pid)})
 	}

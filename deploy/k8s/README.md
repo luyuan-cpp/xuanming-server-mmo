@@ -200,7 +200,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 
 Omit `-JavaSvcRegistry` or pass `-SkipJavaSvc` to skip Java service deployment.
 
-### gateway 探针、管理端口与回退口径(2026-10-15,G2b §9 第 7 条;未编译、未测试,待 Codex 验证)
+### gateway 探针、管理端口与回退口径(2026-10-15,G2b §9 第 7 条;未编译、未测试,待 Gemini 验证)
 
 - **探针打独立管理端口 8082**:`k8s_deploy.ps1` 生成的 `java-svc-gateway-config` 写 `management.server.port: 8082`,
   `manifests/java-svc/gateway.yaml` 的 startup / readiness / liveness 三个探针都打 8082,容器 ports 声明 `8082`(名 `management`)。
@@ -313,7 +313,7 @@ pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
   - Self-hosted / bare metal K8s: prefer `-GateServiceType NodePort` behind an external L4 load balancer.
   - Exposing the Service is only half of it, and the missing half is **not** in this script: clients never learn gate's address from the Service. `login` reads gate's etcd-registered endpoint — the cluster-internal `POD_IP` — and hands it to the client verbatim (`go/login/internal/svc/servicecontext.go`, `CandidatesForZone`). Until `login` is taught to translate `node_id` to an externally reachable address, external clients cannot connect no matter how the Service is configured. The deploy script warns on any non-`ClusterIP` setting for this reason.
   - The gate process deliberately does not try to discover its own external address. It binds `0.0.0.0` and registers its pod identity; deciding what the outside world should dial is the job of whoever hands the address out.
-  - **(2026-09-29 更正:上面两条已被集群外入口 D76–D93 取代,原文保留作历史)** 最终没有采用"login 按 `node_id` 翻译地址"(D76 否决的方案④),而是**进程自报客户端可达地址**:`-ClientEntryMode external` 下 gate / battle 在发布 etcd 之前把 `NodeInfo.client_endpoint`(`proto/common/base/common.proto:33`)填好,login / scene_manager / battle 三个出口按同一规则选地址(Go `go/shared/clientendpoint/select.go:41` `Select`,C++ `client_endpoint::ClientFacing`)。`endpoint` 仍是集群内身份,只在 `podip` 模式下被当成客户端地址下发 —— 所以**上面那段"Service 怎么配都连不上"的结论对默认的 `podip` 仍然成立**,集群外玩家必须用 external。external 下 gate 是 StatefulSet + 每序号 Service `gate-<i>`,见下方 Optional Flags「集群外客户端入口」与 `docs/design/k8s_gate_exposure_guidance.md`;权威设计见 `docs/design/k8s-client-entry.md`(D76–D93、「运维手册」、「kind 端到端验证」)。**未上集群验证**,待 Codex / 用户按 kind 端到端验收。
+  - **(2026-09-29 更正:上面两条已被集群外入口 D76–D93 取代,原文保留作历史)** 最终没有采用"login 按 `node_id` 翻译地址"(D76 否决的方案④),而是**进程自报客户端可达地址**:`-ClientEntryMode external` 下 gate / battle 在发布 etcd 之前把 `NodeInfo.client_endpoint`(`proto/common/base/common.proto:33`)填好,login / scene_manager / battle 三个出口按同一规则选地址(Go `go/shared/clientendpoint/select.go:41` `Select`,C++ `client_endpoint::ClientFacing`)。`endpoint` 仍是集群内身份,只在 `podip` 模式下被当成客户端地址下发 —— 所以**上面那段"Service 怎么配都连不上"的结论对默认的 `podip` 仍然成立**,集群外玩家必须用 external。external 下 gate 是 StatefulSet + 每序号 Service `gate-<i>`,见下方 Optional Flags「集群外客户端入口」与 `docs/design/k8s_gate_exposure_guidance.md`;权威设计见 `docs/design/k8s-client-entry.md`(D76–D93、「运维手册」、「kind 端到端验证」)。**未上集群验证**,待 Gemini / 用户按 kind 端到端验收。
 - Do not treat `LoadBalancer` as the universal default. If the cluster does not have a mature, production-grade LB implementation, `NodePort` plus an external L4 balancer is usually the more stable choice.
 - Internal-only services should stay inside the cluster and do not need external exposure.
 - Stability baseline per zone: `centre=1`, `gate=2`, `scene=4`.
@@ -543,10 +543,10 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - 存量缺陷已修:`dev_tools.ps1` 的 `k8s-image-preflight` / `k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all` 自提交 `31e4d1d4c`
     起因多传 4 个 Agones 参数在参数绑定阶段就失败,现已去掉并对 `-AgonesHighDensity` / `-AgonesAutoscale` 显式拒绝。这条链很久没人跑通,首次使用先加 `-DryRun`。
   - 以上透传与拒绝**未运行**,契约测试 `tools/scripts/tests/k8s_client_entry_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`、
-    `k8s_login_auth_provider_guard.tests.ps1` 待 Codex 验证。
+    `k8s_login_auth_provider_guard.tests.ps1` 待 Gemini 验证。
 - **削峰(G4b):`-GatewayRateLimit` / `-LoginQueue`**(2026-10-14;设计 `docs/design/open-server-rate-limit-design.md` §十一,规格
   `docs/handoff/launch-readiness-20261013/spec_G4b.md`;权威口径是 `tools/scripts/k8s_deploy.ps1` 的参数注释与常量表 `$script:PeakShavingLaunchTier`)。
-  状态:已落码,**未编译、未测试**,待 Codex 验证。下面的阈值是开服档取值,**已定(2026-11-12),压测出基线后可调**(L-14);它们是配置值,不能据此下容量结论(AGENTS §6)。
+  状态:已落码,**未编译、未测试**,待 Gemini 验证。下面的阈值是开服档取值,**已定(2026-11-12),压测出基线后可调**(L-14);它们是配置值,不能据此下容量结论(AGENTS §6)。
   依据:zone 桶 2000/s、burst 5000 取设计稿「Layer 1 配额参考」的开服档(负责人 2026-10-13 定),burst 等于 2.5 秒的补充量,吸收开服整点的瞬时洪峰;
   IP 5/s、burst 20 与 jar 内缺省相同,一次登录(首认证 + assign-gate)扣 2 个 IP 令牌,同一个 NAT 出口约 10 人可以同时登录;账号冷却 5000ms 与设计稿 §5.2、jar 内缺省一致。
   单一来源是 `k8s_deploy.ps1` 的 `$script:PeakShavingLaunchTier`(2026-11-12 核对与上面一致)。
@@ -565,7 +565,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - **登录排队的合入门槛(2026-10-15 更正注:上面「staging / prod 开」目前只对 `-GatewayRateLimit` 成立)**。G4b-2 的 login 段已先于合入门槛
     随 `e4ff1d165` / `ebccaf04d` 入库(越序),`k8s_deploy.ps1` 用脚本常量 `$script:LoginQueueMergeGateCleared`(当前 `$false`)机械拦截:
     - 三项门槛(`docs/handoff/launch-readiness-20261013/spec_G4b.md` §7「合入门槛」):① G1b 规格指定的多 zone 用例(L-01 验收:每个 zone 的队列都能出队)
-      由 Codex 跑绿;② G4b-G 由 Codex 跑绿;③ `spec_G4b-G.md` §8.4 的真实 Redis 最小冒烟跑通,命令原文与输出摘要记进 `docs/PROGRESS.md`。
+      由 Gemini 跑绿;② G4b-G 由 Gemini 跑绿;③ `spec_G4b-G.md` §8.4 的真实 Redis 最小冒烟跑通,命令原文与输出摘要记进 `docs/PROGRESS.md`。
     - 门槛未清时:`-LoginQueue auto` 在任何档位都解析为关(写路径打印是 `login_queue=off(-LoginQueue auto)`,下文计划行示例里的 `login_queue=on` 要等门槛清掉),
       本次部署 login 的非 dev 档另打 `[PeakShaving]LoginQueueGate=closed` 警告;`-LoginQueue on` 在参数解析后、任何 kubectl 之前拒绝(`*-down` / `*-status` 带它也拒绝)。
       login ConfigMap 不写 `Queue` / `Secrets.QueueToken`,`MMORPG_LOGIN_QUEUE_TOKEN_SECRET` 也不要求。`-GatewayRateLimit` 不受影响。
@@ -1030,7 +1030,7 @@ friend 与 trade 同形:全局池服务(`$GoSvcCatalogue.friend`,`Global = $true
 
 ## 玩家收件箱 player-inbox:独占库 `mmorpg_player_inbox` + `player-inbox-migrate` Job + 运维口令 Secret + 告警(2026-10-15,docs/design/player-inbox-service.md 第 4 批)
 
-> 状态:已落码,**未编译、未测试**,待 Codex 验证。服务本体(`go/player_inbox`)由第 2 批落码;本节只管部署接线。
+> 状态:已落码,**未编译、未测试**,待 Gemini 验证。服务本体(`go/player_inbox`)由第 2 批落码;本节只管部署接线。
 > 运维手册(上线顺序、回滚下限、epoch-raise、库恢复、毒消息、批量处置):`docs/ops/player-inbox-runbook.md`。
 
 player-inbox 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue['player-inbox']`,`Global = $true`),`infra-up` / `all-up` 在基础设施阶段部署到
@@ -1127,7 +1127,7 @@ player-inbox 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue['player-
 
 ## 帮会 guild:全局池 + 独占库 `mmorpg_guild` + `guild-migrate` Job(2026-10-16,K8s 上线批 BK8s 第一块)
 
-> 状态:清单、ConfigMap 生成、建表 Job、镜像登记、连接总账已落码;**未编译、未跑契约测试、未上集群**,待 Codex。
+> 状态:清单、ConfigMap 生成、建表 Job、镜像登记、连接总账已落码;**未编译、未跑契约测试、未上集群**,待 Gemini。
 > 依据:`docs/design/guild-phase2/90-consistency.md` G-05(BK8s 汇总)、`92-handoff.md` §13.2 ⑧。资产通道开关与密钥、NetworkPolicy 见下一节「gRPC 口准入与资产通道」;告警与 Loki ruler 是后续块,见本节末。
 
 guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global = $true`),`infra-up` / `all-up` 部署到 `mmorpg-infra` 一份,`zone-up` 跳过,顺序见「全局服务的部署顺序」。
@@ -1159,13 +1159,13 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
 - **BK8s 第二块(2026-10-16 已落码)**:资产通道开关 `-AssetOps` + 签名密钥注入 guild / trade / scene、gRPC 口准入 `-NetworkPolicies`,见下一节「gRPC 口准入与资产通道」。
   guild.yaml 原先预留的 optional secretKeyRef 已删(env 改由脚本在 on 时注入)。
 - **BK8s 后续块(未做,按批推进)**:告警规则(G-07)与 Loki ruler 接线;TiDB 的 BR 按库恢复清单加 `mmorpg_guild`(随 TiDB 一期)。
-- **验证(交 Codex,未运行)**:`cd go/guild && go build ./... && go vet ./... && go test -count=1 ./...`(新增 `TestValidateMySQLPool`、`TestAdvertisedHost`);
+- **验证(交 Gemini,未运行)**:`cd go/guild && go build ./... && go vet ./... && go test -count=1 ./...`(新增 `TestValidateMySQLPool`、`TestAdvertisedHost`);
   `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(新增 4 条帮会用例,并改了 deadline 用例、MySQL 总账自检与「连 MySQL 的 ConfigMap 名单」三条);
   集群上:guild 两个 Pod Ready、`kubectl logs job/guild-migrate` 迁移报告正常、robot `guild_smoke.yaml` 输出 `GUILD_SMOKE_OK`。
 
 ## 内容安全 content-guard:无状态全局服务 + etcd 里的词库(2026-11-20,docs/design/rename-and-content-safety.md §6)
 
-> 状态:部署脚本、清单、告警与契约测试已落码;**未跑契约测试、未上集群**,待 Codex。
+> 状态:部署脚本、清单、告警与契约测试已落码;**未跑契约测试、未上集群**,待 Gemini。
 
 content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $true`),`infra-up` / `all-up` 部署到 infra namespace 一次。
 它不连数据库 / Redis / Kafka,只连 etcd,所以没有迁移 Job、没有密钥。
@@ -1199,7 +1199,7 @@ content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $t
 
 ## gRPC 口准入与资产通道(2026-10-16,K8s 上线批 BK8s 第二块:`-NetworkPolicies` / `-AssetOps`)
 
-> 状态:部署脚本、清单、契约测试已落码;**未跑契约测试、未上集群**,待 Codex。依据 `docs/design/guild-phase2/90-consistency.md` G-05。
+> 状态:部署脚本、清单、契约测试已落码;**未跑契约测试、未上集群**,待 Gemini。依据 `docs/design/guild-phase2/90-consistency.md` G-05。
 > 两个开关**默认都是 off**,off 时产物与开关引入之前相同(只多几条「删掉以前留下的同名策略 / Secret」的 `--ignore-not-found` 删除)。
 >
 > 2026-11-12(`docs/design/gate-online-identity.md` §10.2、§10.3,未跑契约测试、未上集群):
@@ -1273,13 +1273,13 @@ content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $t
   调用方还开着时 zone-up 会被上面的核对拒绝,不会悄悄把 scene 的验签密钥摘掉。
 - **打开之前**还要满足 `docs/design/guild-phase2/08-save-owner-fence.md` §8.3 的六条门禁(运行期验证,脚本核不了)。
 
-**验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(本批新增 9 条、改 1 条)与
+**验证(交 Gemini,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(本批新增 9 条、改 1 条)与
 `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`(新增 2 条 trade 用例)。集群上(装了支持 NetworkPolicy 的网络插件):
 打开后从 scene-manager / guild Pod 能连 scene 的 50000、从 gate Pod 连不上;guild / trade 两 Pod Ready;robot `guild_smoke.yaml` 的捐献 / 兑换不再回 `kGuildAssetPending`。
 
 ## 发布轨道:金丝雀 zone 与全局服务的金丝雀副本(2026-11-05~06,`-ReleaseTrack` / `-CanaryServices`)
 
-> 状态:部署脚本、契约测试、告警已落码;**未跑契约测试、未上集群**,待 Codex。规则见 `docs/design/release-track-gray-canary.md`,操作步骤见 `docs/ops/release-track-canary-runbook.md`。
+> 状态:部署脚本、契约测试、告警已落码;**未跑契约测试、未上集群**,待 Gemini。规则见 `docs/design/release-track-gray-canary.md`,操作步骤见 `docs/ops/release-track-canary-runbook.md`。
 
 - `zone-up -ReleaseTrack canary`:zone 内的 gate、scene、login、scene-manager、db 写 `MMORPG_RELEASE_TRACK=canary`,Pod 模板加标签 `mmorpg.io/release-track: canary`;
   data-service、player-locator 不重新下发(输出 `[keep-stable]`)。infra-up、all-up 带 canary 直接拒绝。
@@ -1394,7 +1394,7 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
 - **合服**:榜按全局唯一的 player_id 存、没有 zone 维度,合服不搬不改;audit auditor 不适用(结论不是遗漏)。
 - **上线顺序**:没有开关,`infra-up` 一次部署 rank 与 match。rank 还没起来时 match 的投分 RPC 失败、游标不推进,rank 起来之后接着投。
 
-## 支付 payment:全局池 + 独占库 `mmorpg_payment` + `payment-migrate` Job + 回调入口 Service(2026-11-19,docs/design/payment-recharge.md §22;未运行,待 Codex 验证)
+## 支付 payment:全局池 + 独占库 `mmorpg_payment` + `payment-migrate` Job + 回调入口 Service(2026-11-19,docs/design/payment-recharge.md §22;未运行,待 Gemini 验证)
 
 payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $true`),`infra-up` / `all-up` 部署到 infra namespace 一份,`zone-up` 跳过,顺序见「全局服务的部署顺序」。
 共性(Job 门禁、等待预算、不删在途 Job、退出码、重跑迁移)照「聚宝斋 trade」一节,这里只写不同的地方。它不提供金丝雀副本。
@@ -1440,9 +1440,9 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   `PaymentFactNeedsManual`(孤儿或冲突的付款)、`PaymentNotificationRetrying` / `PaymentNotificationRejected`(回调处理不成 / 验签不过)、
   `PaymentChannelCallFailing`(调渠道接口失败)、`PaymentRefundFailed`(渠道退不了款)。指标名与取值由契约测试对照 `go/payment/internal/core/workers.go`。
 - **没做的**:回调入口的证书、域名与云厂商注解要运维自己配;渠道的真实商户参数没有接过真实接口(设计 §22.11)。
-- **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1`,以及改到的 `k8s_deploy_contract`、`k8s_migrate_gate`、`logical_db_deploy_contract`、`redis_player_cluster_contract` 四份契约测试。
+- **验证(交 Gemini,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1`,以及改到的 `k8s_deploy_contract`、`k8s_migrate_gate`、`logical_db_deploy_contract`、`redis_player_cluster_contract` 四份契约测试。
 
-## 商城 mall:全局 Java 服务 + 独占库 `mmorpg_mall` + `mall-schema` Job(2026-11-19,docs/design/payment-recharge.md §22;未运行,待 Codex 验证)
+## 商城 mall:全局 Java 服务 + 独占库 `mmorpg_mall` + `mall-schema` Job(2026-11-19,docs/design/payment-recharge.md §22;未运行,待 Gemini 验证)
 
 官方商城(`java/mall_game`)在 infra namespace 部署一份,全服共用,`zone-up` 不部署它。它只给集群内的 trade 与 payment 调用,没有对集群外的入口,不提供金丝雀副本。
 
@@ -1487,7 +1487,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
 - **准入**:`-NetworkPolicies on` 时 18120 只放行 `trade` 与 `payment`。策略名是 `mall-grpc-allowlist`:沿用 `-grpc-allowlist` 后缀,`k8s_netpol_probe.ps1` 按这个后缀找策略,商城这一份也会被实测。
 - **连接数**:Hikari 池上限 16(写在 `DatabaseConfiguration.poolConfig`,没有配置项)× 2 副本计入 MySQL 连接总账(`MallReplicas` / `MallMaxPool`)。和 gateway 一样,本次部不部署都计入。
 - **镜像**:`mmorpg-mall`,`java_svc_image.ps1` 与 gateway 一起构建。
-- **验证(交 Codex,未运行)**:同上一节。
+- **验证(交 Gemini,未运行)**:同上一节。
 
 ## scene 节点场景归属对账告警(2026-11-10,缺口清单第 33 条;未编译、未在集群上验证)
 
@@ -1683,7 +1683,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   与本区库池 `ServerConfig.Database.MaxOpenConn` / `MaxIdleConn` 都已删除,不留回落。
   **回退 A17c 必须用旧 commit 重跑 `k8s_deploy.ps1 zone-up` 重新生成 ConfigMap,不能只 `kubectl rollout undo statefulset/db`**:
   undo 只换回旧镜像,ConfigMap 里只有新键,旧二进制不认它们、按默认开池(go-zero 对未知配置键静默忽略,凭记忆,未核实),而且旧二进制还要本区库。
-- **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。本项新增 9 例(批 A 7、批 B 2),当前文件 89 → 98:
+- **验证(交 Gemini,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。本项新增 9 例(批 A 7、批 B 2),当前文件 89 → 98:
   规划档与 `zones.json` 的峰值 ≤ `max_connections`;公式自检(复现 2026-10-12 核算的 Z=4 → 920、Z=2 → 500);ConfigMap 镜像值 == 服务 yaml;
   连 MySQL 的 ConfigMap 只有总账认识的那几个;写路径打印那一行;10 个 zone 打超限警告且不阻断;db 指标端口三处一致;告警阈值与规划档同源。
   `.github/workflows/deploy-config-tests.yml` 的触发路径已加上 gateway 的 `application.yaml` 与 `deploy/k8s/*.yaml` / `*.json`,改这些输入也会跑契约测试。
@@ -1790,7 +1790,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
     误判「unchanged」放行,而 apply 的三方合并把它们改回清单值、照样重启 redis-0。改成服务端预演之后,预演结果里这些字段已经被改回,与线上不同,
     闸照实要求确认。`rollout restart` 加的 `restartedAt` 注解不在清单里,三方合并保留它,两边都有,不算变化。对 sts/redis 带外改过之后,
     仍应先把同样的改动落进 `redis.yaml` 再跑 infra-up,否则每次都会被要求确认(而且确认后会被改回)。
-    以前的另一个盲区(2026-10-19 已补,未运行,待 Codex 验证):`kubectl delete sts redis --cascade=orphan` 之后(改 volumeClaimTemplates 之类不可变字段的
+    以前的另一个盲区(2026-10-19 已补,未运行,待 Gemini 验证):`kubectl delete sts redis --cascade=orphan` 之后(改 volumeClaimTemplates 之类不可变字段的
     常规做法)redis-<n> Pod 与 PVC 仍在服务,以前闸查不到 sts、也查不到旧 Deployment,按「全新集群」放行。
     现在两样都没有时再查带 `app=redis` 的 `redis-<n>` Pod(`Get-LiveRedisOrphanPodOrdinals`):有就判 `orphan-pods`,要求 `-ConfirmRedisCoreRestart`
     (拒绝文本点名这些 Pod),不再当成全新集群。
@@ -1831,7 +1831,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   **未做**:告警(connected_clients ÷ maxclients、rejected_connections 增量、生效值 < 清单值;依赖 redis_exporter,待拍板,届时照 `mysql-connection-alerts.yaml` 写);
   *(2026-10-23 更正,上一条原文保留:前两项已做。redis.yaml、redis-match-cluster.yaml(2026-11-19 起还有两套 Redis Cluster 的 redis-cluster.yaml) 的每个 Redis Pod 带 `redis-exporter` sidecar(镜像钉 `oliver006/redis_exporter:v1.62.0`,指标端口 9121,口令只走 `REDIS_PASSWORD` 环境变量),告警在 `deploy/k8s/redis-alerts.yaml`,手工 `kubectl apply -n observability`,另需一个指向 9121 的 PodMonitor。加 sidecar 改了核心 Pod 模板,下一次 infra-up 要 `-ConfirmRedisCoreRestart`。「生效值 < 清单值」仍靠 `-WaitReady` 的部署后核对。静态契约 `tools/scripts/tests/redis_exporter_contract.tests.ps1`。)*
   go-zero 客户端的池上限:2026-11-12 起 go-zero 的 Redis 句柄全部换成 `shared/clusterredis`(缺口第 34 条第 2b、5 批),池上限都显式了。
-- **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/redis_maxclients_contract.tests.ps1`(第 1 批静态契约);
+- **验证(交 Gemini,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/redis_maxclients_contract.tests.ps1`(第 1 批静态契约);
   `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(第 2 批:规划档 ≤ 80%、输入钉子、公式自检、写路径打印、重启闸四种判定与拒绝文本、
   旧 Deployment 的拒绝、读线上那一步的 fail-closed、摘要语义、infra-up DryRun 的注解、两个包装入口透传;第 3 批:显式池上限等于服务 yaml、
   ConfigMap 镜像 PoolSize、PoolSize 非法时 fail-closed)。Go 侧与 C++ 侧的编译与单测命令见 `docs/PROGRESS.md` 2026-10-16「P0-E 第 3 批」条目。
@@ -1844,7 +1844,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
 三个入口脚本给 `-RedisReplicas` 即在参数绑定处失败。以前在 staging 上切过高可用的环境:确认没有客户端指向 `redis.<infra>` 之后,
 人工删掉 `statefulset/redis`、`deployment/redis-proxy` 及其 PVC、PDB、ConfigMap(部署脚本不再碰它们)。
 
-## Redis 运维命令:`redis-split-status` 与 `redis-wipe`(按用途拆实例 2026-11-19 退役;未运行,待 Codex 验证)
+## Redis 运维命令:`redis-split-status` 与 `redis-wipe`(按用途拆实例 2026-11-19 退役;未运行,待 Gemini 验证)
 
 按用途、按 zone 组拆出的单主实例(G4a 第 1a 批的排队实例 `redis-queue-g<N>`、[控制面按 zone 化](../../docs/design/control-plane-zone-scoping-20261105.md)
 的控制域实例 `redis-ctl-g<N>`)、它们的模板 `redis-purpose.yaml` / `redis-purpose-ha.yaml`、zones 配置的 `redisQueueGroup`,以及
@@ -1866,7 +1866,7 @@ StatefulSet 不会被部署脚本删除或清库,确认没有客户端指向它�
   才算通过,否则退出码 1;从节点的 DBSIZE 只打印。名单外的 StatefulSet(含没清理的旧 queue / ctl 实例)不碰。只清 Redis:MySQL / etcd / Kafka 仍按 AGENTS.md §6.2 另行处理。
 - Java 版(`D:\luyuan\xuanming-server-mmo`)没有 K8s 生产形态,不涉及。
 
-### 验证(交 Codex,未运行)
+### 验证(交 Gemini,未运行)
 
 ```powershell
 pwsh -NoProfile -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1
@@ -1875,7 +1875,7 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 ```
 
-## 玩家域 Redis Cluster(2026-10-31;未运行,待 Codex 验证)
+## 玩家域 Redis Cluster(2026-10-31;未运行,待 Gemini 验证)
 
 设计 [redis-player-store-cluster.md](../../docs/design/redis-player-store-cluster.md) §5.1、§5.6、§6、§7;运维手册(部署、扩缩容、节点故障、中断恢复、核对清单)[redis-player-cluster-runbook.md](../../docs/ops/redis-player-cluster-runbook.md)。
 
@@ -1943,7 +1943,7 @@ kubectl apply -n observability -f deploy/k8s/redis-control-alerts.yaml   # 控�
 
 组 `redis.player-domain`,10 条:`RedisPlayerNodeDown`、`RedisPlayerClusterStateNotOk`、`RedisPlayerSlotsNotCovered`、`RedisPlayerNodesDisagree`、`RedisPlayerReplicaLinkDown`、`RedisPlayerMemoryNearMax`、`RedisPlayerOomRejected`、`RedisPlayerConnectionsRejected`、`RedisPlayerConnectionsNearMax`、`RedisPlayerAofWriteFailed`。指标来自每个 Pod 的 `redis-exporter` sidecar(9121),需要 PodMonitor 或按注解抓取。指标名未在本机核实,部署后对着 `/metrics` 核对。
 
-### 控制 Redis Cluster(2026-11-12,缺口第 34 条第 6a 批;未运行,待 Codex 验证)
+### 控制 Redis Cluster(2026-11-12,缺口第 34 条第 6a 批;未运行,待 Gemini 验证)
 
 设计 [redis-cluster-all-domains-20261110.md](../../docs/design/redis-cluster-all-domains-20261110.md) §7、§10;手册同上(两套集群共用)。除玩家域、登录域与 match 私有键之外的全部 Redis 用途搬到第二套集群 `redis-control`。它与玩家域是**同一份模板、同一套部署函数**(`k8s_deploy.ps1` 的 `Get-RedisCluster -Kind player|control` 一处写两套的差别),上面「参数」「产物」「变更闸」「连接总账」各节的规则一一适用,只换名字:
 
@@ -2109,7 +2109,7 @@ kind 本地环境特有,不影响真集群:
 >   并给集群内 login 开 `-LoginDevPasswordAuth`(仅 dev 档)。
 > - 节点 / 宿主重启后 kubelet 对 `kind load` 过的镜像去 Docker Hub 校验、Pod 卡 `ErrImagePull`(backlog P2-03)**仍未处理**,照下文 `kubectl delete pod` 重建;
 >   P2-03 落地时在已有的 `kind-config.yaml` 上追加 `kubeadmConfigPatches`,不重写该文件、不动 `extraPortMappings`。
-> - 以上命令本会话**未运行**(本机未装 kind),待 Codex / 用户验证。
+> - 以上命令本会话**未运行**(本机未装 kind),待 Gemini / 用户验证。
 
 ```powershell
 . E:\work\tools\buildenv.ps1                       # GOPROXY / go 工具链
@@ -2383,7 +2383,7 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   - 第 1~4 步之间 Redis 进程重启了,它只按 Secret 当时的值起来:第 2 步之前重启 = 只认旧口令(无害,重做第 1 步);第 2 步之后重启 = 只认新口令,
     还没退场的旧 Pod 会 NOAUTH,对它重做第 1 步(加回旧口令)。所以轮换期间不跑会重启 Redis 的变更。
   - 核对:每个 scene 日志 `Redis AUTH ok to <host:port>`,不再有 `metric=zone_redis_auth_failed`;各节点 `INFO errorstats` 的 NOAUTH 计数不再增长。
-- **未验证**:Secret 下发、指纹注解与双口令轮换都没有在集群上跑过;部署脚本与契约测试未经 Codex 运行。
+- **未验证**:Secret 下发、指纹注解与双口令轮换都没有在集群上跑过;部署脚本与契约测试未经 Gemini 运行。
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 3a 节(C++ 节点的 Redis 口令)与 battle 段(battle 不连 Redis),
   `tools/scripts/tests/redis_player_cluster_contract.tests.ps1` 的「两套都开的 zone-up」,`tools/scripts/tests/k8s_client_entry_contract.tests.ps1` 的
   「库:-PodAnnotations 与 sidecar 配置指纹…」与「库:-SecretEnv 渲染成 secretKeyRef…」。
@@ -2416,7 +2416,7 @@ match 的 `Redis` 段与 mail 的回落段指向核心单实例,取 `redis-auth`
 - **dev 档没设口令**:各段写空串,不写 `SharedRedisPasswordEnv`,不注入变量,不写指纹,产物与改走 Secret 之前逐字相同。
 - **上线顺序**:项目未上线,首次部署整批起步即可。已有集群要注意:新脚本给某服务写空口令之后,该服务的镜像必须已经认 `SharedRedisPasswordEnv`,
   否则旧镜像按空口令连 Redis,会全线 NOAUTH。所以先发 Go 镜像,再用新脚本部署。反过来,新镜像配旧脚本不受影响:配置里仍是口令字面量,照常可用。
-- **未验证**:Go 代码、部署脚本、契约测试都还没经 Codex 运行;Secret 注入、指纹滚动、Spring 嵌套占位的解析,都没有在集群上跑过。
+- **未验证**:Go 代码、部署脚本、契约测试都还没经 Gemini 运行;Secret 注入、指纹滚动、Spring 嵌套占位的解析,都没有在集群上跑过。
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「Go 服务与 gateway 的共享 Redis 口令」一节,以及 3b 节的两条 gateway 用例
   (`staging / prod 的 gateway 带 spring.data.redis.password…`、`gateway 削峰指纹随 Redis 口令变化…`)。Go 单测在 `go/shared/redisauth` 和各服务的
   `internal/config/shared_redis_password_test.go`。
@@ -2550,7 +2550,7 @@ match 的 `Redis` 段与 mail 的回落段指向核心单实例,取 `redis-auth`
 - **钉版不改变运行版本的依据**:2026-10-15 查 Docker Hub,`4.3.1`(2026-06-23 推送)与 `latest`(2026-06-24 推送)
   是同一个 index digest。这只是 registry 上的对比:正在跑的 broker 拉的是 Pod 创建时的 `latest`,本机 compose 用的是
   本地缓存的 `latest`,两者都可能更旧。
-- **合入前先核对(V0,由负责人或 Codex 执行,不阻塞落码)**:
+- **合入前先核对(V0,由负责人或 Gemini 执行,不阻塞落码)**:
   1. 集群(`-n` 换成实际的 `-InfraNamespace`):
      `kubectl get pod -n mmorpg-infra -l app=kafka -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[0].imageID}{"\n"}{end}'`,
      每个 broker 的 imageID 都要含 `sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`;
@@ -2665,7 +2665,7 @@ docker compose -f deploy/docker-compose.yml config
 渲染后的 broker 默认保留期 > 900000。manifest 里嵌的 shell 可以用
 `yaml.safe_load` 抽出来跑 `sh -n`(Job 的 `command[2]`、kafka 的 `args[0]`、compose 的 `entrypoint[2]`)。
 
-## Kafka 磁盘预算(2026-10-30 按新存盘路径改写;未编译、未测试,待 Codex 验证)
+## Kafka 磁盘预算(2026-10-30 按新存盘路径改写;未编译、未测试,待 Gemini 验证)
 
 盘预算只算审计 topic 和命令 topic,与 zone 数无关:这些 topic 都是全服一份,玩家存盘不经 Kafka。
 `k8s_deploy.ps1` 在写路径入口(zone-up / all-up / infra-up)算一份预算,决定 PVC 大小并打一行账本。
@@ -2756,7 +2756,7 @@ N 大于最小的实际 PVC = `pvc-not-expanded`(某块盘还没扩到 N:先完�
 缺省 `-KafkaProfile prod`:kind 上的新集群会申请 80Gi 的 PVC(2026-11-11 审计 topic 定为每分区 4GiB 之前是 40Gi)。local-path 不强制容量,高写入压测可能写满宿主盘。
 **本机 / kind 建议显式传 `-KafkaProfile dev`**(PVC 20Gi)。
 
-### 验证(交 Codex,未运行)
+### 验证(交 Gemini,未运行)
 
 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 里 Kafka 盘预算的用例(纯函数的缺省值与各判定路径、账本行、kafka 清单的 `storage:`、负向参数)。
 
@@ -2869,7 +2869,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
 - 抓取前提:每个节点跑 node_exporter 并被抓取(kube-prometheus 默认就有)。形状、门槛和三种语言启动核对的接线由 `tools/scripts/tests/clock_alerts_contract.tests.ps1` 核对。
 - 服务启动核对不需要额外部署:靠 Pod 默认挂载的集群 CA 访问 API server 的 `/version`,不要 RBAC 权限。工作负载关掉 ServiceAccount 令牌挂载、或者出口策略挡住 API server 时,核对只告警跳过。
 
-## 玩家归属与合服映射:只在全局库(2026-10-30;未编译、未测试,待 Codex 验证)
+## 玩家归属与合服映射:只在全局库(2026-10-30;未编译、未测试,待 Gemini 验证)
 
 归属和落点只在目录 `player_route` 一份(按玩家分片),data_service 直接 SQL 读写,提交即完成;合服只写 `zone_merged_into` 一条映射,各服务定时重读。没有 Redis 副本、对账 leader、就绪标记,部署脚本也没有路由开关(设计见 `docs/design/player-route-mapping-durability-proposal.md` §15,合服见 `docs/ops/merge-zone-runbook.md`)。
 

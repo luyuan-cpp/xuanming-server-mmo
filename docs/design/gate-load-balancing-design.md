@@ -29,7 +29,7 @@ Gate → 本地校验签名、目标 Gate 与到期时间 → 允许后续游戏
 代码：`go/login/internal/logic/loginpregate/assigngatelogic.go`、`queryqueuestatuslogic.go`、
 `go/login/internal/logic/pkg/loginqueue/gatetoken.go`、`admit_recheck.go`。
 
-### gate 目录怎么读、怎么挑（2026-10-18 起；已落码，未编译、未测试，待 Codex 验证）
+### gate 目录怎么读、怎么挑（2026-10-18 起；已落码，未编译、未测试，待 Gemini 验证）
 
 **读目录**：login 的 `node.NodeWatcher` 对本 zone 的 gate 前缀做 list-watch，维护一份进程内镜像
 （`go/login/internal/logic/pkg/node/node_cache.go`、`watcher.go`）。AssignGate 快路径与排队 dispatcher
@@ -82,7 +82,7 @@ scene_manager 跨 zone 重定向共用；Java 版 `game-discovery` 的 `GatePick
 `gatepick.Eligible` 一份（2026-11-06 起；此前 login 的 `FilterDrainingGates` 与 scene_manager 的 `filterDrainingTargets` 各写了一份
 先行剔除，见下节「为什么一次分档」）。
 
-### 满载与停写的 gate（2026-11-05 起；11-06 排空并入分档；已落码，未编译、未测试，待 Codex 验证）
+### 满载与停写的 gate（2026-11-05 起；11-06 排空并入分档；已落码，未编译、未测试，待 Gemini 验证）
 
 挑 gate 之前先给候选分档，不该再接新玩家的 gate 只在没有更好的选择时才用。规则只有一份，在 `go/shared/gatepick`
 （`eligibility.go` 的 `Eligible`、`Verdict`、`Full`、`StaleAfter`、`ReportPeriod`），四处共用：login 快路径 `PickGate`、dispatcher 的
@@ -217,7 +217,7 @@ dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `A
 
 - Java 版（`game-discovery` 的 `GatePicker`）三项都未做，记在 Java 仓 `PARITY.md` 待做；做的时候按同一分档（排空并入，不先行剔除）。
 
-### 本进程在途票（2026-11-11 起；已落码，未编译、未测试，待 Codex 验证）
+### 本进程在途票（2026-11-11 起；已落码，未编译、未测试，待 Gemini 验证）
 
 gate 人数每 10s 才上报一次，login 看到的人数最多晚约 15s。只按它挑，两条挑法都会在一个上报周期里往同一台最闲的 gate 上堆人：
 快路径各请求互相看不到刚分出去的人；dispatcher 一拍之内有 `gatePicker` 记账，跨拍又从同一份滞后人数起算。
@@ -241,7 +241,7 @@ gate 人数每 10s 才上报一次，login 看到的人数最多晚约 15s。只
 
 **还没做**（容量模型 A0-7 的其余部分与评审登记）：
 
-- 回落告警与 `login.gate-health` 组还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据（交 Codex 与首轮演练）。
+- 回落告警与 `login.gate-health` 组还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据（交 Gemini 与首轮演练）。
 
 ## 有状态连接与跨 Gate 重连
 

@@ -1,12 +1,12 @@
 # player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 
-> **状态**:已落码,**未编译、未测试,待 Codex 验证**(AGENTS §10.1)。规格与核实意见:`docs/handoff/launch-readiness-20261013/spec_B0-1_reconcile_by_gate.md`（已清理，见 `ccf2840b2`）;负责人 2026-10-17 拍板「索引在既有三段会话 Lua 里与会话写入原子维护」。核实意见的 3 条 must(单 leader 无法让位、etcd 一抖就作废补建、标记与代次只在进程内)已按 §4 的做法改设计后落码。
+> **状态**:已落码,**未编译、未测试,待 Gemini 验证**(AGENTS §10.1)。规格与核实意见:`docs/handoff/launch-readiness-20261013/spec_B0-1_reconcile_by_gate.md`（已清理，见 `ccf2840b2`）;负责人 2026-10-17 拍板「索引在既有三段会话 Lua 里与会话写入原子维护」。核实意见的 3 条 must(单 leader 无法让位、etcd 一抖就作废补建、标记与代次只在进程内)已按 §4 的做法改设计后落码。
 >
 > 代码:`go/player_locator/internal/logic/{keys.go, session_cas.go, gate_session_index.go, gate_sweep.go, slot_shard.go, leasemonitor.go, session_reconciler.go, reconcile_view.go, reconcile_metrics.go}`、`internal/node/node.go`(能力键)、`player_locator.go`(装配);告警 `deploy/k8s/player-locator-alerts.yaml`。
 >
 > **2026-10-18 评审修订**(同日落码后的核实意见,本文已按修订后的代码改写,未编译、未测试):last_success 启动预置 0、Stalled 不再按 is_leader 过滤(§9);长 for 告警用短子查询抹平换主空档(§9);单键 WRONGTYPE 只跳过该成员 / 该 gate、不中止整拍,实例级错误照常整拍失败(§4.2、§8);完整扫描单页失败对同一游标退避重试、扫描期间 Redis 换进程则整遍作废、有候选被跳过的补建不设标记、审计失败设冷却键(§4.3、§4.4、§8);last_audit 超前一个周期以上按坏值处理(§4.3);大面积故障恢复时间更正为约 3.7 小时(§7);回滚后快速再升级的窗口登记为残余风险(§6、§8)。
 
-> **2026-10-31 按 §11 分桶(玩家态 Redis 集群化第 7 批,未编译、未测试,待 Codex 验证;总设计 [redis-player-store-cluster.md](redis-player-store-cluster.md) §5.9)**:会话、断线租约、gate 索引进玩家域,按会话 pid 的 slot-tag 分桶;死 gate 清扫与 LeaseMonitor 改按「成员登记 + 段租约」分给各副本,写者检查与补建 / 审计仍由一个 leader 跑。§2 起按新形状改写;§1 与上面的 2026-10-18 记录保留原文。
+> **2026-10-31 按 §11 分桶(玩家态 Redis 集群化第 7 批,未编译、未测试,待 Gemini 验证;总设计 [redis-player-store-cluster.md](redis-player-store-cluster.md) §5.9)**:会话、断线租约、gate 索引进玩家域,按会话 pid 的 slot-tag 分桶;死 gate 清扫与 LeaseMonitor 改按「成员登记 + 段租约」分给各副本,写者检查与补建 / 审计仍由一个 leader 跑。§2 起按新形状改写;§1 与上面的 2026-10-18 记录保留原文。
 
 ## 1. 问题与现状
 
@@ -311,7 +311,7 @@ go-zero 在 Prometheus agent 启动(`zrpc.MustNewServer`)之前的指标写入�
 - 写者与补建 / 审计(同一文件):写者读失败不动标记与代次、旧写者删标记加代次、只续已存在的标记、补建补齐并设标记、补回登记集、旧写者阻止就绪、写者读失败不开始补建、补建中代次变化不设标记、标记过期后下一任重新补建、不补非 ONLINE 与已改写的会话、审计计 audit_repaired、审计时机跨 leader 持久、审计清存活 gate 脏成员与空键、单页失败重试后设上标记、SCAN 失败整遍失败、SSCAN 失败按同一非零游标重试、持续失败按指数退避 5 次后放弃、审计失败设冷却键、拓扑变化整遍作废、有候选被跳过不设标记(incomplete)、last_audit 超前一个周期按到期处理、连续失败让位、3 拍无成功让位、让位释放选主锁并退避(真实选主器)、run 等补建循环退出、两个限速器与预算;`isKeyTypeError` 等纯函数。
 - 配置 / 节点 / 告警:`config_test.go`、`svc/player_redis_conf_test.go`、`node_registration_test.go`(+ integration tag 的能力键随租约存亡)、`reconcile_metrics_test.go`。
 
-验证命令见 PROGRESS 同日条目。真实 Redis 上的核对(交 Codex,只记录结果,不下性能结论):本地栈跑 robot login-test 后,`redis-cli --scan --pattern 'player:gate_index:{*}:sessions:<uuid>'` 逐把 SCARD 求和等于在线机器人数,`player:gate_index:{*}:gates` 里只有当前 gate,`GET player:gate_index:ready:{pl:gix}`(控制集群上)以 `v2:` 开头,`EXISTS ""` 为 0,`player:locator_shard:*:segment:*` 共 512 把(两个角色各 256)且值都是现存副本;结束 gate 进程等约 3 分钟,这个 uuid 的索引键都已消失、对应会话已删除,日志有 `orphaned ONLINE session -> DISCONNECTING`。
+验证命令见 PROGRESS 同日条目。真实 Redis 上的核对(交 Gemini,只记录结果,不下性能结论):本地栈跑 robot login-test 后,`redis-cli --scan --pattern 'player:gate_index:{*}:sessions:<uuid>'` 逐把 SCARD 求和等于在线机器人数,`player:gate_index:{*}:gates` 里只有当前 gate,`GET player:gate_index:ready:{pl:gix}`(控制集群上)以 `v2:` 开头,`EXISTS ""` 为 0,`player:locator_shard:*:segment:*` 共 512 把(两个角色各 256)且值都是现存副本;结束 gate 进程等约 3 分钟,这个 uuid 的索引键都已消失、对应会话已删除,日志有 `orphaned ONLINE session -> DISCONNECTING`。
 
 ## 13. Java 版
 

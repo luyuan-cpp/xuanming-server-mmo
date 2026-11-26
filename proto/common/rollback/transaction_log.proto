@@ -144,6 +144,15 @@ enum TransactionType
   TX_GUILD_BOUNTY_ESCROW = 41;  // 发布江湖追杀令预扣银两(ASSET_OP_STREAM_GUILD_DEBIT)
   TX_GUILD_WAR_REWARD = 42;     // 帮战即时银两、周战功里程碑宝箱与灵脉分红(ASSET_OP_STREAM_GUILD_CREDIT)
   TX_GUILD_BOUNTY_PAYOUT = 43;  // 追杀赏金、反杀赏金与过期本金退还(ASSET_OP_STREAM_GUILD_CREDIT)
+
+  // ── 官方灵石百宝阁直购(docs/design/spirit-shop-and-starter-packs-v1.md §2.4) ──
+  // 扣灵石与发绑定物品共用同一 correlation_id = client_request_id。只追加,不复用旧编号。
+  TX_SPIRIT_SHOP_BUY = 44;
+
+  // ── 游历手记典藏解锁与双轨领奖(docs/design/activity-travel-pass-and-showcase-v1.md §2.4) ──
+  // correlation_id = client_request_id。只追加,不复用旧编号。
+  TX_TRAVEL_PASS_UNLOCK = 45;
+  TX_TRAVEL_PASS_REWARD = 46;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

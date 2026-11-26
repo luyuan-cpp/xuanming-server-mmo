@@ -84,7 +84,7 @@
 
 无论哪种，都要补一个用例：到期删锁先于 SET pending 时，结算最终仍被应用。
 
-**2026-11-01 状态：已消除（未编译，待 Codex 验证）。** 结算改为只走 match SQL + player_inbox（`player-data-tidb-scaling-plan.md` §5.4），Redis 里没有 pending 可删：`ApplyInboxSettlement` 不读锁、不看冻结，reaper 判作废之后结算照常入账。reaper 也加了宽限（`FreezeExpiresAtMs`）。曾经的修复分支 `claude/recover-battle-settlement-f39089db` 不再合回，去向见 `turn-battle-gap-closure.md` §10。
+**2026-11-01 状态：已消除（未编译，待 Gemini 验证）。** 结算改为只走 match SQL + player_inbox（`player-data-tidb-scaling-plan.md` §5.4），Redis 里没有 pending 可删：`ApplyInboxSettlement` 不读锁、不看冻结，reaper 判作废之后结算照常入账。reaper 也加了宽限（`FreezeExpiresAtMs`）。曾经的修复分支 `claude/recover-battle-settlement-f39089db` 不再合回，去向见 `turn-battle-gap-closure.md` §10。
 
 ### 2.2 low · Redis 回退一族（同一根因，建议合并处置）
 
@@ -148,7 +148,7 @@
 | 类别 | 内容 |
 |---|---|
 | medium，待修 | ~~本文 cross-service-assets#1（缺省可达）~~（2026-11-01 已消除，见 §2.1）；r2-battle#1（全球匹配门控）；r2-mz#1（copy 合服门控）；r2-ps#1（仅混版，严重度待第二轮第四波裁决）；第一轮 §2.5 三条（全球匹配、交易资产通道门控） |
-| 已落码、未验证 | 第一轮 §2.1–§2.4，r2-gate#1、r2-sm#1/2/3、r2-db#1/3，混版字段保护第 2、3a 批。都在等 Codex 编译、测试与故障演练，见第一轮 §7 与第二轮交接 §8.1 |
+| 已落码、未验证 | 第一轮 §2.1–§2.4，r2-gate#1、r2-sm#1/2/3、r2-db#1/3，混版字段保护第 2、3a 批。都在等 Gemini 编译、测试与故障演练，见第一轮 §7 与第二轮交接 §8.1 |
 | 本轮新 low | §2.2 的 6 条（建议合并成一份设计），§2.3 的 9 条 |
 | 未覆盖 | 第二轮第三、四波（另一会话在做）；Java 版同类审计；运行期一致性压测（[data-consistency-stress-testing.md](data-consistency-stress-testing.md) L2–L4）。静态审计不能代替这些运行证据 |
 
@@ -197,7 +197,7 @@
 | 7 | low | 路由失败回滚时,kafka 报错但消息其实已投递,目标节点又抢在回滚之前完成登记和认领,就成了「没有 location 的现任」;下一次换图或重登按首次落点铸新代次,丢这之前最后一次提交之后的进度。只发生在不凭交接标记的铸造上(首次落点、第二条腿、死节点接管),凭标记的回滚早已靠「标记还在」互斥 | 11-06 本会话已改(6.3 第 5 条),Codex 已跑通(见 6.4) |
 | 8 | low | 判死释放(`ReleaseDeadPlayerStoreHolder`)只比代次,交易判死比(代次、持有者、认领序号)三列。误判死与同落点重连认领凑在一次释放 RPC 的窗口里时,认领之后的进度丢 | R2 交接会话 11-06 已修:判死释放比(代次、持有者、认领序号)三列并复核注册表(handover-single-writer-v#1 的 scene_manager 侧);见第二轮审计 §6 |
 | 9 | low | rank 封榜奖励被邮件服务拒收时永远重试、没有终态;30 天后邮件一律按过期拒收 | R2 交接会话 11-06 已修(r2-mail#2):发件取 min(封榜 +30 天, now + mail 当前 TTL),收件箱满与超出可投窗口设终态并计指标。目前没有生产调用方触发封榜发奖 |
-| 10 | low | `ReleasePlayerName` 非管理员路径不核调用方,只限登记年龄窗口;出 bug 或被越权调用时一名两角 | 2026-11-06 已落码,未编译,待 Codex 验证。名字行改成「预留 → 绑定」状态机(`player_name.bound_ms`):建角提交之后复核角色再绑定;已绑定的 `ReleasePlayerName` 一律拒绝,只有删角写完墓碑之后的收尾能释放;预留态释放之前在玩家片证明角色永远不会提交(必要时写墓碑);不带 token 时只认 login 的签名。核账工具加 `name_unbound`。设计与残余见 [名字设计](guild-phase2/03-names.md) §3.4a |
+| 10 | low | `ReleasePlayerName` 非管理员路径不核调用方,只限登记年龄窗口;出 bug 或被越权调用时一名两角 | 2026-11-06 已落码,未编译,待 Gemini 验证。名字行改成「预留 → 绑定」状态机(`player_name.bound_ms`):建角提交之后复核角色再绑定;已绑定的 `ReleasePlayerName` 一律拒绝,只有删角写完墓碑之后的收尾能释放;预留态释放之前在玩家片证明角色永远不会提交(必要时写墓碑);不带 token 时只认 login 的签名。核账工具加 `name_unbound`。设计与残余见 [名字设计](guild-phase2/03-names.md) §3.4a |
 
 核实成立的保证(各路复核过):写权判定先判代次、再判持有者、最后才比序号;认领在同一个事务里抬代次再读全部行;交接标记只在最终存盘提交、且没有排队快照之后才写,写了标记就不再存盘;判死释放用 location 记的那一代,库里更新就不动;发号器两套 etcd 都写成功才发号;外部腿只认已提交账本才终结,自动放弃的「已释放」和「账本未见」出自同一次读、按租约令牌提交;写者闸门冻结之后旧位置的写提交不了;搬库翻转结局未知时绝不解冻;过户、删角之后旧会话写不进存档。
 
@@ -229,12 +229,12 @@
 
 | 条 | 已有的运行证据 | 出处 |
 |---|---|---|
-| 1 流水随存盘提交(发件箱) | 11-08 的证据(`currency_test` 的 `TransactionLogCommitGateTest.*` 7 条、`bag_test` 4 条提交水位用例全 PASS)对的是 11-05 的提交闸门,发件箱已取代它,只剩提交水位那部分仍适用。11-11~12 的发件箱:11-13 Codex 编过 go/db 生产代码、跑通告警契约,11-14 与 11-18 编过 scene;**单测与冒烟一条没跑**;11-19 改成一笔带完(删分笔、存盘通道 16 MiB)**未编译**。待 Codex:协议生成;C++ `AuditOutboxTest.*`、`bag_test` 的存盘客户端审计用例;Go `go/db/internal/auditoutbox`(确认后才删、部分失败只删成功的、持锁互斥、两副本并发每行只投一次、按哈希分工不重叠、排空、闸门冻结、全扫)、`playerstore` 同事务写入与回滚、`config` 与 data_service 的 topic 一致;真库(MySQL 与 TiDB)的命名锁互斥与发件箱同事务 | PROGRESS 11-11、11-12 两条「审计发件箱」;11-08 原件 `build/verification/naming-audit-20261108/cpp-tests/` |
-| 2 身份不确认期间补存 | 11-08 整解编译通过。11-10 补了 3 条单测(`cross_zone_test` 的 `PlayerStoreDirectEcs.UnconfirmedIdentitySavesEachPlayerOnceEveryFiveSeconds` 等),补存入口改为 `PlayerLifecycleSystem::RunIdentityAtRiskSaves`,**未编译,待 Codex** | PROGRESS 11-10 Claude「身份不确认期间补存补单测」 |
+| 1 流水随存盘提交(发件箱) | 11-08 的证据(`currency_test` 的 `TransactionLogCommitGateTest.*` 7 条、`bag_test` 4 条提交水位用例全 PASS)对的是 11-05 的提交闸门,发件箱已取代它,只剩提交水位那部分仍适用。11-11~12 的发件箱:11-13 Codex 编过 go/db 生产代码、跑通告警契约,11-14 与 11-18 编过 scene;**单测与冒烟一条没跑**;11-19 改成一笔带完(删分笔、存盘通道 16 MiB)**未编译**。待 Gemini:协议生成;C++ `AuditOutboxTest.*`、`bag_test` 的存盘客户端审计用例;Go `go/db/internal/auditoutbox`(确认后才删、部分失败只删成功的、持锁互斥、两副本并发每行只投一次、按哈希分工不重叠、排空、闸门冻结、全扫)、`playerstore` 同事务写入与回滚、`config` 与 data_service 的 topic 一致;真库(MySQL 与 TiDB)的命名锁互斥与发件箱同事务 | PROGRESS 11-11、11-12 两条「审计发件箱」;11-08 原件 `build/verification/naming-audit-20261108/cpp-tests/` |
+| 2 身份不确认期间补存 | 11-08 整解编译通过。11-10 补了 3 条单测(`cross_zone_test` 的 `PlayerStoreDirectEcs.UnconfirmedIdentitySavesEachPlayerOnceEveryFiveSeconds` 等),补存入口改为 `PlayerLifecycleSystem::RunIdentityAtRiskSaves`,**未编译,待 Gemini** | PROGRESS 11-10 Claude「身份不确认期间补存补单测」 |
 | 3 本地换图旁路关掉 | 只改配置与注释,没有运行证据 | — |
 | 4 人工终结统一判据 | `go/shared` assetop 144 PASS(9 条真 MySQL 门控 SKIP);trade 的 assetopfix、data、reconcile、svc 共 111 PASS | PROGRESS 11-06 Codex「数据一致性验证续跑」「修正 scene_manager 五项旧夹具」 |
 | 5 回滚先看资格原件 | `go/scene_manager` 的 `./internal/logic/...` 全量 756 PASS;回滚 Lua 在真 Redis 7.2.16 与 8.10.2 上 16/16(两种先后、6 类资格原件,返回 4 / 5 时 6 个键逐字节不变) | 同上两条 |
-| 6 持有者存活租约 | 11-12 落码,**未编译,待 Codex**。单测:C++ `cross_zone_test` 的 `PlayerStoreDirectEcs.*HolderLease*` 3 条与 `currency_test` 的键金样;Go `holder_lease_test.go` 9 条(四个点位、标记优先、读失败、跨语言契约) | PROGRESS 11-12 Claude「持有者存活租约」 |
+| 6 持有者存活租约 | 11-12 落码,**未编译,待 Gemini**。单测:C++ `cross_zone_test` 的 `PlayerStoreDirectEcs.*HolderLease*` 3 条与 `currency_test` 的键金样;Go `holder_lease_test.go` 9 条(四个点位、标记优先、读失败、跨语言契约) | PROGRESS 11-12 Claude「持有者存活租约」 |
 
 还没有运行证据的:
 - 流水随存盘提交的运行期核对(本机全栈:资产变动 → 发件箱 → Kafka → `transaction_log` 表;停 Kafka 期间发件箱只积不丢、恢复后排空;两副本 go/db 并存时不重投),本地跨节点换图冒烟,etcd 单边失联演练,真实 SQL 条件写竞态,Kafka「报错但已投递」注入,告警规则的 promtool 校验。
@@ -249,7 +249,7 @@
 
 ### 6.5 2026-11-12 补审
 
-只读静态审计,5 条发现;回合结算、匹配、观战没有发现。修复与 Codex 命令见 `docs/PROGRESS.md` 11-12「数据一致性补审」条目,全部未编译。
+只读静态审计,5 条发现;回合结算、匹配、观战没有发现。修复与 Gemini 命令见 `docs/PROGRESS.md` 11-12「数据一致性补审」条目,全部未编译。
 
 | # | 严重度 | 问题 | 处置 |
 |---|---|---|---|
@@ -263,7 +263,7 @@
 
 ### 6.6 2026-11-19 搬库改动复核
 
-第 11、12、14 条的修复是后台代理写的,11-12 只确认了关键函数在。11-19 把 `tools/dbmove` 逐行读了一遍,这三处的逻辑没有发现错误;它凭记忆写的 `information_schema` 列名、MySQL 的 `replica_*` 变量与复制通道表在真库上核过(TiDB v8.5.2、MySQL 8.4.13),都对。复核中补了两处,细节与 Codex 命令见 `docs/PROGRESS.md` 11-19「搬库工具三处改动逐行复核」,未编译:
+第 11、12、14 条的修复是后台代理写的,11-12 只确认了关键函数在。11-19 把 `tools/dbmove` 逐行读了一遍,这三处的逻辑没有发现错误;它凭记忆写的 `information_schema` 列名、MySQL 的 `replica_*` 变量与复制通道表在真库上核过(TiDB v8.5.2、MySQL 8.4.13),都对。复核中补了两处,细节与 Gemini 命令见 `docs/PROGRESS.md` 11-19「搬库工具三处改动逐行复核」,未编译:
 
 | # | 严重度 | 问题 | 处置 |
 |---|---|---|---|

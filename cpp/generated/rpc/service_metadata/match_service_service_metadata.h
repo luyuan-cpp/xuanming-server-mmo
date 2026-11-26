@@ -134,3 +134,39 @@ constexpr uint32_t MatchServiceCheerTournamentSquadIndex = 31;
 constexpr uint32_t MatchServiceClaimTournamentRewardMessageId = 475;
 constexpr uint32_t MatchServiceClaimTournamentRewardIndex = 32;
 #define MatchServiceClaimTournamentRewardMethod  ::MatchService_Stub::descriptor()->method(32)
+
+constexpr uint32_t MatchServiceSaluteTournamentChampionMessageId = 506;
+constexpr uint32_t MatchServiceSaluteTournamentChampionIndex = 33;
+#define MatchServiceSaluteTournamentChampionMethod  ::MatchService_Stub::descriptor()->method(33)
+
+constexpr uint32_t MatchServiceSendTournamentSpectateCheerMessageId = 507;
+constexpr uint32_t MatchServiceSendTournamentSpectateCheerIndex = 34;
+#define MatchServiceSendTournamentSpectateCheerMethod  ::MatchService_Stub::descriptor()->method(34)
+
+constexpr uint32_t MatchServiceGetTournamentSpectateCheerMessageId = 508;
+constexpr uint32_t MatchServiceGetTournamentSpectateCheerIndex = 35;
+#define MatchServiceGetTournamentSpectateCheerMethod  ::MatchService_Stub::descriptor()->method(35)
+
+constexpr uint32_t MatchServiceUpdateTournamentSquadEmblemMessageId = 511;
+constexpr uint32_t MatchServiceUpdateTournamentSquadEmblemIndex = 36;
+#define MatchServiceUpdateTournamentSquadEmblemMethod  ::MatchService_Stub::descriptor()->method(36)
+
+constexpr uint32_t MatchServiceStartTournamentWarmupMessageId = 512;
+constexpr uint32_t MatchServiceStartTournamentWarmupIndex = 37;
+#define MatchServiceStartTournamentWarmupMethod  ::MatchService_Stub::descriptor()->method(37)
+
+constexpr uint32_t MatchServicePredictTournamentMatchMessageId = 513;
+constexpr uint32_t MatchServicePredictTournamentMatchIndex = 38;
+#define MatchServicePredictTournamentMatchMethod  ::MatchService_Stub::descriptor()->method(38)
+
+constexpr uint32_t MatchServiceGetTournamentPredictionBoardMessageId = 514;
+constexpr uint32_t MatchServiceGetTournamentPredictionBoardIndex = 39;
+#define MatchServiceGetTournamentPredictionBoardMethod  ::MatchService_Stub::descriptor()->method(39)
+
+constexpr uint32_t MatchServiceBanTournamentLeylineMessageId = 534;
+constexpr uint32_t MatchServiceBanTournamentLeylineIndex = 40;
+#define MatchServiceBanTournamentLeylineMethod  ::MatchService_Stub::descriptor()->method(40)
+
+constexpr uint32_t MatchServiceGetTournamentHighlightsMessageId = 535;
+constexpr uint32_t MatchServiceGetTournamentHighlightsIndex = 41;
+#define MatchServiceGetTournamentHighlightsMethod  ::MatchService_Stub::descriptor()->method(41)

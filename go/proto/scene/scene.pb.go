@@ -675,6 +675,10 @@ type PrepareBattleRequest struct {
 	MatchMode uint32 `protobuf:"varint,8,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
 	// 活动对局冻结上下文（瑞兽迎春等，用于 scene 在 PrepareBattle 复核锁定出战宝宝与隔离快照）。
 	ActivityContext *battle.BattleActivityContext `protobuf:"bytes,9,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`
+	// true = 五行幻境周常爬塔开战：scene 权威校验并注入当前层数与本轮已选符印。
+	IsWuxingTower bool `protobuf:"varint,10,opt,name=is_wuxing_tower,json=isWuxingTower,proto3" json:"is_wuxing_tower,omitempty"`
+	// 道友切磋坊自定义规则（仅切磋局透传，供 scene 决定满血蓝隔离等准备策略）。
+	CustomDuelRules *battle.CustomDuelRules `protobuf:"bytes,11,opt,name=custom_duel_rules,json=customDuelRules,proto3" json:"custom_duel_rules,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -768,6 +772,20 @@ func (x *PrepareBattleRequest) GetMatchMode() uint32 {
 func (x *PrepareBattleRequest) GetActivityContext() *battle.BattleActivityContext {
 	if x != nil {
 		return x.ActivityContext
+	}
+	return nil
+}
+
+func (x *PrepareBattleRequest) GetIsWuxingTower() bool {
+	if x != nil {
+		return x.IsWuxingTower
+	}
+	return false
+}
+
+func (x *PrepareBattleRequest) GetCustomDuelRules() *battle.CustomDuelRules {
+	if x != nil {
+		return x.CustomDuelRules
 	}
 	return nil
 }
@@ -990,7 +1008,7 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"c\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x121\n" +
-	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\x8f\x03\n" +
+	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\xf5\x03\n" +
 	"\x14PrepareBattleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12$\n" +
@@ -1002,7 +1020,10 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x10battle_config_id\x18\a \x01(\rR\x0ebattleConfigId\x12\x1d\n" +
 	"\n" +
 	"match_mode\x18\b \x01(\rR\tmatchMode\x12A\n" +
-	"\x10activity_context\x18\t \x01(\v2\x16.BattleActivityContextR\x0factivityContext\"\xad\x01\n" +
+	"\x10activity_context\x18\t \x01(\v2\x16.BattleActivityContextR\x0factivityContext\x12&\n" +
+	"\x0fis_wuxing_tower\x18\n" +
+	" \x01(\bR\risWuxingTower\x12<\n" +
+	"\x11custom_duel_rules\x18\v \x01(\v2\x10.CustomDuelRulesR\x0fcustomDuelRules\"\xad\x01\n" +
 	"\x15PrepareBattleResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\x12+\n" +
@@ -1060,13 +1081,14 @@ var file_proto_scene_scene_proto_goTypes = []any{
 	(*SceneInfoComp)(nil),                      // 16: SceneInfoComp
 	(*battle.RankedMatchContext)(nil),          // 17: RankedMatchContext
 	(*battle.BattleActivityContext)(nil),       // 18: BattleActivityContext
-	(*base.TipInfoMessage)(nil),                // 19: TipInfoMessage
-	(*battle.BattlePlayerSnapshot)(nil),        // 20: BattlePlayerSnapshot
-	(*base.RoleTradeSeal)(nil),                 // 21: common.base.RoleTradeSeal
-	(*base.ServiceCallAuth)(nil),               // 22: common.base.ServiceCallAuth
-	(*base.NodeHandshakeRequest)(nil),          // 23: NodeHandshakeRequest
-	(*base.Empty)(nil),                         // 24: Empty
-	(*base.NodeHandshakeResponse)(nil),         // 25: NodeHandshakeResponse
+	(*battle.CustomDuelRules)(nil),             // 19: CustomDuelRules
+	(*base.TipInfoMessage)(nil),                // 20: TipInfoMessage
+	(*battle.BattlePlayerSnapshot)(nil),        // 21: BattlePlayerSnapshot
+	(*base.RoleTradeSeal)(nil),                 // 22: common.base.RoleTradeSeal
+	(*base.ServiceCallAuth)(nil),               // 23: common.base.ServiceCallAuth
+	(*base.NodeHandshakeRequest)(nil),          // 24: NodeHandshakeRequest
+	(*base.Empty)(nil),                         // 25: Empty
+	(*base.NodeHandshakeResponse)(nil),         // 26: NodeHandshakeResponse
 }
 var file_proto_scene_scene_proto_depIdxs = []int32{
 	14, // 0: ProcessClientPlayerMessageRequest.message_content:type_name -> MessageContent
@@ -1076,31 +1098,32 @@ var file_proto_scene_scene_proto_depIdxs = []int32{
 	16, // 4: CreateSceneResponse.scene_info:type_name -> SceneInfoComp
 	17, // 5: PrepareBattleRequest.ranked_context:type_name -> RankedMatchContext
 	18, // 6: PrepareBattleRequest.activity_context:type_name -> BattleActivityContext
-	19, // 7: PrepareBattleResponse.error_message:type_name -> TipInfoMessage
-	20, // 8: PrepareBattleResponse.snapshot:type_name -> BattlePlayerSnapshot
-	21, // 9: SealAccountRoleTradeRequest.seal:type_name -> common.base.RoleTradeSeal
-	22, // 10: SealAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
-	1,  // 11: Scene.PlayerEnterGameNode:input_type -> PlayerEnterGameNodeRequest
-	2,  // 12: Scene.ProcessClientPlayerMessage:input_type -> ProcessClientPlayerMessageRequest
-	6,  // 13: Scene.UpdateSessionDetail:input_type -> RegisterPlayerSessionRequest
-	7,  // 14: Scene.CreateScene:input_type -> CreateSceneRequest
-	9,  // 15: Scene.DestroyScene:input_type -> DestroySceneRequest
-	10, // 16: Scene.PrepareBattle:input_type -> PrepareBattleRequest
-	12, // 17: Scene.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
-	23, // 18: Scene.NodeHandshake:input_type -> NodeHandshakeRequest
-	24, // 19: Scene.PlayerEnterGameNode:output_type -> Empty
-	3,  // 20: Scene.ProcessClientPlayerMessage:output_type -> ProcessClientPlayerMessageResponse
-	24, // 21: Scene.UpdateSessionDetail:output_type -> Empty
-	8,  // 22: Scene.CreateScene:output_type -> CreateSceneResponse
-	24, // 23: Scene.DestroyScene:output_type -> Empty
-	11, // 24: Scene.PrepareBattle:output_type -> PrepareBattleResponse
-	24, // 25: Scene.CancelBattlePrepare:output_type -> Empty
-	25, // 26: Scene.NodeHandshake:output_type -> NodeHandshakeResponse
-	19, // [19:27] is the sub-list for method output_type
-	11, // [11:19] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	19, // 7: PrepareBattleRequest.custom_duel_rules:type_name -> CustomDuelRules
+	20, // 8: PrepareBattleResponse.error_message:type_name -> TipInfoMessage
+	21, // 9: PrepareBattleResponse.snapshot:type_name -> BattlePlayerSnapshot
+	22, // 10: SealAccountRoleTradeRequest.seal:type_name -> common.base.RoleTradeSeal
+	23, // 11: SealAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
+	1,  // 12: Scene.PlayerEnterGameNode:input_type -> PlayerEnterGameNodeRequest
+	2,  // 13: Scene.ProcessClientPlayerMessage:input_type -> ProcessClientPlayerMessageRequest
+	6,  // 14: Scene.UpdateSessionDetail:input_type -> RegisterPlayerSessionRequest
+	7,  // 15: Scene.CreateScene:input_type -> CreateSceneRequest
+	9,  // 16: Scene.DestroyScene:input_type -> DestroySceneRequest
+	10, // 17: Scene.PrepareBattle:input_type -> PrepareBattleRequest
+	12, // 18: Scene.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
+	24, // 19: Scene.NodeHandshake:input_type -> NodeHandshakeRequest
+	25, // 20: Scene.PlayerEnterGameNode:output_type -> Empty
+	3,  // 21: Scene.ProcessClientPlayerMessage:output_type -> ProcessClientPlayerMessageResponse
+	25, // 22: Scene.UpdateSessionDetail:output_type -> Empty
+	8,  // 23: Scene.CreateScene:output_type -> CreateSceneResponse
+	25, // 24: Scene.DestroyScene:output_type -> Empty
+	11, // 25: Scene.PrepareBattle:output_type -> PrepareBattleResponse
+	25, // 26: Scene.CancelBattlePrepare:output_type -> Empty
+	26, // 27: Scene.NodeHandshake:output_type -> NodeHandshakeResponse
+	20, // [20:28] is the sub-list for method output_type
+	12, // [12:20] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_scene_proto_init() }

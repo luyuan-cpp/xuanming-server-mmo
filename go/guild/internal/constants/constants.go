@@ -181,6 +181,33 @@ const (
 	// 结果不计;只作为恢复器作废释放时大厅的结束原因写进视图的 end_tip_id。业务结果,不是服务端故障(fault 列留空):
 	// 作废本身由 match 的权威终局决定,原因(截止、原件不合格、原实例失联)另有 match 侧的计数与日志。
 	ErrTrialBattleAborted = uint32(table.GuildError_kGuildTrialBattleAborted)
+
+	// ── 帮会全天帮战 V2(docs/design/guild-play-v2.md)新增 24 个 ──
+	// 仅 ErrWarServiceBusy 标 fault=1(match / Redis 不可用),其余均为玩家可理解的业务提示。
+	ErrWarNotOpen                  = uint32(table.GuildError_kGuildWarNotOpen)
+	ErrWarLevelTooLow              = uint32(table.GuildError_kGuildWarLevelTooLow)
+	ErrWarSameGuild                = uint32(table.GuildError_kGuildWarSameGuild)
+	ErrWarTargetPeaceMode          = uint32(table.GuildError_kGuildWarTargetPeaceMode)
+	ErrWarSelfPeaceMode            = uint32(table.GuildError_kGuildWarSelfPeaceMode)
+	ErrWarPeaceCooldown            = uint32(table.GuildError_kGuildWarPeaceCooldown)
+	ErrWarTargetProtected          = uint32(table.GuildError_kGuildWarTargetProtected)
+	ErrWarTargetInBattle           = uint32(table.GuildError_kGuildWarTargetInBattle)
+	ErrWarTargetOffline            = uint32(table.GuildError_kGuildWarTargetOffline)
+	ErrWarSafeZone                 = uint32(table.GuildError_kGuildWarSafeZone)
+	ErrWarTeamInvalid              = uint32(table.GuildError_kGuildWarTeamInvalid)
+	ErrWarTeamSizeExceedsRoadLimit = uint32(table.GuildError_kGuildWarTeamSizeExceedsRoadLimit)
+	ErrWarLeylineNotFound          = uint32(table.GuildError_kGuildWarLeylineNotFound)
+	ErrWarGarrisonFull             = uint32(table.GuildError_kGuildWarGarrisonFull)
+	ErrWarGarrisonCooldown         = uint32(table.GuildError_kGuildWarGarrisonCooldown)
+	ErrWarMilestoneLocked          = uint32(table.GuildError_kGuildWarMilestoneLocked)
+	ErrWarMilestoneClaimed         = uint32(table.GuildError_kGuildWarMilestoneClaimed)
+	ErrWarDividendEmpty            = uint32(table.GuildError_kGuildWarDividendEmpty)
+	ErrWarBountyInvalidTarget      = uint32(table.GuildError_kGuildWarBountyInvalidTarget)
+	ErrWarBountyAlreadyActive      = uint32(table.GuildError_kGuildWarBountyAlreadyActive)
+	ErrWarBountyLimit              = uint32(table.GuildError_kGuildWarBountyLimit)
+	ErrWarBountyNotFound           = uint32(table.GuildError_kGuildWarBountyNotFound)
+	ErrWarTrackCooldown            = uint32(table.GuildError_kGuildWarTrackCooldown)
+	ErrWarServiceBusy              = uint32(table.GuildError_kGuildWarServiceBusy)
 )
 
 // MaxShopBuyCount:帮会商店单次兑换的份数上限(05-economy.md §5.11.2)。

@@ -58,6 +58,7 @@ struct MysteryMerchantGoodsTableSnapshot;
 struct MysteryMerchantRuleTableSnapshot;
 struct MysteryMerchantSpotTableSnapshot;
 struct PetTableSnapshot;
+struct PetCosmeticTableSnapshot;
 struct PetEntryTableSnapshot;
 struct PetRuleTableSnapshot;
 struct PetTierTableSnapshot;
@@ -71,10 +72,15 @@ struct SeasonSealTableSnapshot;
 struct SkillTableSnapshot;
 struct SkillPermissionTableSnapshot;
 struct SkillScrollCraftTableSnapshot;
+struct SkillVfxCosmeticTableSnapshot;
+struct SpiritShopGoodsTableSnapshot;
+struct SpiritShopLimitGroupTableSnapshot;
 struct TestTableSnapshot;
 struct TestMultiKeyTableSnapshot;
 struct TournamentRewardTableSnapshot;
 struct TournamentRuleTableSnapshot;
+struct TravelPassSeasonTableSnapshot;
+struct TravelPassTierTableSnapshot;
 struct TrialJournalEntryTableSnapshot;
 struct TrialJournalMilestoneTableSnapshot;
 struct TrialJournalSealTableSnapshot;
@@ -86,7 +92,7 @@ using LoadSuccessCallback = std::function<void()>;
 
 // 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
 // 运行期只加载 schema_digest 与本常量一致的表包。
-inline constexpr std::string_view kTableSchemaDigest = "243c1949baf529dc";
+inline constexpr std::string_view kTableSchemaDigest = "55d900397a301fa1";
 
 // 一次加载或热更表包的身份元数据。
 struct TableBundleIdentity {
@@ -201,6 +207,8 @@ struct TableSet {
 
     std::shared_ptr<const PetTableSnapshot> petTable;
 
+    std::shared_ptr<const PetCosmeticTableSnapshot> petCosmeticTable;
+
     std::shared_ptr<const PetEntryTableSnapshot> petEntryTable;
 
     std::shared_ptr<const PetRuleTableSnapshot> petRuleTable;
@@ -227,6 +235,12 @@ struct TableSet {
 
     std::shared_ptr<const SkillScrollCraftTableSnapshot> skillScrollCraftTable;
 
+    std::shared_ptr<const SkillVfxCosmeticTableSnapshot> skillVfxCosmeticTable;
+
+    std::shared_ptr<const SpiritShopGoodsTableSnapshot> spiritShopGoodsTable;
+
+    std::shared_ptr<const SpiritShopLimitGroupTableSnapshot> spiritShopLimitGroupTable;
+
     std::shared_ptr<const TestTableSnapshot> testTable;
 
     std::shared_ptr<const TestMultiKeyTableSnapshot> testMultiKeyTable;
@@ -234,6 +248,10 @@ struct TableSet {
     std::shared_ptr<const TournamentRewardTableSnapshot> tournamentRewardTable;
 
     std::shared_ptr<const TournamentRuleTableSnapshot> tournamentRuleTable;
+
+    std::shared_ptr<const TravelPassSeasonTableSnapshot> travelPassSeasonTable;
+
+    std::shared_ptr<const TravelPassTierTableSnapshot> travelPassTierTable;
 
     std::shared_ptr<const TrialJournalEntryTableSnapshot> trialJournalEntryTable;
 

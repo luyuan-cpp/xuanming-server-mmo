@@ -137,4 +137,64 @@ public final class TournamentRuleTableComp {
         }
     }
 
-}
+    public record Bo3_top4_enabled(boolean value) {
+        public static Bo3_top4_enabled from(TournamentRuleTable row) {
+            return new Bo3_top4_enabled(row.getBo3Top4Enabled());
+        }
+    }
+
+    public record Intermission_seconds(int value) {
+        public static Intermission_seconds from(TournamentRuleTable row) {
+            return new Intermission_seconds(row.getIntermissionSeconds());
+        }
+    }
+
+    public record Public_knockout_replay(boolean value) {
+        public static Public_knockout_replay from(TournamentRuleTable row) {
+            return new Public_knockout_replay(row.getPublicKnockoutReplay());
+        }
+    }
+
+    public record Salute_gold_amount(int value) {
+        public static Salute_gold_amount from(TournamentRuleTable row) {
+            return new Salute_gold_amount(row.getSaluteGoldAmount());
+        }
+    }
+
+    public record Salute_item_id(int value) {
+        public static Salute_item_id from(TournamentRuleTable row) {
+            return new Salute_item_id(row.getSaluteItemId());
+        }
+    }
+
+    public record Salute_item_count(int value) {
+        public static Salute_item_count from(TournamentRuleTable row) {
+            return new Salute_item_count(row.getSaluteItemCount());
+        }
+    }
+
+    public record Warmup_spar_enabled(boolean value) {
+        public static Warmup_spar_enabled from(TournamentRuleTable row) {
+            return new Warmup_spar_enabled(row.getWarmupSparEnabled());
+        }
+    }
+
+    public record Prediction_enabled(boolean value) {
+        public static Prediction_enabled from(TournamentRuleTable row) {
+            return new Prediction_enabled(row.getPredictionEnabled());
+        }
+    }
+
+    public record Prediction_reward_min_hits(int value) {
+        public static Prediction_reward_min_hits from(TournamentRuleTable row) {
+            return new Prediction_reward_min_hits(row.getPredictionRewardMinHits());
+        }
+    }
+
+    public record Third_place_match_enabled(boolean value) {
+        public static Third_place_match_enabled from(TournamentRuleTable row) {
+            return new Third_place_match_enabled(row.getThirdPlaceMatchEnabled());
+        }
+    }
+
+ 

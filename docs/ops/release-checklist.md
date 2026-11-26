@@ -5,7 +5,7 @@
 **设计依据:** [release-packaging-standard-20260914.md](../design/release-packaging-standard-20260914.md)(P1–P4)、[CHANGELOG.md](../../CHANGELOG.md)
 **脚本入口:** `tools/scripts/publish_images.ps1` → `make_release.ps1` → `release_preflight.ps1`;离线交付 `fetch_images.ps1` → `import_images.ps1`;快照清理 `artifacts_retention.ps1`;公共库 `tools/scripts/lib/release_common.ps1`、`tools/scripts/lib/artifacts_lib.ps1`;GitHub 干净出包 `.github/workflows/release.yml`
 
-> **协作边界(AGENTS.md §9 / §10.1):** 标"人工"的步骤(`git tag`、`git push`、`docker push`、部署到集群)一律由人执行,AI 与 CI 流水线都不做;构建、测试命令由 Codex 或人执行。
+> **协作边界(AGENTS.md §9 / §10.1):** 标"人工"的步骤(`git tag`、`git push`、`docker push`、部署到集群)一律由人执行,AI 与 CI 流水线都不做;构建、测试命令由 Gemini 或人执行。
 >
 > **历史引用:** 仓库里既有的 `release-checklist.md §A.2 / §C / §D.1 / §E.2 / §F.B-2 / #B-1` 等引用(`release_preflight.ps1`、`release_common.ps1`、`k8s_image.ps1`、`k8s_deploy.ps1` 的注释)均指文末附录里的同名小节。
 
@@ -121,7 +121,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   带新持久字段的版本(2026-10-20 增补,审计 r2-ps#1;2026-11-05 起由机器门禁兜住):首次上线之后,台账已在 ① 封存过,引导期内再加持久字段时 proto 生成直接失败(要求先做完 §6.2),合并带进已发布世代的字段行同样失败;⑥ 的 `release.persist_schema.sealed` 核对本版本台账已封存到最大世代。原因:世代号是「go/db 不比 scene、不比存档旧」这道门禁的依据,同一世代号的二进制认识的行种与字段集合必须相同;字段本身不会因此丢,旧版本原样带回不认识的内容(2026-11-12 起),见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1「封存」、§5.3。首次上线本身不受此限(首次封存时台账可以仍是 `bootstrap`)。
   **升世代的版本分两步部署**(2026-11-12 增补):本版本台账封存的世代比线上版本高时,第一步对**每个** zone 跑 `zone-up -ZoneId <z> -NodeImage <线上版本的节点镜像> -GoSvcTag <本版本 tag>`:只换 zone 内的 Go 服务(含 go/db),C++ 节点不变(显式给 `-GoSvcTag` 时不跟随 `-NodeImage`);全部 zone 都滚完,第二步才逐 zone 跑 `zone-up -ZoneId <z> -NodeImage <本版本节点镜像>`(可以先开金丝雀 zone)。只逐 zone 一次换完的话,已升级 zone 的玩家在别的 zone 的 go/db 升级之前进不了那些 zone(认领回 `SCHEMA_TOO_NEW`,不丢数据)。原因见 mixed-version §8.2。
   首次发布含 B0-4(C++ 节点 fd 上限不够就拒启)的版本之前,先按 [gate-kernel-tuning-runbook.md](gate-kernel-tuning-runbook.md) §3.1「上线前置」第 1 步,读各集群各节点池的容器 nofile 硬限并记进 PROGRESS;硬限不够时先处理再发布。拒启的影响面按工作负载形态不同(单副本 battle hostPort 会整体停服),回滚另有 external gate 删 Pod 等额外步骤,见同节「紧急回退」(2026-10-18 增补)。
-  核心 Redis 在 staging / prod 退役(2026-11-19 增补,缺口第 34 条第 6b-2 批;部署脚本改动未运行、待 Codex 验证):这两档的控制域只在控制集群 `redis-control`、玩家域只在玩家集群 `redis-player`,`k8s_deploy.ps1` 不再部署 `manifests/infra/redis.yaml`,也不读 `MMORPG_REDIS_PASSWORD`;共享 Redis 的高可用形态 `redis-ha.yaml` 与 `-RedisReplicas` 一并删除,给了即在参数绑定处失败。以前在 staging 上部署过核心(含 2026-10-19 起的高可用形态)的环境,升级后按 [deploy/k8s/README.md](../../deploy/k8s/README.md)「共享 Redis 的高可用形态(2026-11-19 退役)」人工删掉残留对象;dev 没开控制集群时照旧部署核心单实例。
+  核心 Redis 在 staging / prod 退役(2026-11-19 增补,缺口第 34 条第 6b-2 批;部署脚本改动未运行、待 Gemini 验证):这两档的控制域只在控制集群 `redis-control`、玩家域只在玩家集群 `redis-player`,`k8s_deploy.ps1` 不再部署 `manifests/infra/redis.yaml`,也不读 `MMORPG_REDIS_PASSWORD`;共享 Redis 的高可用形态 `redis-ha.yaml` 与 `-RedisReplicas` 一并删除,给了即在参数绑定处失败。以前在 staging 上部署过核心(含 2026-10-19 起的高可用形态)的环境,升级后按 [deploy/k8s/README.md](../../deploy/k8s/README.md)「共享 Redis 的高可用形态(2026-11-19 退役)」人工删掉残留对象;dev 没开控制集群时照旧部署核心单实例。
 
 ### 2.2 在 GitHub Actions 上出包(`.github/workflows/release.yml`)
 
@@ -176,7 +176,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   - 别的 Go 服务要回滚时,按下一条单独回滚那一个,不带上 go/db。data_service 可以回滚(它不解释载荷),login 不读玩家存档。
 - [ ] **快速回滚单个 Deployment**:`kubectl rollout undo`(附录 E.2 三级回滚的第 3 级)。它的前提是新旧 revision 的 tag 不同且不可变,本流水线的 `vX.Y.Z-<commit>` tag 满足。
   - **gateway 例外(2026-10-16 补注)**:gateway 的上一个 revision 早于 2026-10-15「探针改走独立管理端口 8082」时,**不要**对 gateway 做 `kubectl rollout undo`。undo 只退 Pod 模板(探针回到 8081),`java-svc-gateway-config` 仍是 `management.server.port: 8082`,三个探针全部失败,startupProbe 约 600s 后杀容器并反复重启,rollout 卡到 progressDeadline,回滚不生效。改用旧 commit 重跑 `k8s_deploy.ps1 zone-up`(ConfigMap 与 Pod 模板同批生成);详见 [deploy/k8s/README.md](../../deploy/k8s/README.md)「gateway 探针、管理端口与回退口径」。更一般地,`rollout undo` 还隐含「旧 revision 与当前 ConfigMap 兼容」这一前提,ConfigMap 不随 undo 回退。
-- [ ] **go/db 回滚到 S1(重试只交给分区属主)之前的版本**(2026-10-17 补;已落码,未编译、未测试,待 Codex 验证):先按 [db-retry-owner-routing.md](../design/db-retry-owner-routing.md) §10 切回 RetryRouting=shared 并 rollout restart,用 `go/db/cmd/retry_requeue -check` 确认所有 `kafka:retry:queue:{topic}:p*` 为 0,再回滚镜像。旧版本只认共享收件箱 `kafka:retry:queue:{topic}`、看不到 p*,直接回滚会让其中的存盘滞留(它们在 Redis 里只有这一份);已经回滚的,立即执行 retry_requeue 搬回(告警 DbRetryPartitionedStranded)。上面「部署上一版本」(`-GoSvcTag <上一版>`)与「快速回滚单个 Deployment」(`kubectl rollout undo statefulset/db`)两条路径都适用;步骤:
+- [ ] **go/db 回滚到 S1(重试只交给分区属主)之前的版本**(2026-10-17 补;已落码,未编译、未测试,待 Gemini 验证):先按 [db-retry-owner-routing.md](../design/db-retry-owner-routing.md) §10 切回 RetryRouting=shared 并 rollout restart,用 `go/db/cmd/retry_requeue -check` 确认所有 `kafka:retry:queue:{topic}:p*` 为 0,再回滚镜像。旧版本只认共享收件箱 `kafka:retry:queue:{topic}`、看不到 p*,直接回滚会让其中的存盘滞留(它们在 Redis 里只有这一份);已经回滚的,立即执行 retry_requeue 搬回(告警 DbRetryPartitionedStranded)。上面「部署上一版本」(`-GoSvcTag <上一版>`)与「快速回滚单个 Deployment」(`kubectl rollout undo statefulset/db`)两条路径都适用;步骤:
   1. **切回 shared 并等滚动完成**(`<zone ns>` 即 `mmorpg-zone-<z>`):配置里是 owner 时,把 `go/db/etc/db.yaml` 的 `RetryRouting` 改回 `shared` → `k8s_deploy.ps1 zone-up` → `kubectl -n <zone ns> rollout restart statefulset/db` → `kubectl -n <zone ns> rollout status statefulset/db`(只改 ConfigMap 不会滚动 db);金丝雀留下的环境变量用 `kubectl -n <zone ns> set env statefulset/db DB_RETRY_ROUTING-` 去掉(同样触发滚动,也要等 rollout status)。`kubectl set env` 加的变量不在 last-applied 里,`k8s_deploy` 的 apply 不会删它,且环境变量优先于配置键,必须单独去掉。
   2. **三项人工核对**(retry_requeue 的退出码 5 只看得见会登记模式的 go/db,更早的 S1 镜像不登记,所以这三项不能省):
      - 每个 db Pod 的 `db_retry_routing_mode{mode="owner"}` 都是 0(Prometheus 查 `db_retry_routing_mode{namespace="<zone ns>", mode="owner"}`;S1 之前的 Pod 没有这条序列,不算 owner);
@@ -267,7 +267,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 
 - **背景**(2026-11-12 按存盘直接提交的路径改写):台账 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 期间,生成器把新增持久字段一律记为世代 1,所有二进制的世代都是 1。字段本身不受影响:旧版本原样带回不认识的内容,不看世代号。失效的是世代判定:go/db 认领时核不出「scene、存档比自己新」,只剩每笔存盘的行种检查兜底,新 scene 可能经旧 go/db 认领成功、抬了代次之后一笔也存不进(进度只在内存里,scene 退出就丢);带数据行却没带回世代的写入也发现不了。推导见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §5.3、§8.1。
 - **时机**:首次上线之后、**第一次发布带新持久字段的版本之前**。只做一次;台账不能从 `active` 改回 `bootstrap`,生成器会拒绝。原先的「逐个 zone 关闭引导期」(引导关闭标记、未盖戳写入计数)随旧存盘链删除,建角初始行本来就带世代,不再需要这一步。
-- [ ] **① 主干上把台账切到 `active`**:由负责人在主干提交里把 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 改为 `state=active`(只改这一行),再按 AGENTS.md §4 跑一次 proto 生成(Codex 执行),确认生成通过、台账其余行不变。此后每次出现新增字段的生成运行都会追加一个新世代。
+- [ ] **① 主干上把台账切到 `active`**:由负责人在主干提交里把 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 改为 `state=active`(只改这一行),再按 AGENTS.md §4 跑一次 proto 生成(Gemini 执行),确认生成通过、台账其余行不变。此后每次出现新增字段的生成运行都会追加一个新世代。
 - [ ] **② 记录**:在 `docs/PROGRESS.md` 记一条:`state=active` 的提交号。
 - **门禁**:① 完成之前,不得发布任何新增持久字段的版本。2026-11-05 起有机器门禁:首次上线的版本在 §2.1 ① 封存过台账之后,引导期内再加持久字段,proto 生成会失败并提示先做本节;发布预检 `release.persist_schema.sealed` 要求每个版本都封存到最大世代。
 
@@ -518,8 +518,8 @@ kubectl rollout undo deploy/login -n mmorpg
 
 #### F.B-1: dev 重启 robot 后 player_locator session 残留 ONLINE
 
-- **状态:** 治本 (G) 已合;治标 (E) 已于 2026-11-05 撤除(依据 [client-rpc-callback.md](../design/client-rpc-callback.md) §7 R4:`Disconnect` 标了 `CLIENT_RPC_SERVER_ONLY`,只能由 gate 在客户端连接关闭时合成,带会话代次;客户端发上来 gate 按非法包丢弃、不回包。撤除未编译,待 Codex 验证)。现在只剩下面治本这一层,robot 只需关连接。
-- **治本:** cpp gate `HandleConnectionDisconnection` 把 `SessionInfo.playerId` 填进 `SessionDetails`,login `markPlayerSessionDisconnecting` 真的能跑(本轮 commit)。2026-11-19 起(落码未编译,待 Codex 验证)断线通知至少送达一次:gate 把它交给 `login_session_renewal.cpp` 持有,login 只在关栅栏与 `SetDisconnecting` 都成功后才回成功,没成就由 gate 退避重发(1 秒起翻倍、封顶 30 秒),login 自己不再重试。
+- **状态:** 治本 (G) 已合;治标 (E) 已于 2026-11-05 撤除(依据 [client-rpc-callback.md](../design/client-rpc-callback.md) §7 R4:`Disconnect` 标了 `CLIENT_RPC_SERVER_ONLY`,只能由 gate 在客户端连接关闭时合成,带会话代次;客户端发上来 gate 按非法包丢弃、不回包。撤除未编译,待 Gemini 验证)。现在只剩下面治本这一层,robot 只需关连接。
+- **治本:** cpp gate `HandleConnectionDisconnection` 把 `SessionInfo.playerId` 填进 `SessionDetails`,login `markPlayerSessionDisconnecting` 真的能跑(本轮 commit)。2026-11-19 起(落码未编译,待 Gemini 验证)断线通知至少送达一次:gate 把它交给 `login_session_renewal.cpp` 持有,login 只在关栅栏与 `SetDisconnecting` 都成功后才回成功,没成就由 gate 退避重发(1 秒起翻倍、封顶 30 秒),login 自己不再重试。
 - R4 之前的做法(已撤除,不要加回):robot main `defer sendDisconnectBestEffort(gc)` 主动发 login.Disconnect(commit `0f4712996` 之后)。函数、全部调用点与 `robot/login_test.go` 已删;R4 之后照这样加回,每个 robot 只会在 gate 多计一次非法包,不会多一层兜底。dev 重跑 robot 后再见残留 ONLINE,先看 gate 的 `gate_login_disconnect_pending` 与 `[LoginDisconnect]` 日志(通知还在重发,说明 login 或 player_locator 一直失败),再查 gate 的连接关闭处理(`client_session_handler.cpp` 的 `shouldNotifyLogin`)与 login 侧,不要查 robot。
 - **生产影响:** 玩家正常 TCP 断会触发 OS-level RST → gate 同样路径,本来就走治本逻辑,所以**生产无症状**;dev 重跑机器人时遇到
 

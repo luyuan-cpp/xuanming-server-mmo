@@ -1,6 +1,6 @@
 # 战斗掉落两包都放不下时改投邮件
 
-> **状态**：2026-11-11~12 落码（服务端 C++ / Go 配置 / 部署脚本 / 客户端），**未生成协议、未编译、未测试**，待 Codex 按 §12 验证。Java 版 0.1.0-SNAPSHOT 待做（§13）。
+> **状态**：2026-11-11~12 落码（服务端 C++ / Go 配置 / 部署脚本 / 客户端），**未生成协议、未编译、未测试**，待 Gemini 按 §12 验证。Java 版 0.1.0-SNAPSHOT 待做（§13）。
 > **决定**：负责人 2026-11-11 定「背包满是放到邮件里面的」，范围选「人物背包与临时格都放不下才寄」。
 > **关联**：[战斗道具预留](battle-item-reservation.md)、[背包规则分层 §6.6](bag-rule-policy-layering.md)、[回合制收口 §11](turn-battle-gap-closure.md)、[邮件服务](mail-system.md)、[玩家收件箱](player-inbox-service.md)、[存盘直接提交](player-save-direct-commit.md)。
 
@@ -145,7 +145,7 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=mail_outbox_stuck"
 | 测试 | `cpp/tests/bag_test/mail_outbox_test.cpp`（新）、`player_battle_settlement_test.cpp`、`item_hold_test.cpp`、`persist_round_trip_test.cpp`、`player_feature_persistence_test.cpp`、`player_equip_attribute_test.cpp`、`bag_test.cpp`、`bag_test.vcxproj(.filters)`；`cpp/tests/cross_zone_test/{cross_zone_test.cpp, discovery_set_test.cpp}`；`go/mail/internal/data/battle_sender_crosslang_test.go`（新）；`tools/scripts/tests/{k8s_deploy_contract.tests.ps1, k8s_migrate_gate.tests.ps1}` |
 | 客户端（`../mmorpg-client`） | `Assets/Scripts/UI/Ugui/Gameplay/{EquipBagModel.cs, GameplayWindow.Fidelity.cs}`、`Assets/Scripts/UI/Ugui/Jubaozhai/CommerceWindow.cs`、`Assets/Scripts/UI/Ugui/Battle/BattleResultPanel.cs`、`Assets/Tests/EditMode/Battle/{EquipForgeModelTests.cs, DamageNumberLayoutTests.cs}`、`Docs/ClientProtocolCompatibility.md` |
 
-## 12. 验证（全部未执行，交 Codex）
+## 12. 验证（全部未执行，交 Gemini）
 
 仓库根目录，串行，失败不重试，保留首个错误与失败用例输出。
 

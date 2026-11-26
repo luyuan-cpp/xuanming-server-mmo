@@ -1,6 +1,6 @@
 # 全层水平扩展:逻辑库自治、角色护栏、目录分片、不停服迁移、多地域
 
-> 状态:**2026-10-31 全部写完,三路独立评审的问题已修,全部未编译,待 Codex 验证。** 验证清单在 `docs/handoff/player-save-direct-commit-20261030/progress.md` §13。
+> 状态:**2026-10-31 全部写完,三路独立评审的问题已修,全部未编译,待 Gemini 验证。** 验证清单在 `docs/handoff/player-save-direct-commit-20261030/progress.md` §13。
 > 来源:负责人 2026-10-31「全部按最标准的修复,我不怕改动,而且我确实会有不停服迁移物理库的」「角色护栏、过户逐服务冻结、目录按哈希分集群,这个开始先做,优先写代码」。
 > 前提:项目未上线,数据可清空,不写存量迁移和新旧混跑。Java 版只在 `PARITY.md` 记待做。
 > 取代:[总体方案](./player-data-tidb-scaling-plan.md) §8.2、§13 阶段 C 的做法。基线快照 `refs/snapshots/before-stage-c`(tree)。
@@ -30,7 +30,7 @@
 | R的Mall逻辑库（本机计划显式命名） | `java/mall_game` | 全区共用，不按zone拆 | 商城订单、支付/退款/寄售原件与本库写者闸门；只经RPC/HTTP访问其他服务 |
 | R的Gateway逻辑库（缺省`mmorpg`，隔离联验可显式命名） | `java/gateway_node` | 全区共用，不按zone拆 | 区目录、公告、白名单与本库写者闸门 |
 
-### R双区的四个Java进程（2026-11-02补齐，待Codex实测）
+### R双区的四个Java进程（2026-11-02补齐，待 Gemini实测）
 
 四角色为`mall`、`mall-replica`、`gateway`、`gateway-replica`：两个Mall写同一个商城逻辑库，两个Gateway写同一个网关逻辑库。每个进程各有独立NORMAL账号、writer/instance/deployment身份、单次grant与消费目录；不是每个zone新建一套商城。Gateway的HTTP入口仍通过gRPC调用R的Go login，公开实例计划必须按两个zone分别固定本轮login地址。独立Java仓的Dubbo网关不参与此运行栈。
 
@@ -727,22 +727,22 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 
 ## 11. 落码批次
 
-每批由 Codex 验证,没有运行证据前都写「未编译」。
+每批由 Gemini 验证,没有运行证据前都写「未编译」。
 
 | 批 | 内容 | 状态 |
 |---|---|---|
-| F1 | `shared/rolefence`、proto、data_service 协调者、`fence_version`、删跨库守卫 | 已写完,未编译,待 Codex 验证。过渡状态见下 |
-| F2 | guild、match 接护栏,§4 占用仲裁 | 已写完,未编译,待 Codex 验证。过渡状态见下 |
-| F3 | trade、mail、friend、player_inbox 接护栏,chat 改 RPC | 已写完,未编译,待 Codex 验证。过渡状态见下 |
-| D1 | 目录分片 §5,存档分步 §6,go/db 选库 §7,流水库 §1 | 已写完,未编译,待 Codex 验证。部署渲染归 K1,见下 |
-| G1 | 闸门每库一份 §2,工具链 | 已写完,未编译,待 Codex 验证。过渡状态见下 |
-| M1 | `shared/dbplacement`、连接层按映射拨号、`tools/dbmove`、手册 §8 | 已写完,未编译,待 Codex 验证。部署渲染(`DbPlacement` 段、`MMORPG_DB_PLACEMENT`)归 K1 |
-| K1 | 部署:配置渲染、密钥、`-Region`、契约测试、跨库契约测试 §1 | 已写完,未编译,待 Codex 验证。闸门冻结时长的指标和告警由 FX3 补上 |
-| FX1 | 一轮独立评审的修复:准备令牌和最终冻结分开、试探、准备时限、确定性结局不打成 HOLD、Cancel 不依赖存档库、占用多占、单库回档手册 | 已写完,未编译,待 Codex 验证 |
-| FX2 | 一轮独立评审的修复:判陈旧先读 listing 后读真相,过户第 3 步失败回 `Unavailable`,写 ref 的两个窗口,建角确定失败 `ErrNotCommitted`,`claim_seq`,展示读跳过坏落点,排空证明按状态码判 | 已写完,未编译,待 Codex 验证 |
-| FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Codex 验证。serverbase 的排空判定不在这批 |
+| F1 | `shared/rolefence`、proto、data_service 协调者、`fence_version`、删跨库守卫 | 已写完,未编译,待 Gemini 验证。过渡状态见下 |
+| F2 | guild、match 接护栏,§4 占用仲裁 | 已写完,未编译,待 Gemini 验证。过渡状态见下 |
+| F3 | trade、mail、friend、player_inbox 接护栏,chat 改 RPC | 已写完,未编译,待 Gemini 验证。过渡状态见下 |
+| D1 | 目录分片 §5,存档分步 §6,go/db 选库 §7,流水库 §1 | 已写完,未编译,待 Gemini 验证。部署渲染归 K1,见下 |
+| G1 | 闸门每库一份 §2,工具链 | 已写完,未编译,待 Gemini 验证。过渡状态见下 |
+| M1 | `shared/dbplacement`、连接层按映射拨号、`tools/dbmove`、手册 §8 | 已写完,未编译,待 Gemini 验证。部署渲染(`DbPlacement` 段、`MMORPG_DB_PLACEMENT`)归 K1 |
+| K1 | 部署:配置渲染、密钥、`-Region`、契约测试、跨库契约测试 §1 | 已写完,未编译,待 Gemini 验证。闸门冻结时长的指标和告警由 FX3 补上 |
+| FX1 | 一轮独立评审的修复:准备令牌和最终冻结分开、试探、准备时限、确定性结局不打成 HOLD、Cancel 不依赖存档库、占用多占、单库回档手册 | 已写完,未编译,待 Gemini 验证 |
+| FX2 | 一轮独立评审的修复:判陈旧先读 listing 后读真相,过户第 3 步失败回 `Unavailable`,写 ref 的两个窗口,建角确定失败 `ErrNotCommitted`,`claim_seq`,展示读跳过坏落点,排空证明按状态码判 | 已写完,未编译,待 Gemini 验证 |
+| FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Gemini 验证。serverbase 的排空判定不在这批 |
 | R1 | 评审,文档,验证清单 | 已完成。三路评审 26 条全部修复,排空判定的最后一处(闸门冻结确定没写不 Hold、`ResourceExhausted`)在主会话改完。修复本身没有再评审 |
-| B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Codex 验证 |
+| B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Gemini 验证 |
 
 G1 落地后、F1~D1 落地前的过渡状态(D1 已写完,这段结束):闸门已按库拆开,但跨库 SQL 还在。data_service 的建角初始行和判死还在目录事务里写存档库,这些写只受目录库闸门保护,不受落点库闸门保护;go/db 选库还跨库读 `player_route`,库名来自配置 `Placement.RouteSchema`。这些都要求全部库还在一个集群,所以 F1~D1 落地之前不能真的搬库。
 

@@ -83,6 +83,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	MysteryMerchantRuleTable = NewObject<UMysteryMerchantRuleTable>(this);
 	MysteryMerchantSpotTable = NewObject<UMysteryMerchantSpotTable>(this);
 	PetTable = NewObject<UPetTable>(this);
+	PetCosmeticTable = NewObject<UPetCosmeticTable>(this);
 	PetEntryTable = NewObject<UPetEntryTable>(this);
 	PetRuleTable = NewObject<UPetRuleTable>(this);
 	PetTierTable = NewObject<UPetTierTable>(this);
@@ -96,10 +97,15 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	SkillTable = NewObject<USkillTable>(this);
 	SkillPermissionTable = NewObject<USkillPermissionTable>(this);
 	SkillScrollCraftTable = NewObject<USkillScrollCraftTable>(this);
+	SkillVfxCosmeticTable = NewObject<USkillVfxCosmeticTable>(this);
+	SpiritShopGoodsTable = NewObject<USpiritShopGoodsTable>(this);
+	SpiritShopLimitGroupTable = NewObject<USpiritShopLimitGroupTable>(this);
 	TestTable = NewObject<UTestTable>(this);
 	TestMultiKeyTable = NewObject<UTestMultiKeyTable>(this);
 	TournamentRewardTable = NewObject<UTournamentRewardTable>(this);
 	TournamentRuleTable = NewObject<UTournamentRuleTable>(this);
+	TravelPassSeasonTable = NewObject<UTravelPassSeasonTable>(this);
+	TravelPassTierTable = NewObject<UTravelPassTierTable>(this);
 	TrialJournalEntryTable = NewObject<UTrialJournalEntryTable>(this);
 	TrialJournalMilestoneTable = NewObject<UTrialJournalMilestoneTable>(this);
 	TrialJournalSealTable = NewObject<UTrialJournalSealTable>(this);
@@ -159,6 +165,7 @@ void UConfigSubsystem::Deinitialize()
 	MysteryMerchantRuleTable = nullptr;
 	MysteryMerchantSpotTable = nullptr;
 	PetTable = nullptr;
+	PetCosmeticTable = nullptr;
 	PetEntryTable = nullptr;
 	PetRuleTable = nullptr;
 	PetTierTable = nullptr;
@@ -172,10 +179,15 @@ void UConfigSubsystem::Deinitialize()
 	SkillTable = nullptr;
 	SkillPermissionTable = nullptr;
 	SkillScrollCraftTable = nullptr;
+	SkillVfxCosmeticTable = nullptr;
+	SpiritShopGoodsTable = nullptr;
+	SpiritShopLimitGroupTable = nullptr;
 	TestTable = nullptr;
 	TestMultiKeyTable = nullptr;
 	TournamentRewardTable = nullptr;
 	TournamentRuleTable = nullptr;
+	TravelPassSeasonTable = nullptr;
+	TravelPassTierTable = nullptr;
 	TrialJournalEntryTable = nullptr;
 	TrialJournalMilestoneTable = nullptr;
 	TrialJournalSealTable = nullptr;
@@ -240,6 +252,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UMysteryMerchantRuleTable::FileName(),
 		UMysteryMerchantSpotTable::FileName(),
 		UPetTable::FileName(),
+		UPetCosmeticTable::FileName(),
 		UPetEntryTable::FileName(),
 		UPetRuleTable::FileName(),
 		UPetTierTable::FileName(),
@@ -253,10 +266,15 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		USkillTable::FileName(),
 		USkillPermissionTable::FileName(),
 		USkillScrollCraftTable::FileName(),
+		USkillVfxCosmeticTable::FileName(),
+		USpiritShopGoodsTable::FileName(),
+		USpiritShopLimitGroupTable::FileName(),
 		UTestTable::FileName(),
 		UTestMultiKeyTable::FileName(),
 		UTournamentRewardTable::FileName(),
 		UTournamentRuleTable::FileName(),
+		UTravelPassSeasonTable::FileName(),
+		UTravelPassTierTable::FileName(),
 		UTrialJournalEntryTable::FileName(),
 		UTrialJournalMilestoneTable::FileName(),
 		UTrialJournalSealTable::FileName(),
@@ -973,6 +991,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (PetCosmeticTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PetCosmetic] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!PetCosmeticTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (PetEntryTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[PetEntry] 管理器未创建"));
@@ -1155,6 +1187,48 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (SkillVfxCosmeticTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SkillVfxCosmetic] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!SkillVfxCosmeticTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (SpiritShopGoodsTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SpiritShopGoods] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!SpiritShopGoodsTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (SpiritShopLimitGroupTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SpiritShopLimitGroup] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!SpiritShopLimitGroupTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (TestTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Test] 管理器未创建"));
@@ -1203,6 +1277,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!TournamentRuleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TravelPassSeasonTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TravelPassSeason] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TravelPassSeasonTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TravelPassTierTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TravelPassTier] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TravelPassTierTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2315,6 +2417,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (PetCosmeticTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PetCosmetic] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UPetCosmeticTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PetCosmetic] 取不到 %s"), UPetCosmeticTable::FileName());
+		bAllOk = false;
+	}
+	else if (!PetCosmeticTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (PetEntryTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[PetEntry] 管理器未创建"));
@@ -2575,6 +2697,66 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (SkillVfxCosmeticTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SkillVfxCosmetic] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(USkillVfxCosmeticTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SkillVfxCosmetic] 取不到 %s"), USkillVfxCosmeticTable::FileName());
+		bAllOk = false;
+	}
+	else if (!SkillVfxCosmeticTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (SpiritShopGoodsTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SpiritShopGoods] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(USpiritShopGoodsTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SpiritShopGoods] 取不到 %s"), USpiritShopGoodsTable::FileName());
+		bAllOk = false;
+	}
+	else if (!SpiritShopGoodsTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (SpiritShopLimitGroupTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SpiritShopLimitGroup] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(USpiritShopLimitGroupTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SpiritShopLimitGroup] 取不到 %s"), USpiritShopLimitGroupTable::FileName());
+		bAllOk = false;
+	}
+	else if (!SpiritShopLimitGroupTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (TestTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Test] 管理器未创建"));
@@ -2646,6 +2828,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!TournamentRuleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TravelPassSeasonTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TravelPassSeason] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTravelPassSeasonTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TravelPassSeason] 取不到 %s"), UTravelPassSeasonTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TravelPassSeasonTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TravelPassTierTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TravelPassTier] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTravelPassTierTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TravelPassTier] 取不到 %s"), UTravelPassTierTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TravelPassTierTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

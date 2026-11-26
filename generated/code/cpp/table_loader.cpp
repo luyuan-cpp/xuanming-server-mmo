@@ -59,6 +59,7 @@
 #include "mysterymerchantrule_table.h"
 #include "mysterymerchantspot_table.h"
 #include "pet_table.h"
+#include "petcosmetic_table.h"
 #include "petentry_table.h"
 #include "petrule_table.h"
 #include "pettier_table.h"
@@ -72,10 +73,15 @@
 #include "skill_table.h"
 #include "skillpermission_table.h"
 #include "skillscrollcraft_table.h"
+#include "skillvfxcosmetic_table.h"
+#include "spiritshopgoods_table.h"
+#include "spiritshoplimitgroup_table.h"
 #include "test_table.h"
 #include "testmultikey_table.h"
 #include "tournamentreward_table.h"
 #include "tournamentrule_table.h"
+#include "travelpassseason_table.h"
+#include "travelpasstier_table.h"
 #include "trialjournalentry_table.h"
 #include "trialjournalmilestone_table.h"
 #include "trialjournalseal_table.h"
@@ -94,9 +100,9 @@ LoadSuccessCallback loadSuccessCallback;
 
 namespace {
 
-constexpr std::size_t kTableCount = 72;
+constexpr std::size_t kTableCount = 78;
 
-constexpr std::array<std::string_view, 72> kTableNames = {
+constexpr std::array<std::string_view, 78> kTableNames = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -147,6 +153,7 @@ constexpr std::array<std::string_view, 72> kTableNames = {
     "MysteryMerchantRule",
     "MysteryMerchantSpot",
     "Pet",
+    "PetCosmetic",
     "PetEntry",
     "PetRule",
     "PetTier",
@@ -160,10 +167,15 @@ constexpr std::array<std::string_view, 72> kTableNames = {
     "Skill",
     "SkillPermission",
     "SkillScrollCraft",
+    "SkillVfxCosmetic",
+    "SpiritShopGoods",
+    "SpiritShopLimitGroup",
     "Test",
     "TestMultiKey",
     "TournamentReward",
     "TournamentRule",
+    "TravelPassSeason",
+    "TravelPassTier",
     "TrialJournalEntry",
     "TrialJournalMilestone",
     "TrialJournalSeal",
@@ -172,7 +184,7 @@ constexpr std::array<std::string_view, 72> kTableNames = {
 };
 
 
-constexpr std::array<std::string_view, 24> kHotReloadableTables = {
+constexpr std::array<std::string_view, 28> kHotReloadableTables = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -194,6 +206,10 @@ constexpr std::array<std::string_view, 24> kHotReloadableTables = {
     "Skill",
     "SkillPermission",
     "SkillScrollCraft",
+    "SpiritShopGoods",
+    "SpiritShopLimitGroup",
+    "TravelPassSeason",
+    "TravelPassTier",
     "TrialJournalEntry",
     "TrialJournalMilestone",
     "TrialJournalSeal",
@@ -307,6 +323,8 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
 
     set->petTable = PetTableManager::Instance().CurrentSnapshot();
 
+    set->petCosmeticTable = PetCosmeticTableManager::Instance().CurrentSnapshot();
+
     set->petEntryTable = PetEntryTableManager::Instance().CurrentSnapshot();
 
     set->petRuleTable = PetRuleTableManager::Instance().CurrentSnapshot();
@@ -333,6 +351,12 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
 
     set->skillScrollCraftTable = SkillScrollCraftTableManager::Instance().CurrentSnapshot();
 
+    set->skillVfxCosmeticTable = SkillVfxCosmeticTableManager::Instance().CurrentSnapshot();
+
+    set->spiritShopGoodsTable = SpiritShopGoodsTableManager::Instance().CurrentSnapshot();
+
+    set->spiritShopLimitGroupTable = SpiritShopLimitGroupTableManager::Instance().CurrentSnapshot();
+
     set->testTable = TestTableManager::Instance().CurrentSnapshot();
 
     set->testMultiKeyTable = TestMultiKeyTableManager::Instance().CurrentSnapshot();
@@ -340,6 +364,10 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
     set->tournamentRewardTable = TournamentRewardTableManager::Instance().CurrentSnapshot();
 
     set->tournamentRuleTable = TournamentRuleTableManager::Instance().CurrentSnapshot();
+
+    set->travelPassSeasonTable = TravelPassSeasonTableManager::Instance().CurrentSnapshot();
+
+    set->travelPassTierTable = TravelPassTierTableManager::Instance().CurrentSnapshot();
 
     set->trialJournalEntryTable = TrialJournalEntryTableManager::Instance().CurrentSnapshot();
 
@@ -456,6 +484,8 @@ void InstallTableSetIntoManagers(const TableSet& set) {
 
     PetTableManager::Instance().InstallSnapshot(set.petTable);
 
+    PetCosmeticTableManager::Instance().InstallSnapshot(set.petCosmeticTable);
+
     PetEntryTableManager::Instance().InstallSnapshot(set.petEntryTable);
 
     PetRuleTableManager::Instance().InstallSnapshot(set.petRuleTable);
@@ -482,6 +512,12 @@ void InstallTableSetIntoManagers(const TableSet& set) {
 
     SkillScrollCraftTableManager::Instance().InstallSnapshot(set.skillScrollCraftTable);
 
+    SkillVfxCosmeticTableManager::Instance().InstallSnapshot(set.skillVfxCosmeticTable);
+
+    SpiritShopGoodsTableManager::Instance().InstallSnapshot(set.spiritShopGoodsTable);
+
+    SpiritShopLimitGroupTableManager::Instance().InstallSnapshot(set.spiritShopLimitGroupTable);
+
     TestTableManager::Instance().InstallSnapshot(set.testTable);
 
     TestMultiKeyTableManager::Instance().InstallSnapshot(set.testMultiKeyTable);
@@ -489,6 +525,10 @@ void InstallTableSetIntoManagers(const TableSet& set) {
     TournamentRewardTableManager::Instance().InstallSnapshot(set.tournamentRewardTable);
 
     TournamentRuleTableManager::Instance().InstallSnapshot(set.tournamentRuleTable);
+
+    TravelPassSeasonTableManager::Instance().InstallSnapshot(set.travelPassSeasonTable);
+
+    TravelPassTierTableManager::Instance().InstallSnapshot(set.travelPassTierTable);
 
     TrialJournalEntryTableManager::Instance().InstallSnapshot(set.trialJournalEntryTable);
 
@@ -555,28 +595,34 @@ void LoadTableAt(std::size_t index) {
     case 47: MysteryMerchantRuleTableManager::Instance().Load(); break;
     case 48: MysteryMerchantSpotTableManager::Instance().Load(); break;
     case 49: PetTableManager::Instance().Load(); break;
-    case 50: PetEntryTableManager::Instance().Load(); break;
-    case 51: PetRuleTableManager::Instance().Load(); break;
-    case 52: PetTierTableManager::Instance().Load(); break;
-    case 53: PlayModeTableManager::Instance().Load(); break;
-    case 54: RankedPresetTableManager::Instance().Load(); break;
-    case 55: RankedRuleTableManager::Instance().Load(); break;
-    case 56: RewardTableManager::Instance().Load(); break;
-    case 57: RoleNameRuleTableManager::Instance().Load(); break;
-    case 58: SeasonRuleTableManager::Instance().Load(); break;
-    case 59: SeasonSealTableManager::Instance().Load(); break;
-    case 60: SkillTableManager::Instance().Load(); break;
-    case 61: SkillPermissionTableManager::Instance().Load(); break;
-    case 62: SkillScrollCraftTableManager::Instance().Load(); break;
-    case 63: TestTableManager::Instance().Load(); break;
-    case 64: TestMultiKeyTableManager::Instance().Load(); break;
-    case 65: TournamentRewardTableManager::Instance().Load(); break;
-    case 66: TournamentRuleTableManager::Instance().Load(); break;
-    case 67: TrialJournalEntryTableManager::Instance().Load(); break;
-    case 68: TrialJournalMilestoneTableManager::Instance().Load(); break;
-    case 69: TrialJournalSealTableManager::Instance().Load(); break;
-    case 70: WorldTableManager::Instance().Load(); break;
-    case 71: ZoneGroupTableManager::Instance().Load(); break;
+    case 50: PetCosmeticTableManager::Instance().Load(); break;
+    case 51: PetEntryTableManager::Instance().Load(); break;
+    case 52: PetRuleTableManager::Instance().Load(); break;
+    case 53: PetTierTableManager::Instance().Load(); break;
+    case 54: PlayModeTableManager::Instance().Load(); break;
+    case 55: RankedPresetTableManager::Instance().Load(); break;
+    case 56: RankedRuleTableManager::Instance().Load(); break;
+    case 57: RewardTableManager::Instance().Load(); break;
+    case 58: RoleNameRuleTableManager::Instance().Load(); break;
+    case 59: SeasonRuleTableManager::Instance().Load(); break;
+    case 60: SeasonSealTableManager::Instance().Load(); break;
+    case 61: SkillTableManager::Instance().Load(); break;
+    case 62: SkillPermissionTableManager::Instance().Load(); break;
+    case 63: SkillScrollCraftTableManager::Instance().Load(); break;
+    case 64: SkillVfxCosmeticTableManager::Instance().Load(); break;
+    case 65: SpiritShopGoodsTableManager::Instance().Load(); break;
+    case 66: SpiritShopLimitGroupTableManager::Instance().Load(); break;
+    case 67: TestTableManager::Instance().Load(); break;
+    case 68: TestMultiKeyTableManager::Instance().Load(); break;
+    case 69: TournamentRewardTableManager::Instance().Load(); break;
+    case 70: TournamentRuleTableManager::Instance().Load(); break;
+    case 71: TravelPassSeasonTableManager::Instance().Load(); break;
+    case 72: TravelPassTierTableManager::Instance().Load(); break;
+    case 73: TrialJournalEntryTableManager::Instance().Load(); break;
+    case 74: TrialJournalMilestoneTableManager::Instance().Load(); break;
+    case 75: TrialJournalSealTableManager::Instance().Load(); break;
+    case 76: WorldTableManager::Instance().Load(); break;
+    case 77: ZoneGroupTableManager::Instance().Load(); break;
     }
 }
 
@@ -782,69 +828,87 @@ bool LoadTableIntoSetAt(const std::size_t index,
         return PetTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petTable, err);
     case 50:
+        return PetCosmeticTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.petCosmeticTable, err);
+    case 51:
         return PetEntryTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petEntryTable, err);
-    case 51:
+    case 52:
         return PetRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petRuleTable, err);
-    case 52:
+    case 53:
         return PetTierTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petTierTable, err);
-    case 53:
+    case 54:
         return PlayModeTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.playModeTable, err);
-    case 54:
+    case 55:
         return RankedPresetTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rankedPresetTable, err);
-    case 55:
+    case 56:
         return RankedRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rankedRuleTable, err);
-    case 56:
+    case 57:
         return RewardTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rewardTable, err);
-    case 57:
+    case 58:
         return RoleNameRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.roleNameRuleTable, err);
-    case 58:
+    case 59:
         return SeasonRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.seasonRuleTable, err);
-    case 59:
+    case 60:
         return SeasonSealTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.seasonSealTable, err);
-    case 60:
+    case 61:
         return SkillTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillTable, err);
-    case 61:
+    case 62:
         return SkillPermissionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillPermissionTable, err);
-    case 62:
+    case 63:
         return SkillScrollCraftTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillScrollCraftTable, err);
-    case 63:
+    case 64:
+        return SkillVfxCosmeticTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.skillVfxCosmeticTable, err);
+    case 65:
+        return SpiritShopGoodsTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.spiritShopGoodsTable, err);
+    case 66:
+        return SpiritShopLimitGroupTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.spiritShopLimitGroupTable, err);
+    case 67:
         return TestTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testTable, err);
-    case 64:
+    case 68:
         return TestMultiKeyTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testMultiKeyTable, err);
-    case 65:
+    case 69:
         return TournamentRewardTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.tournamentRewardTable, err);
-    case 66:
+    case 70:
         return TournamentRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.tournamentRuleTable, err);
-    case 67:
+    case 71:
+        return TravelPassSeasonTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.travelPassSeasonTable, err);
+    case 72:
+        return TravelPassTierTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.travelPassTierTable, err);
+    case 73:
         return TrialJournalEntryTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.trialJournalEntryTable, err);
-    case 68:
+    case 74:
         return TrialJournalMilestoneTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.trialJournalMilestoneTable, err);
-    case 69:
+    case 75:
         return TrialJournalSealTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.trialJournalSealTable, err);
-    case 70:
+    case 76:
         return WorldTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.worldTable, err);
-    case 71:
+    case 77:
         return ZoneGroupTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.zoneGroupTable, err);
     default:
@@ -993,6 +1057,8 @@ void InvokeTablesLoadSuccess() {
 
     PetTableManager::Instance().LoadSuccess();
 
+    PetCosmeticTableManager::Instance().LoadSuccess();
+
     PetEntryTableManager::Instance().LoadSuccess();
 
     PetRuleTableManager::Instance().LoadSuccess();
@@ -1019,6 +1085,12 @@ void InvokeTablesLoadSuccess() {
 
     SkillScrollCraftTableManager::Instance().LoadSuccess();
 
+    SkillVfxCosmeticTableManager::Instance().LoadSuccess();
+
+    SpiritShopGoodsTableManager::Instance().LoadSuccess();
+
+    SpiritShopLimitGroupTableManager::Instance().LoadSuccess();
+
     TestTableManager::Instance().LoadSuccess();
 
     TestMultiKeyTableManager::Instance().LoadSuccess();
@@ -1026,6 +1098,10 @@ void InvokeTablesLoadSuccess() {
     TournamentRewardTableManager::Instance().LoadSuccess();
 
     TournamentRuleTableManager::Instance().LoadSuccess();
+
+    TravelPassSeasonTableManager::Instance().LoadSuccess();
+
+    TravelPassTierTableManager::Instance().LoadSuccess();
 
     TrialJournalEntryTableManager::Instance().LoadSuccess();
 
@@ -1145,6 +1221,8 @@ void LoadTables() {
 
     PetTableManager::Instance().Load();
 
+    PetCosmeticTableManager::Instance().Load();
+
     PetEntryTableManager::Instance().Load();
 
     PetRuleTableManager::Instance().Load();
@@ -1171,6 +1249,12 @@ void LoadTables() {
 
     SkillScrollCraftTableManager::Instance().Load();
 
+    SkillVfxCosmeticTableManager::Instance().Load();
+
+    SpiritShopGoodsTableManager::Instance().Load();
+
+    SpiritShopLimitGroupTableManager::Instance().Load();
+
     TestTableManager::Instance().Load();
 
     TestMultiKeyTableManager::Instance().Load();
@@ -1178,6 +1262,10 @@ void LoadTables() {
     TournamentRewardTableManager::Instance().Load();
 
     TournamentRuleTableManager::Instance().Load();
+
+    TravelPassSeasonTableManager::Instance().Load();
+
+    TravelPassTierTableManager::Instance().Load();
 
     TrialJournalEntryTableManager::Instance().Load();
 

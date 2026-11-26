@@ -281,7 +281,7 @@ loop 跑在测试线程上，等待都由 2 秒看门狗或 WSAPoll 1.5 秒超�
 
 ### 2026-11-05 验证收尾
 
-本节代码与文档于 11-01 随 `e33b99351` 并入主干。Codex 核对历史构建、运行日志及源码哈希，并补完 Windows 两条用例的 20 轮重复检查：
+本节代码与文档于 11-01 随 `e33b99351` 并入主干。Gemini 核对历史构建、运行日志及源码哈希，并补完 Windows 两条用例的 20 轮重复检查：
 
 | 范围 | 实际结果 | 证据 |
 |---|---|---|
@@ -342,7 +342,7 @@ Java 版使用 Redisson，没有对应 muduo 适配层，本节无 Java 待办�
   `hiredis_command_lifecycle_test.cpp` 的 `FailedConnectCallbackCannotReenterNativeConnect` 断言了这个行为，所以先按有意设计记录，不改代码。
   11-11 负责人定改掉，见下节。
 
-**待 Codex 验证**
+**待 Gemini 验证**
 
 1. Linux HEAD 两版重跑。新建 `build/verification/hiredis-linux-head-<时间戳>/`，以
    `build/verification/cobalt-redis-lifecycle-final-20261105T152044053Z/runner.py` 为模板，只改两处：`SDK_ID` 换成
@@ -363,7 +363,7 @@ Java 版使用 Redisson，没有对应 muduo 适配层，本节无 Java 待办�
 
 Java 版使用 Redisson，没有对应适配层，本次无 Java 待办。
 
-### 2026-11-11：维护账只按命令记，disconnect() 分发期间推迟，补三份副本守卫与同批用例（Claude，未编译、未测试，待 Codex 验证）
+### 2026-11-11：维护账只按命令记，disconnect() 分发期间推迟，补三份副本守卫与同批用例（Claude，未编译、未测试，待 Gemini 验证）
 
 负责人 11-11 定：上节列出的残余直接改代码，不留到以后。
 
@@ -413,7 +413,7 @@ Java 版使用 Redisson，没有对应适配层，本次无 Java 待办。
 - `.github/workflows/deploy-config-tests.yml` 的 push 与 pull_request 触发路径加上三处 `contrib/hiredis/**`，只改其中一份也会触发；
   该 job 自动执行 `tools/scripts/tests/` 一级目录下的全部脚本，不需要另行登记。
 
-**待 Codex 验证（取代上节 1–3 项，串行执行）**
+**待 Gemini 验证（取代上节 1–3 项，串行执行）**
 
 1. 契约测试：在仓库根目录执行 `pwsh -NoProfile -File tools/scripts/tests/hiredis_adapter_copies_contract.tests.ps1`，通过标准为 `fail=0`、退出 0。
 2. Windows 构建：先 `msbuild cpp\libs\engine\muduo_windows\muduo.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`，

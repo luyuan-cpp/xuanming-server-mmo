@@ -2,7 +2,7 @@
 
 > **2026-09-29 重写为「每实例入口」口径**(集群外入口 D76–D93)。权威设计见 `docs/design/k8s-client-entry.md`(D87–D90、「运维手册」),
 > 部署参数见 `deploy/k8s/README.md` Optional Flags「集群外客户端入口」。与 `k8s_gate_exposure_guidance.md` 同内容。
-> 文末「原口径」保留旧四条原文并逐条标注。以下全部**未上集群验证**,待 kind 端到端验收(Codex / 用户执行)。
+> 文末「原口径」保留旧四条原文并逐条标注。以下全部**未上集群验证**,待 kind 端到端验收(Gemini / 用户执行)。
 
 ## 1. 结论:gate 入口必须是每个实例一个
 

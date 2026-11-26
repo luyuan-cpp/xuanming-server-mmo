@@ -11,7 +11,7 @@
 
 > ## 落码状态(2026-10-08)
 >
-> **B6b-srv2(同道历练的 guild 侧)已落码,未编译、未 proto-gen、未跑测试,待 Codex 验证。**
+> **B6b-srv2(同道历练的 guild 侧)已落码,未编译、未 proto-gen、未跑测试,待 Gemini 验证。**
 > 第 7、8 部分(§6.22–§6.35)写于死锁修复之前,与代码不同的地方都就地加了"2026-10-08 落码修正";§6.40、§6.41、§6.45、§6.46、§6.49 同样各有一段。
 > 冲突时的效力顺序不变:README §2 / §3 > 上面的决策覆盖 > 92-handoff §12.2 / §12.4 > 90-consistency > 本文件正文;落码修正与代码注释优先于它所在小节的正文。
 > 运维要点(结果消费卡住、毒消息、EXPIRED 局、待入队积压、人工补发、部署顺序)在 §6.35a;验证命令在 §6.46 的 B6b-srv2。
@@ -28,7 +28,7 @@
 
 # S6 帮会活动(批次 B6a 元宵灯会 / 中秋团圆,B6b 同道历练)— 第 1 部分:结论、现状、配表、规则函数
 
-> 状态:设计稿(2026-09-16 按对抗评审修订,修订记录见 `s6_activities_review.md`),未落码、未编译,待 Codex 验证。遵守 `00_contract.md`;行号是 2026-09-16 的核对值。并行会话(组队、聚宝斋、聊天、属性)正在改同一个工作树,落码前按函数名重新定位。
+> 状态:设计稿(2026-09-16 按对抗评审修订,修订记录见 `s6_activities_review.md`),未落码、未编译,待 Gemini 验证。遵守 `00_contract.md`;行号是 2026-09-16 的核对值。并行会话(组队、聚宝斋、聊天、属性)正在改同一个工作树,落码前按函数名重新定位。
 > 依赖:B1(库与锁序)、B2(推送 `GuildNotifier`/`l.notify`、合服闸门、`GuildRule` 表、客户端 `RefreshQueued`/`DrainQueued`)、B4a/B4b(资产通道)、B5(`guild_member.contribution_*`、`guild.funds`、`guild_asset_op`/`guild_daily_counter` 表、`assetop.Loop`、`withSyncDelivery`、`go/shared/gameday`)。
 > **开工前须用户拍板两件事**(第 11 部分 U1、U2):"当期"的含义;历练阵亡者是否得奖。本稿按推荐默认写。
 
@@ -852,7 +852,7 @@ func (l *StartActivityBattleLogic) StartActivityBattle(in *matchpb.StartActivity
 
 ## 6.19 为什么要持久化
 
-> **2026-10-30 更正(未编译,待 Codex 验证)**:`battle:activity_result:*` 整条通道已删除,本节到 §6.20 以及后文所有「结果记录」「销账」「battle 每 10s 重发」都按历史设计读。现在的做法:battle 把终局提交 match SQL(`CommitBattleOutcome`),match 的发件箱投 Kafka,投递至少一次,重复由 guild 的幂等闸门回 Duplicate;巡检器读 `<MatchAuthoritySchema>.match_battle_completion`,`decision=1`(COMPLETE)时取 `raw_payload` 结算,`decision=2`(ABORT)或没有行都算没有结果,走原来的超时语义;SQL 读失败下一轮再来。见 `go/guild/internal/data/trial_result_record.go`。
+> **2026-10-30 更正(未编译,待 Gemini 验证)**:`battle:activity_result:*` 整条通道已删除,本节到 §6.20 以及后文所有「结果记录」「销账」「battle 每 10s 重发」都按历史设计读。现在的做法:battle 把终局提交 match SQL(`CommitBattleOutcome`),match 的发件箱投 Kafka,投递至少一次,重复由 guild 的幂等闸门回 Duplicate;巡检器读 `<MatchAuthoritySchema>.match_battle_completion`,`decision=1`(COMPLETE)时取 `raw_payload` 结算,`decision=2`(ABORT)或没有行都算没有结果,走原来的超时语义;SQL 读失败下一轮再来。见 `go/guild/internal/data/trial_result_record.go`。
 
 现状 `SendBattleResultEvent`(`battle_room_manager.cpp:287-296`)发送失败只打日志;battle 进程在 librdkafka 缓冲 flush 前崩溃,事件同样丢失。普通对局丢一条只影响评分;历练丢一条就是**一整局的帮贡、资金、物品永久丢失**,`guild_trial_battle` 永远停在 STARTED。个人结算已有 R07 发件箱(先落 Redis、后投递、未销账重投,`:1406-1600`),活动结果照同一纪律做,但销账方是 guild。
 
@@ -862,7 +862,7 @@ func (l *StartActivityBattleLogic) StartActivityBattle(in *matchpb.StartActivity
 |---|---|
 | 键 | `battle:activity_result:{battle_id}`(十进制) |
 | 值 | `BattleResultEvent` 序列化字节(含 `activity_context`) |
-| 存储 | battle 的 `tlsRedis.GetZoneRedis()`,即 R07 `battle:settlement:pending:*` 所在实例;注释称 SharedRedis。**必须**与 guild 的 `PlayerLocatorRedis` 为同一实例、同一 DB(Codex 验证第 B6b-srv1 步 0 核对,不同则停下) |
+| 存储 | battle 的 `tlsRedis.GetZoneRedis()`,即 R07 `battle:settlement:pending:*` 所在实例;注释称 SharedRedis。**必须**与 guild 的 `PlayerLocatorRedis` 为同一实例、同一 DB(Gemini 验证第 B6b-srv1 步 0 核对,不同则停下) |
 | TTL | 604800 秒(7 天,与 R07 `kPendingSettlementTtlSec`、Kafka 保留期一致) |
 | 写入方 | battle,只在 `activity_context.kind != NONE` 时写;写成功后才发 Kafka |
 | 销账方 | guild:该 battle 进入任何终态(SETTLED 各结果、bad_context 含 battle_id)后 `DEL` |
@@ -1002,7 +1002,7 @@ scene 不需要任何改动:活动奖励不走 scene 结算,scene 照常发 PVE 
 
 残余(复审):① 业务拒绝的具体原因(2026-11-11 已修,未编译):有 launch 原件时实时路径写不了大厅的结束原因(`endPendingLobby` 拒绝),原先只有最后同意的人看到真正原因,大厅释放时写的是 `trialCancelledLobbyEndTip`(`kGuildTrialServiceBusy`)。现在实时路径拿到 match 的确定拒绝时先经 `RecordTrialLaunchEndReason` 把回给发起人的 tip id 与参数记在 launch 原件上(`GuildTrialLaunchRecord.realtime_end_tip`,字段 11,`base.TipInfoMessage` 确定性原字节;只写一次、只对没登记对局的 state1 原件写),再提前检查(`logic/trial_launch.go` 的 `handOffFailedTrialStart`,两步共用一份独立预算);恢复器凭零 battle 的取消墓碑释放时(`FinishCancelledTrialLaunch` → `cancelledTrialLobbyEnd`)用它关大厅,名单上所有人看到同一个原因。只影响展示,不参与释放判定:记录失败、原字节坏时退回默认原因。默认原因按回执分两个(`cancelledTrialLobbyEnd`):零 battle 的取消墓碑(开战没成)写 `kGuildTrialServiceBusy`;回执带对局(开局后 SQL ABORT、发房前中止)写新码 `kGuildTrialBattleAborted`「本次历练战斗已作废，结果不计」(2026-11-11 在 `Tip.xlsx` 帮会段末尾追加,fault 留空;此前同样写「服务繁忙」,与事实不符)。回归 `data/trial_launch_end_reason_tidb_test.go`、`logic/trial_launch_recovery_test.go` 的 `TestStartTrialAtMatchExpeditesOnlySettledFailures`(先记原因再提前检查)、`data/activity_repo_static_test.go`(新写语句只改展示列)。② 同一原因,有 launch 原件时 `endTrialLobby` 每次都失败并打一条 ERROR「大厅未结束…保留原launch/占位等待终局证明」,这条在业务拒绝时属预期,不代表故障,排障时不要按它告警。③ Prepare 返回错误(含 guild 库抖动导致的提交结果未知)时实时路径不提前检查:这时 Start 没有发出,提前本身是安全的,但这是库故障路径、库多半也写不进这一条,没做,原件按宽限处理。
 
-回归:`data/trial_launch_claim_test.go`(首次检查时刻、退避与抖动,纯函数)、`data/trial_launch_claim_tidb_test.go`(窗口内认领不到、到期只被认领一次、state=2 同一调度、终结后不再认领、坏行跳过;复审追加:提前检查只让从未认领的 state1 原件立即到期且只往前提、CAS 拿过期观察值或原件已终结时影响 0 行)、`data/trial_launch_abort_tidb_test.go`(EXPIRED / 发房前中止 / 别帮对局行 / 解散后 EXPIRED 历史行、大厅结束原因;复审追加:从未登记的发房前中止补写 SETTLED/LOSS)、`data/activity_repo_static_test.go`(复审追加:两条调度写只改调度列、带状态复核)、`logic/trial_launch_recovery_test.go`(只查认领到的原件、坏行不挡后面、解散不报错、释放后推送、一轮多页;复审追加:业务拒绝与预算不足提前检查而结局未知与开局成功不提前、认领失败不报错、剩余预算不够一条就不认领、页大小按预算截断、宽限盖住开局预算、生产装配释放后推送)。未编译、未运行,待 Codex 带 `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` 验证。
+回归:`data/trial_launch_claim_test.go`(首次检查时刻、退避与抖动,纯函数)、`data/trial_launch_claim_tidb_test.go`(窗口内认领不到、到期只被认领一次、state=2 同一调度、终结后不再认领、坏行跳过;复审追加:提前检查只让从未认领的 state1 原件立即到期且只往前提、CAS 拿过期观察值或原件已终结时影响 0 行)、`data/trial_launch_abort_tidb_test.go`(EXPIRED / 发房前中止 / 别帮对局行 / 解散后 EXPIRED 历史行、大厅结束原因;复审追加:从未登记的发房前中止补写 SETTLED/LOSS)、`data/activity_repo_static_test.go`(复审追加:两条调度写只改调度列、带状态复核)、`logic/trial_launch_recovery_test.go`(只查认领到的原件、坏行不挡后面、解散不报错、释放后推送、一轮多页;复审追加:业务拒绝与预算不足提前检查而结局未知与开局成功不提前、认领失败不报错、剩余预算不够一条就不认领、页大小按预算截断、宽限盖住开局预算、生产装配释放后推送)。未编译、未运行,待 Gemini 带 `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` 验证。
 
 <!-- s6_activities_part7.md -->
 
@@ -2207,13 +2207,13 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 
 全部通过输出 `GUILD_SMOKE_ACTIVITIES_OK`;任一步失败输出 `GUILD_SMOKE_ACTIVITIES_FAIL step=Sx reason=…` 并非 0 退出。
 
-**可重复性**:个人计数按游戏日;重跑前由 Codex 只对这 4 个测试账号执行
+**可重复性**:个人计数按游戏日;重跑前由 Gemini 只对这 4 个测试账号执行
 `DELETE FROM mmorpg_guild.guild_daily_counter WHERE player_id IN (<4 个 id>) AND counter_kind=3 AND period_key=<今天>;`
 (前置里的解散会删旧进度行)。冒烟脚本本身不碰数据库。
 
 <!-- s6_activities_part11.md -->
 
-# S6 帮会活动 — 第 11 部分:批次文件清单、Codex 验证、会话协调、待拍板、契约偏差
+# S6 帮会活动 — 第 11 部分:批次文件清单、Gemini 验证、会话协调、待拍板、契约偏差
 
 ## 6.45 批次拆分(每子批 ≤30 手改文件,开工前各自向用户申请授权)
 
@@ -2290,7 +2290,7 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 
 `GuildClient.cs`、`GuildWindow.cs`、`GuildUiRoot.cs`、`GuildUiTests.cs`、`robot/guild_smoke_scenario.go`(S9–S15)、`robot/etc/guild_smoke.yaml`(`trial: true`)、`PROGRESS.md`。
 
-## 6.46 Codex 验证(串行,工作目录 `E:\work\xuanming-server-mmo`)
+## 6.46 Gemini 验证(串行,工作目录 `E:\work\xuanming-server-mmo`)
 
 ### B6a-srv
 0. 前置:加载 buildenv;`git status --short proto cpp/generated go/proto go/*/generated robot/generated data generated tools/data_table_exporter/state > pre-b6a-status.txt`,生成后逐项对比他人未提交产物未被覆盖;依赖核对(任一不满足即停):`rg -n "GUILD_ASSET_OP_KIND_ACTIVITY_REWARD" proto/guild/guild_db.proto`、`rg -n "TX_GUILD_ACTIVITY_REWARD" proto/common/rollback/transaction_log.proto`、`rg -n "func NextDailyReset" go/shared/gameday/gameday.go`、`rg -n "NotifyGuildChanged" proto/guild/guild.proto`、`rg -n "EnableEconomy|withSyncDelivery" go/guild/internal/logic`、`rg -n "DrainQueued" ../mmorpg-client/Assets/Scripts/Game/Guild/GuildClient.cs`。
@@ -2350,7 +2350,7 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 1. `cd go/guild; go build ./...; go vet ./...; go test -count=1 ./internal/...`;集成 `-run "Trial|Owed|Poison"`,不得 SKIP。
 2. 部署顺序:battle → match → 路由服与 gate → guild。guild 日志应有"Trial result consumer started topic=match-results group=guild-trial"(本地 `-Zone` 也**不带** `_zN` 后缀)。
 
-> **2026-10-08 落码修正(B6b-srv2 已落码;以下命令全部未执行,由 Codex 串行执行)**:上面两步按实际文件展开。
+> **2026-10-08 落码修正(B6b-srv2 已落码;以下命令全部未执行,由 Gemini 串行执行)**:上面两步按实际文件展开。
 >
 > **工作目录**:含本批改动的**完整检出**。落码所在的 worktree(`E:\work\xuanming-server-mmo-guild`,分支 `guild/phase2-finish`)是稀疏检出,缺 `go/schemamigrate`、`tools/scripts` 等,**不能直接在里面编 `go/guild`**;先把分支带进完整工作区。下文的相对路径都从仓库根算。
 >
@@ -2512,7 +2512,7 @@ TEST(BattleResultActivity, ClassifyRetryOrder)             // (false,99,30)→kD
 ## 自查补充(评审未提)
 
 - **S6 缺表定义**:S1 修订(`s1_storage_part7.md:94,108`)已把 `guild_activity_progress`、`guild_trial_battle` 的列与索引交给 B6a/B6b 自行定义,原 S6 没写 message、批次清单也没列 `guild_db.proto`/`tables.go`。已在 part2 §6.5 补全三张表与两个枚举(含 `idx (state, created_ms)` 供巡检器),并把计数列定名 `progress_count`(关闭原偏差 7),批次清单补入。
-- **导表 FK 预案删除**:核实 `foreign_key.py:13` 对 0 值跳过,原 Codex 验证里"FK=0 报错则去掉 cfg_fk"的预案删去。
+- **导表 FK 预案删除**:核实 `foreign_key.py:13` 对 0 值跳过,原 Gemini 验证里"FK=0 报错则去掉 cfg_fk"的预案删去。
 - **原偏差 6(outbox 状态数值)关闭**:S4 E1 与 S5 §5.6 已统一为 1 PENDING … 4 ABORTED,S6 SQL 一律绑定 `assetop.Status*` 常量。
 - **多玩家结算的锁序交错**:按 `(player_id, 表位置)` 全序加锁并给出不成环理由(part2 §6.5 末尾;契约偏差 21)。
 

@@ -77,6 +77,8 @@ message PetInfo {
   PetEntriesInfo entries = 20;
   PetTierAscensionInfo next_tier = 21;   // 下一灵阶突破预览（已满阶时 next_tier == 0）
   string desc = 16;                      // 种类说明(PetTable.desc),客户端 tooltip 用
+  uint32 cosmetic_id = 22;               // 当前生效的灵宠幻化 ID（PetCosmetic.id；0 = 原形）
+  string cosmetic_art_key = 23;          // 当前生效的灵宠幻化客户端资源键（空串 = 原形；缺图回退原形）
 }
 
 message PetListInfo {

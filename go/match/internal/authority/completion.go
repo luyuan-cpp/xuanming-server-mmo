@@ -274,25 +274,40 @@ func decodeOutcomeOriginal(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRe
 		return r, "created_before_formation"
 	case r.DeadlineMs <= r.CreatedAtMs:
 		return r, "created_after_deadline"
-	case len(r.Players) != len(f.Members):
+	case humanPlayerCount(r.Players) != len(f.Members):
 		return r, "players_count_mismatch"
 	}
 	return r, ""
 }
 
-// originalMemberTeams 核对 Create 原件的参战名单与成局成员是同一个集合:r.Players 无空号、无重复,与 f.Members 一一对应
-// (f.Members 自身也不得重复)。返回 玩家→队号,COMPLETE 据它核个人结算的成员与队伍。
+func humanPlayerCount(players []*battlepb.BattlePlayerSnapshot) int {
+	n := 0
+	for _, p := range players {
+		if p != nil && !p.GetAiControlled() {
+			n++
+		}
+	}
+	return n
+}
+
+// originalMemberTeams 核对 Create 原件的参战名单与成局成员是同一个集合:r.Players 无空号、无重复,
+// 真人参与者(ai_controlled=false)与 f.Members 一一对应(f.Members 自身也不得重复)。
+// 返回 真人玩家→队号,COMPLETE 据它核个人结算的成员与队伍。
 // 截止 ABORT 不读它:释放按 f.Members 走,不依赖原件名单,名单不符的原件照样能被作废。
 func originalMemberTeams(f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) (map[uint64]uint32, error) {
-	teams := make(map[uint64]uint32, len(r.Players))
+	allIds := make(map[uint64]struct{}, len(r.Players))
+	teams := make(map[uint64]uint32, len(f.Members))
 	for _, p := range r.Players {
 		if p == nil || p.PlayerId == 0 {
 			return nil, errors.New("创建成员为空")
 		}
-		if _, exists := teams[p.PlayerId]; exists {
+		if _, exists := allIds[p.PlayerId]; exists {
 			return nil, errors.New("创建成员重复")
 		}
-		teams[p.PlayerId] = p.TeamIndex
+		allIds[p.PlayerId] = struct{}{}
+		if !p.GetAiControlled() {
+			teams[p.PlayerId] = p.TeamIndex
+		}
 	}
 	if len(f.Members) != len(teams) {
 		return nil, errors.New("创建成员与原成局成员人数不符")

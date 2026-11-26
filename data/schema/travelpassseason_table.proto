@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+// TravelPassSeason 表的权威 schema。源表 data/TravelPassSeason.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 游历手记期次表（docs/design/activity-travel-pass-and-showcase-v1.md）：
+// 无每日打卡、无周清欠账、正常战斗积点、先玩后买、解锁典藏后永不过期。
+// 行 id 一经上线不要改义或复用；下架将 enabled 置 0。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TravelPassSeasonTable {
+  option (cfg_sheet)       = "TravelPassSeason";
+  option (cfg_source_file) = "TravelPassSeason.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 期次 ID（上线后只停用不复用旧 ID）
+  uint32 id = 1;
+  // 启用开关：0 = 停用，1 = 启用（全表同一时段至多 1 条启用期次）
+  uint32 enabled = 2;
+  // 期次展示名（如「青云游历手记 · 第一期」）
+  string name = 3;
+  // 期次说明（写明不强制、无日清、先玩后买、解锁永不过期）
+  string description = 4;
+  // 活动中心卡片图标资源键
+  string icon_key = 5;
+  // 游历手记顶部画卷横幅资源键
+  string banner_asset_key = 6;
+  // 开始时间（UTC 毫秒，0 表示无起点限制）
+  uint64 starts_at_ms = 7;
+  // 结束时间（UTC 毫秒，0 表示常驻不限时；非 0 时已解锁典藏者永不过期）
+  uint64 ends_at_ms = 8;
+  // 满级总游历印点数（如 300）
+  uint32 max_points = 9;
+  // 合格普通 PVE / 瑞兽迎春 / 帮会胜局加点（如 20）
+  uint32 pve_win_points = 10;
+  // 合格困难首领试炼 / 正式 PVP 胜局加点（如 30）
+  uint32 hard_or_pvp_win_points = 11;
+  // 合格达标 PVP 平局或负局加点（如 15）
+  uint32 pvp_qualified_other_points = 12;
+  // 解锁典藏轨结算币种：CurrencyType（首期统一填 1 = 真实充值灵石，严禁绑定灵石抵扣）
+  uint32 premium_currency_type = 13;
+  // 解锁典藏轨单价（1..1000000000，如 180 灵石 = ¥18）
+  uint64 premium_price = 14;
+  // 配置修订号（改价或调整关键配置时递增，用于报价防呆）
+  uint32 config_revision = 15;
+}

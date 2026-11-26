@@ -780,6 +780,7 @@ func validateManualAudit(r assetop.ManualResolution) error {
 
 // assetOpImmutable 是终结时要用的不可变列。
 type assetOpImmutable struct {
+	OpID                          uint64
 	PlayerID, GuildID             uint64
 	Stream                        uint32 // assetpb.AssetOpStream 的库值;只给 sqlLockSeqGuard 绑参数
 	Kind                          pb.GuildAssetOpKind
@@ -901,6 +902,7 @@ func (s *GuildAssetStore) readImmutable(ctx context.Context, opID uint64) (asset
 	if err != nil {
 		return assetOpImmutable{}, false, fmt.Errorf("read immutable columns: %w", err)
 	}
+	row.OpID = opID
 	row.Kind = pb.GuildAssetOpKind(kind)
 	return row, true, nil
 }
@@ -1050,8 +1052,25 @@ func applyCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, st
 				out.touched = true
 			}
 		}
-	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_ACTIVITY_REWARD:
-		// 只 CAS。
+	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_ACTIVITY_REWARD,
+		pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_WAR_REWARD,
+		pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT:
+		// 只 CAS（活动/帮战/追杀发奖为纯入账，无需回退对侧）。
+	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_ESCROW:
+		// 帮战追杀令托管银两终结：APPLIED 激活追杀令(1->2)，REJECTED/ABORTED 作废(1->5)。
+		// guild_war_bounty 锁序位置 17 > guild_asset_op(6)，单向顺延无成环可能。
+		nextBountyStatus := uint32(5)
+		resolvedMs := nowMs
+		if status == assetop.StatusApplied {
+			nextBountyStatus = 2
+			resolvedMs = 0
+		}
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE `guild_war_bounty` SET `status` = ?, `resolved_at_ms` = ? WHERE `escrow_op_id` = ? AND `status` = 1",
+			nextBountyStatus, resolvedMs, row.OpID); err != nil {
+			return out, fmt.Errorf("finalize bounty escrow op %d: %w", row.OpID, err)
+		}
+		out.touched = true
 	default:
 		out.unknownKind = true
 	}

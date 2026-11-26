@@ -245,6 +245,10 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     antiControlOrSeasonSkillPlayers.clear();
     bossTrialKind = kBossTrialKindNone;
     battleDifficulty = 0;
+    bossWeeklyAffixId = bossaffix::kAffixNone;
+    weeklyAffixWoodTeamBoostUntilRound = 0;
+    weeklyAffixEarthTeamBoostUntilRound = 0;
+    weeklyAffixWoodManaTriggeredActors.clear();
     initialAttackerHumanCount = 0;
     protectedGuardActorId = 0;
     initialPolarity = 0;
@@ -271,10 +275,100 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     telegraphStateVersion = 0;
     manualActionRoundsByPlayer.clear();
     effectiveContributionPlayers.clear();
+    totalDamageDealtByPlayer.clear();
+    totalHealingDoneByPlayer.clear();
+    totalControlsLandedByPlayer.clear();
+    primaryFocusDamageByPlayer.clear();
+    totalShieldGrantedByPlayer.clear();
+    totalDispelsLandedByPlayer.clear();
+    damageTakenByPlayer.clear();
+    lowHpExperiencedPlayers.clear();
+    peakEscalationStacks = 0;
+    teamPings[0].clear();
+    teamPings[1].clear();
+    roundPingCountByPlayer.clear();
     surrenderedTeam.reset();
     teamSurrenderVotes[0].Clear();
     teamSurrenderVotes[1].Clear();
     consecutiveIdleRoundsByPlayer.clear();
+    teamAFormationId = 0;
+    teamBFormationId = 0;
+    hasTowerContext = false;
+    towerContext.Clear();
+    towerSigilTotals = {};
+    hasCustomDuelRules = false;
+    customDuelRules.Clear();
+    wuxingSynergyActiveThisRound = false;
+    wuxingSynergyActorIds.clear();
+    activeSeasonWeeklyAffixId = 0;
+    aiControlledPlayers.clear();
+
+    if (IsGuildWarBattle()) {
+        // 帮会全天帮战 V2 强隔离：必须携带合法 BATTLE_ACTIVITY_KIND_GUILD_WAR 上下文，且不消耗局外背包道具。
+        if (!request.has_activity_context() ||
+            request.activity_context().kind() != BATTLE_ACTIVITY_KIND_GUILD_WAR ||
+            !request.activity_context().has_guild_war()) {
+            return false;
+        }
+        for (auto& snapshot : *createRequest.mutable_players()) {
+            snapshot.clear_items();
+        }
+    }
+
+    if (request.has_custom_duel_rules()) {
+        const auto& rules = request.custom_duel_rules();
+        if (!wuxing::IsValidCustomDuelRoundLimit(rules.round_limit_override())) {
+            return false;
+        }
+        hasCustomDuelRules = true;
+        customDuelRules = rules;
+    }
+
+    for (const auto& snapshot : request.players()) {
+        if (!wuxing::IsValidFormationId(snapshot.formation_id())) {
+            return false;
+        }
+        if (snapshot.formation_id() != 0) {
+            if (snapshot.team_index() == 0 && teamAFormationId == 0) {
+                teamAFormationId = snapshot.formation_id();
+            } else if (snapshot.team_index() == 1 && teamBFormationId == 0) {
+                teamBFormationId = snapshot.formation_id();
+            }
+        }
+        if (snapshot.has_tower_context() && snapshot.tower_context().floor() != 0) {
+            if (request.match_mode() != kMatchModePveSolo || hasTowerContext) {
+                return false;
+            }
+            const auto& tc = snapshot.tower_context();
+            if (tc.floor() < 1u || tc.floor() > wuxing::kTowerMaxFloors || tc.run_id() == 0u) {
+                return false;
+            }
+            for (const uint32_t sigilId : tc.active_sigil_ids()) {
+                if (!wuxing::IsValidTowerSigilId(sigilId)) {
+                    return false;
+                }
+                const auto def = wuxing::FindTowerSigil(sigilId);
+                towerSigilTotals.damagePct += def.damagePct;
+                towerSigilTotals.critPct += def.critPct;
+                towerSigilTotals.critDamagePct += def.critDamagePct;
+                towerSigilTotals.shieldBreakBonusPct += def.shieldBreakBonusPct;
+                towerSigilTotals.healShieldPct += def.healShieldPct;
+                towerSigilTotals.petDamagePct += def.petDamagePct;
+                towerSigilTotals.roundHpRegenPct += def.roundHpRegenPct;
+                towerSigilTotals.roundManaRegenPct += def.roundManaRegenPct;
+                towerSigilTotals.controlResistPct += def.controlResistPct;
+                towerSigilTotals.onHitManaRegenPct += def.onHitManaRegenPct;
+                towerSigilTotals.damageTakenReducePct += def.damageTakenReducePct;
+                towerSigilTotals.first3RoundsDamagePct += def.first3RoundsDamagePct;
+                towerSigilTotals.singleTargetDamagePct += def.singleTargetDamagePct;
+                towerSigilTotals.critBurnMaxHpPct += def.critBurnMaxHpPct;
+                towerSigilTotals.openingShieldPct += def.openingShieldPct;
+                towerSigilTotals.reflectPct += def.reflectPct;
+            }
+            hasTowerContext = true;
+            towerContext = tc;
+        }
+    }
 
     // 回合上限与玩法配置：优先 DungeonTable.round_limit，其次物法易势默认 16 回合，正式排位缺省收敛到 20 回合，其余沿用 time_limit 换算。
     maxRounds = kDefaultMaxRounds;
@@ -290,17 +384,56 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
             maxRounds = RoundsFromMilliseconds(static_cast<uint64_t>(dungeonRow->time_limit()) * 1000);
         }
     }
+    if (!bossaffix::IsValidOverride(request.boss_weekly_affix_id())) {
+        return false;
+    }
     if (IsBossTrialKind(bossTrialKind)) {
         bossPhase = 1;
+        bossWeeklyAffixId = bossaffix::ResolveForBattle(
+            true, hasTowerContext, request.created_at_ms(), request.boss_weekly_affix_id());
     }
     constexpr uint32_t kRankedDefaultMaxRounds = 20;
     if (IsRankedBattle() && !hasExplicitRoundLimit) {
         maxRounds = std::min(maxRounds, kRankedDefaultMaxRounds);
     }
+    if (IsGuildWarBattle() && !hasExplicitRoundLimit) {
+        maxRounds = std::min(maxRounds, kGuildWarDefaultMaxRounds);
+    }
     if (request.match_mode() == kMatchModePolarity5v5 && bossTrialKind == kBossTrialKindNone) {
         bossTrialKind = kBossTrialKindPolarity5v5;
         if (maxRounds == kDefaultMaxRounds) {
             maxRounds = kPolarityDefaultMaxRounds;
+        }
+    }
+    if (hasCustomDuelRules && customDuelRules.round_limit_override() > 0u) {
+        maxRounds = customDuelRules.round_limit_override();
+    }
+
+    // 赛季全员对称周环境词缀：仅当未启用锦标赛五行地脉、五行幻境爬塔、自定义切磋及瑞兽迎春活动时生效，
+    // 且须全部玩家快照一致携带合法词缀 1..4，分歧或越界 fail-closed 退回 0，杜绝单边优势。
+    if (!hasTowerContext && !hasCustomDuelRules &&
+        ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_UNSPECIFIED &&
+        bossTrialKind != kBossTrialKindFestivalBeast &&
+        !(request.has_activity_context() &&
+          request.activity_context().kind() == BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST) &&
+        request.players_size() > 0) {
+        uint32_t unanimousAffix = 0u;
+        bool consistent = true;
+        for (const auto& snapshot : request.players()) {
+            const uint32_t candidate = snapshot.season_weekly_affix_id();
+            if (!seasonrules::IsValidWeeklyAffixId(candidate)) {
+                consistent = false;
+                break;
+            }
+            if (unanimousAffix == 0u) {
+                unanimousAffix = candidate;
+            } else if (unanimousAffix != candidate) {
+                consistent = false;
+                break;
+            }
+        }
+        if (consistent && seasonrules::IsValidWeeklyAffixId(unanimousAffix)) {
+            activeSeasonWeeklyAffixId = unanimousAffix;
         }
     }
 
@@ -380,6 +513,28 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     }
     InitSpecialEncounterState();
 
+    // 锦标赛 V2 土厚灵脉 + 地载阵 + 五行幻境土系符印：开场第 1 回合叠加最大气血护盾。
+    leylineEarthShieldByActor.clear();
+    const bool earthLeyline = ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_EARTH;
+    for (const auto& actor : actors) {
+        if (!IsActorActive(actor) || actor.max_health() == 0) {
+            continue;
+        }
+        uint64_t shieldPct = earthLeyline ? 8ULL : 0ULL;
+        shieldPct += wuxing::FormationOf(TeamFormationId(actor.team_index())).openingShieldPct;
+        if (hasTowerContext && actor.team_index() == 0) {
+            shieldPct += towerSigilTotals.openingShieldPct;
+        }
+        if (bossWeeklyAffixId == bossaffix::kAffixMetal && actor.team_index() == 1 &&
+            actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            shieldPct += bossaffix::kMetalEnemyOpeningShieldPct;
+        }
+        if (shieldPct > 0) {
+            leylineEarthShieldByActor[actor.actor_id()] =
+                std::max<uint64_t>(1ULL, (actor.max_health() * shieldPct) / 100ULL);
+        }
+    }
+
     initialized = true;
     return true;
 }
@@ -434,6 +589,18 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         actor.set_team_index(snapshot.team_index());
         actor.set_name(snapshot.player_name());
         actor.set_appearance_id(snapshot.appearance_id());
+        for (const auto& [skillId, vfxId] : snapshot.equipped_skill_vfx()) {
+            if (skillId != 0 && vfxId != 0) {
+                (*actor.mutable_equipped_skill_vfx())[skillId] = vfxId;
+            }
+        }
+        if (IsRankedBattle()) {
+            const auto& streaks = createRequest.ranked_context().member_win_streaks();
+            if (const auto stIt = streaks.find(snapshot.player_id());
+                stIt != streaks.end() && stIt->second >= kMinWinStreakHighlight) {
+                actor.set_win_streak(stIt->second);
+            }
+        }
         actor.set_class_id(snapshot.class_id());
         actor.set_gender(snapshot.gender());
         actor.set_level(snapshot.level());
@@ -503,11 +670,18 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
             }
             actor.add_skill_table_ids(skillTableId);
         }
+        if (snapshot.ai_controlled()) {
+            // 守旗阵 AI 托管守擂快照：全程自动出手，不阻塞手动指令收集，不写个人结算表。
+            actor.set_is_auto(true);
+            aiControlledPlayers.insert(snapshot.player_id());
+        }
         actors.emplace_back(std::move(actor));
 
-        auto& settlement = settlements[snapshot.player_id()];
-        settlement.set_battle_id(request.battle_id());
-        settlement.set_player_id(snapshot.player_id());
+        if (!snapshot.ai_controlled()) {
+            auto& settlement = settlements[snapshot.player_id()];
+            settlement.set_battle_id(request.battle_id());
+            settlement.set_player_id(snapshot.player_id());
+        }
     }
     return true;
 }
@@ -544,6 +718,9 @@ bool TurnBattleEngine::BuildPetActor(const BattlePlayerSnapshot& snapshot, const
     actor.set_team_index(snapshot.team_index());
     actor.set_owner_player_id(snapshot.player_id());
     actor.set_pet_table_id(pet.pet_table_id());
+    if (!pet.cosmetic_art_key().empty()) {
+        actor.set_pet_cosmetic_art_key(pet.cosmetic_art_key());
+    }
     *actor.mutable_pet_cultivation() = pet.pet_cultivation();
     actor.set_name(pet.pet_name());
     actor.set_level(pet.level());
@@ -702,9 +879,25 @@ bool TurnBattleEngine::InitMonsters(const CreateBattleRequest& request) {
             ? std::max<uint32_t>(1u, (attackerCount + 1u) / 2u)
             : hpScale;
         const uint64_t scaledHp = baseHp * unitHpScale;
-        if (scaledHp != spawned.max_health()) {
-            spawned.set_max_health(scaledHp);
-            spawned.mutable_attributes()->set_health(scaledHp);
+        uint64_t finalHp = scaledHp;
+        if (hasTowerContext) {
+            const uint32_t hpPct = wuxing::TowerMonsterHealthPct(towerContext.floor());
+            const uint32_t atkPct = wuxing::TowerMonsterAttackPct(towerContext.floor());
+            finalHp = std::max<uint64_t>(1ULL, (scaledHp * hpPct) / 100ULL);
+            if (spawned.attributes().strength() > 0) {
+                spawned.mutable_attributes()->set_strength(
+                    std::max<uint64_t>(1ULL, (spawned.attributes().strength() * atkPct) / 100ULL));
+            }
+            if (spawned.physical_attack() > 0) {
+                spawned.set_physical_attack(std::max<uint64_t>(1ULL, (spawned.physical_attack() * atkPct) / 100ULL));
+            }
+            if (spawned.magic_attack() > 0) {
+                spawned.set_magic_attack(std::max<uint64_t>(1ULL, (spawned.magic_attack() * atkPct) / 100ULL));
+            }
+        }
+        if (finalHp != spawned.max_health()) {
+            spawned.set_max_health(finalHp);
+            spawned.mutable_attributes()->set_health(finalHp);
         }
         // 护卫救援：非首领的护卫单位归属玩家侧（team 0）作为受保护目标，死亡即刻判负。
         if (bossTrialKind == kBossTrialKindGuardianRescue && !spawned.is_boss() && protectedGuardActorId == 0) {
@@ -793,7 +986,11 @@ bool TurnBattleEngine::SubmitAction(uint64_t actorId, const BattleAction& action
 
     // 传输层先核本人/本宠归属;引擎对人物和宝宝使用同一行动校验。
     const auto* actor = FindActor(actorId);
-    if (actor != nullptr && (actor->actor_type() == BATTLE_ACTOR_TYPE_PLAYER || actor->actor_type() == BATTLE_ACTOR_TYPE_PET) && IsActorActive(*actor)) {
+    const uint64_t controllerId = actor != nullptr && actor->actor_type() == BATTLE_ACTOR_TYPE_PET
+        ? actor->owner_player_id()
+        : actorId;
+    if (actor != nullptr && !aiControlledPlayers.contains(controllerId) &&
+        (actor->actor_type() == BATTLE_ACTOR_TYPE_PLAYER || actor->actor_type() == BATTLE_ACTOR_TYPE_PET) && IsActorActive(*actor)) {
         // 校验链不过的行动不落账,按未提交处理(回合超时默认普攻兜底);
         // 截止前允许重复提交改主意,最后一次为准
         if (CheckActionPrerequisites(*actor, action) == kSuccess) {
@@ -817,6 +1014,10 @@ uint32_t TurnBattleEngine::ValidateAction(uint64_t actorId, const BattleAction& 
     if (actor == nullptr || (actor->actor_type() != BATTLE_ACTOR_TYPE_PLAYER && actor->actor_type() != BATTLE_ACTOR_TYPE_PET)) {
         return kInvalidParameter;
     }
+    const uint64_t controllerId = actor->actor_type() == BATTLE_ACTOR_TYPE_PET ? actor->owner_player_id() : actorId;
+    if (aiControlledPlayers.contains(controllerId)) {
+        return kInvalidParameter;
+    }
     if (!IsActorActive(*actor)) {
         return kThisEntityIsInvalid;
     }
@@ -831,6 +1032,9 @@ uint32_t TurnBattleEngine::SetActorAuto(uint64_t actorId, bool enabled) {
     }
     if (prepActive) {
         return kFeatureUnavailable;
+    }
+    if (aiControlledPlayers.contains(actorId)) {
+        return kInvalidParameter;
     }
     auto* actor = FindActor(actorId);
     if (actor == nullptr || actor->actor_type() != BATTLE_ACTOR_TYPE_PLAYER) {
@@ -919,6 +1123,9 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         // 类型白名单(G6):InitPlayers 已把不可施放的类型剔出列表,这里是第二道闸,
         // 防止日后有人绕过 skill_table_ids 直接塞技能 id
         if (!IsTurnBattleCastableSkill(*skillRow)) {
+            return kSkillCannotBeCastInCurrentState;
+        }
+        if (IsControlBannedByCustomDuel() && IsControlSkill(*skillRow)) {
             return kSkillCannotBeCastInCurrentState;
         }
         if (skillRow->battle_model() == 1) return CheckConfiguredSkill(actor, action, *skillRow);
@@ -1157,6 +1364,59 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
 
     // 1. 未提交者填默认行动(宝宝与挂机玩家可选技能,其余玩家与怪物仍普攻)
     BeginConfiguredRound(result);
+    // 人宠五行相生合击（每 3 回合自动共鸣，主角五行与出战存活灵宠五行满足相生即激活 +10% 伤害/治疗/护盾）。
+    wuxingSynergyActiveThisRound = false;
+    wuxingSynergyActorIds.clear();
+    if (wuxing::IsSynergyRound(roundIndex)) {
+        for (const auto& owner : actors) {
+            if (owner.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || !IsActorActive(owner)) {
+                continue;
+            }
+            const uint32_t ownerElement = wuxing::ElementOfClass(owner.class_id());
+            if (ownerElement == wuxing::kElementNone) {
+                continue;
+            }
+            for (const auto& pet : actors) {
+                if (pet.actor_type() != BATTLE_ACTOR_TYPE_PET || pet.owner_player_id() != owner.actor_id() ||
+                    !IsActorActive(pet)) {
+                    continue;
+                }
+                const uint32_t petElement = wuxing::ElementOfPet(pet.pet_table_id());
+                if (wuxing::AreElementsMutuallyGenerating(ownerElement, petElement)) {
+                    wuxingSynergyActiveThisRound = true;
+                    wuxingSynergyActorIds.insert(owner.actor_id());
+                    wuxingSynergyActorIds.insert(pet.actor_id());
+                    auto* synergyEvent = AppendEvent(result, BATTLE_EVENT_WUXING_SYNERGY, owner.actor_id(), pet.actor_id());
+                    synergyEvent->set_value(wuxing::kSynergyBonusPct);
+                    break;
+                }
+            }
+        }
+    }
+    // 锦标赛 V2 水润灵脉 + 云垂阵 + 五行幻境回合初法力/气血恢复（均封顶至最大值）。
+    const bool waterLeyline = ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WATER;
+    for (auto& actor : actors) {
+        if (!IsActorActive(actor)) {
+            continue;
+        }
+        uint64_t manaRegenPct = waterLeyline ? 5ULL : 0ULL;
+        manaRegenPct += wuxing::FormationOf(TeamFormationId(actor.team_index())).roundManaRegenPct;
+        if (hasTowerContext && actor.team_index() == 0) {
+            manaRegenPct += towerSigilTotals.roundManaRegenPct;
+        }
+        if (manaRegenPct > 0 && actor.max_mana() > 0 && actor.attributes().mana() < actor.max_mana()) {
+            const uint64_t curMana = actor.attributes().mana();
+            const uint64_t regen = std::max<uint64_t>(1ULL, (actor.max_mana() * manaRegenPct) / 100ULL);
+            actor.mutable_attributes()->set_mana(std::min(actor.max_mana(), SaturatingAdd(curMana, regen)));
+        }
+        if (hasTowerContext && actor.team_index() == 0 && towerSigilTotals.roundHpRegenPct > 0 &&
+            actor.max_health() > 0 && actor.attributes().health() < actor.max_health()) {
+            const uint64_t curHp = actor.attributes().health();
+            const uint64_t regenHp =
+                std::max<uint64_t>(1ULL, (actor.max_health() * towerSigilTotals.roundHpRegenPct) / 100ULL);
+            actor.mutable_attributes()->set_health(std::min(actor.max_health(), SaturatingAdd(curHp, regenHp)));
+        }
+    }
     FillDefaultActions();
 
     // 事件组编号每回合从 1 起(表现规格 D2);出手序在回合开始时一次排定并保留下来
@@ -1231,6 +1491,9 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         UpdateOutcome();
     }
 
+    // 6.8 群仙问道赛 V3 MVP 累计统计：基于本回合最终确定性事件流汇总每名玩家（含其宝宝）的伤害/治疗护盾/硬控。
+    AccumulateRoundMvpMetrics(result);
+
     // 7. 终局奖励只生成一次，固定额度与独立随机结果写进结算账本供重复读取。
     RollRewards();
 
@@ -1252,8 +1515,12 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
     pendingActions.clear();
     if (outcome == BATTLE_OUTCOME_ONGOING) {
         ExpireSurrenderVotesForRoundAdvance();
+        teamPings[0].clear();
+        teamPings[1].clear();
+        roundPingCountByPlayer.clear();
         ++roundIndex;
         attackerTriggeredStanceCounterThisRound.clear();
+        weeklyAffixWoodManaTriggeredActors.clear();
         for (auto it = exposedActors.begin(); it != exposedActors.end(); ) {
             if (it->second.untilRound < roundIndex) {
                 it = exposedActors.erase(it);
@@ -2028,6 +2295,9 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
     if (target.attributes().health() == 0) {
         HandleDeath(target, attacker.actor_id(), result);
     }
+    if (dealt > 0 && hitKind != BATTLE_HIT_COUNTER) {
+        ApplyWuxingPostDirectHitEffects(attacker, target, dealt, isCritical, result);
+    }
 
     // 反震(D5)排在落伤害之后、连击续段判定之前。反击那一下不触发:
     // 反击不再引发连击 / 反击 / 反震,否则两个高反震 + 高反击的单位能在一次行动里来回弹
@@ -2293,6 +2563,9 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
         if (target.attributes().health() == 0) {
             HandleDeath(target, actor.actor_id(), result);
         }
+        if (dealt > 0) {
+            ApplyWuxingPostDirectHitEffects(actor, target, dealt, isCritical, result);
+        }
         }
     }
 
@@ -2316,19 +2589,25 @@ bool TurnBattleEngine::IsAreaSkill(const SkillTable& skillRow) const {
 }
 
 uint64_t TurnBattleEngine::SkillManaCost(const BattleActorState& actor, const SkillTable& skillRow) const {
+    uint64_t cost = 0;
     if (skillRow.battle_model() == 1) {
         const uint64_t original = classskill::ManaCost(actor.max_mana(), skillRow.mana_percent());
         const uint32_t category = EquipmentManaCategory(skillRow);
         const auto& reductions = actor.equipment_effects().mana_reduction_bps();
         const auto found = reductions.find(category);
         const double equipment = actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && found != reductions.end() ? found->second : 0;
-        return equipbattle::DiscountMana(original, equipment - 10000 * ConfiguredModifier(actor, BattleModifier::ManaCost));
+        cost = equipbattle::DiscountMana(original, equipment - 10000 * ConfiguredModifier(actor, BattleModifier::ManaCost));
+    } else if (IsClassSkill(skillRow)) {
+        // 职业技能按最大法力的比例(class-skills.md §6.3);多目标也只在出手时扣这一次
+        cost = classskill::ManaCost(actor.max_mana(), skillRow.mana_percent());
+    } else {
+        cost = LegacySkillManaCost(skillRow);
     }
-    // 职业技能按最大法力的比例(class-skills.md §6.3);多目标也只在出手时扣这一次
-    if (IsClassSkill(skillRow)) {
-        return classskill::ManaCost(actor.max_mana(), skillRow.mana_percent());
+    if (bossWeeklyAffixId == bossaffix::kAffixWater && actor.team_index() == 0 &&
+        IsWeeklyWaterDiscountSkill(skillRow)) {
+        cost = bossaffix::DiscountWaterManaCost(cost);
     }
-    return LegacySkillManaCost(skillRow);
+    return cost;
 }
 
 uint64_t TurnBattleEngine::LegacySkillManaCost(const SkillTable& skillRow) {
@@ -2579,6 +2858,9 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
             if (target.attributes().health() == 0) {
                 HandleDeath(target, actor.actor_id(), result);
             }
+            if (dealt > 0) {
+                ApplyWuxingPostDirectHitEffects(actor, target, dealt, isCritical, result);
+            }
             }
         }
     }
@@ -2592,7 +2874,11 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
             EffectContext context; context.skillId = skillRow.id(); context.rank = rank;
             ResolveConfiguredHeal(actor, target, ClassSkillHealAmount(actor, skillRow, rank, target), context, result);
         } else {
-        const uint64_t healed = ApplyHeal(target, ClassSkillHealAmount(actor, skillRow, rank, target));
+        double rawHeal = ClassSkillHealAmount(actor, skillRow, rank, target);
+        if (const uint32_t wuxingHealPct = WuxingHealShieldBonusPct(actor); wuxingHealPct > 0) {
+            rawHeal *= (100.0 + wuxingHealPct) / 100.0;
+        }
+        const uint64_t healed = ApplyHeal(target, rawHeal);
         RecordTrialMonsterHeal(actor, target, healed);
         if (healed > 0) {
             RecordEffectiveContribution(actor);
@@ -2620,16 +2906,29 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
     }
 
     if (skillRow.dispel_count() > 0) {
+        bool clearedWeeklyDispel = false;
+        uint32_t dispelledTotal = 0;
         if (actor.team_index() != target.team_index()) {
             TryDispelBossStance(actor, target, result);
         } else if (sunderUntilRound.erase(target.actor_id()) > 0) {
             RecordEffectiveContribution(actor);
+            clearedWeeklyDispel = true;
+            ++dispelledTotal;
         }
-        if (DispelDebuffs(target, skillRow.dispel_count(), result) > 0) {
+        const uint32_t clearedDebuffs = DispelDebuffs(target, skillRow.dispel_count(), result);
+        if (clearedDebuffs > 0) {
             RecordEffectiveContribution(actor);
+            clearedWeeklyDispel = true;
+            dispelledTotal += clearedDebuffs;
             if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.team_index() == target.team_index()) {
                 antiControlOrSeasonSkillPlayers.insert(actor.actor_id());
             }
+        }
+        if (dispelledTotal > 0) {
+            RecordDispelLanded(actor.actor_id(), dispelledTotal);
+        }
+        if (clearedWeeklyDispel) {
+            OnBossWeeklyAffixDispelTriggered(actor.actor_id(), result);
         }
     }
 
@@ -2720,8 +3019,12 @@ uint64_t TurnBattleEngine::EffectiveDefense(const BattleActorState& actor) const
 }
 
 uint64_t TurnBattleEngine::EffectiveSpeed(const BattleActorState& actor) const {
-    const double multiplier = ClassBuffStatMultiplier(actor, ClassBuffStat::kSpeed) *
+    double multiplier = ClassBuffStatMultiplier(actor, ClassBuffStat::kSpeed) *
         std::max(0.1, 1 + ConfiguredModifier(actor, BattleModifier::Speed));
+    if (const uint32_t formationSpeedPct = wuxing::FormationOf(TeamFormationId(actor.team_index())).speedBonusPct;
+        formationSpeedPct > 0) {
+        multiplier *= (100.0 + formationSpeedPct) / 100.0;
+    }
     return multiplier == 1.0 ? actor.attributes().speed() : classskill::FloorRatio(actor.attributes().speed(), multiplier);
 }
 
@@ -3031,7 +3334,17 @@ double TurnBattleEngine::AutoBasicAttackDamage(const BattleActorState& actor) co
 
 void TurnBattleEngine::ExecuteDefend(BattleActorState& actor, TurnResultS2C& result) {
     actor.set_is_defending(true);
-    AppendEvent(result, BATTLE_EVENT_DEFEND, actor.actor_id(), actor.actor_id());
+    auto* ev = AppendEvent(result, BATTLE_EVENT_DEFEND, actor.actor_id(), actor.actor_id());
+    // 灵息充盈周（全员对称）：双方普通防御额外回复 3% 最大法力，按缺口封顶。
+    if (const uint32_t manaRegenBps = seasonrules::DefendBonusManaRegenBps(activeSeasonWeeklyAffixId);
+        manaRegenBps > 0u && actor.max_mana() > 0 && actor.attributes().mana() < actor.max_mana()) {
+        const uint64_t curMana = actor.attributes().mana();
+        const uint64_t missing = actor.max_mana() - curMana;
+        const uint64_t gain = std::min(missing,
+            std::max<uint64_t>(1ULL, (actor.max_mana() * manaRegenBps) / 10000ULL));
+        actor.mutable_attributes()->set_mana(curMana + gain);
+        ev->set_value(static_cast<int64_t>(gain));
+    }
 }
 
 void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& action,
@@ -3306,7 +3619,7 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
         if (buffRow.interval_effect_size() == 0) {
             break;
         }
-        const double rawDamage =
+        double rawDamage =
             buffRow.interval_effect(0) * static_cast<double>(std::max(1u, entry.layer()));
         if (HasConfiguredBuffs(actor)) {
             auto* source = FindActor(entry.caster_id());
@@ -3315,6 +3628,12 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
             ResolveConfiguredDamage(source == nullptr ? actor : *source, actor, rawDamage,
                 combatdamage::kMagicDamage, context, result);
             break;
+        }
+        if (bossWeeklyAffixId == bossaffix::kAffixWater && actor.team_index() == 1) {
+            const auto* source = FindActor(entry.caster_id());
+            if (source != nullptr && source->team_index() == 0) {
+                rawDamage = rawDamage * (100.0 + bossaffix::kWaterChargeOrPeriodicDamageBonusPct) / 100.0;
+            }
         }
         const uint64_t dealt = ApplyDamage(actor, rawDamage);
         if (dealt > 0) {
@@ -3386,8 +3705,9 @@ void TurnBattleEngine::UpdateOutcome() {
     } else if (sideBWiped) {
         outcome = BATTLE_OUTCOME_SIDE_A_WIN;
     } else if (roundIndex >= maxRounds) {
-        // 论剑排位与物法易势 5V5 打满逻辑回合上限双方均存活判平局；其余对局按既有规则进攻方（A 方）判负。
-        if (IsRankedBattle() || bossTrialKind == kBossTrialKindPolarity5v5 || createRequest.match_mode() == kMatchModePolarity5v5) {
+        // 论剑排位、物法易势 5V5、帮会帮战与自定义规则切磋打满逻辑回合上限双方均存活判平局；其余对局按既有规则进攻方（A 方）判负。
+        if (IsRankedBattle() || bossTrialKind == kBossTrialKindPolarity5v5 ||
+            createRequest.match_mode() == kMatchModePolarity5v5 || IsGuildWarBattle() || hasCustomDuelRules) {
             outcome = BATTLE_OUTCOME_DRAW;
         } else {
             outcome = BATTLE_OUTCOME_SIDE_B_WIN;
@@ -3402,7 +3722,7 @@ std::string TurnBattleEngine::SelectRewardStrategy(uint64_t playerId) const {
 }
 
 void TurnBattleEngine::RollRewards() {
-    if (!IsPveMatch() || outcome != BATTLE_OUTCOME_SIDE_A_WIN || IsFestivalBeastBattle()) {
+    if (!IsPveMatch() || outcome != BATTLE_OUTCOME_SIDE_A_WIN || IsFestivalBeastBattle() || hasTowerContext) {
         return;
     }
     for (auto& [playerId, settlement] : settlements) {
@@ -3530,14 +3850,22 @@ double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
     isCritical = false;
 
     double finalDamage = DamageBeforeCriticalRoll(caster, target, baseDamage, attack, attackMultiplier, damageType);
-    const double critChance = CriticalChance(caster, damageType);
+    double critChance = CriticalChance(caster, damageType);
+    if (bossWeeklyAffixId == bossaffix::kAffixMetal && caster.team_index() == 0 && target.team_index() == 1 &&
+        IsActorExposed(target.actor_id())) {
+        critChance = std::min(1.0, critChance + static_cast<double>(bossaffix::kMetalExposedCritBonusPct) / 100.0);
+    }
 
     // 暴击只走引擎 RNG;critChance 为 0 时不消耗随机数(与实时短路口径一致)。
     // 掷骰位置与改公式前相同,同种子回放的随机数消费序列不变。
     // 注意满 100 也掷骰(Rand01 ∈ [0,1) 恒小于 1,结果必为真):这是装备系统落地前的既有行为,
     // 改成短路会平移所有满暴击单位之后的随机序列,所以不与 RollPercent 的两端短路对齐
     if (critChance > 0.0 && Rand01() < critChance) {
-        finalDamage *= kCriticalDamageMultiplier;
+        double critMultiplier = kCriticalDamageMultiplier;
+        if (hasTowerContext && caster.team_index() == 0 && towerSigilTotals.critDamagePct > 0) {
+            critMultiplier += static_cast<double>(towerSigilTotals.critDamagePct) / 100.0;
+        }
+        finalDamage *= critMultiplier;
         isCritical = true;
     }
 
@@ -3576,6 +3904,65 @@ double TurnBattleEngine::DamageBeforeCriticalRoll(const BattleActorState& caster
     if (!IsPveMatch()) {
         damage *= kPvpDamageScale;
     }
+    // 锦标赛 V2 五行灵脉伤害缩放（与 Java 引擎定点数倍率逐项对齐）：金锐破防 +4%、火炽 +6%、土厚减伤 -5%。
+    switch (ActiveTournamentLeyline()) {
+    case TOURNAMENT_LEYLINE_METAL:
+        damage *= 104.0 / 100.0;
+        break;
+    case TOURNAMENT_LEYLINE_FIRE:
+        damage *= 106.0 / 100.0;
+        break;
+    case TOURNAMENT_LEYLINE_EARTH:
+        damage *= 95.0 / 100.0;
+        break;
+    default:
+        break;
+    }
+    // 赛季全员对称周环境词缀（先机守势周前 2 回合直伤 -8%；锋芒竞速周攻击无盾目标直伤 +5%）。
+    if (const uint32_t openingReducePct =
+            seasonrules::OpeningGuardDamageReducePct(activeSeasonWeeklyAffixId, roundIndex);
+        openingReducePct > 0u) {
+        damage *= (100.0 - openingReducePct) / 100.0;
+    }
+    if (const uint32_t sharpBonusPct = seasonrules::SharpTempoUnshieldedDamageBonusPct(
+            activeSeasonWeeklyAffixId, HasAnyActiveShield(target));
+        sharpBonusPct > 0u) {
+        damage *= (100.0 + sharpBonusPct) / 100.0;
+    }
+    // 五行阵法 + 阵法互克 + 人宠五行相生合击 + 五行幻境局内符印（全确定性缩放，均 0 时零改动）。
+    uint32_t attackerBonusPct = 0u;
+    const auto srcForm = wuxing::FormationOf(TeamFormationId(caster.team_index()));
+    const uint32_t dstFormId = TeamFormationId(target.team_index());
+    attackerBonusPct += srcForm.damageBonusPct;
+    attackerBonusPct += wuxing::FormationCounterBonusPct(srcForm.id, dstFormId);
+    if (caster.actor_type() == BATTLE_ACTOR_TYPE_PET) {
+        attackerBonusPct += srcForm.petDamageBonusPct;
+    }
+    if (IsWuxingSynergyActiveForActor(caster.actor_id())) {
+        attackerBonusPct += wuxing::kSynergyBonusPct;
+    }
+    if (hasTowerContext && caster.team_index() == 0) {
+        attackerBonusPct += towerSigilTotals.damagePct;
+        if (caster.actor_type() == BATTLE_ACTOR_TYPE_PET) {
+            attackerBonusPct += towerSigilTotals.petDamagePct;
+        }
+        if (roundIndex <= 3u) {
+            attackerBonusPct += towerSigilTotals.first3RoundsDamagePct;
+        }
+        if (towerSigilTotals.shieldBreakBonusPct > 0u && HasAnyActiveShield(target)) {
+            attackerBonusPct += towerSigilTotals.shieldBreakBonusPct;
+        }
+    }
+    if (attackerBonusPct > 0u) {
+        damage *= (100.0 + attackerBonusPct) / 100.0;
+    }
+    uint32_t defenderReducePct = wuxing::FormationOf(dstFormId).damageTakenReducePct;
+    if (hasTowerContext && target.team_index() == 0) {
+        defenderReducePct += towerSigilTotals.damageTakenReducePct;
+    }
+    if (defenderReducePct > 0u) {
+        damage *= std::max(0.1, (100.0 - static_cast<double>(std::min<uint32_t>(defenderReducePct, 80u))) / 100.0);
+    }
     return damage;
 }
 
@@ -3586,6 +3973,16 @@ double TurnBattleEngine::CriticalChance(const BattleActorState& caster, uint32_t
         critRateBonus = caster.combat().physical_crit_rate();
     } else if (damageType == combatdamage::kMagicDamage) {
         critRateBonus = caster.combat().magic_crit_rate();
+    }
+    // 锦标赛 V2 金锐灵脉：暴击率 +5%。
+    if (ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_METAL) {
+        critRateBonus = SaturatingAdd(critRateBonus, 5ULL);
+    }
+    if (const uint32_t formCrit = wuxing::FormationOf(TeamFormationId(caster.team_index())).critBonusPct; formCrit > 0u) {
+        critRateBonus = SaturatingAdd(critRateBonus, formCrit);
+    }
+    if (hasTowerContext && caster.team_index() == 0 && towerSigilTotals.critPct > 0u) {
+        critRateBonus = SaturatingAdd(critRateBonus, towerSigilTotals.critPct);
     }
     // 暴击率为整数百分比口径,基础 + 加成之后换算并夹到 [0,1](与实时 CalculateFinalDamage 一致)
     const uint32_t equipmentCrit = damageType == combatdamage::kPhysicalDamage ? caster.equipment_effects().physical_crit_bps() :
@@ -3614,8 +4011,26 @@ uint64_t TurnBattleEngine::LandedDamage(const BattleActorState& target, double r
     return combatdamage::DamageToHealth(rawDamage, target.attributes().health());
 }
 
+uint64_t TurnBattleEngine::AbsorbTournamentEarthShield(uint64_t actorId, uint64_t& remaining) {
+    if (remaining == 0 || leylineEarthShieldByActor.empty()) {
+        return 0;
+    }
+    auto it = leylineEarthShieldByActor.find(actorId);
+    if (it == leylineEarthShieldByActor.end() || it->second == 0) {
+        return 0;
+    }
+    const uint64_t absorbed = std::min(remaining, it->second);
+    it->second -= absorbed;
+    remaining -= absorbed;
+    if (it->second == 0) {
+        leylineEarthShieldByActor.erase(it);
+    }
+    return absorbed;
+}
+
 uint64_t TurnBattleEngine::ApplyDamage(BattleActorState& target, double rawDamage) {
-    const uint64_t damage = LandedDamage(target, rawDamage);
+    uint64_t damage = LandedDamage(target, rawDamage);
+    AbsorbTournamentEarthShield(target.actor_id(), damage);
     if (damage > 0) {
         target.mutable_attributes()->set_health(target.attributes().health() - damage);
     }
@@ -3626,6 +4041,9 @@ uint64_t TurnBattleEngine::LandedHeal(const BattleActorState& target, double raw
     // !(> 0) 同时挡住 NaN;治疗量按缺口封顶后再转整数,高血量 + 大倍率也不会越界
     if (!(rawHeal > 0) || !std::isfinite(rawHeal) || target.is_dead()) {
         return 0;
+    }
+    if (ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WOOD) {
+        rawHeal *= 110.0 / 100.0;
     }
     if (EscalationStacks() > 0) {
         rawHeal *= static_cast<double>(EscalationSupportPct()) / 100.0;
@@ -3746,8 +4164,202 @@ void TurnBattleEngine::RecordEffectiveContribution(const BattleActorState& actor
     }
 }
 
+bool TurnBattleEngine::IsHardControlBuff(uint32_t buffTableId) const {
+    if (buffTableId == 0 || dataProvider == nullptr) {
+        return false;
+    }
+    const auto* row = dataProvider->FindBuff(buffTableId);
+    if (row == nullptr) {
+        return false;
+    }
+    if (row->buff_type() == kBuffTypeStun ||
+        row->buff_type() == kBuffTypeSilence ||
+        row->buff_type() == kBuffTypeFreeze) {
+        return true;
+    }
+    if (row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Control)) {
+        const uint32_t sk = row->state_kind();
+        return sk >= static_cast<uint32_t>(BattleStateKind::SealActive) &&
+               sk <= static_cast<uint32_t>(BattleStateKind::Freeze);
+    }
+    return false;
+}
+
+void TurnBattleEngine::RecordDispelLanded(uint64_t casterActorId, uint32_t count) {
+    if (casterActorId == 0 || count == 0) {
+        return;
+    }
+    const auto* caster = FindActor(casterActorId);
+    if (caster == nullptr) {
+        return;
+    }
+    uint64_t ownerId = 0;
+    if (caster->actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+        ownerId = caster->actor_id();
+    } else if (caster->actor_type() == BATTLE_ACTOR_TYPE_PET) {
+        ownerId = caster->owner_player_id();
+    }
+    if (ownerId != 0) {
+        totalDispelsLandedByPlayer[ownerId] += count;
+    }
+}
+
+void TurnBattleEngine::AccumulateRoundMvpMetrics(const TurnResultS2C& result) {
+    peakEscalationStacks = std::max(peakEscalationStacks, EscalationStacks());
+    auto resolveOwner = [](const BattleActorState* actor) -> uint64_t {
+        if (actor == nullptr) {
+            return 0;
+        }
+        if (actor->actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+            return actor->actor_id();
+        }
+        if (actor->actor_type() == BATTLE_ACTOR_TYPE_PET) {
+            return actor->owner_player_id();
+        }
+        return 0;
+    };
+    auto noteLowHp = [&](const BattleActorState* target, uint64_t hpAfter) {
+        if (target != nullptr && target->actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+            hpAfter > 0 && target->max_health() > 0 &&
+            hpAfter <= UINT64_MAX / kClutchComebackLowHpDenominator &&
+            hpAfter * kClutchComebackLowHpDenominator < target->max_health()) {
+            lowHpExperiencedPlayers.insert(target->actor_id());
+        }
+    };
+    for (const auto& ev : result.events()) {
+        const auto* source = FindActor(ev.source_id());
+        const auto* target = FindActor(ev.target_id());
+        const uint64_t ownerId = resolveOwner(source);
+        const uint64_t targetOwnerId = resolveOwner(target);
+        switch (ev.event_type()) {
+            case BATTLE_EVENT_DAMAGE: {
+                const uint64_t dealt = SaturatingAdd(ev.value(), ev.absorbed());
+                if (dealt > 0) {
+                    if (ownerId != 0 && source != nullptr &&
+                        (target == nullptr || target->team_index() != source->team_index())) {
+                        totalDamageDealtByPlayer[ownerId] =
+                            SaturatingAdd(totalDamageDealtByPlayer[ownerId], dealt);
+                        if (ev.is_primary_focus()) {
+                            primaryFocusDamageByPlayer[ownerId] =
+                                SaturatingAdd(primaryFocusDamageByPlayer[ownerId], dealt);
+                        }
+                    }
+                    if (targetOwnerId != 0 && target != nullptr &&
+                        (source == nullptr || target->team_index() != source->team_index())) {
+                        damageTakenByPlayer[targetOwnerId] =
+                            SaturatingAdd(damageTakenByPlayer[targetOwnerId], dealt);
+                    }
+                }
+                noteLowHp(target, ev.target_health_after());
+                break;
+            }
+            case BATTLE_EVENT_HEAL:
+                if (ownerId != 0 && source != nullptr && ev.value() > 0 &&
+                    (target == nullptr || target->team_index() == source->team_index())) {
+                    totalHealingDoneByPlayer[ownerId] =
+                        SaturatingAdd(totalHealingDoneByPlayer[ownerId], ev.value());
+                }
+                break;
+            case BATTLE_EVENT_SHIELD:
+                if (ownerId != 0 && source != nullptr && ev.value() > 0 &&
+                    (target == nullptr || target->team_index() == source->team_index())) {
+                    totalHealingDoneByPlayer[ownerId] =
+                        SaturatingAdd(totalHealingDoneByPlayer[ownerId], ev.value());
+                    totalShieldGrantedByPlayer[ownerId] =
+                        SaturatingAdd(totalShieldGrantedByPlayer[ownerId], ev.value());
+                }
+                break;
+            case BATTLE_EVENT_BUFF_TICK:
+                if (ev.value() > 0 && target != nullptr) {
+                    if (source == nullptr || target->team_index() != source->team_index()) {
+                        if (ownerId != 0) {
+                            totalDamageDealtByPlayer[ownerId] =
+                                SaturatingAdd(totalDamageDealtByPlayer[ownerId], ev.value());
+                        }
+                        if (targetOwnerId != 0) {
+                            damageTakenByPlayer[targetOwnerId] =
+                                SaturatingAdd(damageTakenByPlayer[targetOwnerId], ev.value());
+                        }
+                        noteLowHp(target, ev.target_health_after());
+                    } else if (ownerId != 0) {
+                        totalHealingDoneByPlayer[ownerId] =
+                            SaturatingAdd(totalHealingDoneByPlayer[ownerId], ev.value());
+                    }
+                }
+                break;
+            case BATTLE_EVENT_BUFF_ADD:
+                if (ownerId != 0 && source != nullptr && ev.buff_table_id() != 0 && target != nullptr &&
+                    target->team_index() != source->team_index() &&
+                    IsHardControlBuff(ev.buff_table_id())) {
+                    ++totalControlsLandedByPlayer[ownerId];
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+BattleHighlightKind TurnBattleEngine::ComputeHighlightKind(uint64_t playerId, uint32_t teamIndex,
+                                                           bool playerWon, bool isDead) const {
+    if (playerWon &&
+        (peakEscalationStacks >= kClutchComebackMinEscalationStacks ||
+         (!isDead && lowHpExperiencedPlayers.contains(playerId)))) {
+        return BATTLE_HIGHLIGHT_CLUTCH_COMEBACK;
+    }
+
+    auto readU64 = [](const std::map<uint64_t, uint64_t>& m, uint64_t id) -> uint64_t {
+        const auto it = m.find(id);
+        return it != m.end() ? it->second : 0ULL;
+    };
+    auto readCtrlPlusDispel = [&](uint64_t id) -> uint32_t {
+        uint32_t total = 0;
+        if (const auto it = totalControlsLandedByPlayer.find(id); it != totalControlsLandedByPlayer.end()) {
+            total += it->second;
+        }
+        if (const auto it = totalDispelsLandedByPlayer.find(id); it != totalDispelsLandedByPlayer.end()) {
+            total += it->second;
+        }
+        return total;
+    };
+
+    uint64_t maxFocus = 0;
+    uint32_t maxCtrl = 0;
+    uint64_t maxSupport = 0;
+    uint64_t maxTaken = 0;
+    for (const auto& member : actors) {
+        if (member.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || member.team_index() != teamIndex) {
+            continue;
+        }
+        const uint64_t pid = member.actor_id();
+        maxFocus = std::max(maxFocus, readU64(primaryFocusDamageByPlayer, pid));
+        maxCtrl = std::max(maxCtrl, readCtrlPlusDispel(pid));
+        maxSupport = std::max(maxSupport, readU64(totalHealingDoneByPlayer, pid));
+        maxTaken = std::max(maxTaken, readU64(damageTakenByPlayer, pid));
+    }
+
+    const uint64_t selfFocus = readU64(primaryFocusDamageByPlayer, playerId);
+    if (selfFocus > 0 && selfFocus == maxFocus) {
+        return BATTLE_HIGHLIGHT_PRIMARY_FOCUS;
+    }
+    const uint32_t selfCtrl = readCtrlPlusDispel(playerId);
+    if (selfCtrl >= kHighlightControlMinCount && selfCtrl == maxCtrl) {
+        return BATTLE_HIGHLIGHT_TACTICAL_CONTROL;
+    }
+    const uint64_t selfSupport = readU64(totalHealingDoneByPlayer, playerId);
+    if (selfSupport > 0 && selfSupport == maxSupport) {
+        return BATTLE_HIGHLIGHT_SAVIOR_SUPPORT;
+    }
+    const uint64_t selfTaken = readU64(damageTakenByPlayer, playerId);
+    if (selfTaken > 0 && selfTaken == maxTaken) {
+        return BATTLE_HIGHLIGHT_IRON_GUARD;
+    }
+    return BATTLE_HIGHLIGHT_NONE;
+}
+
 bool TurnBattleEngine::HasActiveEncounterDamageModifiers() const {
-    return activePolarity != 0 || IsBossTrialKind(bossTrialKind);
+    return activePolarity != 0 || IsBossTrialKind(bossTrialKind) ||
+           (hasTowerContext && towerSigilTotals.singleTargetDamagePct > 0u);
 }
 
 void TurnBattleEngine::EmitBossMechanicEvent(TurnResultS2C& result, uint32_t mechanicKind,
@@ -3934,9 +4546,36 @@ void TurnBattleEngine::ProcessBossTrialRoundEnd(TurnResultS2C& result) {
         }
     }
 
-    // 3. 二阶段「决战姿态（破釜）」：全部特殊护卫阵亡或首领气血 <= 50%，整场仅触发一次且绝不回合中途连劈（V7）。
-    if (bossPhase < 2u &&
-        (!anySpecialGuardAlive || boss->attributes().health() * 2ULL <= boss->max_health())) {
+    // 2.5 首领试炼周常五行词缀回合末反向考验（仅真实首领试炼生效，零时钟确定性）。
+    if (bossWeeklyAffixId == bossaffix::kAffixWood && bossaffix::IsWoodRegenRound(roundIndex) &&
+        !IsActorControlLocked(*boss)) {
+        const double incomingHealMod = ConfiguredModifier(*boss, BattleModifier::IncomingHeal);
+        if (incomingHealMod >= 0.0 && boss->max_health() > 0 && boss->attributes().health() < boss->max_health()) {
+            const uint64_t rawHeal =
+                std::max<uint64_t>(1ULL, (boss->max_health() * bossaffix::kWoodBossRegenHpPct) / 100ULL);
+            const uint64_t healed = ApplyHeal(*boss, static_cast<double>(rawHeal));
+            if (healed > 0) {
+                auto* healEv = AppendEvent(result, BATTLE_EVENT_HEAL, boss->actor_id(), boss->actor_id());
+                healEv->set_value(healed);
+                healEv->set_target_health_after(boss->attributes().health());
+                healEv->set_target_mana_after(boss->attributes().mana());
+                EmitBossMechanicEvent(result, kBossMechanicWeeklyAffixTrigger, boss->actor_id(),
+                                      boss->actor_id(), healed);
+            }
+        }
+    } else if (bossWeeklyAffixId == bossaffix::kAffixWater && bossaffix::IsWaterMomentumRound(roundIndex) &&
+               !IsActorControlLocked(*boss) && bossMomentumStacks < kBossMomentumMaxStacks) {
+        ++bossMomentumStacks;
+        EmitBossMechanicEvent(result, kBossMechanicMomentumGain, boss->actor_id(),
+                              boss->actor_id(), bossMomentumStacks);
+    }
+
+    // 3. 二阶段「决战姿态（破釜）」：全部特殊护卫阵亡或首领气血 <= 50%（火周提前至 <= 60%），整场仅触发一次且绝不回合中途连劈（V7）。
+    const bool phaseTwoHpReached = bossWeeklyAffixId == bossaffix::kAffixFire
+        ? bossaffix::IsHealthAtOrBelowPct(boss->attributes().health(), boss->max_health(),
+                                          bossaffix::kFireBossPhaseTwoHpPct)
+        : (boss->attributes().health() * 2ULL <= boss->max_health());
+    if (bossPhase < 2u && (!anySpecialGuardAlive || phaseTwoHpReached)) {
         bossPhase = 2u;
         bool hasNextRoundCleave = false;
         for (const auto& entry : activeTelegraphs) {
@@ -3982,7 +4621,8 @@ uint32_t TurnBattleEngine::ChooseDynamicStanceType(uint32_t currentRound) const 
 uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState& source, BattleActorState& target,
                                                          uint64_t damage, uint32_t damageType, bool isDirectPrimary,
                                                          TurnResultS2C& result, bool isMultiTargetSkill,
-                                                         bool isPrimaryTarget, bool* outSplashReduced) {
+                                                         bool isPrimaryTarget, bool* outSplashReduced,
+                                                         bool isWeeklyChargedOrPeriodic, bool isPursuit) {
     if (outSplashReduced != nullptr) {
         *outSplashReduced = false;
     }
@@ -3992,9 +4632,14 @@ uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState&
     const uint32_t dmgStancePolarity = damageType == combatdamage::kPhysicalDamage
         ? kBossStancePhysical
         : (damageType == combatdamage::kMagicDamage ? kBossStanceMagic : kBossStanceNone);
-    // 1. 物法易势 5V5：与当前易势同类型的直接主伤害 ×1.15（常规减伤/防御后、护盾吸收前，整数向下取整一次）。
+    // 1. 物法易势 5V5 / 自定义切磋物法易势：与当前易势同类型的直接主伤害 ×1.15（常规减伤/防御后、护盾吸收前，整数向下取整一次）。
     if (isDirectPrimary && activePolarity != 0 && activePolarity == damageType) {
         damage = (damage * kPolarityDamageNum) / kPolarityDamageDen;
+    }
+    // 1.5 五行幻境火系灵品符印（402 焚心）：单体直伤额外 +12%。
+    if (isDirectPrimary && !isMultiTargetSkill && hasTowerContext && source.team_index() == 0 &&
+        towerSigilTotals.singleTargetDamagePct > 0u) {
+        damage = (damage * (100ULL + towerSigilTotals.singleTargetDamagePct)) / 100ULL;
     }
     // 2. 首领试炼 V2 阵型「主目标聚火 100% / 多目标直伤副目标溅射 60%」（仅限试炼敌方，零侵入常规 PVE/PVP，V6）。
     if (isDirectPrimary && IsBossTrialKind(bossTrialKind) && source.team_index() == 0 && target.team_index() == 1 &&
@@ -4039,6 +4684,43 @@ uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState&
         }
         if (vulnPct > 0) {
             damage = (damage * (100ULL + vulnPct)) / 100ULL;
+        }
+    }
+    // 4.5 首领试炼周常五行词缀正向增伤与破绽灼伤（仅真实首领试炼生效，整数定点数倍率）。
+    if (bossWeeklyAffixId != bossaffix::kAffixNone && source.team_index() == 0 && target.team_index() == 1) {
+        switch (bossWeeklyAffixId) {
+        case bossaffix::kAffixMetal:
+            if (isDirectPrimary && isPrimaryTarget && IsActorExposed(target.actor_id())) {
+                damage = (damage * (100ULL + bossaffix::kMetalExposedPrimaryBonusPct)) / 100ULL;
+            }
+            break;
+        case bossaffix::kAffixWood:
+            if (weeklyAffixWoodTeamBoostUntilRound >= roundIndex) {
+                damage = (damage * (100ULL + bossaffix::kWoodTeamDamageBonusPct)) / 100ULL;
+            }
+            break;
+        case bossaffix::kAffixWater:
+            if (isWeeklyChargedOrPeriodic) {
+                damage = (damage * (100ULL + bossaffix::kWaterChargeOrPeriodicDamageBonusPct)) / 100ULL;
+            }
+            break;
+        case bossaffix::kAffixFire:
+            if ((source.actor_type() == BATTLE_ACTOR_TYPE_PET && isDirectPrimary) || isPursuit) {
+                damage = (damage * (100ULL + bossaffix::kFirePetOrFollowUpDamageBonusPct)) / 100ULL;
+            }
+            if (isDirectPrimary && IsActorExposed(target.actor_id()) && target.max_health() > 0) {
+                const uint64_t rawBurn =
+                    std::max<uint64_t>(1ULL, (target.max_health() * bossaffix::kFireExposedBurnMaxHpPct) / 100ULL);
+                damage = SaturatingAdd(damage, std::min(rawBurn, bossaffix::kFireExposedBurnCap));
+            }
+            break;
+        case bossaffix::kAffixEarth:
+            if (weeklyAffixEarthTeamBoostUntilRound >= roundIndex) {
+                damage = (damage * (100ULL + bossaffix::kEarthParryNextRoundDamageBonusPct)) / 100ULL;
+            }
+            break;
+        default:
+            break;
         }
     }
     // 5. 灵障首领：灵障护盾在生命扣血之前优先吸收伤害，击破时记录破盾者与有效贡献。
@@ -4099,10 +4781,11 @@ bool TurnBattleEngine::IsEncounterSlowPhaseActor(uint64_t actorId) const {
 }
 
 void TurnBattleEngine::InitSpecialEncounterState() {
-    if (bossTrialKind == kBossTrialKindNone) {
+    if (bossTrialKind == kBossTrialKindNone && !HasCustomDuelPolarity()) {
         return;
     }
-    if (bossTrialKind == kBossTrialKindPolarity5v5 || createRequest.match_mode() == kMatchModePolarity5v5) {
+    if (bossTrialKind == kBossTrialKindPolarity5v5 || createRequest.match_mode() == kMatchModePolarity5v5 ||
+        HasCustomDuelPolarity()) {
         initialPolarity = (RandIndex(2) == 0) ? combatdamage::kPhysicalDamage : combatdamage::kMagicDamage;
         UpdatePolarityForRound();
         return;
@@ -4111,7 +4794,8 @@ void TurnBattleEngine::InitSpecialEncounterState() {
 }
 
 void TurnBattleEngine::UpdatePolarityForRound() {
-    if (bossTrialKind != kBossTrialKindPolarity5v5 && createRequest.match_mode() != kMatchModePolarity5v5) {
+    if (bossTrialKind != kBossTrialKindPolarity5v5 && createRequest.match_mode() != kMatchModePolarity5v5 &&
+        !HasCustomDuelPolarity()) {
         activePolarity = 0;
         return;
     }
@@ -4538,6 +5222,9 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
                 if (bossPhase >= 2u) {
                     scale *= 1.10;
                 }
+                if (bossWeeklyAffixId == bossaffix::kAffixEarth) {
+                    scale *= bossaffix::kEarthBossCleaveMultiplier;
+                }
             }
 
             uint32_t validTargets = 0;
@@ -4598,12 +5285,14 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
                         ++cleaveParryCount;
                         EmitBossMechanicEvent(result, kBossMechanicCleaveParryExpose, source->actor_id(),
                                               source->actor_id(), kBossExposedFullPct);
+                        OnBossWeeklyAffixParryTriggered(source->actor_id(), result);
                     } else if (targetIds.size() >= 2u && parriedTargets >= 1u) {
                         // V3 防线：多人裂地双劈 1/2 化解给予轻度破绽 +20%，保留认真防守队友的正反馈。
                         ApplyBossExposed(source->actor_id(), kBossExposedPartialPct, roundIndex + 1u);
                         ++cleaveParryCount;
                         EmitBossMechanicEvent(result, kBossMechanicCleaveParryExpose, source->actor_id(),
                                               source->actor_id(), kBossExposedPartialPct);
+                        OnBossWeeklyAffixParryTriggered(source->actor_id(), result);
                     }
                     recordResolved(entry, kTelegraphStatusExecuted, "慢速重劈已发动");
                 }
@@ -4623,6 +5312,9 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
                 }
                 if (bossPhase >= 2u) {
                     scale *= 1.10;
+                }
+                if (bossWeeklyAffixId == bossaffix::kAffixEarth) {
+                    scale *= bossaffix::kEarthBossCleaveMultiplier;
                 }
             }
             uint32_t validTargets = 0;
@@ -4671,11 +5363,13 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
                     ++cleaveParryCount;
                     EmitBossMechanicEvent(result, kBossMechanicCleaveParryExpose, source->actor_id(),
                                           source->actor_id(), kBossExposedFullPct);
+                    OnBossWeeklyAffixParryTriggered(source->actor_id(), result);
                 } else if (validTargets >= 2u && parriedTargets * 2u >= validTargets) {
                     ApplyBossExposed(source->actor_id(), kBossExposedPartialPct, roundIndex + 1u);
                     ++cleaveParryCount;
                     EmitBossMechanicEvent(result, kBossMechanicCleaveParryExpose, source->actor_id(),
                                           source->actor_id(), kBossExposedPartialPct);
+                    OnBossWeeklyAffixParryTriggered(source->actor_id(), result);
                 }
             }
             recordResolved(entry, kTelegraphStatusExecuted, "玄毒冲击已发动");
@@ -4853,6 +5547,83 @@ void TurnBattleEngine::TryDispelBossStance(const BattleActorState& source, const
     }
     if (dispelledAny) {
         RecordEffectiveContribution(source);
+        OnBossWeeklyAffixDispelTriggered(source.actor_id(), result);
+    }
+}
+
+bool TurnBattleEngine::IsActorExposed(uint64_t actorId) const {
+    if (actorId == 0u) {
+        return false;
+    }
+    const auto it = exposedActors.find(actorId);
+    return it != exposedActors.end() && it->second.pct > 0u && it->second.untilRound >= roundIndex;
+}
+
+bool TurnBattleEngine::IsWeeklyWaterDiscountSkill(const SkillTable& skillRow) const {
+    for (const uint32_t effectBuffId : skillRow.effect()) {
+        const auto* buffRow = dataProvider->FindBuff(effectBuffId);
+        if (buffRow == nullptr) {
+            continue;
+        }
+        const auto op = static_cast<BattleEffectOp>(buffRow->battle_op());
+        if (op == BattleEffectOp::PrepareCast || op == BattleEffectOp::PeriodicDamage ||
+            op == BattleEffectOp::ConsumePeriodic || op == BattleEffectOp::ExtendPeriodic ||
+            buffRow->buff_type() == kBuffTypePoison || buffRow->buff_type() == kBuffTypeBurn) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void TurnBattleEngine::OnBossWeeklyAffixDispelTriggered(uint64_t casterActorId, TurnResultS2C& result) {
+    if (bossWeeklyAffixId != bossaffix::kAffixWood || casterActorId == 0u) {
+        return;
+    }
+    auto* caster = FindActor(casterActorId);
+    if (caster == nullptr || caster->team_index() != 0u || !IsActorActive(*caster)) {
+        return;
+    }
+    weeklyAffixWoodTeamBoostUntilRound = std::max(weeklyAffixWoodTeamBoostUntilRound, roundIndex + 1u);
+    if (caster->max_mana() == 0ULL || weeklyAffixWoodManaTriggeredActors.contains(casterActorId)) {
+        return;
+    }
+    weeklyAffixWoodManaTriggeredActors.insert(casterActorId);
+    const uint64_t rawGain =
+        std::max<uint64_t>(1ULL, (caster->max_mana() * bossaffix::kWoodDispelManaRegenPct) / 100ULL);
+    const uint64_t curMana = caster->attributes().mana();
+    const uint64_t missing = caster->max_mana() > curMana ? (caster->max_mana() - curMana) : 0ULL;
+    const uint64_t gained = std::min(rawGain, missing);
+    if (gained > 0ULL) {
+        caster->mutable_attributes()->set_mana(curMana + gained);
+        auto* manaEv = AppendEvent(result, BATTLE_EVENT_MANA, casterActorId, casterActorId);
+        manaEv->set_value(gained);
+        manaEv->set_mana_delta(static_cast<int64_t>(gained));
+        manaEv->set_target_health_after(caster->attributes().health());
+        manaEv->set_target_mana_after(caster->attributes().mana());
+    }
+    EmitBossMechanicEvent(result, kBossMechanicWeeklyAffixTrigger, casterActorId, casterActorId, gained);
+}
+
+void TurnBattleEngine::OnBossWeeklyAffixParryTriggered(uint64_t bossActorId, TurnResultS2C& result) {
+    if (bossWeeklyAffixId != bossaffix::kAffixEarth) {
+        return;
+    }
+    weeklyAffixEarthTeamBoostUntilRound = std::max(weeklyAffixEarthTeamBoostUntilRound, roundIndex + 1u);
+    uint64_t shieldedCount = 0ULL;
+    for (const auto& actor : actors) {
+        if (actor.team_index() != 0u || !IsActorActive(actor) || actor.max_health() == 0ULL) {
+            continue;
+        }
+        const uint64_t gain =
+            std::max<uint64_t>(1ULL, (actor.max_health() * bossaffix::kEarthParryTeamShieldPct) / 100ULL);
+        auto& pool = leylineEarthShieldByActor[actor.actor_id()];
+        pool = SaturatingAdd(pool, gain);
+        auto* shieldEv = AppendEvent(result, BATTLE_EVENT_SHIELD, actor.actor_id(), actor.actor_id());
+        shieldEv->set_shield_after(pool);
+        ++shieldedCount;
+    }
+    if (shieldedCount > 0ULL) {
+        EmitBossMechanicEvent(result, kBossMechanicWeeklyAffixTrigger, bossActorId, bossActorId, shieldedCount);
     }
 }
 
@@ -4877,6 +5648,13 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
     if (IsImmuneToBuff(target, *buffRow)) {
         return;
     }
+    if (IsControlBannedByCustomDuel() && IsHardControlBuff(buffTableId)) {
+        if (const auto* caster = FindActor(casterId); caster != nullptr && caster->team_index() != target.team_index()) {
+            auto* resistEvent = AppendEvent(result, BATTLE_EVENT_RESIST, casterId, target.actor_id());
+            resistEvent->set_buff_table_id(buffTableId);
+            return;
+        }
+    }
 
     // 抗异常(equipment-attributes.md §4.5,D8):排在免疫之后 —— 已经免疫就没有"抵抗"可言,
     // 不该为它掷骰;排在驱散之前 —— 被抵抗的 buff 等于没挂上,不能顺手把目标身上的东西驱掉。
@@ -4889,7 +5667,10 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
     }
 
     // 驱散:新 buff 的 dispel_tag 命中现有 buff 的 tag 即移除之
-    DispelBuffsByTag(target, *buffRow, result);
+    const uint32_t removedByTag = DispelBuffsByTag(target, *buffRow, result);
+    if (removedByTag > 0) {
+        RecordDispelLanded(casterId, removedByTag);
+    }
     if (const auto* caster = FindActor(casterId); caster != nullptr) {
         if (buffRow->buff_type() == kBuffTypeDispel && caster->team_index() != target.team_index()) {
             TryDispelBossStance(*caster, target, result);
@@ -4987,8 +5768,9 @@ bool TurnBattleEngine::RollAilmentResist(const BattleActorState& target, const B
 
     // 有效抵抗率 = max(0, 单项 + 所有抗异常 − 施加者的忽视所有抗异常);RollPercent 负责夹到 100,
     // 且为 0 时不消耗随机数(没有抗性装备的目标,事件流与本功能落地前逐位一致)
-    const uint64_t totalResist =
-        SaturatingAdd(*specificResist, target.combat().resist_all_ailment());
+    const uint64_t totalResist = SaturatingAdd(
+        SaturatingAdd(*specificResist, target.combat().resist_all_ailment()),
+        WuxingControlResistPct(target));
     const uint64_t ignored = caster->combat().ignore_ailment_resist();
     const uint64_t effectiveResist = totalResist > ignored ? totalResist - ignored : 0;
     return RollPercent(effectiveResist);
@@ -5011,10 +5793,10 @@ bool TurnBattleEngine::IsImmuneToBuff(const BattleActorState& target,
     return false;
 }
 
-void TurnBattleEngine::DispelBuffsByTag(BattleActorState& target, const BuffTable& buffRow,
-                                        TurnResultS2C& result) {
+uint32_t TurnBattleEngine::DispelBuffsByTag(BattleActorState& target, const BuffTable& buffRow,
+                                            TurnResultS2C& result) {
     if (buffRow.dispel_tag().empty()) {
-        return;
+        return 0;
     }
 
     // 先收集再移除,移除按下标降序避免位移
@@ -5036,6 +5818,7 @@ void TurnBattleEngine::DispelBuffsByTag(BattleActorState& target, const BuffTabl
     for (auto it = dispelIndexes.rbegin(); it != dispelIndexes.rend(); ++it) {
         RemoveBuffAt(target, *it, result);
     }
+    return static_cast<uint32_t>(dispelIndexes.size());
 }
 
 bool TurnBattleEngine::StackOrRefreshExistingBuff(BattleActorState& target,
@@ -5167,6 +5950,43 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_is_dead(actor->is_dead());
     settlement.set_fled(actor->fled());
     settlement.set_surrendered(surrenderedTeam.has_value() && actor->team_index() == *surrenderedTeam);
+    if (const auto dmgIt = totalDamageDealtByPlayer.find(playerId); dmgIt != totalDamageDealtByPlayer.end()) {
+        settlement.set_total_damage_dealt(dmgIt->second);
+    }
+    if (const auto healIt = totalHealingDoneByPlayer.find(playerId); healIt != totalHealingDoneByPlayer.end()) {
+        settlement.set_total_healing_done(healIt->second);
+    }
+    if (const auto ctrlIt = totalControlsLandedByPlayer.find(playerId); ctrlIt != totalControlsLandedByPlayer.end()) {
+        settlement.set_total_controls_landed(ctrlIt->second);
+    }
+    if (const auto pfIt = primaryFocusDamageByPlayer.find(playerId); pfIt != primaryFocusDamageByPlayer.end()) {
+        settlement.set_primary_focus_damage_dealt(pfIt->second);
+    }
+    if (const auto shIt = totalShieldGrantedByPlayer.find(playerId); shIt != totalShieldGrantedByPlayer.end()) {
+        settlement.set_total_shield_granted(shIt->second);
+    }
+    if (const auto dispIt = totalDispelsLandedByPlayer.find(playerId); dispIt != totalDispelsLandedByPlayer.end()) {
+        settlement.set_total_dispels_landed(dispIt->second);
+    }
+    if (const auto takenIt = damageTakenByPlayer.find(playerId); takenIt != damageTakenByPlayer.end()) {
+        settlement.set_damage_taken(takenIt->second);
+    }
+    const bool playerWon =
+        (actor->team_index() == 0 && outcome == BATTLE_OUTCOME_SIDE_A_WIN) ||
+        (actor->team_index() == 1 && outcome == BATTLE_OUTCOME_SIDE_B_WIN);
+    settlement.set_highlight_kind(
+        ComputeHighlightKind(playerId, actor->team_index(), playerWon, actor->is_dead()));
+    if (playerWon) {
+        uint32_t maxEnemyStreak = 0;
+        for (const auto& other : actors) {
+            if (other.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+                other.team_index() != actor->team_index() &&
+                other.win_streak() >= kMinWinStreakHighlight) {
+                maxEnemyStreak = std::max(maxEnemyStreak, other.win_streak());
+            }
+        }
+        settlement.set_ended_opponent_streak(maxEnemyStreak);
+    }
 
     // 出战宝宝的战后终值:随主人的结算一起回 scene(scene 是唯一应用者);论剑临时竞技宠不回写永久宠物。
     for (const auto& other : actors) {
@@ -5185,6 +6005,13 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     if (IsFestivalBeastBattle()) {
         *settlement.mutable_festival_beast() = createRequest.activity_context().festival_beast();
     }
+    if (hasTowerContext) {
+        auto* towerSettle = settlement.mutable_tower_settlement();
+        towerSettle->set_week_key(towerContext.week_key());
+        towerSettle->set_run_id(towerContext.run_id());
+        towerSettle->set_floor(towerContext.floor());
+        towerSettle->set_total_rounds(CompletedRounds());
+    }
     if (IsRankedBattle()) {
         settlement.set_competitive_ranked(true);
         settlement.set_season_id(createRequest.ranked_context().season_id());
@@ -5193,8 +6020,8 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     }
 
     // 奖励已由 RollRewards 终局冻结；这里只带出实际击杀事实，读取结算不查配置、不掷随机。
-    // 瑞兽迎春关闭常规任务击杀/掉落收益，不附带 defeated_monsters。
-    if (IsPveMatch() && !IsFestivalBeastBattle() && outcome == BATTLE_OUTCOME_SIDE_A_WIN &&
+    // 瑞兽迎春与五行幻境爬塔关闭常规任务击杀/掉落收益，不附带 defeated_monsters。
+    if (IsPveMatch() && !IsFestivalBeastBattle() && !hasTowerContext && outcome == BATTLE_OUTCOME_SIDE_A_WIN &&
         actor->team_index() == 0 && IsActorActive(*actor)) {
         for (const auto& defeat : defeatedMonsters) {
             *settlement.add_defeated_monsters() = defeat;
@@ -5355,6 +6182,30 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     }
     if (const uint32_t surrenderUnlock = SurrenderUnlockRound(); surrenderUnlock > 0) {
         state.set_surrender_unlock_round(surrenderUnlock);
+    }
+    if (createRequest.has_tournament_context() && createRequest.tournament_context().match_id() != 0) {
+        *state.mutable_tournament_context() = createRequest.tournament_context();
+    }
+    if (teamAFormationId != 0u) {
+        state.set_team_a_formation_id(teamAFormationId);
+    }
+    if (teamBFormationId != 0u) {
+        state.set_team_b_formation_id(teamBFormationId);
+    }
+    if (hasTowerContext) {
+        *state.mutable_tower_context() = towerContext;
+    }
+    if (hasCustomDuelRules) {
+        *state.mutable_custom_duel_rules() = customDuelRules;
+    }
+    if (wuxingSynergyActiveThisRound) {
+        state.set_wuxing_synergy_active_this_round(true);
+    }
+    if (bossWeeklyAffixId != bossaffix::kAffixNone) {
+        state.set_boss_weekly_affix_id(bossWeeklyAffixId);
+    }
+    if (activeSeasonWeeklyAffixId != 0u) {
+        state.set_season_weekly_affix_id(activeSeasonWeeklyAffixId);
     }
 
     for (const auto& resolved : lastResolvedTelegraphs) {
@@ -5887,6 +6738,7 @@ bool TurnBattleEngine::FinalizePrepPhase() {
     }
 
     prepActive = false;
+    roundPingCountByPlayer.clear();
     // 在最终亮牌阵容上一次性初始化全部开场光环/成长被动，杜绝被换掉宠物的残留光环。
     InitializeConfiguredAbilities();
     return true;
@@ -5965,6 +6817,76 @@ void TurnBattleEngine::FillPrepStateForViewer(BattleStateS2C& state, uint64_t vi
     PopulatePrepStateForViewer(*state.mutable_prep_state(), viewerPlayerId, deadlineMs);
 }
 
+uint32_t TurnBattleEngine::SubmitBattlePing(uint64_t playerId, uint64_t targetActorId, BattlePingKind kind,
+                                            BattleTacticalPing* outPing) {
+    if (!initialized || outcome != BATTLE_OUTCOME_ONGOING) {
+        return kFeatureUnavailable;
+    }
+    const auto* sender = FindActor(playerId);
+    if (sender == nullptr || sender->actor_type() != BATTLE_ACTOR_TYPE_PLAYER || sender->fled()) {
+        return kInvalidParameter;
+    }
+    const uint32_t senderTeam = sender->team_index();
+    if (senderTeam > 1u) {
+        return kInvalidParameter;
+    }
+    uint32_t teamPlayerCount = 0;
+    for (const auto& actor : actors) {
+        if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.team_index() == senderTeam) {
+            ++teamPlayerCount;
+        }
+    }
+    if (teamPlayerCount < 2u) {
+        return kFeatureUnavailable;
+    }
+    if (kind != BATTLE_PING_FOCUS && kind != BATTLE_PING_CONTROL &&
+        kind != BATTLE_PING_PROTECT && kind != BATTLE_PING_DISPEL) {
+        return kInvalidParameter;
+    }
+    const auto* target = FindActor(targetActorId);
+    if (target == nullptr || !IsActorActive(*target)) {
+        return kInvalidParameter;
+    }
+    if ((kind == BATTLE_PING_FOCUS || kind == BATTLE_PING_CONTROL) && target->team_index() == senderTeam) {
+        return kInvalidParameter;
+    }
+    if (kind == BATTLE_PING_PROTECT && target->team_index() != senderTeam) {
+        return kInvalidParameter;
+    }
+
+    auto& usedCount = roundPingCountByPlayer[playerId];
+    if (usedCount >= kMaxBattlePingsPerRound) {
+        return kRateLimitExceeded;
+    }
+    ++usedCount;
+
+    BattleTacticalPing ping;
+    ping.set_sender_player_id(playerId);
+    ping.set_target_actor_id(targetActorId);
+    ping.set_kind(kind);
+    ping.set_round_index(prepActive ? 0u : roundIndex);
+    teamPings[senderTeam][playerId] = ping;
+    if (outPing != nullptr) {
+        *outPing = ping;
+    }
+    return 0u;
+}
+
+void TurnBattleEngine::FillTeamPingsForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const {
+    state.clear_team_pings();
+    if (viewerPlayerId == 0 || outcome != BATTLE_OUTCOME_ONGOING) {
+        return;
+    }
+    const auto team = TeamIndexOfPlayer(viewerPlayerId);
+    if (!team.has_value() || *team > 1u) {
+        return;
+    }
+    for (const auto& [senderId, ping] : teamPings[*team]) {
+        (void)senderId;
+        *state.add_team_pings() = ping;
+    }
+}
+
 BattleEventItem* TurnBattleEngine::AppendEvent(TurnResultS2C& result, eBattleEventType eventType,
                                                uint64_t sourceId, uint64_t targetId) {
     auto* event = result.add_events();
@@ -6023,6 +6945,111 @@ bool TurnBattleEngine::RollPercent(uint64_t percent) {
         return true;
     }
     return Rand01() * 100.0 < static_cast<double>(percent);
+}
+
+bool TurnBattleEngine::HasAnyActiveShield(const BattleActorState& target) const {
+    if (bossTrialKind == kBossTrialKindBarrier && target.is_boss() && bossBarrierShield > 0) {
+        return true;
+    }
+    if (const auto it = leylineEarthShieldByActor.find(target.actor_id());
+        it != leylineEarthShieldByActor.end() && it->second > 0) {
+        return true;
+    }
+    for (const auto& entry : target.buffs()) {
+        if (entry.remaining_capacity() == 0) {
+            continue;
+        }
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+uint32_t TurnBattleEngine::WuxingHealShieldBonusPct(const BattleActorState& caster) const {
+    uint32_t pct = wuxing::FormationOf(TeamFormationId(caster.team_index())).healShieldBonusPct;
+    if (IsWuxingSynergyActiveForActor(caster.actor_id())) {
+        pct += wuxing::kSynergyBonusPct;
+    }
+    if (hasTowerContext && caster.team_index() == 0) {
+        pct += towerSigilTotals.healShieldPct;
+    }
+    return pct;
+}
+
+uint32_t TurnBattleEngine::WuxingControlResistPct(const BattleActorState& target) const {
+    uint32_t pct = wuxing::FormationOf(TeamFormationId(target.team_index())).controlResistPct;
+    if (hasTowerContext && target.team_index() == 0) {
+        pct += towerSigilTotals.controlResistPct;
+    }
+    return pct;
+}
+
+bool TurnBattleEngine::IsControlSkill(const SkillTable& skillRow) const {
+    for (const uint32_t effectBuffId : skillRow.effect()) {
+        if (IsHardControlBuff(effectBuffId)) {
+            return true;
+        }
+        const auto* buffRow = dataProvider->FindBuff(effectBuffId);
+        if (buffRow != nullptr &&
+            ((buffRow->battle_op() == static_cast<uint32_t>(BattleEffectOp::Control) &&
+              buffRow->state_kind() >= 1 && buffRow->state_kind() <= 6) ||
+             buffRow->buff_type() == kBuffTypeStun ||
+             buffRow->buff_type() == kBuffTypeFreeze ||
+             buffRow->buff_type() == kBuffTypeSilence)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacker, BattleActorState& target,
+                                                       uint64_t dealt, bool isCritical, TurnResultS2C& result) {
+    if (!hasTowerContext || dealt == 0) {
+        return;
+    }
+    // 火系仙品符印（403 业火）：暴击附带目标 3% 最大气血真伤（单次封顶 1500）。
+    if (attacker.team_index() == 0 && isCritical && towerSigilTotals.critBurnMaxHpPct > 0 && IsActorActive(target)) {
+        const uint64_t rawBurn =
+            std::max<uint64_t>(1ULL, (target.max_health() * towerSigilTotals.critBurnMaxHpPct) / 100ULL);
+        const uint64_t burn = std::min({rawBurn, wuxing::kFireCritBurnCapPerHit, target.attributes().health()});
+        if (burn > 0) {
+            target.mutable_attributes()->set_health(target.attributes().health() - burn);
+            auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, attacker.actor_id(), target.actor_id());
+            ev->set_value(burn);
+            ev->set_target_health_after(target.attributes().health());
+            ev->set_target_mana_after(target.attributes().mana());
+            if (target.attributes().health() == 0) {
+                HandleDeath(target, attacker.actor_id(), result);
+            }
+        }
+    }
+    // 水系灵品符印（302 归元）：受击回复 4% 最大法力。
+    if (target.team_index() == 0 && IsActorActive(target) && towerSigilTotals.onHitManaRegenPct > 0 &&
+        target.max_mana() > 0 && target.attributes().mana() < target.max_mana()) {
+        const uint64_t gain =
+            std::max<uint64_t>(1ULL, (target.max_mana() * towerSigilTotals.onHitManaRegenPct) / 100ULL);
+        target.mutable_attributes()->set_mana(std::min(target.max_mana(), SaturatingAdd(target.attributes().mana(), gain)));
+    }
+    // 土系灵品/仙品符印（502 镇岳 / 503 昆仑）：反弹实扣伤害的 12%/15%。
+    if (target.team_index() == 0 && IsActorActive(target) && IsActorActive(attacker) &&
+        attacker.team_index() != 0 && towerSigilTotals.reflectPct > 0) {
+        const uint64_t reflected = std::min(
+            attacker.attributes().health(),
+            std::max<uint64_t>(1ULL, (dealt * towerSigilTotals.reflectPct) / 100ULL));
+        if (reflected > 0) {
+            attacker.mutable_attributes()->set_health(attacker.attributes().health() - reflected);
+            auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, target.actor_id(), attacker.actor_id());
+            ev->set_value(reflected);
+            ev->set_hit_kind(BATTLE_HIT_REFLECT);
+            ev->set_target_health_after(attacker.attributes().health());
+            ev->set_target_mana_after(attacker.attributes().mana());
+            if (attacker.attributes().health() == 0) {
+                HandleDeath(attacker, target.actor_id(), result);
+            }
+        }
+    }
 }
 
 }  // namespace turnbattle

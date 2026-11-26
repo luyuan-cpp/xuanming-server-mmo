@@ -5172,3 +5172,72 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - `gen_docs_index.py --check` **exit 0**；负责人实跑 `.\dev.bat gen` 与 `.\gen.bat client` 产物核验通过（`skill.json` 139 条含 `10040=太清灵盾`、`buff.json` 128 条、`skillscrollcraft.json` 6 卷、`pettier.json` 5 阶、`MessageIds.cs` 500..503）。
 - **未执行范围（全部移交 Gemini）**：`MessageLimiter.xlsx` 新增 500..503 后需补跑一次 `.\dev.bat export`（同步产出 `messagelimiter.*`）、未编译 C++/Unity、未跑任何单测/实机、未完成 4 项增量 UGUI 与 24 张新技能图标、未改动并行会话的脏文件、未执行 `git commit` / `git push`。
 - **Java 版（AGENTS §12）**：按负责人要求留作 TODO，已在 `xuanming-server-mmo/PARITY.md` 顶部登记待对齐。
+
+
+## 2026-11-25 《群仙问道赛》V2 全栈落地（模块 A BO3 五行地脉与局间换阵 + 模块 B 冠军玉座每日观道致敬 + 模块 C 淘汰赛公开战报与观战预设喝彩 + 29 枚 V2 美术切片接入）
+
+- **权威契约、配表与生成物（`xuanming-server-mmo-cpp`）**：
+  - `data/schema/tournamentrule_table.proto` 与 `data/TournamentRule.xlsx`（`rule_version=2`）新增字段 `21..26`（`bo3_top4_enabled=true`、`intermission_seconds=60`、`public_knockout_replay=true`、`salute_gold_amount=5000`、`salute_item_id=20`、`salute_item_count=3`）；`data/tip/Tip.xlsx` 新增 4 条 `match_error` Tip（`16056..16059`：`AlreadySalutedToday` / `NoChampionToSalute` / `SpectateCheerCooldown` / `SpectateCheerInvalid`）。
+  - `proto/battle/{battle_data,battle_node,player_battle}.proto` 新增 `TournamentLeylineElement` 与 `TournamentBattleContext` 并透传至 `CreateBattleRequest` / `BattleStateS2C`；`proto/match/{match_service,match_authority}.proto` 新增 `TOURNAMENT_MATCH_STATE_INTERMISSION=7`、SQL 表 `match_tournament_match_game` / `match_tournament_salute` 及 3 条客户端 RPC（`506=SaluteTournamentChampion`、`507=SendTournamentSpectateCheer`、`508=GetTournamentSpectateCheer`）。导表（74 表）、`proto-gen-run`、`gen_schema_index.py --check` 全过。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - **C++ 战斗引擎**：`turn_battle_engine.{h,cpp}`、`configured_battle_effects.cpp`、`equipment_battle_effects.cpp` 完整实现五行地脉确定性数值修正（金锐/木生/水润/火炽/土厚含首回合 8% 开场护盾吸收）及 `BuildStateSnapshot()` 透传（`StripEngineOnlyState` 保留）；新增 `TurnBattleEngineTest.TournamentV2LeylinesAndSnapshotPropagation` 并串行 MSBuild 编译 `battle.exe`、`gate.exe`、`turn_battle_engine_test.exe`（均 0 错误，测试 **1/1 PASS**）。
+  - **Go `match` 服务**：完成 BO3 进度与 `match_tournament_match_game` 去重、60 秒局间换阵与到期自动续开（`RequestHigh=gameIndex` 隔离直开主键）、每日 UTC+8 原子观道致敬与邮件投递、`GetBattleReport` 淘汰赛公开回放白名单与 `SpectateCheerHub`（6 固定短语白名单 + 5s 冷却 + 32 条递增 `seq` 缓冲）全量接线与单测。
+- **Java 独立服务端对账（`xuanming-server-mmo`）**：
+  - `ContractSync` + `--check` 通过；`game-battle-engine` 与 `game-match` 全量同构落地（含修复 `GlobalMatchStore.reserveDirect` 豁免 `kind=4`、登记 `PARITY.md`），实跑 `clean install`、`game-battle-engine`（`TournamentLeylineBattleEngineTest` + `SeasonBattleEngineTest` **4/4 PASS**）与 `game-match`（`TournamentParityTest` + `MatchMethodsTest` + `MatchApplicationContextTest` + `MatchReportsScriptsAndRankedTest` **36/36 PASS**）。
+- **Unity 客户端非 UI + 29 枚 V2 切片 + UGUI 模块 A/B/C（`mmorpg-client`）**：
+  - 完成 `sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1`，从 `D:/work/image/designs/season-team-tournament-v2/assets/{a,b,c,titles}` 导入全部 29 枚 PNG 切片并生成唯一 GUID `.meta` 至 `Assets/Resources/UI/Ugui/TournamentV2/`。
+  - 纯 C# 层（`TournamentModels.cs`、`TournamentClient.cs`、`TournamentUiModel.cs`）完成 506/507/508 RPC、校准单调局间倒计时、五行灵脉/6 短语数据目录、公开淘汰赛回放与 0:0 中性人气比例；UGUI 层（`TournamentArtCatalog.cs`、`TournamentWindow.cs`、`TournamentUiRoot.cs`、新增 `TournamentSpectateCheerOverlay.cs` 与 `TournamentChampionStageController.cs`）完整接入对阵树 BO3 局分/灵脉/多局回放、760×540 局间换阵弹层、冠军殿堂与天墉城玉座/牌匾/80×80 观道致敬轻窗，以及实时观战底部 ≤76px 单行喝彩条（严格遵守原生毛笔字稿不叠字、真实角色肖像缺失回落中性太极占位）。
+- **实际验证结果**：
+  - C++：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**；串行 MSBuild `/m:1` `battle.exe`/`gate.exe`/`turn_battle_engine_test.exe` **0 错误**；`TournamentV2LeylinesAndSnapshotPropagation` **1/1 PASS**。
+  - Java：`ContractSync --check` 0 退出；`game-battle-engine` **4/4 PASS**、`game-match` **36/36 PASS**。
+  - Unity：`tools/client_compile_check.ps1` **exit=0（739 files, 0 errors）**；WebGL2/IL2CPP 禁用 API 0 命中；29 枚 PNG 与 41 份 `.meta` GUID 唯一无漏；`TournamentClientTests` + `TournamentUiModelTests` **7/7 PASS**。
+- **未执行范围与已知阻塞**：Go `go/match` 测试编译当前受同工作区并行会话未收尾的 `go/shared/generated/table/spiritshopgoods_table.go`（`row.ItemId1` vs `ItemId_1`）阻塞，未改动他人文件；尚未跑多进程真库实网联机与 Unity Editor 实景镜头/逐像素验收；`D:/work/image/designs/season-team-tournament-v2/` 与三个代码仓均尚未执行 `git commit` / `git push`。
+
+## 2026-11-25 《论剑 / 人宠会武》V2 终版道家 Q 版 UI 资源与 UGUI 全量接入（对齐 `image@1db2509` 与 `RETIRED_STYLE.md`）
+
+- **美术资源核验与导入（`mmorpg-client`）**：
+  - 核验 `D:\work\image\designs\ranked-play-v2-ui-20261125`（Azure `image` 提交 `1db250960d7`）：11 件帮会同源 `guild_*.png` 与 `Assets/Resources/UI/Ugui/GuildFidelity20261016/` SHA-256 100% 一致直接复用；`no-pet-modal-base` / `round-counter-base` / `surrender-button-base` / `surrender-vote-strip-base` 4 件与 `BattleArenaV2V3/controls/` 逐字节一致直接复用；新导入缺失的 3 件透明无字控件至 `Assets/Resources/UI/Ugui/RankedPlayV2/`（`escalation-badge-base.png`、`fangmang-progress-track.png`、`four-skill-detail-card-base.png`）并生成全局唯一 Sprite `.meta`。
+- **退场旧图清零与 UGUI 代码接入**：
+  - `SeasonEconomyUiArt.cs` 新增 `LoadRankedPlayV2Control` 与 `LoadGuildFidelityAsset`；`RankedArtCatalog.cs` 彻底移除 `RETIRED_STYLE.md` 禁用的旧论剑角色头像/立绘引用（`avatar-pozheng/kongchang/shouxin`、`role-*-full`）并新增 `LoadGuildApproved` / `CreateGuildArt` / `CreateGuildButton`。
+  - `FormalPvpLobbyPanel.cs` 接入 `fangmang-progress-track.png` + `guild_progress_fill.png` 实时 6 胜「锋芒」进度条，并将第三荣誉入口统一为「玉符与称号」。
+  - `RankedSharedDrawer.cs` 全面切换至帮会同源页签/列表行/表头/按钮与低光污宣纸底，Tab 2 更名「玉符与称号」，彻底移除 `avatar-pozheng` 兜底（真实玩家头像走 `QdaoCharacterCatalog.LoadPortrait`，缺图显中性「道」字徽章）。
+  - `RankedSettlementPanel.cs` 与 `RankedLobbyPanel.cs` 移除退场 `ui-window-clean` 改为 `guild_empty_shell` 及帮会同源表头/按钮/宣纸卡，保持现场结算 Card 1/2 留存与 Card 3 核心材料拆解无错位。
+  - `SeasonRotationPanel.cs` 4 技能详情页接入 `four-skill-detail-card-base.png`（`01`–`04` 编号行 + 图标 + 分类标 + 冷却/法力 + 描述，缺表回退技能 ID）。
+  - `BattleCoreHudOverlay.cs` 切至低光污 `escalation-badge-base.png` 并完善下回合预告文案；`BattleScreen.cs` 修正多人投降确认文案为「需全部活跃队友同意（连续 2 回合未手动不计入）」并对齐表决浮条/按钮文案（「认输 / 投降」「同意投降」「继续战斗」）。
+- **实际验证结果**：
+  - `pwsh -File tools/client_compile_check.ps1`：**`exit=0, files=740, errors=0`**（本批改动 0 warning）。
+  - Roslyn + NUnit 实跑 `RankedClientTests` + `BattleClientAutoBattleTests` + `DirectRoutingBattleTransportTests` + `DamageNumberLayoutTests`：**68/68 PASS**（0 失败）。
+  - 静态扫描全仓 `Assets/Scripts` 确认退场旧论剑窗框与错误人物代码引用清零；全仓 11,960 份 `.meta` GUID 0 重复。
+- **未执行范围**：未在 Unity Editor PlayMode 做 1920×1080 / 2400×1080 像素级真机截图验收与多进程实网点击联调；未执行 `git commit` / `git push`。
+
+## 2026-11-25 《群仙问道赛》V3 全栈扩展落码（模块 D 零积分热身约战 + 模块 E 神机问道免费竞猜 + 模块 F 问鼎之星 MVP 与真外观回填 + 模块 G 季军争夺战与 8 道家战旗；生成与编译移交 Gemini，20 枚增量 UI 切片移交 Codex）
+
+- **设计与交接文档**：
+  - `docs/planning/season-team-tournament-v3.md`：V3 四个模块完整规则、协议、SQL 表、防刷与合规边界（零 P2W、零押注、零自由文本/图片 UGC、100% 绑定自用奖励）。
+  - `docs/planning/ui-handoff/season-team-tournament-v3-ui-handoff.md`：交付 Codex 制作 20 枚增量透明 PNG 切片与交互原型（仅定义界面结构、切片尺寸与用途，美术风格完全以 `D:\work\image` 仓库既有规范为准）。
+- **权威配置表与协议契约（`xuanming-server-mmo-cpp`）**：
+  - `data/schema/tournamentrule_table.proto` & `data/TournamentRule.xlsx`（`rule_version=3`）：新增字段 `27..30`（`warmup_spar_enabled=true`、`prediction_enabled=true`、`prediction_reward_min_hits=2`、`third_place_match_enabled=true`）。
+  - `data/TournamentReward.xlsx`：追加 `id=8`（`tier_kind=8` 全服季军）与 `id=9`（`tier_kind=9` 神机问道纪念礼）。
+  - `data/tip/Tip.xlsx`：在 `//match_error` 段追加 4 条 Tip（`MatchTournamentEmblemInvalid` / `MatchTournamentPredictionClosed` / `MatchTournamentPredictionTargetInvalid` / `MatchTournamentWarmupUnavailable`）。
+  - `proto/battle/battle_data.proto`：`BattleSettlementData` 新增 `33..35`（`total_damage_dealt` / `total_healing_done` / `total_controls_landed`）；`TournamentBattleContext` 新增 `12..15`（`squad_a_emblem_id` / `squad_b_emblem_id` / `is_warmup` / `is_third_place`）。
+  - `proto/match/{match_service,match_authority}.proto`：新增 4 条 `MatchService` RPC（`UpdateTournamentSquadEmblem`、`StartTournamentWarmup`、`PredictTournamentMatch`、`GetTournamentPredictionBoard`）、`TOURNAMENT_MATCH_PHASE_WARMUP=3`、`TournamentSquadEmblem (1..8)`、`TOURNAMENT_REWARD_TIER_THIRD_PLACE=8` / `PREDICTION=9`、`match_tournament_prediction` 表与全套 V3 视图/持久化字段。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - C++ 战斗引擎：`cpp/libs/services/battle/system/turn_battle_engine.{h,cpp}` 实现每回合确定性累计每人（含所属出战宝宝）有效伤害、治疗/护盾、硬控命中并写入 `BattleSettlementData`（`33..35`），新增单测 `TournamentV3SettlementMvpMetricsAccumulateDamageHealAndControl`。
+  - Go `match` 服务：`internal/constants/errors{,_test}.go`、`internal/tournament/{catalog,rules,rules_test}.go`、`internal/authority/{schema,tournament,tournament_test}.go`、`internal/logic/{tournamentlogic,gather}.go`、`internal/server/matchserviceserver.go` 全量落地 4 大模块（含 `SyncTournamentMemberProfiles` 集结时静默回填真实外观、热身约战零污染与排除精选观战、免费竞猜加权积分与 Tier 9 达标发奖、确定性 MVP 评定与总决赛 MVP 归档、季军争夺战生成/第 3·4 名定档/双战收口结算与 Tier 8 独立发奖）。
+- **Java 独立服务端对账（`xuanming-server-mmo`）**：
+  - `game-battle-engine`（`TurnBattleEngine.java`、`TournamentLeylineBattleEngineTest.java`）与 `game-match`（`match_feature_tables.proto`、`MatchFeatureTables`、`MatchMethods`、`MatchMethodsTest`、`TournamentTables`、`TournamentRules`、`TournamentStore`、`TournamentService`、`MatchFeatureConfiguration`、`GatherPipeline`、`GatherConfiguration`、`GlobalMatchService`、`GlobalMatchConfiguration`、`TournamentParityTest`）同构实现 V3 全部规则与 H2 全链路断言，并登记 `PARITY.md`。
+- **Unity 客户端逻辑与 UGUI（`mmorpg-client`）**：
+  - 纯 C# 层（`TournamentModels.cs`、`TournamentClient.cs`、`TournamentUiModel.cs`、`TournamentClientTests.cs`、`TournamentUiModelTests.cs`）：新增 8 道家战旗目录、4 条 V3 RPC、`TournamentPredictionBoardSnapshot`、V3 弹窗状态机与 4 条 Tip 恢复策略。
+  - UGUI 层（`TournamentArtCatalog.cs`、`TournamentWindow.cs`、`TournamentSpectateCheerOverlay.cs`、`TournamentChampionStageController.cs`、`TournamentUiRoot.cs`）：预留全部 20 枚 `TournamentV3` 资源键（缺图自动优雅降级为道家样式，导图后原生题字与印章严禁叠字），完整接入战旗择选、热身约战弹层、对阵树猜胜与中/惜章、《神机问道榜》弹窗、MVP 高光战报卡、季军战标识及观战顶条零积分演练徽标。
+- **验证边界（按负责人分工要求）**：本轮仅执行轻量只读静态门禁（C++ 裸指针/线程源守卫、英文日志检查、文档索引生成与校验、Unity WebGL2/IL2CPP 禁 API 扫描）；导表、协议生成、`ContractSync`、C++/Go/Java/Unity 编译与单测全部移交 Gemini 执行；20 枚 V3 PNG 美术切片移交 Codex 制作；未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 大世界地图玩法 V2（M1 全端闭环核查 + HUD 灵潮角标登录首拉修复 + 文档去风格词清理）
+
+- **全端闭环复核**：
+  - **C++/Go 权威服务端（`xuanming-server-mmo-cpp`）**：`world_map_overview.go`、Fill-First 选线、C++ `SendSceneInfo` 同槽 `MGET` 与 `MysteryMerchantSpot` 12 站位（含新主城临时碧渊水宫 1–6、八景岛 7–9、碧渊水宫 10–12）均已在 `main`（`816839456`）；重跑 Go `scene_manager` M1 定向测试 0.087s PASS。
+  - **Java 独立服务端（`xuanming-server-mmo`）**：`WorldMapOverviewBuilder` / `WorldMapOverviewTest`、`ChannelSelector` 与 `SharedPlayerChannels` 已合入；重跑 `mvn -pl game-scene-manager -Dtest=WorldMapOverviewTest test` PASS。
+  - **Unity 客户端与 UI（`mmorpg-client`）**：核实 `Assets/Resources/UI/Ugui/WorldMapV2/` 全部 17 件无字切图及 `CityTravelWindow.WorldMapV2.cs`、`CityTravelWindow.cs`、`CityTravelUiRoot.cs`、`MysteryMerchantWindow.cs` 与对应 `CityTravelWindowTests` / `WorldMapOverviewTests` 已完成接入。
+- **修复一处真机时序漏口（`CityTravelUiRoot.cs`）**：原先仅在手动打开地图（`Toggle()`）时请求 `WorldMapOverview`，导致 HUD「地图」按钮右上角 `WorldMapEntryTideBadge` 在玩家未手动开图前不会自动亮起；现补充登录拿到分线目录后自动首拉一次总览，并在地图关闭期间每 60 秒轻刷新一次（复用既有 `SceneChannelClient` 节流，断线/切连接复位）。
+- **文档清理**：清空 [world-map-play-v2.md §7](planning/world-map-play-v2.md) 中全部画风/色号/纹样设定（按新规只描述做什么 UI，不替 Codex 定风格）。
+- **验证与发现**：Go `scene_manager` M1 定向测 PASS；Java `WorldMapOverviewTest` PASS；核对 Azure `image/main@e26ece7`（`D:\work\image\designs\world-map-play-v2-ui\ui`）全部 15 件无字 RGBA 切图与 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/` 逐字节 SHA-256 15/15 一致、`.meta` `spriteBorder` 15/15 对齐 `CONTROL-USAGE.md`，并微调 `CityTravelWindow.WorldMapV2.cs` 两处文字安全区（`WorldMapTideHeadline` 宽 `440→385` 防与倒计时重叠、`WorldMapPinCurrent` 宽 `92→108` 对齐「当前所在」108px 规格）；重跑 Unity `client_compile_check.ps1` **exit=0（773 files, 0 errors）**。另查实场景 3（`月汐湾`）现已双端 `clientOnly: false`，但 Go/Java `WorldMapPlay` 默认开放/灵潮池仍为 `[1,2,5]`/`[2,5]` 且缺场景 3 神秘商人站位，已记录待负责人确认是否纳入；未执行 `git commit` / `git push`。

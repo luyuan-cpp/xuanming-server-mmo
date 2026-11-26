@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	teampb "proto/team"
+	"shared/generated/pb/table"
 	"shared/placement"
 
 	"google.golang.org/protobuf/proto"
@@ -34,6 +35,9 @@ const (
 
 	// MaxPendingInvitesPerInvitee 每个被邀请人的待处理邀请上限,由提交事务原子判定。
 	MaxPendingInvitesPerInvitee = config.TeamMaxPendingInvitesPerInvitee
+
+	// RecallCooldownMs 队长一键召集全队的冷却时长(毫秒,按 SQL 时钟跨副本一致判定)。
+	RecallCooldownMs uint64 = 15_000
 )
 
 // SessionState 规则层看到的会话状态(player:session:{<id>},由 store 的 SessionLoader 提供)。
@@ -79,6 +83,8 @@ const (
 	OpTransferLeader
 	OpDisband
 	OpConfirmRankedPreset
+	OpSetFormation
+	OpRecallMembers
 )
 
 // Op 一次名册操作的输入。用下面的构造函数创建,不要手填 Kind 与字段组合。
@@ -102,6 +108,8 @@ type Op struct {
 	RankedCharacterPresetId uint32
 	RankedPetPresetId       uint32
 	RankedRuleVersion       uint32
+	// Formation SetTeamFormation 选择的跑图跟随队形样式。
+	Formation teampb.TeamFollowFormationStyle
 }
 
 // CreateOp 建队:caller 为队长,zone 为建队者 home zone,teamId 由发号器给出。
@@ -157,6 +165,28 @@ func ConfirmRankedPresetOp(caller uint64, characterPresetID, petPresetID, ruleVe
 	}
 }
 
+// SetFormationOp 队长切换跑图五行跟随队形。
+func SetFormationOp(caller uint64, formation teampb.TeamFollowFormationStyle) Op {
+	return Op{Kind: OpSetFormation, Caller: caller, Formation: formation}
+}
+
+// RecallMembersOp 队长发起一键召集归队。
+func RecallMembersOp(caller uint64) Op {
+	return Op{Kind: OpRecallMembers, Caller: caller}
+}
+
+// IsValidFollowFormation 校验跑图跟随阵型枚举取值。
+func IsValidFollowFormation(style teampb.TeamFollowFormationStyle) bool {
+	switch style {
+	case teampb.TeamFollowFormationStyle_TEAM_FOLLOW_FORMATION_COLUMN,
+		teampb.TeamFollowFormationStyle_TEAM_FOLLOW_FORMATION_ECHELON,
+		teampb.TeamFollowFormationStyle_TEAM_FOLLOW_FORMATION_WUXING:
+		return true
+	default:
+		return false
+	}
+}
+
 // InviteIndexAdd 需要写进 team_invite_index 的反查项。
 type InviteIndexAdd struct {
 	InviteeId  uint64
@@ -203,10 +233,14 @@ type Decision struct {
 	// 留在队里的成员 TeamId 不变,原本不收 scene 信号;服务器驱动的组队跟随按队长建队形
 	// (docs/design/team-follow-server-trail.md),所以 publish 据此给留下的全员也发一次。
 	LeaderChanged bool
+	// FormationChanged 提交前后跑图跟随队形变化:给留队全员(含队长)发 scene 刷新信号,立即热切队形几何。
+	FormationChanged bool
 	// Disbanded 本次解散(显式解散,或最后一人离队 / 被修复移出)。
 	Disbanded bool
 	// RevokedInvitees 因解散而失效的未过期邀请的被邀请人(推 NotifyTeamEvent INVITE_REVOKED)。
 	RevokedInvitees []uint64
+	// RecallRecipients 队长一键召集的接收成员(不含队长自己,推 NotifyTeamEvent LEADER_RECALL)。
+	RecallRecipients []uint64
 	// RejectedApplicant 被拒绝的申请人(推 NotifyTeamEvent APPLICATION_REJECTED);0 = 无。
 	RejectedApplicant uint64
 	// InvitedPlayer 本次新发/刷新邀请的被邀请人(推 NotifyTeamInvite);0 = 无。
@@ -286,6 +320,10 @@ func Apply(op Op, rec *teampb.TeamRecord, nowMs uint64, sessions Sessions, cfg R
 		c.disband()
 	case OpConfirmRankedPreset:
 		c.confirmRankedPreset()
+	case OpSetFormation:
+		c.setFormation()
+	case OpRecallMembers:
+		c.recallMembers()
 	default:
 		return reject(ErrInternal, 0)
 	}
@@ -381,12 +419,13 @@ type ruleCtx struct {
 	reason    teampb.TeamChangeReason
 	actor     uint64
 
-	disbanded bool
-	revoked   []uint64
-	extraLeft []uint64
-	added     []InviteIndexAdd
-	rejected  uint64
-	invited   uint64
+	disbanded        bool
+	revoked          []uint64
+	recallRecipients []uint64
+	extraLeft        []uint64
+	added            []InviteIndexAdd
+	rejected         uint64
+	invited          uint64
 }
 
 func reject(code uint32, param uint64) Decision {
@@ -686,6 +725,40 @@ func (c *ruleCtx) confirmRankedPreset() {
 	c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED, c.op.Caller)
 }
 
+func (c *ruleCtx) setFormation() {
+	if !c.isLeader(c.op.Caller) {
+		c.fail(ErrNotLeader, 0)
+		return
+	}
+	if !IsValidFollowFormation(c.op.Formation) {
+		c.fail(uint32(table.CommonError_kInvalidParameter), 0)
+		return
+	}
+	if c.rec.GetFollowFormation() == c.op.Formation {
+		return // 相同队形幂等无变更
+	}
+	c.rec.FollowFormation = c.op.Formation
+	c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_FORMATION_CHANGED, c.op.Caller)
+}
+
+func (c *ruleCtx) recallMembers() {
+	if !c.isLeader(c.op.Caller) {
+		c.fail(ErrNotLeader, 0)
+		return
+	}
+	if c.rec.GetLastRecallAtMs() != 0 && c.now < c.rec.GetLastRecallAtMs()+RecallCooldownMs {
+		c.fail(uint32(table.CommonError_kRateLimitExceeded), 0)
+		return
+	}
+	c.rec.LastRecallAtMs = c.now
+	for _, m := range c.rec.GetMembers() {
+		if m.GetPlayerId() != c.op.Caller {
+			c.recallRecipients = append(c.recallRecipients, m.GetPlayerId())
+		}
+	}
+	c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_UNSPECIFIED, c.op.Caller)
+}
+
 func clearRankedConfirmations(rec *teampb.TeamRecord) {
 	for _, m := range rec.GetMembers() {
 		m.RankedPresetConfirmed = false
@@ -754,6 +827,7 @@ func (c *ruleCtx) finish(orig *teampb.TeamRecord) Decision {
 		LeaderOfflineTransferred: c.transferred,
 		RejectedApplicant:        c.rejected,
 		InvitedPlayer:            c.invited,
+		RecallRecipients:         c.recallRecipients,
 	}
 	housekeeping := c.appsExpired || c.invitesExpired || c.transferred
 	if !c.opChanged && !housekeeping {
@@ -783,6 +857,7 @@ func (c *ruleCtx) finish(orig *teampb.TeamRecord) Decision {
 		d.Record = c.rec
 		newMembers = memberSet(c.rec)
 		d.LeaderChanged = orig.GetLeaderId() != 0 && orig.GetLeaderId() != c.rec.GetLeaderId()
+		d.FormationChanged = orig != nil && orig.GetFollowFormation() != c.rec.GetFollowFormation()
 	}
 	for _, id := range MemberIds(c.rec) {
 		if oldMembers[id] {

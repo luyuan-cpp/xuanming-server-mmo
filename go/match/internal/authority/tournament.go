@@ -19,33 +19,42 @@ import (
 )
 
 const (
-	tournamentSeasonCols = "season_id,season_key,season_name,rule_version,stage,registration_start_ms,qualifier_start_ms,knockout_start_ms,settle_start_ms,end_ms,battle_team_size,roster_max_size,knockout_team_count,champion_squad_id,champion_squad_name,champion_member_summary,settled_ms,updated_ms"
-	tournamentSquadCols  = "squad_id,season_id,name,name_norm,captain_player_id,state,member_count,qualifier_points,qualifier_played,qualifier_wins,qualifier_losses,qualifier_draws,seed_rank,final_rank,cheer_count,registered_ms,updated_ms"
-	tournamentMemberCols = "season_id,player_id,squad_id,role,starter_slot,player_name,zone_id,joined_ms"
-	tournamentInviteCols = "squad_id,invitee_player_id,season_id,inviter_player_id,state,created_ms,expires_ms"
-	tournamentMatchCols  = "match_id,season_id,phase,round_index,slot_index,squad_a_id,squad_b_id,lineup_a,lineup_b,ready_a,ready_b,state,battle_id,winner_squad_id,outcome,featured_spectate,scheduled_start_ms,deadline_ms,finished_ms,updated_ms"
-	tournamentRewardCols = "season_id,player_id,tier_kind,reward_id,squad_id,final_rank,tier_id,gold_amount,attachments,title_code,badge_code,delivery_state,mail_id,claimed_ms,updated_ms"
+	tournamentSeasonCols     = "season_id,season_key,season_name,rule_version,stage,registration_start_ms,qualifier_start_ms,knockout_start_ms,settle_start_ms,end_ms,battle_team_size,roster_max_size,knockout_team_count,champion_squad_id,champion_squad_name,champion_member_summary,settled_ms,updated_ms,champion_members_blob,champion_salute_count,champion_emblem_id,third_place_squad_id,third_place_squad_name,third_place_emblem_id,final_mvp_player_id,final_mvp_player_name,final_mvp_score,champion_honor_bits"
+	tournamentSquadCols      = "squad_id,season_id,name,name_norm,captain_player_id,state,member_count,qualifier_points,qualifier_played,qualifier_wins,qualifier_losses,qualifier_draws,seed_rank,final_rank,cheer_count,registered_ms,updated_ms,emblem_id,honor_bits"
+	tournamentMemberCols     = "season_id,player_id,squad_id,role,starter_slot,player_name,zone_id,joined_ms,class_id,gender,appearance_id"
+	tournamentInviteCols     = "squad_id,invitee_player_id,season_id,inviter_player_id,state,created_ms,expires_ms"
+	tournamentMatchCols      = "match_id,season_id,phase,round_index,slot_index,squad_a_id,squad_b_id,lineup_a,lineup_b,ready_a,ready_b,state,battle_id,winner_squad_id,outcome,featured_spectate,scheduled_start_ms,deadline_ms,finished_ms,updated_ms,best_of,current_game_index,wins_a,wins_b,current_leyline_element,leyline_sequence,intermission_deadline_ms,is_third_place,mvp_player_id,mvp_player_name,mvp_squad_id,mvp_score,mvp_damage,mvp_healing,mvp_controls,banned_leyline_a,banned_leyline_b"
+	tournamentMatchGameCols  = "match_id,game_index,season_id,phase,battle_id,leyline_element,winner_squad_id,outcome,finished_ms"
+	tournamentRewardCols     = "season_id,player_id,tier_kind,reward_id,squad_id,final_rank,tier_id,gold_amount,attachments,title_code,badge_code,delivery_state,mail_id,claimed_ms,updated_ms"
+	tournamentSaluteCols     = "player_id,salute_day,season_id,reward_id,mail_id,created_ms"
+	tournamentPredictionCols = "season_id,player_id,match_id,predicted_squad_id,round_index,is_third_place,player_name,result_state,earned_points,created_ms,updated_ms"
 )
 
 var (
-	ErrTournamentNotOpen           = errors.New("tournament: feature disabled")
-	ErrTournamentStageClosed       = errors.New("tournament: action not allowed in current stage")
-	ErrTournamentSquadNameInvalid  = errors.New("tournament: invalid or duplicate squad name")
-	ErrTournamentAlreadyInSquad    = errors.New("tournament: player already in a squad this season")
-	ErrTournamentSquadNotFound     = errors.New("tournament: squad not found")
-	ErrTournamentNotCaptain        = errors.New("tournament: caller is not squad captain")
-	ErrTournamentSquadFull         = errors.New("tournament: squad roster full")
-	ErrTournamentSquadLocked       = errors.New("tournament: squad registration locked")
-	ErrTournamentInviteNotFound    = errors.New("tournament: invite not found or expired")
-	ErrTournamentMemberNotEnough   = errors.New("tournament: not enough squad members")
-	ErrTournamentLineupInvalid     = errors.New("tournament: lineup invalid")
-	ErrTournamentQualifierLimit    = errors.New("tournament: qualifier match cap reached")
-	ErrTournamentMatchNotReady     = errors.New("tournament: match not ready or already finished")
-	ErrTournamentAlreadyCheered    = errors.New("tournament: already cheered this season")
-	ErrTournamentRewardUnavailable = errors.New("tournament: no claimable rewards")
+	ErrTournamentNotOpen                 = errors.New("tournament: feature disabled")
+	ErrTournamentStageClosed             = errors.New("tournament: action not allowed in current stage")
+	ErrTournamentSquadNameInvalid        = errors.New("tournament: invalid or duplicate squad name")
+	ErrTournamentAlreadyInSquad          = errors.New("tournament: player already in a squad this season")
+	ErrTournamentSquadNotFound           = errors.New("tournament: squad not found")
+	ErrTournamentNotCaptain              = errors.New("tournament: caller is not squad captain")
+	ErrTournamentSquadFull               = errors.New("tournament: squad roster full")
+	ErrTournamentSquadLocked             = errors.New("tournament: squad registration locked")
+	ErrTournamentInviteNotFound          = errors.New("tournament: invite not found or expired")
+	ErrTournamentMemberNotEnough         = errors.New("tournament: not enough squad members")
+	ErrTournamentLineupInvalid           = errors.New("tournament: lineup invalid")
+	ErrTournamentQualifierLimit          = errors.New("tournament: qualifier match cap reached")
+	ErrTournamentMatchNotReady           = errors.New("tournament: match not ready or already finished")
+	ErrTournamentAlreadyCheered          = errors.New("tournament: already cheered this season")
+	ErrTournamentRewardUnavailable       = errors.New("tournament: no claimable rewards")
+	ErrTournamentAlreadySalutedToday     = errors.New("tournament: already saluted champion today")
+	ErrTournamentNoChampionToSalute      = errors.New("tournament: no settled champion available to salute")
+	ErrTournamentEmblemInvalid           = errors.New("tournament: emblem id out of [1,8]")
+	ErrTournamentPredictionClosed        = errors.New("tournament: prediction window closed for match")
+	ErrTournamentPredictionTargetInvalid = errors.New("tournament: predicted squad not in match")
+	ErrTournamentWarmupUnavailable       = errors.New("tournament: warmup spar unavailable")
 )
 
-// TournamentLaunchSpec 描述一场双方已就绪、可直接进入 gather 建房的锦标赛对局。
+// TournamentLaunchSpec 描述一场双方已就绪、可直接进入 gather 建房的锦标赛对局(V2 含 BO3 局次与五行灵脉;V3 含队徽/热身/季军战标记)。
 type TournamentLaunchSpec struct {
 	MatchID        uint64
 	SeasonID       uint32
@@ -55,6 +64,27 @@ type TournamentLaunchSpec struct {
 	TeamA          []uint64
 	TeamB          []uint64
 	Featured       bool
+	BestOf         uint32
+	GameIndex      uint32
+	WinsA          uint32
+	WinsB          uint32
+	LeylineElement battlepb.TournamentLeylineElement
+	SquadAId       uint64
+	SquadAName     string
+	SquadAEmblemID uint32
+	SquadBId       uint64
+	SquadBName     string
+	SquadBEmblemID uint32
+	IsWarmup       bool
+	IsThirdPlace   bool
+}
+
+// TournamentSaluteResult 描述一次成功的每日免费观道致敬落账结果。
+type TournamentSaluteResult struct {
+	SeasonID            uint32
+	SaluteDay           uint32
+	ChampionSaluteCount uint64
+	RewardID            uint64
 }
 
 // SwapTournamentCatalog 在启动与表包热更时原子切换锦标赛配置目录。
@@ -77,29 +107,85 @@ func (s *Store) TournamentCatalog() *tournament.Catalog {
 
 func scanTournamentSeason(row scanner) (*pb.MatchTournamentSeasonRecord, error) {
 	r := &pb.MatchTournamentSeasonRecord{}
+	var membersBlob []byte
+	var saluteCount, champEmblem, thirdID, thirdEmblem, finalMvpID, finalMvpScore, champHonorBits sql.NullInt64
+	var thirdName, finalMvpName sql.NullString
 	err := row.Scan(
 		&r.SeasonId, &r.SeasonKey, &r.SeasonName, &r.RuleVersion, &r.Stage,
 		&r.RegistrationStartMs, &r.QualifierStartMs, &r.KnockoutStartMs, &r.SettleStartMs, &r.EndMs,
 		&r.BattleTeamSize, &r.RosterMaxSize, &r.KnockoutTeamCount,
 		&r.ChampionSquadId, &r.ChampionSquadName, &r.ChampionMemberSummary, &r.SettledMs, &r.UpdatedMs,
+		&membersBlob, &saluteCount,
+		&champEmblem, &thirdID, &thirdName, &thirdEmblem, &finalMvpID, &finalMvpName, &finalMvpScore, &champHonorBits,
 	)
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+	r.ChampionMembersBlob = membersBlob
+	if saluteCount.Valid && saluteCount.Int64 > 0 {
+		r.ChampionSaluteCount = uint64(saluteCount.Int64)
+	}
+	if champEmblem.Valid && champEmblem.Int64 > 0 {
+		r.ChampionEmblemId = uint32(champEmblem.Int64)
+	}
+	if thirdID.Valid && thirdID.Int64 > 0 {
+		r.ThirdPlaceSquadId = uint64(thirdID.Int64)
+	}
+	r.ThirdPlaceSquadName = thirdName.String
+	if thirdEmblem.Valid && thirdEmblem.Int64 > 0 {
+		r.ThirdPlaceEmblemId = uint32(thirdEmblem.Int64)
+	}
+	if finalMvpID.Valid && finalMvpID.Int64 > 0 {
+		r.FinalMvpPlayerId = uint64(finalMvpID.Int64)
+	}
+	r.FinalMvpPlayerName = finalMvpName.String
+	if finalMvpScore.Valid && finalMvpScore.Int64 > 0 {
+		r.FinalMvpScore = uint32(finalMvpScore.Int64)
+	}
+	if champHonorBits.Valid && champHonorBits.Int64 > 0 {
+		r.ChampionHonorBits = uint32(champHonorBits.Int64)
+	}
+	return r, nil
 }
 
 func scanTournamentSquad(row scanner) (*pb.MatchTournamentSquadRecord, error) {
 	r := &pb.MatchTournamentSquadRecord{}
+	var emblemID, honorBits sql.NullInt64
 	err := row.Scan(
 		&r.SquadId, &r.SeasonId, &r.Name, &r.NameNorm, &r.CaptainPlayerId, &r.State, &r.MemberCount,
 		&r.QualifierPoints, &r.QualifierPlayed, &r.QualifierWins, &r.QualifierLosses, &r.QualifierDraws,
-		&r.SeedRank, &r.FinalRank, &r.CheerCount, &r.RegisteredMs, &r.UpdatedMs,
+		&r.SeedRank, &r.FinalRank, &r.CheerCount, &r.RegisteredMs, &r.UpdatedMs, &emblemID, &honorBits,
 	)
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+	if emblemID.Valid && tournament.IsValidEmblemID(uint32(emblemID.Int64)) {
+		r.EmblemId = uint32(emblemID.Int64)
+	} else {
+		r.EmblemId = tournament.DefaultEmblemID
+	}
+	if honorBits.Valid && honorBits.Int64 > 0 {
+		r.HonorBits = uint32(honorBits.Int64)
+	}
+	return r, nil
 }
 
 func scanTournamentMember(row scanner) (*pb.MatchTournamentMemberRecord, error) {
 	r := &pb.MatchTournamentMemberRecord{}
-	err := row.Scan(&r.SeasonId, &r.PlayerId, &r.SquadId, &r.Role, &r.StarterSlot, &r.PlayerName, &r.ZoneId, &r.JoinedMs)
-	return r, err
+	var classID, gender sql.NullInt64
+	var appearanceID sql.NullString
+	err := row.Scan(&r.SeasonId, &r.PlayerId, &r.SquadId, &r.Role, &r.StarterSlot, &r.PlayerName, &r.ZoneId, &r.JoinedMs, &classID, &gender, &appearanceID)
+	if err != nil {
+		return nil, err
+	}
+	if classID.Valid && classID.Int64 > 0 {
+		r.ClassId = uint32(classID.Int64)
+	}
+	if gender.Valid && gender.Int64 > 0 {
+		r.Gender = uint32(gender.Int64)
+	}
+	r.AppearanceId = appearanceID.String
+	return r, nil
 }
 
 func scanTournamentInvite(row scanner) (*pb.MatchTournamentInviteRecord, error) {
@@ -110,12 +196,77 @@ func scanTournamentInvite(row scanner) (*pb.MatchTournamentInviteRecord, error) 
 
 func scanTournamentMatch(row scanner) (*pb.MatchTournamentMatchRecord, error) {
 	r := &pb.MatchTournamentMatchRecord{}
+	var bestOf, curGame, winsA, winsB, curLeyline, intermissionDeadline sql.NullInt64
+	var leylineSeq, mvpName sql.NullString
+	var isThirdPlace sql.NullBool
+	var mvpPlayerID, mvpSquadID, mvpScore, mvpDamage, mvpHealing, mvpControls, bannedA, bannedB sql.NullInt64
 	err := row.Scan(
 		&r.MatchId, &r.SeasonId, &r.Phase, &r.RoundIndex, &r.SlotIndex,
 		&r.SquadAId, &r.SquadBId, &r.LineupA, &r.LineupB, &r.ReadyA, &r.ReadyB,
 		&r.State, &r.BattleId, &r.WinnerSquadId, &r.Outcome, &r.FeaturedSpectate,
 		&r.ScheduledStartMs, &r.DeadlineMs, &r.FinishedMs, &r.UpdatedMs,
+		&bestOf, &curGame, &winsA, &winsB, &curLeyline, &leylineSeq, &intermissionDeadline,
+		&isThirdPlace, &mvpPlayerID, &mvpName, &mvpSquadID, &mvpScore, &mvpDamage, &mvpHealing, &mvpControls,
+		&bannedA, &bannedB,
 	)
+	if err != nil {
+		return nil, err
+	}
+	if bestOf.Valid && bestOf.Int64 > 0 {
+		r.BestOf = uint32(bestOf.Int64)
+	} else {
+		r.BestOf = 1
+	}
+	if curGame.Valid && curGame.Int64 > 0 {
+		r.CurrentGameIndex = uint32(curGame.Int64)
+	} else {
+		r.CurrentGameIndex = 1
+	}
+	if winsA.Valid && winsA.Int64 > 0 {
+		r.WinsA = uint32(winsA.Int64)
+	}
+	if winsB.Valid && winsB.Int64 > 0 {
+		r.WinsB = uint32(winsB.Int64)
+	}
+	if curLeyline.Valid && curLeyline.Int64 > 0 {
+		r.CurrentLeylineElement = uint32(curLeyline.Int64)
+	}
+	r.LeylineSequence = leylineSeq.String
+	if intermissionDeadline.Valid && intermissionDeadline.Int64 > 0 {
+		r.IntermissionDeadlineMs = uint64(intermissionDeadline.Int64)
+	}
+	r.IsThirdPlace = isThirdPlace.Valid && isThirdPlace.Bool
+	if mvpPlayerID.Valid && mvpPlayerID.Int64 > 0 {
+		r.MvpPlayerId = uint64(mvpPlayerID.Int64)
+	}
+	r.MvpPlayerName = mvpName.String
+	if mvpSquadID.Valid && mvpSquadID.Int64 > 0 {
+		r.MvpSquadId = uint64(mvpSquadID.Int64)
+	}
+	if mvpScore.Valid && mvpScore.Int64 > 0 {
+		r.MvpScore = uint32(mvpScore.Int64)
+	}
+	if mvpDamage.Valid && mvpDamage.Int64 > 0 {
+		r.MvpDamage = uint64(mvpDamage.Int64)
+	}
+	if mvpHealing.Valid && mvpHealing.Int64 > 0 {
+		r.MvpHealing = uint64(mvpHealing.Int64)
+	}
+	if mvpControls.Valid && mvpControls.Int64 > 0 {
+		r.MvpControls = uint32(mvpControls.Int64)
+	}
+	if bannedA.Valid && bannedA.Int64 > 0 {
+		r.BannedLeylineA = uint32(bannedA.Int64)
+	}
+	if bannedB.Valid && bannedB.Int64 > 0 {
+		r.BannedLeylineB = uint32(bannedB.Int64)
+	}
+	return r, nil
+}
+
+func scanTournamentMatchGame(row scanner) (*pb.MatchTournamentMatchGameRecord, error) {
+	r := &pb.MatchTournamentMatchGameRecord{}
+	err := row.Scan(&r.MatchId, &r.GameIndex, &r.SeasonId, &r.Phase, &r.BattleId, &r.LeylineElement, &r.WinnerSquadId, &r.Outcome, &r.FinishedMs)
 	return r, err
 }
 
@@ -166,11 +317,13 @@ func (s *Store) ensureTournamentSeasonTx(ctx context.Context, tx *sql.Tx, stamp 
 	}
 	s1 := buildNewTournamentSeason(1, stamp, s.TournamentCatalog())
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		"INSERT INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		s1.SeasonId, s1.SeasonKey, s1.SeasonName, s1.RuleVersion, s1.Stage,
 		s1.RegistrationStartMs, s1.QualifierStartMs, s1.KnockoutStartMs, s1.SettleStartMs, s1.EndMs,
 		s1.BattleTeamSize, s1.RosterMaxSize, s1.KnockoutTeamCount,
 		s1.ChampionSquadId, s1.ChampionSquadName, s1.ChampionMemberSummary, s1.SettledMs, s1.UpdatedMs,
+		[]byte{}, uint64(0),
+		uint32(0), uint64(0), "", uint32(0), uint64(0), "", uint32(0), uint32(0),
 	)
 	if err != nil {
 		var dup *mysql.MySQLError
@@ -182,7 +335,39 @@ func (s *Store) ensureTournamentSeasonTx(ctx context.Context, tx *sql.Tx, stamp 
 	return s1, nil
 }
 
-func (s *Store) toTournamentSeasonView(r *pb.MatchTournamentSeasonRecord, registeredCount uint32) *pb.TournamentSeasonView {
+func decodeChampionMembers(blob []byte) []*pb.TournamentMemberView {
+	if len(blob) == 0 {
+		return nil
+	}
+	var msg pb.MatchTournamentChampionMembersBlob
+	if proto.Unmarshal(blob, &msg) != nil {
+		return nil
+	}
+	out := make([]*pb.TournamentMemberView, 0, len(msg.Members))
+	for _, m := range msg.Members {
+		out = append(out, toTournamentMemberView(m))
+	}
+	return out
+}
+
+func toTournamentMemberView(m *pb.MatchTournamentMemberRecord) *pb.TournamentMemberView {
+	if m == nil {
+		return nil
+	}
+	return &pb.TournamentMemberView{
+		PlayerId:     m.PlayerId,
+		PlayerName:   m.PlayerName,
+		ZoneId:       m.ZoneId,
+		Role:         pb.TournamentMemberRole(m.Role),
+		StarterSlot:  m.StarterSlot,
+		JoinedMs:     m.JoinedMs,
+		ClassId:      m.ClassId,
+		Gender:       m.Gender,
+		AppearanceId: m.AppearanceId,
+	}
+}
+
+func (s *Store) toTournamentSeasonView(r *pb.MatchTournamentSeasonRecord, registeredCount uint32, salutedToday bool) *pb.TournamentSeasonView {
 	rule := s.TournamentCatalog().Rule()
 	return &pb.TournamentSeasonView{
 		SeasonId:                r.SeasonId,
@@ -207,38 +392,60 @@ func (s *Store) toTournamentSeasonView(r *pb.MatchTournamentSeasonRecord, regist
 		ChampionSquadId:         r.ChampionSquadId,
 		ChampionSquadName:       r.ChampionSquadName,
 		ChampionMemberSummary:   r.ChampionMemberSummary,
+		ChampionSaluteCount:     r.ChampionSaluteCount,
+		SalutedToday:            salutedToday,
+		ChampionMembers:         decodeChampionMembers(r.ChampionMembersBlob),
+		ChampionEmblemId:        r.ChampionEmblemId,
+		ThirdPlaceSquadId:       r.ThirdPlaceSquadId,
+		ThirdPlaceSquadName:     r.ThirdPlaceSquadName,
+		ThirdPlaceEmblemId:      r.ThirdPlaceEmblemId,
+		FinalMvpPlayerId:        r.FinalMvpPlayerId,
+		FinalMvpPlayerName:      r.FinalMvpPlayerName,
+		FinalMvpScore:           r.FinalMvpScore,
+		ChampionHonorBits:       r.ChampionHonorBits,
 	}
 }
 
-func loadSquadMembersTx(ctx context.Context, q interface {
+func loadSquadMemberRecordsTx(ctx context.Context, q interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, squadID uint64) ([]*pb.TournamentMemberView, error) {
+}, squadID uint64) ([]*pb.MatchTournamentMemberRecord, error) {
 	rows, err := q.QueryContext(ctx, "SELECT "+tournamentMemberCols+" FROM match_tournament_member WHERE squad_id=? ORDER BY role ASC, starter_slot ASC, joined_ms ASC", squadID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*pb.TournamentMemberView
+	var out []*pb.MatchTournamentMemberRecord
 	for rows.Next() {
 		m, err := scanTournamentMember(rows)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, &pb.TournamentMemberView{
-			PlayerId:    m.PlayerId,
-			PlayerName:  m.PlayerName,
-			ZoneId:      m.ZoneId,
-			Role:        pb.TournamentMemberRole(m.Role),
-			StarterSlot: m.StarterSlot,
-			JoinedMs:    m.JoinedMs,
-		})
+		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+func loadSquadMembersTx(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, squadID uint64) ([]*pb.TournamentMemberView, error) {
+	recs, err := loadSquadMemberRecordsTx(ctx, q, squadID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*pb.TournamentMemberView, 0, len(recs))
+	for _, m := range recs {
+		out = append(out, toTournamentMemberView(m))
+	}
+	return out, nil
 }
 
 func toTournamentSquadView(r *pb.MatchTournamentSquadRecord, members []*pb.TournamentMemberView) *pb.TournamentSquadView {
 	if r == nil {
 		return nil
+	}
+	emblem := r.EmblemId
+	if !tournament.IsValidEmblemID(emblem) {
+		emblem = tournament.DefaultEmblemID
 	}
 	return &pb.TournamentSquadView{
 		SquadId:         r.SquadId,
@@ -257,6 +464,8 @@ func toTournamentSquadView(r *pb.MatchTournamentSquadRecord, members []*pb.Tourn
 		CheerCount:      r.CheerCount,
 		RegisteredMs:    r.RegisteredMs,
 		Members:         members,
+		EmblemId:        emblem,
+		HonorBits:       r.HonorBits,
 	}
 }
 
@@ -287,38 +496,103 @@ func toTournamentRewardView(r *pb.MatchTournamentRewardRecord) *pb.TournamentPla
 	return v
 }
 
-func toTournamentMatchView(m *pb.MatchTournamentMatchRecord, squads map[uint64]*pb.MatchTournamentSquadRecord) *pb.TournamentMatchView {
+func (s *Store) toTournamentMatchView(m *pb.MatchTournamentMatchRecord, squads map[uint64]*pb.MatchTournamentSquadRecord, gameBattleIDs []uint64) *pb.TournamentMatchView {
 	if m == nil {
 		return nil
 	}
+	bestOf := m.BestOf
+	if bestOf == 0 {
+		bestOf = 1
+	}
+	curGame := m.CurrentGameIndex
+	if curGame == 0 {
+		curGame = 1
+	}
+	publicReplay := s.TournamentCatalog().Rule().GetPublicKnockoutReplay() &&
+		m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT) &&
+		(m.BattleId != 0 || len(gameBattleIDs) > 0) &&
+		(m.State == uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FINISHED) || m.WinsA > 0 || m.WinsB > 0)
 	v := &pb.TournamentMatchView{
-		MatchId:          m.MatchId,
-		SeasonId:         m.SeasonId,
-		Phase:            pb.TournamentMatchPhase(m.Phase),
-		RoundIndex:       m.RoundIndex,
-		SlotIndex:        m.SlotIndex,
-		SquadAId:         m.SquadAId,
-		SquadBId:         m.SquadBId,
-		ReadyA:           m.ReadyA,
-		ReadyB:           m.ReadyB,
-		State:            pb.TournamentMatchState(m.State),
-		BattleId:         m.BattleId,
-		WinnerSquadId:    m.WinnerSquadId,
-		Outcome:          battlepb.EBattleOutcome(m.Outcome),
-		FeaturedSpectate: m.FeaturedSpectate,
-		ScheduledStartMs: m.ScheduledStartMs,
-		DeadlineMs:       m.DeadlineMs,
-		FinishedMs:       m.FinishedMs,
+		MatchId:                m.MatchId,
+		SeasonId:               m.SeasonId,
+		Phase:                  pb.TournamentMatchPhase(m.Phase),
+		RoundIndex:             m.RoundIndex,
+		SlotIndex:              m.SlotIndex,
+		SquadAId:               m.SquadAId,
+		SquadBId:               m.SquadBId,
+		ReadyA:                 m.ReadyA,
+		ReadyB:                 m.ReadyB,
+		State:                  pb.TournamentMatchState(m.State),
+		BattleId:               m.BattleId,
+		WinnerSquadId:          m.WinnerSquadId,
+		Outcome:                battlepb.EBattleOutcome(m.Outcome),
+		FeaturedSpectate:       m.FeaturedSpectate,
+		ScheduledStartMs:       m.ScheduledStartMs,
+		DeadlineMs:             m.DeadlineMs,
+		FinishedMs:             m.FinishedMs,
+		BestOf:                 bestOf,
+		CurrentGameIndex:       curGame,
+		WinsA:                  m.WinsA,
+		WinsB:                  m.WinsB,
+		CurrentLeylineElement:  battlepb.TournamentLeylineElement(m.CurrentLeylineElement),
+		LeylineSequence:        tournament.DecodeLeylineSequence(m.LeylineSequence),
+		IntermissionDeadlineMs: m.IntermissionDeadlineMs,
+		PublicReplayAvailable:  publicReplay,
+		GameBattleIds:          gameBattleIDs,
+		IsThirdPlace:           m.IsThirdPlace,
+		MvpPlayerId:            m.MvpPlayerId,
+		MvpPlayerName:          m.MvpPlayerName,
+		MvpSquadId:             m.MvpSquadId,
+		MvpScore:               m.MvpScore,
+		MvpDamage:              m.MvpDamage,
+		MvpHealing:             m.MvpHealing,
+		MvpControls:            m.MvpControls,
+		BannedLeylineA:         battlepb.TournamentLeylineElement(m.BannedLeylineA),
+		BannedLeylineB:         battlepb.TournamentLeylineElement(m.BannedLeylineB),
 	}
 	if a := squads[m.SquadAId]; a != nil {
 		v.SquadAName = a.Name
 		v.SquadASeed = a.SeedRank
+		v.SquadAEmblemId = a.EmblemId
 	}
 	if b := squads[m.SquadBId]; b != nil {
 		v.SquadBName = b.Name
 		v.SquadBSeed = b.SeedRank
+		v.SquadBEmblemId = b.EmblemId
 	}
 	return v
+}
+
+func loadMatchGameBattleIDsTx(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, matchID uint64) []uint64 {
+	if matchID == 0 {
+		return nil
+	}
+	rows, err := q.QueryContext(ctx, "SELECT battle_id FROM match_tournament_match_game WHERE match_id=? AND battle_id>0 ORDER BY game_index ASC", matchID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []uint64
+	for rows.Next() {
+		var bid uint64
+		if rows.Scan(&bid) == nil && bid != 0 {
+			ids = append(ids, bid)
+		}
+	}
+	return ids
+}
+
+func salutedTodayTx(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, playerID uint64, stamp uint64) bool {
+	if playerID == 0 {
+		return false
+	}
+	var one int
+	return q.QueryRowContext(ctx, "SELECT 1 FROM match_tournament_salute WHERE player_id=? AND salute_day=? LIMIT 1",
+		playerID, tournament.Utc8DayKey(stamp)).Scan(&one) == nil
 }
 
 func (s *Store) ensureTournamentOpen() error {
@@ -328,14 +602,18 @@ func (s *Store) ensureTournamentOpen() error {
 	return nil
 }
 
-// CreateTournamentSquad 创建本赛季战队(队名已由上层完成敏感词审核;squadID 在事务外由 BattleIDGen 预分配)。
-func (s *Store) CreateTournamentSquad(ctx context.Context, playerID uint64, playerName string, zoneID uint32, squadName string, squadID uint64) (*pb.TournamentSquadView, error) {
+// CreateTournamentSquad 创建本赛季战队(队名已由上层完成敏感词审核;squadID 在事务外由 BattleIDGen 预分配;emblemID 0 默认 1 青剑)。
+func (s *Store) CreateTournamentSquad(ctx context.Context, playerID uint64, playerName string, zoneID uint32, squadName string, emblemID uint32, squadID uint64) (*pb.TournamentSquadView, error) {
 	if err := s.ensureTournamentOpen(); err != nil {
 		return nil, err
 	}
 	display, norm, ok := tournament.NormalizeSquadName(squadName)
 	if !ok {
 		return nil, ErrTournamentSquadNameInvalid
+	}
+	normEmblem, emblemOK := tournament.NormalizeEmblemID(emblemID)
+	if !emblemOK {
+		return nil, ErrTournamentEmblemInvalid
 	}
 	if playerID == 0 || squadID == 0 {
 		return nil, errors.New("tournament: invalid player or squad id")
@@ -374,11 +652,12 @@ func (s *Store) CreateTournamentSquad(ctx context.Context, playerID uint64, play
 			State:           uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_DRAFT),
 			MemberCount:     1,
 			UpdatedMs:       stamp,
+			EmblemId:        normEmblem,
 		}
 		_, err = tx.ExecContext(ctx,
-			"INSERT INTO match_tournament_squad("+tournamentSquadCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+			"INSERT INTO match_tournament_squad("+tournamentSquadCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			squad.SquadId, squad.SeasonId, squad.Name, squad.NameNorm, squad.CaptainPlayerId, squad.State, squad.MemberCount,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, stamp,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, stamp, normEmblem, uint32(0),
 		)
 		if err != nil {
 			var dup *mysql.MySQLError
@@ -388,8 +667,8 @@ func (s *Store) CreateTournamentSquad(ctx context.Context, playerID uint64, play
 			return err
 		}
 		_, err = tx.ExecContext(ctx,
-			"INSERT INTO match_tournament_member("+tournamentMemberCols+") VALUES(?,?,?,?,?,?,?,?)",
-			cur.SeasonId, playerID, squadID, uint32(pb.TournamentMemberRole_TOURNAMENT_MEMBER_ROLE_CAPTAIN), uint32(1), playerName, zoneID, stamp,
+			"INSERT INTO match_tournament_member("+tournamentMemberCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+			cur.SeasonId, playerID, squadID, uint32(pb.TournamentMemberRole_TOURNAMENT_MEMBER_ROLE_CAPTAIN), uint32(1), playerName, zoneID, stamp, uint32(0), uint32(0), "",
 		)
 		if err != nil {
 			var dup *mysql.MySQLError
@@ -576,8 +855,8 @@ func (s *Store) RespondTournamentInvite(ctx context.Context, playerID uint64, pl
 			}
 		}
 		if _, err = tx.ExecContext(ctx,
-			"INSERT INTO match_tournament_member("+tournamentMemberCols+") VALUES(?,?,?,?,?,?,?,?)",
-			cur.SeasonId, playerID, squadID, role, slot, playerName, zoneID, stamp,
+			"INSERT INTO match_tournament_member("+tournamentMemberCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+			cur.SeasonId, playerID, squadID, role, slot, playerName, zoneID, stamp, uint32(0), uint32(0), "",
 		); err != nil {
 			var dup *mysql.MySQLError
 			if errors.As(err, &dup) && dup.Number == 1062 {
@@ -933,9 +1212,10 @@ func (s *Store) LoadTournamentOverview(ctx context.Context, playerID uint64, inc
 	}
 	var regCount uint32
 	_ = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_squad WHERE season_id=? AND state IN(2,3,4)", cur.SeasonId).Scan(&regCount)
+	salutedToday := salutedTodayTx(ctx, tx, playerID, stamp)
 
 	resp := &pb.GetTournamentOverviewResponse{
-		CurrentSeason: s.toTournamentSeasonView(cur, regCount),
+		CurrentSeason: s.toTournamentSeasonView(cur, regCount, salutedToday),
 		RewardTiers:   s.TournamentCatalog().RewardTierViews(),
 		ServerTimeMs:  stamp,
 	}
@@ -1005,20 +1285,20 @@ func (s *Store) LoadTournamentOverview(ctx context.Context, playerID uint64, inc
 		})
 	}
 
-	// 我的活跃对局(等待对手 / 待开打 / 激战中)
+	// 我的活跃对局(等待对手 / 待开打 / 激战中 / BO3 局间换阵;正式赛优先级高于热身赛)
 	if mySquadID != 0 {
 		mRow := tx.QueryRowContext(ctx,
-			"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND (squad_a_id=? OR squad_b_id=?) AND state IN(1,2,3) ORDER BY phase DESC, round_index DESC, match_id DESC LIMIT 1",
+			"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND (squad_a_id=? OR squad_b_id=?) AND state IN(1,2,3,7) ORDER BY CASE WHEN phase=2 THEN 3 WHEN phase=1 THEN 2 ELSE 1 END DESC, round_index DESC, match_id DESC LIMIT 1",
 			cur.SeasonId, mySquadID, mySquadID)
 		if m, e := scanTournamentMatch(mRow); e == nil {
 			loadSquad(m.SquadAId)
 			loadSquad(m.SquadBId)
-			resp.MyActiveMatch = toTournamentMatchView(m, squadCache)
+			resp.MyActiveMatch = s.toTournamentMatchView(m, squadCache, loadMatchGameBattleIDsTx(ctx, tx, m.MatchId))
 		}
 	}
 
-	// 当前进行中的全服精选观战局
-	featRows, err := tx.QueryContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND state=3 ORDER BY featured_spectate DESC, phase DESC, round_index DESC LIMIT 10", cur.SeasonId)
+	// 当前进行中的全服精选观战局(仅含正式海选/淘汰赛,排除零积分热身演练)
+	featRows, err := tx.QueryContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase IN(1,2) AND state=3 ORDER BY featured_spectate DESC, phase DESC, round_index DESC LIMIT 10", cur.SeasonId)
 	if err != nil {
 		return nil, err
 	}
@@ -1035,7 +1315,7 @@ func (s *Store) LoadTournamentOverview(ctx context.Context, playerID uint64, inc
 	for _, m := range featMatches {
 		loadSquad(m.SquadAId)
 		loadSquad(m.SquadBId)
-		resp.FeaturedMatches = append(resp.FeaturedMatches, toTournamentMatchView(m, squadCache))
+		resp.FeaturedMatches = append(resp.FeaturedMatches, s.toTournamentMatchView(m, squadCache, loadMatchGameBattleIDsTx(ctx, tx, m.MatchId)))
 	}
 
 	// 本季助威记录
@@ -1081,7 +1361,7 @@ func (s *Store) LoadTournamentOverview(ctx context.Context, playerID uint64, inc
 				hRows.Close()
 				return nil, e
 			}
-			resp.HallOfFame = append(resp.HallOfFame, s.toTournamentSeasonView(hs, 0))
+			resp.HallOfFame = append(resp.HallOfFame, s.toTournamentSeasonView(hs, 0, salutedToday))
 		}
 		hRows.Close()
 	}
@@ -1179,7 +1459,7 @@ func (s *Store) ListTournamentStandings(ctx context.Context, seasonID uint32, pl
 		end = len(all)
 	}
 	resp := &pb.ListTournamentStandingsResponse{
-		Season:       s.toTournamentSeasonView(season, uint32(len(all))),
+		Season:       s.toTournamentSeasonView(season, uint32(len(all)), salutedTodayTx(ctx, tx, playerID, stamp)),
 		TotalSquads:  uint32(len(all)),
 		ServerTimeMs: stamp,
 	}
@@ -1210,15 +1490,52 @@ func (s *Store) ListTournamentStandings(ctx context.Context, seasonID uint32, pl
 	if err != nil {
 		return nil, err
 	}
+	var knockoutMatches []*pb.MatchTournamentMatchRecord
 	for mRows.Next() {
 		m, e := scanTournamentMatch(mRows)
 		if e != nil {
 			mRows.Close()
 			return nil, e
 		}
-		resp.KnockoutBracket = append(resp.KnockoutBracket, toTournamentMatchView(m, byID))
+		knockoutMatches = append(knockoutMatches, m)
 	}
 	mRows.Close()
+	// 聚合本季免费神机竞猜票数与本人已选战队,合并到淘汰赛对阵树。
+	predCounts := map[uint64]map[uint64]uint32{}
+	if pRows, pErr := tx.QueryContext(ctx, "SELECT match_id,predicted_squad_id,COUNT(*) FROM match_tournament_prediction WHERE season_id=? GROUP BY match_id,predicted_squad_id", season.SeasonId); pErr == nil {
+		for pRows.Next() {
+			var mid, sid uint64
+			var cnt uint32
+			if pRows.Scan(&mid, &sid, &cnt) == nil {
+				if predCounts[mid] == nil {
+					predCounts[mid] = map[uint64]uint32{}
+				}
+				predCounts[mid][sid] = cnt
+			}
+		}
+		pRows.Close()
+	}
+	myPicks := map[uint64]uint64{}
+	if playerID != 0 {
+		if mpRows, mpErr := tx.QueryContext(ctx, "SELECT match_id,predicted_squad_id FROM match_tournament_prediction WHERE season_id=? AND player_id=?", season.SeasonId, playerID); mpErr == nil {
+			for mpRows.Next() {
+				var mid, sid uint64
+				if mpRows.Scan(&mid, &sid) == nil {
+					myPicks[mid] = sid
+				}
+			}
+			mpRows.Close()
+		}
+	}
+	for _, m := range knockoutMatches {
+		mv := s.toTournamentMatchView(m, byID, loadMatchGameBattleIDsTx(ctx, tx, m.MatchId))
+		mv.MyPredictedSquadId = myPicks[m.MatchId]
+		if bySquad := predCounts[m.MatchId]; bySquad != nil {
+			mv.PredictCountA = bySquad[m.SquadAId]
+			mv.PredictCountB = bySquad[m.SquadBId]
+		}
+		resp.KnockoutBracket = append(resp.KnockoutBracket, mv)
+	}
 
 	if err = tx.Commit(); err != nil {
 		return nil, err
@@ -1279,14 +1596,14 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 		}
 		encodedLineup := tournament.EncodeLineup(lineup)
 
-		// 淘汰赛分支:确认已有淘汰对阵就绪。
+		// 淘汰赛分支:确认已有淘汰对阵就绪(含 BO3 局间换阵状态 INTERMISSION)。
 		if cur.Stage == uint32(pb.TournamentStage_TOURNAMENT_STAGE_KNOCKOUT) {
 			var m *pb.MatchTournamentMatchRecord
 			if matchID != 0 {
 				m, err = scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE match_id=? FOR UPDATE", matchID))
 			} else {
 				m, err = scanTournamentMatch(tx.QueryRowContext(ctx,
-					"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND (squad_a_id=? OR squad_b_id=?) AND state IN(1,2) ORDER BY round_index ASC LIMIT 1 FOR UPDATE",
+					"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND (squad_a_id=? OR squad_b_id=?) AND state IN(1,2,7) ORDER BY round_index ASC LIMIT 1 FOR UPDATE",
 					cur.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT), mySquadID, mySquadID))
 			}
 			if errors.Is(err, sql.ErrNoRows) || m.SeasonId != cur.SeasonId || m.Phase != uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT) {
@@ -1296,7 +1613,8 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 				return err
 			}
 			if m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT) &&
-				m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY) {
+				m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY) &&
+				m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_INTERMISSION) {
 				return ErrTournamentMatchNotReady
 			}
 			if m.SquadAId == 0 || m.SquadBId == 0 {
@@ -1312,9 +1630,28 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 			default:
 				return ErrTournamentMatchNotReady
 			}
+			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
+			otherID := m.SquadAId
+			if otherID == mySquadID {
+				otherID = m.SquadBId
+			}
+			if other, e := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", otherID)); e == nil {
+				squads[otherID] = other
+			}
 			m.UpdatedMs = stamp
 			if m.ReadyA && m.ReadyB {
 				m.State = uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY)
+				m.IntermissionDeadlineMs = 0
+				sqAName, sqBName := "", ""
+				var sqAEmblem, sqBEmblem uint32 = tournament.DefaultEmblemID, tournament.DefaultEmblemID
+				if a := squads[m.SquadAId]; a != nil {
+					sqAName = a.Name
+					sqAEmblem = a.EmblemId
+				}
+				if b := squads[m.SquadBId]; b != nil {
+					sqBName = b.Name
+					sqBEmblem = b.EmblemId
+				}
 				launch = &TournamentLaunchSpec{
 					MatchID:        m.MatchId,
 					SeasonID:       cur.SeasonId,
@@ -1324,21 +1661,25 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 					TeamA:          tournament.DecodeLineup(m.LineupA),
 					TeamB:          tournament.DecodeLineup(m.LineupB),
 					Featured:       true,
+					BestOf:         m.BestOf,
+					GameIndex:      m.CurrentGameIndex,
+					WinsA:          m.WinsA,
+					WinsB:          m.WinsB,
+					LeylineElement: battlepb.TournamentLeylineElement(m.CurrentLeylineElement),
+					SquadAId:       m.SquadAId,
+					SquadAName:     sqAName,
+					SquadAEmblemID: sqAEmblem,
+					SquadBId:       m.SquadBId,
+					SquadBName:     sqBName,
+					SquadBEmblemID: sqBEmblem,
+					IsThirdPlace:   m.IsThirdPlace,
 				}
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET lineup_a=?,lineup_b=?,ready_a=?,ready_b=?,state=?,updated_ms=? WHERE match_id=?",
-				nonNilBytes(m.LineupA), nonNilBytes(m.LineupB), m.ReadyA, m.ReadyB, m.State, stamp, m.MatchId); err != nil {
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET lineup_a=?,lineup_b=?,ready_a=?,ready_b=?,state=?,intermission_deadline_ms=?,updated_ms=? WHERE match_id=?",
+				nonNilBytes(m.LineupA), nonNilBytes(m.LineupB), m.ReadyA, m.ReadyB, m.State, m.IntermissionDeadlineMs, stamp, m.MatchId); err != nil {
 				return err
 			}
-			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
-			otherID := m.SquadAId
-			if otherID == mySquadID {
-				otherID = m.SquadBId
-			}
-			if other, e := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", otherID)); e == nil {
-				squads[otherID] = other
-			}
-			matchView = toTournamentMatchView(m, squads)
+			matchView = s.toTournamentMatchView(m, squads, loadMatchGameBattleIDsTx(ctx, tx, m.MatchId))
 			return tx.Commit()
 		}
 
@@ -1355,7 +1696,7 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 				existing.UpdatedMs = stamp
 				_, _ = tx.ExecContext(ctx, "UPDATE match_tournament_match SET lineup_a=?,updated_ms=? WHERE match_id=?", nonNilBytes(encodedLineup), stamp, existing.MatchId)
 			}
-			matchView = toTournamentMatchView(existing, map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad})
+			matchView = s.toTournamentMatchView(existing, map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}, nil)
 			return tx.Commit()
 		}
 
@@ -1410,6 +1751,14 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 				paired.SquadBId, nonNilBytes(paired.LineupB), paired.State, stamp, paired.MatchId); err != nil {
 				return err
 			}
+			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
+			sqAName := ""
+			var sqAEmblem uint32 = tournament.DefaultEmblemID
+			if other, e := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", paired.SquadAId)); e == nil {
+				squads[paired.SquadAId] = other
+				sqAName = other.Name
+				sqAEmblem = other.EmblemId
+			}
 			launch = &TournamentLaunchSpec{
 				MatchID:        paired.MatchId,
 				SeasonID:       cur.SeasonId,
@@ -1419,12 +1768,16 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 				TeamA:          tournament.DecodeLineup(paired.LineupA),
 				TeamB:          lineup,
 				Featured:       false,
+				BestOf:         1,
+				GameIndex:      1,
+				SquadAId:       paired.SquadAId,
+				SquadAName:     sqAName,
+				SquadAEmblemID: sqAEmblem,
+				SquadBId:       mySquadID,
+				SquadBName:     mySquad.Name,
+				SquadBEmblemID: mySquad.EmblemId,
 			}
-			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
-			if other, e := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", paired.SquadAId)); e == nil {
-				squads[paired.SquadAId] = other
-			}
-			matchView = toTournamentMatchView(paired, squads)
+			matchView = s.toTournamentMatchView(paired, squads, nil)
 			return tx.Commit()
 		}
 
@@ -1448,17 +1801,22 @@ func (s *Store) PrepareTournamentMatch(ctx context.Context, captainID, matchID u
 			ScheduledStartMs: stamp,
 			DeadlineMs:       cur.KnockoutStartMs,
 			UpdatedMs:        stamp,
+			BestOf:           1,
+			CurrentGameIndex: 1,
 		}
 		if _, err = tx.ExecContext(ctx,
-			"INSERT INTO match_tournament_match("+tournamentMatchCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+			"INSERT INTO match_tournament_match("+tournamentMatchCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			created.MatchId, created.SeasonId, created.Phase, created.RoundIndex, created.SlotIndex,
 			created.SquadAId, created.SquadBId, nonNilBytes(created.LineupA), nonNilBytes(created.LineupB),
 			created.ReadyA, created.ReadyB, created.State, 0, 0, 0, false,
 			created.ScheduledStartMs, created.DeadlineMs, 0, stamp,
+			uint32(1), uint32(1), uint32(0), uint32(0), uint32(0), "", uint64(0),
+			false, uint64(0), "", uint64(0), uint32(0), uint64(0), uint64(0), uint32(0),
+			uint32(0), uint32(0),
 		); err != nil {
 			return err
 		}
-		matchView = toTournamentMatchView(created, map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad})
+		matchView = s.toTournamentMatchView(created, map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}, nil)
 		return tx.Commit()
 	})
 	return matchView, launch, err
@@ -1506,7 +1864,7 @@ func resolveAndValidateLineup(members []*pb.TournamentMemberView, requested []ui
 	return out, nil
 }
 
-// BindTournamentMatchBattle 建房保留成功后把 match_id 与 battle_id 原子绑定;建房前失败则释放就绪态供重试。
+// BindTournamentMatchBattle 建房保留成功后把 match_id 与 battle_id 原子绑定并落账小局表;建房前失败则释放就绪态供重试。
 func (s *Store) BindTournamentMatchBattle(ctx context.Context, matchID, battleID uint64, featured bool) error {
 	return s.Fenced(ctx, func() error {
 		tx, err := s.DB.BeginTx(ctx, nil)
@@ -1518,18 +1876,22 @@ func (s *Store) BindTournamentMatchBattle(ctx context.Context, matchID, battleID
 		if err != nil {
 			return err
 		}
+		m, err := scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE match_id=? FOR UPDATE", matchID))
+		if err != nil {
+			return err
+		}
 		if battleID == 0 {
-			// 回滚就绪态(海选回到等待对手,淘汰赛清空就绪待双方重新确认)。
-			m, err := scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE match_id=? FOR UPDATE", matchID))
-			if err != nil {
-				return err
-			}
 			if m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY) {
 				return tx.Commit()
 			}
-			if m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_QUALIFIER) {
+			if m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_QUALIFIER) ||
+				m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP) {
 				_, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET squad_b_id=0,lineup_b=?,ready_b=0,state=?,updated_ms=? WHERE match_id=?",
 					[]byte{}, uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT), stamp, matchID)
+			} else if m.BestOf >= 3 && (m.WinsA > 0 || m.WinsB > 0) {
+				// BO3 局间建房失败回滚为 INTERMISSION 并短延迟重试,防卡死在 READY。
+				_, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET ready_a=0,ready_b=0,state=?,intermission_deadline_ms=?,updated_ms=? WHERE match_id=?",
+					uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_INTERMISSION), stamp+15000, stamp, matchID)
 			} else {
 				_, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET ready_a=0,ready_b=0,state=?,updated_ms=? WHERE match_id=?",
 					uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT), stamp, matchID)
@@ -1539,16 +1901,25 @@ func (s *Store) BindTournamentMatchBattle(ctx context.Context, matchID, battleID
 			}
 			return tx.Commit()
 		}
-		_, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET battle_id=?,state=?,featured_spectate=?,updated_ms=? WHERE match_id=? AND state IN(1,2)",
-			battleID, uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_IN_BATTLE), featured, stamp, matchID)
-		if err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET battle_id=?,state=?,featured_spectate=?,intermission_deadline_ms=0,updated_ms=? WHERE match_id=? AND state IN(1,2,7)",
+			battleID, uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_IN_BATTLE), featured, stamp, matchID); err != nil {
+			return err
+		}
+		gameIdx := m.CurrentGameIndex
+		if gameIdx == 0 {
+			gameIdx = 1
+		}
+		if _, err = tx.ExecContext(ctx,
+			"INSERT INTO match_tournament_match_game("+tournamentMatchGameCols+") VALUES(?,?,?,?,?,?,0,0,0) ON DUPLICATE KEY UPDATE battle_id=VALUES(battle_id),leyline_element=VALUES(leyline_element)",
+			m.MatchId, gameIdx, m.SeasonId, m.Phase, battleID, m.CurrentLeylineElement,
+		); err != nil {
 			return err
 		}
 		return tx.Commit()
 	})
 }
 
-// ApplyTournamentBattleResult 幂等消费一场锦标赛终局结果:更新海选积分或推进淘汰赛晋级与冠军。
+// ApplyTournamentBattleResult 幂等消费一场锦标赛终局结果:更新海选积分、推进 BO1/BO3 局分与 60 秒局间换阵或晋级夺冠。
 func (s *Store) ApplyTournamentBattleResult(ctx context.Context, event *kafkapb.BattleResultEvent, roundLimit uint32) (bool, error) {
 	if event == nil || event.GetBattleId() == 0 {
 		return false, nil
@@ -1564,7 +1935,22 @@ func (s *Store) ApplyTournamentBattleResult(ctx context.Context, event *kafkapb.
 		if err != nil {
 			return err
 		}
-		m, err := scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE battle_id=? FOR UPDATE", event.GetBattleId()))
+		// 先查小局归档表做 battle_id 级严格幂等去重(防 Kafka 重投重复累加 BO3 胜场)。
+		var gameMatchID uint64
+		var gameFinishedMs uint64
+		if gErr := tx.QueryRowContext(ctx, "SELECT match_id,finished_ms FROM match_tournament_match_game WHERE battle_id=? FOR UPDATE", event.GetBattleId()).Scan(&gameMatchID, &gameFinishedMs); gErr == nil {
+			if gameFinishedMs > 0 {
+				return tx.Commit()
+			}
+		} else if !errors.Is(gErr, sql.ErrNoRows) {
+			return gErr
+		}
+		var m *pb.MatchTournamentMatchRecord
+		if gameMatchID != 0 {
+			m, err = scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE match_id=? FOR UPDATE", gameMatchID))
+		} else {
+			m, err = scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE battle_id=? FOR UPDATE", event.GetBattleId()))
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return tx.Commit()
 		}
@@ -1599,26 +1985,78 @@ func (s *Store) ApplyTournamentBattleResult(ctx context.Context, event *kafkapb.
 
 		outcome := event.GetOutcome()
 		if outcome == battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN && event.GetTotalRounds() >= roundLimit && roundLimit > 0 {
-			// 回合打满检查 A 侧仍有存活则按平局口径。
 			if hasSideSurvivors(event, 0) {
 				outcome = battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW
 			}
 		}
 
 		rule := s.TournamentCatalog().Rule()
-		var winnerSquadID uint64
-		if m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_QUALIFIER) {
+		gameIdx := m.CurrentGameIndex
+		if gameIdx == 0 {
+			gameIdx = 1
+		}
+		applyMvp := func(winnerSquad uint64) {
+			winTeam := -1
+			if winnerSquad != 0 && winnerSquad == sqA.SquadId {
+				winTeam = 0
+			} else if winnerSquad != 0 && winnerSquad == sqB.SquadId {
+				winTeam = 1
+			}
+			if mvp, ok := tournament.ComputeMatchMvp(event.GetSettlements(), winTeam); ok {
+				if m.MvpPlayerId == 0 || mvp.Score > m.MvpScore {
+					mvpSquad := m.SquadAId
+					if mvp.TeamIndex != 0 {
+						mvpSquad = m.SquadBId
+					}
+					var mvpName string
+					_ = tx.QueryRowContext(ctx, "SELECT player_name FROM match_tournament_member WHERE season_id=? AND player_id=?", m.SeasonId, mvp.PlayerID).Scan(&mvpName)
+					if mvpName == "" {
+						mvpName = fmt.Sprintf("#%d", mvp.PlayerID)
+					}
+					m.MvpPlayerId = mvp.PlayerID
+					m.MvpPlayerName = mvpName
+					m.MvpSquadId = mvpSquad
+					m.MvpScore = mvp.Score
+					m.MvpDamage = mvp.Damage
+					m.MvpHealing = mvp.Healing
+					m.MvpControls = mvp.Controls
+				}
+			}
+		}
+
+		var gameWinnerSquadID uint64
+		if m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP) {
+			// V3 热身约战零污染隔离:只记录小局归档与本场 MVP 表现,绝不改动海选积分、场次、晋级树或预测。
+			switch outcome {
+			case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN:
+				gameWinnerSquadID = sqA.SquadId
+			case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN:
+				gameWinnerSquadID = sqB.SquadId
+			}
+			applyMvp(gameWinnerSquadID)
+			if _, err = tx.ExecContext(ctx,
+				"INSERT INTO match_tournament_match_game("+tournamentMatchGameCols+") VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE winner_squad_id=VALUES(winner_squad_id),outcome=VALUES(outcome),finished_ms=VALUES(finished_ms)",
+				m.MatchId, gameIdx, m.SeasonId, m.Phase, event.GetBattleId(), m.CurrentLeylineElement, gameWinnerSquadID, uint32(outcome), stamp); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,winner_squad_id=?,outcome=?,mvp_player_id=?,mvp_player_name=?,mvp_squad_id=?,mvp_score=?,mvp_damage=?,mvp_healing=?,mvp_controls=?,finished_ms=?,updated_ms=? WHERE match_id=?",
+				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FINISHED), gameWinnerSquadID, uint32(outcome),
+				m.MvpPlayerId, m.MvpPlayerName, m.MvpSquadId, m.MvpScore, m.MvpDamage, m.MvpHealing, m.MvpControls,
+				stamp, stamp, m.MatchId); err != nil {
+				return err
+			}
+		} else if m.Phase == uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_QUALIFIER) {
 			sqA.QualifierPlayed++
 			sqB.QualifierPlayed++
 			switch outcome {
 			case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN:
-				winnerSquadID = sqA.SquadId
+				gameWinnerSquadID = sqA.SquadId
 				sqA.QualifierWins++
 				sqA.QualifierPoints += rule.GetQualifierWinPoints()
 				sqB.QualifierLosses++
 				sqB.QualifierPoints += rule.GetQualifierLossPoints()
 			case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN:
-				winnerSquadID = sqB.SquadId
+				gameWinnerSquadID = sqB.SquadId
 				sqB.QualifierWins++
 				sqB.QualifierPoints += rule.GetQualifierWinPoints()
 				sqA.QualifierLosses++
@@ -1629,43 +2067,114 @@ func (s *Store) ApplyTournamentBattleResult(ctx context.Context, event *kafkapb.
 				sqB.QualifierDraws++
 				sqB.QualifierPoints += rule.GetQualifierDrawPoints()
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET qualifier_points=?,qualifier_played=?,qualifier_wins=?,qualifier_losses=?,qualifier_draws=?,updated_ms=? WHERE squad_id=?",
-				sqA.QualifierPoints, sqA.QualifierPlayed, sqA.QualifierWins, sqA.QualifierLosses, sqA.QualifierDraws, stamp, sqA.SquadId); err != nil {
+			applyMvp(gameWinnerSquadID)
+			sqA.HonorBits = tournament.ComputeQualifierHonorBits(sqA.HonorBits, sqA.QualifierPlayed, sqA.QualifierWins, sqA.QualifierLosses, rule.GetParticipationMinMatches())
+			sqB.HonorBits = tournament.ComputeQualifierHonorBits(sqB.HonorBits, sqB.QualifierPlayed, sqB.QualifierWins, sqB.QualifierLosses, rule.GetParticipationMinMatches())
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET qualifier_points=?,qualifier_played=?,qualifier_wins=?,qualifier_losses=?,qualifier_draws=?,honor_bits=?,updated_ms=? WHERE squad_id=?",
+				sqA.QualifierPoints, sqA.QualifierPlayed, sqA.QualifierWins, sqA.QualifierLosses, sqA.QualifierDraws, sqA.HonorBits, stamp, sqA.SquadId); err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET qualifier_points=?,qualifier_played=?,qualifier_wins=?,qualifier_losses=?,qualifier_draws=?,updated_ms=? WHERE squad_id=?",
-				sqB.QualifierPoints, sqB.QualifierPlayed, sqB.QualifierWins, sqB.QualifierLosses, sqB.QualifierDraws, stamp, sqB.SquadId); err != nil {
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET qualifier_points=?,qualifier_played=?,qualifier_wins=?,qualifier_losses=?,qualifier_draws=?,honor_bits=?,updated_ms=? WHERE squad_id=?",
+				sqB.QualifierPoints, sqB.QualifierPlayed, sqB.QualifierWins, sqB.QualifierLosses, sqB.QualifierDraws, sqB.HonorBits, stamp, sqB.SquadId); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx,
+				"INSERT INTO match_tournament_match_game("+tournamentMatchGameCols+") VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE winner_squad_id=VALUES(winner_squad_id),outcome=VALUES(outcome),finished_ms=VALUES(finished_ms)",
+				m.MatchId, gameIdx, m.SeasonId, m.Phase, event.GetBattleId(), m.CurrentLeylineElement, gameWinnerSquadID, uint32(outcome), stamp); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,winner_squad_id=?,outcome=?,mvp_player_id=?,mvp_player_name=?,mvp_squad_id=?,mvp_score=?,mvp_damage=?,mvp_healing=?,mvp_controls=?,finished_ms=?,updated_ms=? WHERE match_id=?",
+				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FINISHED), gameWinnerSquadID, uint32(outcome),
+				m.MvpPlayerId, m.MvpPlayerName, m.MvpSquadId, m.MvpScore, m.MvpDamage, m.MvpHealing, m.MvpControls,
+				stamp, stamp, m.MatchId); err != nil {
 				return err
 			}
 		} else {
-			// 淘汰赛必须产出唯一胜者(平局按确定性四级决胜规则)。
+			// 淘汰赛每小局必产出唯一胜者(平局按确定性四级决胜规则)。
 			switch outcome {
 			case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN:
-				winnerSquadID = sqA.SquadId
+				gameWinnerSquadID = sqA.SquadId
 			case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN:
-				winnerSquadID = sqB.SquadId
+				gameWinnerSquadID = sqB.SquadId
 			default:
 				tieA := extractKnockoutTieMetrics(event, 0, sqA.SquadId, sqA.SeedRank)
 				tieB := extractKnockoutTieMetrics(event, 1, sqB.SquadId, sqB.SeedRank)
 				if tournament.ResolveKnockoutDrawWinner(tieA, tieB) == 0 {
-					winnerSquadID = sqA.SquadId
+					gameWinnerSquadID = sqA.SquadId
 				} else {
-					winnerSquadID = sqB.SquadId
+					gameWinnerSquadID = sqB.SquadId
 				}
 			}
-			loser := sqB
-			if winnerSquadID == sqB.SquadId {
-				loser = sqA
-			}
-			if err = advanceKnockoutWinnerTx(ctx, tx, season, m, winnerSquadID, loser, stamp); err != nil {
+			applyMvp(gameWinnerSquadID)
+			if _, err = tx.ExecContext(ctx,
+				"INSERT INTO match_tournament_match_game("+tournamentMatchGameCols+") VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE winner_squad_id=VALUES(winner_squad_id),outcome=VALUES(outcome),finished_ms=VALUES(finished_ms)",
+				m.MatchId, gameIdx, m.SeasonId, m.Phase, event.GetBattleId(), m.CurrentLeylineElement, gameWinnerSquadID, uint32(outcome), stamp); err != nil {
 				return err
+			}
+
+			if gameWinnerSquadID == sqA.SquadId {
+				m.WinsA++
+			} else {
+				m.WinsB++
+			}
+			bestOf := m.BestOf
+			if bestOf == 0 {
+				bestOf = 1
+			}
+			winsNeeded := bestOf/2 + 1
+			if m.WinsA >= winsNeeded || m.WinsB >= winsNeeded {
+				seriesWinner := sqA.SquadId
+				winnerSq := sqA
+				loser := sqB
+				winnerWins, loserWins := m.WinsA, m.WinsB
+				if m.WinsB >= winsNeeded {
+					seriesWinner = sqB.SquadId
+					winnerSq = sqB
+					loser = sqA
+					winnerWins, loserWins = m.WinsB, m.WinsA
+				}
+				totalRounds := uint32(tournament.TotalKnockoutRounds(int(season.KnockoutTeamCount)))
+				isChamp := !m.IsThirdPlace && m.RoundIndex >= totalRounds
+				nextHonor := tournament.ComputeKnockoutSeriesHonorBits(winnerSq.HonorBits, bestOf, winnerWins, loserWins, isChamp)
+				if nextHonor != winnerSq.HonorBits {
+					winnerSq.HonorBits = nextHonor
+					if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET honor_bits=?,updated_ms=? WHERE squad_id=?",
+						nextHonor, stamp, winnerSq.SquadId); err != nil {
+						return err
+					}
+				}
+				if err = advanceKnockoutWinnerTx(ctx, tx, season, m, seriesWinner, loser, stamp); err != nil {
+					return err
+				}
+				if err = settleMatchPredictionsTx(ctx, tx, season, m, seriesWinner, stamp); err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,wins_a=?,wins_b=?,winner_squad_id=?,outcome=?,mvp_player_id=?,mvp_player_name=?,mvp_squad_id=?,mvp_score=?,mvp_damage=?,mvp_healing=?,mvp_controls=?,intermission_deadline_ms=0,finished_ms=?,updated_ms=? WHERE match_id=?",
+					uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FINISHED), m.WinsA, m.WinsB, seriesWinner, uint32(outcome),
+					m.MvpPlayerId, m.MvpPlayerName, m.MvpSquadId, m.MvpScore, m.MvpDamage, m.MvpHealing, m.MvpControls,
+					stamp, stamp, m.MatchId); err != nil {
+					return err
+				}
+			} else {
+				// BO3 尚未决出大场胜负:切入 60 秒局间换阵与下一局灵脉公示。
+				nextGame := gameIdx + 1
+				seq := tournament.DecodeLeylineSequence(m.LeylineSequence)
+				nextLeyline := uint32(tournament.LeylineForGame(seq, nextGame))
+				interSec := uint64(rule.GetIntermissionSeconds())
+				if interSec == 0 {
+					interSec = tournament.DefaultIntermissionSec
+				}
+				deadline := stamp + interSec*1000
+				if _, err = tx.ExecContext(ctx,
+					"UPDATE match_tournament_match SET state=?,wins_a=?,wins_b=?,current_game_index=?,current_leyline_element=?,ready_a=0,ready_b=0,intermission_deadline_ms=?,outcome=?,mvp_player_id=?,mvp_player_name=?,mvp_squad_id=?,mvp_score=?,mvp_damage=?,mvp_healing=?,mvp_controls=?,updated_ms=? WHERE match_id=?",
+					uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_INTERMISSION), m.WinsA, m.WinsB, nextGame, nextLeyline, deadline, uint32(outcome),
+					m.MvpPlayerId, m.MvpPlayerName, m.MvpSquadId, m.MvpScore, m.MvpDamage, m.MvpHealing, m.MvpControls,
+					stamp, m.MatchId); err != nil {
+					return err
+				}
 			}
 		}
 
-		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,winner_squad_id=?,outcome=?,finished_ms=?,updated_ms=? WHERE match_id=?",
-			uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FINISHED), winnerSquadID, uint32(outcome), stamp, stamp, m.MatchId); err != nil {
-			return err
-		}
 		if err = tx.Commit(); err != nil {
 			return err
 		}
@@ -1714,20 +2223,51 @@ func extractKnockoutTieMetrics(event *kafkapb.BattleResultEvent, teamIndex uint3
 
 func advanceKnockoutWinnerTx(ctx context.Context, tx *sql.Tx, season *pb.MatchTournamentSeasonRecord, m *pb.MatchTournamentMatchRecord, winnerSquadID uint64, loser *pb.MatchTournamentSquadRecord, stamp uint64) error {
 	totalRounds := uint32(tournament.TotalKnockoutRounds(int(season.KnockoutTeamCount)))
-	elimRank := tournament.RankForEliminatedRound(int(season.KnockoutTeamCount), int(m.RoundIndex))
-	if loser != nil && loser.SquadId != 0 {
-		if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=?,updated_ms=? WHERE squad_id=?",
-			uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_ELIMINATED), elimRank, stamp, loser.SquadId); err != nil {
-			return err
+	if m.IsThirdPlace {
+		// V3 季军争夺战:胜者定档第 3 名并写入赛季季军荣誉,败者定档第 4 名。
+		if loser != nil && loser.SquadId != 0 {
+			if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=4,updated_ms=? WHERE squad_id=?",
+				uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_ELIMINATED), stamp, loser.SquadId); err != nil {
+				return err
+			}
 		}
+		if winnerSquadID != 0 {
+			var thirdName string
+			var thirdEmblem uint32
+			_ = tx.QueryRowContext(ctx, "SELECT name,emblem_id FROM match_tournament_squad WHERE squad_id=?", winnerSquadID).Scan(&thirdName, &thirdEmblem)
+			if !tournament.IsValidEmblemID(thirdEmblem) {
+				thirdEmblem = tournament.DefaultEmblemID
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=3,updated_ms=? WHERE squad_id=?",
+				uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_ELIMINATED), stamp, winnerSquadID); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_season SET third_place_squad_id=?,third_place_squad_name=?,third_place_emblem_id=?,updated_ms=? WHERE season_id=?",
+				winnerSquadID, thirdName, thirdEmblem, stamp, season.SeasonId); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
+
 	if m.RoundIndex >= totalRounds {
-		// 总决赛结束:标记冠军战队并刷新赛季冠军摘要(结算发奖交由 AdvanceTournamentSeason 统一幂等落账)。
+		// 总决赛结束:亚军定档第 2 名,冠军写入队徽、外观快照与总决赛 MVP。
+		if loser != nil && loser.SquadId != 0 {
+			if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=2,updated_ms=? WHERE squad_id=?",
+				uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_ELIMINATED), stamp, loser.SquadId); err != nil {
+				return err
+			}
+		}
 		var champName string
-		_ = tx.QueryRowContext(ctx, "SELECT name FROM match_tournament_squad WHERE squad_id=?", winnerSquadID).Scan(&champName)
-		members, _ := loadSquadMembersTx(ctx, tx, winnerSquadID)
-		names := make([]string, 0, len(members))
-		for _, mem := range members {
+		var champEmblem, champHonor uint32
+		_ = tx.QueryRowContext(ctx, "SELECT name,emblem_id,honor_bits FROM match_tournament_squad WHERE squad_id=?", winnerSquadID).Scan(&champName, &champEmblem, &champHonor)
+		if !tournament.IsValidEmblemID(champEmblem) {
+			champEmblem = tournament.DefaultEmblemID
+		}
+		champHonor |= tournament.HonorBitChampion
+		memberRecs, _ := loadSquadMemberRecordsTx(ctx, tx, winnerSquadID)
+		names := make([]string, 0, len(memberRecs))
+		for _, mem := range memberRecs {
 			if mem.PlayerName != "" {
 				names = append(names, mem.PlayerName)
 			} else {
@@ -1735,13 +2275,60 @@ func advanceKnockoutWinnerTx(ctx context.Context, tx *sql.Tx, season *pb.MatchTo
 			}
 		}
 		summary := strings.Join(names, " / ")
-		if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=1,updated_ms=? WHERE squad_id=?",
-			uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_CHAMPION), stamp, winnerSquadID); err != nil {
+		blob, _ := (proto.MarshalOptions{Deterministic: true}).Marshal(&pb.MatchTournamentChampionMembersBlob{Members: memberRecs})
+		if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=1,honor_bits=?,updated_ms=? WHERE squad_id=?",
+			uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_CHAMPION), champHonor, stamp, winnerSquadID); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, "UPDATE match_tournament_season SET champion_squad_id=?,champion_squad_name=?,champion_member_summary=?,updated_ms=? WHERE season_id=?",
-			winnerSquadID, champName, summary, stamp, season.SeasonId)
+		_, err := tx.ExecContext(ctx, "UPDATE match_tournament_season SET champion_squad_id=?,champion_squad_name=?,champion_emblem_id=?,champion_member_summary=?,champion_members_blob=?,final_mvp_player_id=?,final_mvp_player_name=?,final_mvp_score=?,champion_honor_bits=?,updated_ms=? WHERE season_id=?",
+			winnerSquadID, champName, champEmblem, summary, nonNilBytes(blob), m.MvpPlayerId, m.MvpPlayerName, m.MvpScore, champHonor, stamp, season.SeasonId)
 		return err
+	}
+
+	// 检查本赛季末轮是否存在季军争夺战(slot=1, is_third_place=1);若当前为半决赛,败者进入季军战而非直接淘汰。
+	routedLoserToThird := false
+	if totalRounds >= 2 && m.RoundIndex == totalRounds-1 && loser != nil && loser.SquadId != 0 {
+		var thirdMatchID uint64
+		if tx.QueryRowContext(ctx,
+			"SELECT match_id FROM match_tournament_match WHERE season_id=? AND phase=? AND round_index=? AND slot_index=1 AND is_third_place=1 LIMIT 1",
+			season.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT), totalRounds).Scan(&thirdMatchID) == nil && thirdMatchID != 0 {
+			col := "squad_a_id"
+			if m.SlotIndex%2 == 1 {
+				col = "squad_b_id"
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_match SET "+col+"=?,updated_ms=? WHERE match_id=?",
+				loser.SquadId, stamp, thirdMatchID); err != nil {
+				return err
+			}
+			routedLoserToThird = true
+			// 若另一场半决赛因 3 队轮空无败者,则本队自动轮空夺季军。
+			var siblingState uint32
+			if tx.QueryRowContext(ctx,
+				"SELECT state FROM match_tournament_match WHERE season_id=? AND phase=? AND round_index=? AND slot_index=? LIMIT 1",
+				season.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT), m.RoundIndex, m.SlotIndex^1).Scan(&siblingState) == nil &&
+				siblingState == uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_BYE) {
+				var thirdName string
+				var thirdEmblem uint32
+				_ = tx.QueryRowContext(ctx, "SELECT name,emblem_id FROM match_tournament_squad WHERE squad_id=?", loser.SquadId).Scan(&thirdName, &thirdEmblem)
+				if !tournament.IsValidEmblemID(thirdEmblem) {
+					thirdEmblem = tournament.DefaultEmblemID
+				}
+				_, _ = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,winner_squad_id=?,finished_ms=?,updated_ms=? WHERE match_id=?",
+					uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_BYE), loser.SquadId, stamp, stamp, thirdMatchID)
+				_, _ = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=3,updated_ms=? WHERE squad_id=?",
+					uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_ELIMINATED), stamp, loser.SquadId)
+				_, _ = tx.ExecContext(ctx, "UPDATE match_tournament_season SET third_place_squad_id=?,third_place_squad_name=?,third_place_emblem_id=?,updated_ms=? WHERE season_id=?",
+					loser.SquadId, thirdName, thirdEmblem, stamp, season.SeasonId)
+			}
+		}
+	}
+
+	if !routedLoserToThird && loser != nil && loser.SquadId != 0 {
+		elimRank := tournament.RankForEliminatedRound(int(season.KnockoutTeamCount), int(m.RoundIndex))
+		if _, err := tx.ExecContext(ctx, "UPDATE match_tournament_squad SET state=?,final_rank=?,updated_ms=? WHERE squad_id=?",
+			uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_ELIMINATED), elimRank, stamp, loser.SquadId); err != nil {
+			return err
+		}
 	}
 	// 非决赛:将胜者填入下一轮 (round_index+1, slot_index/2) 的 A 或 B 槽位。
 	nextRound := m.RoundIndex + 1
@@ -1796,8 +2383,8 @@ func (s *Store) AdvanceTournamentSeason(ctx context.Context, nowOverrideMs uint6
 		if stamp < cur.KnockoutStartMs {
 			return nil
 		}
-		// 预分配最多 15 场淘汰赛对局 ID(16 强总场次 8+4+2+1=15)。
-		ids, err := idAlloc(15)
+		// 预分配最多 16 场淘汰赛对局 ID(16 强正赛 15 场 + 四强季军争夺战 1 场)。
+		ids, err := idAlloc(16)
 		if err != nil {
 			return err
 		}
@@ -1872,9 +2459,11 @@ func (s *Store) transitionToKnockout(ctx context.Context, seasonID uint32, stamp
 		if err != nil || cur.Stage != uint32(pb.TournamentStage_TOURNAMENT_STAGE_QUALIFIER) || stamp < cur.KnockoutStartMs {
 			return err
 		}
-		// 关闭海选期未成局的等待单。
-		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,updated_ms=? WHERE season_id=? AND phase=? AND state=1",
-			uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FORFEIT), stamp, seasonID, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_QUALIFIER)); err != nil {
+		// 关闭海选期及赛前热身未成局的等待单。
+		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,updated_ms=? WHERE season_id=? AND phase IN(?,?) AND state=1",
+			uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FORFEIT), stamp, seasonID,
+			uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_QUALIFIER),
+			uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP)); err != nil {
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE season_id=? AND state=? FOR UPDATE",
@@ -1965,19 +2554,26 @@ func (s *Store) transitionToKnockout(ctx context.Context, seasonID uint32, stamp
 				if err != nil {
 					return err
 				}
+				bestOf := tournament.BestOfForKnockout(bracketSize, r, rule.GetBo3Top4Enabled())
+				leylineSeq := tournament.DrawLeylines(seasonID, mid, bestOf)
+				firstLeyline := uint32(tournament.LeylineForGame(leylineSeq, 1))
 				rec := &pb.MatchTournamentMatchRecord{
-					MatchId:          mid,
-					SeasonId:         seasonID,
-					Phase:            uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT),
-					RoundIndex:       uint32(r),
-					SlotIndex:        uint32(slot),
-					LineupA:          []byte{},
-					LineupB:          []byte{},
-					State:            uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT),
-					FeaturedSpectate: true,
-					ScheduledStartMs: rStart,
-					DeadlineMs:       rDeadline,
-					UpdatedMs:        stamp,
+					MatchId:               mid,
+					SeasonId:              seasonID,
+					Phase:                 uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT),
+					RoundIndex:            uint32(r),
+					SlotIndex:             uint32(slot),
+					LineupA:               []byte{},
+					LineupB:               []byte{},
+					State:                 uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT),
+					FeaturedSpectate:      true,
+					ScheduledStartMs:      rStart,
+					DeadlineMs:            rDeadline,
+					UpdatedMs:             stamp,
+					BestOf:                bestOf,
+					CurrentGameIndex:      1,
+					CurrentLeylineElement: firstLeyline,
+					LeylineSequence:       tournament.EncodeLeylineSequence(leylineSeq),
 				}
 				if r == 1 {
 					seedA, seedB := pairs[slot][0], pairs[slot][1]
@@ -2000,6 +2596,37 @@ func (s *Store) transitionToKnockout(ctx context.Context, seasonID uint32, stamp
 				roundMatches[r] = append(roundMatches[r], rec)
 			}
 		}
+		// V3 季军争夺战:四强及以上淘汰赛且开关开启时,在末轮追加 slot=1 季军争夺战(同样支持 BO3 与独立灵脉抽签)。
+		if bracketSize >= 4 && rule.GetThirdPlaceMatchEnabled() {
+			mid, err := nextID()
+			if err != nil {
+				return err
+			}
+			rStart := stamp + uint64(totalRounds-1)*roundWindowMs
+			rDeadline := rStart + roundWindowMs
+			bestOf := tournament.BestOfForKnockout(bracketSize, totalRounds, rule.GetBo3Top4Enabled())
+			leylineSeq := tournament.DrawLeylines(seasonID, mid, bestOf)
+			firstLeyline := uint32(tournament.LeylineForGame(leylineSeq, 1))
+			roundMatches[totalRounds] = append(roundMatches[totalRounds], &pb.MatchTournamentMatchRecord{
+				MatchId:               mid,
+				SeasonId:              seasonID,
+				Phase:                 uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT),
+				RoundIndex:            uint32(totalRounds),
+				SlotIndex:             1,
+				LineupA:               []byte{},
+				LineupB:               []byte{},
+				State:                 uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT),
+				FeaturedSpectate:      true,
+				ScheduledStartMs:      rStart,
+				DeadlineMs:            rDeadline,
+				UpdatedMs:             stamp,
+				BestOf:                bestOf,
+				CurrentGameIndex:      1,
+				CurrentLeylineElement: firstLeyline,
+				LeylineSequence:       tournament.EncodeLeylineSequence(leylineSeq),
+				IsThirdPlace:          true,
+			})
+		}
 		// 把首轮 BYE 胜者预先填入第 2 轮槽位。
 		if totalRounds >= 2 {
 			for _, m := range roundMatches[1] {
@@ -2016,11 +2643,14 @@ func (s *Store) transitionToKnockout(ctx context.Context, seasonID uint32, stamp
 		for r := 1; r <= totalRounds; r++ {
 			for _, rec := range roundMatches[r] {
 				if _, err = tx.ExecContext(ctx,
-					"INSERT INTO match_tournament_match("+tournamentMatchCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+					"INSERT INTO match_tournament_match("+tournamentMatchCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 					rec.MatchId, rec.SeasonId, rec.Phase, rec.RoundIndex, rec.SlotIndex,
 					rec.SquadAId, rec.SquadBId, nonNilBytes(rec.LineupA), nonNilBytes(rec.LineupB),
 					rec.ReadyA, rec.ReadyB, rec.State, rec.BattleId, rec.WinnerSquadId, rec.Outcome,
 					rec.FeaturedSpectate, rec.ScheduledStartMs, rec.DeadlineMs, rec.FinishedMs, stamp,
+					rec.BestOf, rec.CurrentGameIndex, rec.WinsA, rec.WinsB, rec.CurrentLeylineElement, rec.LeylineSequence, rec.IntermissionDeadlineMs,
+					rec.IsThirdPlace, uint64(0), "", uint64(0), uint32(0), uint64(0), uint64(0), uint32(0),
+					uint32(0), uint32(0),
 				); err != nil {
 					return err
 				}
@@ -2092,6 +2722,9 @@ func (s *Store) resolveOverdueKnockoutMatches(ctx context.Context, seasonID uint
 			if err = advanceKnockoutWinnerTx(ctx, tx, season, m, winnerID, loser, stamp); err != nil {
 				return err
 			}
+			if err = settleMatchPredictionsTx(ctx, tx, season, m, winnerID, stamp); err != nil {
+				return err
+			}
 			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,winner_squad_id=?,finished_ms=?,updated_ms=? WHERE match_id=?",
 				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FORFEIT), winnerID, stamp, stamp, m.MatchId); err != nil {
 				return err
@@ -2106,13 +2739,22 @@ func (s *Store) estimateTournamentSettlement(ctx context.Context, seasonID uint3
 	if err != nil || season.Stage != uint32(pb.TournamentStage_TOURNAMENT_STAGE_KNOCKOUT) {
 		return false, 0, err
 	}
-	if season.KnockoutTeamCount > 0 && season.ChampionSquadId == 0 && stamp < season.SettleStartMs {
-		return false, 0, nil
+	if season.KnockoutTeamCount > 0 && stamp < season.SettleStartMs {
+		if season.ChampionSquadId == 0 {
+			return false, 0, nil
+		}
+		var openThird int
+		_ = s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_match WHERE season_id=? AND phase=? AND is_third_place=1 AND state NOT IN(4,5,6)",
+			seasonID, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT)).Scan(&openThird)
+		if openThird > 0 {
+			return false, 0, nil
+		}
 	}
-	var memberCount, cheerCount int
+	var memberCount, cheerCount, predCount int
 	_ = s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_member WHERE season_id=?", seasonID).Scan(&memberCount)
 	_ = s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_cheer WHERE season_id=?", seasonID).Scan(&cheerCount)
-	return true, memberCount + cheerCount, nil
+	_ = s.DB.QueryRowContext(ctx, "SELECT COUNT(DISTINCT player_id) FROM match_tournament_prediction WHERE season_id=? AND result_state=1", seasonID).Scan(&predCount)
+	return true, memberCount + cheerCount + predCount, nil
 }
 
 func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, stamp uint64, preallocatedIDs []uint64) error {
@@ -2229,6 +2871,46 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 			}
 		}
 
+		// 3. V3 神机竞猜达标纪念礼:累计命中 >= prediction_reward_min_hits 的玩家自动落账绑定纪念礼。
+		if predTier := cat.PredictionReward(); predTier != nil && cat.Rule().GetPredictionEnabled() {
+			minHits := cat.Rule().GetPredictionRewardMinHits()
+			if minHits == 0 {
+				minHits = 2
+			}
+			_, rawPredAtt, err := tournament.BuildMailAttachments(predTier)
+			if err != nil {
+				return err
+			}
+			pRows, err := tx.QueryContext(ctx, "SELECT player_id FROM match_tournament_prediction WHERE season_id=? AND result_state=1 GROUP BY player_id HAVING COUNT(*)>=?", seasonID, minHits)
+			if err != nil {
+				return err
+			}
+			var predWinners []uint64
+			for pRows.Next() {
+				var pid uint64
+				if e := pRows.Scan(&pid); e != nil {
+					pRows.Close()
+					return e
+				}
+				predWinners = append(predWinners, pid)
+			}
+			pRows.Close()
+			for _, pid := range predWinners {
+				rid, err := nextID()
+				if err != nil {
+					return err
+				}
+				if _, err = tx.ExecContext(ctx,
+					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?)",
+					seasonID, pid, predTier.GetTierKind(), rid, uint64(0), uint32(0),
+					predTier.GetId(), predTier.GetGoldAmount(), nonNilBytes(rawPredAtt), predTier.GetTitleCode(), predTier.GetBadgeCode(),
+					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp,
+				); err != nil {
+					return err
+				}
+			}
+		}
+
 		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_season SET stage=?,settled_ms=?,updated_ms=? WHERE season_id=?",
 			uint32(pb.TournamentStage_TOURNAMENT_STAGE_SETTLED), stamp, stamp, seasonID); err != nil {
 			return err
@@ -2250,11 +2932,12 @@ func (s *Store) openNextTournamentSeason(ctx context.Context, currentSeasonID ui
 		}
 		next := buildNewTournamentSeason(currentSeasonID+1, stamp, s.TournamentCatalog())
 		_, err = tx.ExecContext(ctx,
-			"INSERT IGNORE INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+			"INSERT IGNORE INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			next.SeasonId, next.SeasonKey, next.SeasonName, next.RuleVersion, next.Stage,
 			next.RegistrationStartMs, next.QualifierStartMs, next.KnockoutStartMs, next.SettleStartMs, next.EndMs,
 			next.BattleTeamSize, next.RosterMaxSize, next.KnockoutTeamCount,
-			0, "", "", 0, stamp,
+			0, "", "", 0, stamp, []byte{}, uint64(0),
+			uint32(0), uint64(0), "", uint32(0), uint64(0), "", uint32(0), uint32(0),
 		)
 		if err != nil {
 			return err
@@ -2333,4 +3016,961 @@ func nonNilBytes(b []byte) []byte {
 		return []byte{}
 	}
 	return b
+}
+
+// TakeDueIntermissionLaunches 扫描 BO3 局间换阵倒计时已到期的淘汰赛对局,按双方上局合法阵容自动转为 READY 并返回建房规格。
+func (s *Store) TakeDueIntermissionLaunches(ctx context.Context, nowOverrideMs uint64) ([]*TournamentLaunchSpec, error) {
+	if s == nil || s.DB == nil {
+		return nil, nil
+	}
+	var specs []*TournamentLaunchSpec
+	err := s.Fenced(ctx, func() error {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		stamp := nowOverrideMs
+		if stamp == 0 {
+			if stamp, err = now(ctx, tx); err != nil {
+				return err
+			}
+		}
+		rule := s.TournamentCatalog().Rule()
+		rows, err := tx.QueryContext(ctx,
+			"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE phase=? AND state=? AND intermission_deadline_ms>0 AND intermission_deadline_ms<=? ORDER BY match_id ASC LIMIT 16 FOR UPDATE",
+			uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT),
+			uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_INTERMISSION),
+			stamp,
+		)
+		if err != nil {
+			return err
+		}
+		var due []*pb.MatchTournamentMatchRecord
+		for rows.Next() {
+			m, e := scanTournamentMatch(rows)
+			if e != nil {
+				rows.Close()
+				return e
+			}
+			due = append(due, m)
+		}
+		rows.Close()
+		for _, m := range due {
+			if m.SquadAId == 0 || m.SquadBId == 0 {
+				continue
+			}
+			season, e := scanTournamentSeason(tx.QueryRowContext(ctx, "SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE season_id=?", m.SeasonId))
+			if e != nil {
+				continue
+			}
+			teamA := tournament.DecodeLineup(m.LineupA)
+			if len(teamA) != int(season.BattleTeamSize) {
+				membersA, e2 := loadSquadMembersTx(ctx, tx, m.SquadAId)
+				if e2 == nil {
+					teamA, _ = resolveAndValidateLineup(membersA, nil, int(season.BattleTeamSize))
+				}
+			}
+			teamB := tournament.DecodeLineup(m.LineupB)
+			if len(teamB) != int(season.BattleTeamSize) {
+				membersB, e2 := loadSquadMembersTx(ctx, tx, m.SquadBId)
+				if e2 == nil {
+					teamB, _ = resolveAndValidateLineup(membersB, nil, int(season.BattleTeamSize))
+				}
+			}
+			if len(teamA) != int(season.BattleTeamSize) || len(teamB) != int(season.BattleTeamSize) {
+				continue
+			}
+			var sqAName, sqBName string
+			var sqAEmblem, sqBEmblem uint32
+			_ = tx.QueryRowContext(ctx, "SELECT name,emblem_id FROM match_tournament_squad WHERE squad_id=?", m.SquadAId).Scan(&sqAName, &sqAEmblem)
+			_ = tx.QueryRowContext(ctx, "SELECT name,emblem_id FROM match_tournament_squad WHERE squad_id=?", m.SquadBId).Scan(&sqBName, &sqBEmblem)
+			if !tournament.IsValidEmblemID(sqAEmblem) {
+				sqAEmblem = tournament.DefaultEmblemID
+			}
+			if !tournament.IsValidEmblemID(sqBEmblem) {
+				sqBEmblem = tournament.DefaultEmblemID
+			}
+			if _, err = tx.ExecContext(ctx,
+				"UPDATE match_tournament_match SET lineup_a=?,lineup_b=?,ready_a=1,ready_b=1,state=?,intermission_deadline_ms=0,updated_ms=? WHERE match_id=?",
+				nonNilBytes(tournament.EncodeLineup(teamA)), nonNilBytes(tournament.EncodeLineup(teamB)),
+				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY), stamp, m.MatchId,
+			); err != nil {
+				return err
+			}
+			specs = append(specs, &TournamentLaunchSpec{
+				MatchID:        m.MatchId,
+				SeasonID:       m.SeasonId,
+				Phase:          pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT,
+				RoundIndex:     m.RoundIndex,
+				BattleConfigID: rule.GetBattleConfigId(),
+				TeamA:          teamA,
+				TeamB:          teamB,
+				Featured:       true,
+				BestOf:         m.BestOf,
+				GameIndex:      m.CurrentGameIndex,
+				WinsA:          m.WinsA,
+				WinsB:          m.WinsB,
+				LeylineElement: battlepb.TournamentLeylineElement(m.CurrentLeylineElement),
+				SquadAId:       m.SquadAId,
+				SquadAName:     sqAName,
+				SquadAEmblemID: sqAEmblem,
+				SquadBId:       m.SquadBId,
+				SquadBName:     sqBName,
+				SquadBEmblemID: sqBEmblem,
+				IsThirdPlace:   m.IsThirdPlace,
+			})
+		}
+		return tx.Commit()
+	})
+	return specs, err
+}
+
+// SaluteTournamentChampion 原子执行每日一次免费观道致敬(主键 (player_id, salute_day) 防刷,累加全服致敬计数)。
+func (s *Store) SaluteTournamentChampion(ctx context.Context, playerID uint64, requestedSeasonID uint32, rewardID uint64) (*TournamentSaluteResult, error) {
+	if err := s.ensureTournamentOpen(); err != nil {
+		return nil, err
+	}
+	if playerID == 0 || rewardID == 0 {
+		return nil, errors.New("tournament: invalid player or reward id for salute")
+	}
+	var out *TournamentSaluteResult
+	err := s.Fenced(ctx, func() error {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		stamp, err := now(ctx, tx)
+		if err != nil {
+			return err
+		}
+		var season *pb.MatchTournamentSeasonRecord
+		if requestedSeasonID != 0 {
+			season, err = scanTournamentSeason(tx.QueryRowContext(ctx,
+				"SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE season_id=? AND champion_squad_id>0 FOR UPDATE", requestedSeasonID))
+		} else {
+			season, err = scanTournamentSeason(tx.QueryRowContext(ctx,
+				"SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE champion_squad_id>0 ORDER BY season_id DESC LIMIT 1 FOR UPDATE"))
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTournamentNoChampionToSalute
+		}
+		if err != nil {
+			return err
+		}
+		saluteDay := tournament.Utc8DayKey(stamp)
+		if _, err = tx.ExecContext(ctx,
+			"INSERT INTO match_tournament_salute("+tournamentSaluteCols+") VALUES(?,?,?,?,0,?)",
+			playerID, saluteDay, season.SeasonId, rewardID, stamp,
+		); err != nil {
+			var dup *mysql.MySQLError
+			if errors.As(err, &dup) && dup.Number == 1062 {
+				return ErrTournamentAlreadySalutedToday
+			}
+			return err
+		}
+		newCount := season.ChampionSaluteCount + 1
+		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_season SET champion_salute_count=?,updated_ms=? WHERE season_id=?",
+			newCount, stamp, season.SeasonId); err != nil {
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		out = &TournamentSaluteResult{
+			SeasonID:            season.SeasonId,
+			SaluteDay:           saluteDay,
+			ChampionSaluteCount: newCount,
+			RewardID:            rewardID,
+		}
+		return nil
+	})
+	return out, err
+}
+
+// UpdateTournamentSaluteMailID 在事务外邮件投递成功后回填 mail_id 供审计。
+func (s *Store) UpdateTournamentSaluteMailID(ctx context.Context, playerID uint64, saluteDay uint32, mailID uint64) error {
+	if s == nil || s.DB == nil || playerID == 0 || saluteDay == 0 || mailID == 0 {
+		return nil
+	}
+	return s.Fenced(ctx, func() error {
+		_, err := s.DB.ExecContext(ctx, "UPDATE match_tournament_salute SET mail_id=? WHERE player_id=? AND salute_day=?", mailID, playerID, saluteDay)
+		return err
+	})
+}
+
+// isPublicKnockoutReplayAllowed 校验某场 battle_id 是否属于允许全服公开回放的锦标赛淘汰赛对局(绝不放行海选/私密切磋)。
+func (s *Store) isPublicKnockoutReplayAllowed(ctx context.Context, battleID uint64) bool {
+	if s == nil || s.DB == nil || battleID == 0 || !s.TournamentCatalog().Rule().GetPublicKnockoutReplay() {
+		return false
+	}
+	var one int
+	if s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_tournament_match_game WHERE battle_id=? AND phase=? LIMIT 1",
+		battleID, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT)).Scan(&one) == nil {
+		return true
+	}
+	return s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_tournament_match WHERE battle_id=? AND phase=? LIMIT 1",
+		battleID, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT)).Scan(&one) == nil
+}
+
+// IsTournamentBattle 校验某场 battle_id 是否属于锦标赛对局(供观战喝彩接口防任意伪造 battle_id)。
+func (s *Store) IsTournamentBattle(ctx context.Context, battleID uint64) bool {
+	if s == nil || s.DB == nil || battleID == 0 {
+		return false
+	}
+	var one int
+	if s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_tournament_match_game WHERE battle_id=? LIMIT 1", battleID).Scan(&one) == nil {
+		return true
+	}
+	return s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_tournament_match WHERE battle_id=? LIMIT 1", battleID).Scan(&one) == nil
+}
+
+// ---- 《群仙问道赛》V3 扩展存储：队徽更新 / 零积分热身约战 / 神机竞猜榜 / 真实外观回填 ----
+
+// UpdateTournamentSquadEmblem 队长更换官方预设道家队徽(1..8,封榜前随时可换)。
+func (s *Store) UpdateTournamentSquadEmblem(ctx context.Context, captainID uint64, emblemID uint32) (*pb.TournamentSquadView, error) {
+	if err := s.ensureTournamentOpen(); err != nil {
+		return nil, err
+	}
+	if !tournament.IsValidEmblemID(emblemID) {
+		return nil, ErrTournamentEmblemInvalid
+	}
+	var view *pb.TournamentSquadView
+	err := s.Fenced(ctx, func() error {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		stamp, err := now(ctx, tx)
+		if err != nil {
+			return err
+		}
+		cur, err := s.ensureTournamentSeasonTx(ctx, tx, stamp)
+		if err != nil {
+			return err
+		}
+		if cur.Stage == uint32(pb.TournamentStage_TOURNAMENT_STAGE_SETTLED) {
+			return ErrTournamentStageClosed
+		}
+		var squadID uint64
+		if err = tx.QueryRowContext(ctx, "SELECT squad_id FROM match_tournament_member WHERE season_id=? AND player_id=?", cur.SeasonId, captainID).Scan(&squadID); errors.Is(err, sql.ErrNoRows) {
+			return ErrTournamentSquadNotFound
+		} else if err != nil {
+			return err
+		}
+		squad, err := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=? FOR UPDATE", squadID))
+		if err != nil {
+			return err
+		}
+		if squad.CaptainPlayerId != captainID {
+			return ErrTournamentNotCaptain
+		}
+		if squad.State == uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_DISBANDED) {
+			return ErrTournamentSquadNotFound
+		}
+		squad.EmblemId = emblemID
+		squad.UpdatedMs = stamp
+		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_squad SET emblem_id=?,updated_ms=? WHERE squad_id=?", emblemID, stamp, squadID); err != nil {
+			return err
+		}
+		members, err := loadSquadMembersTx(ctx, tx, squadID)
+		if err != nil {
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		view = toTournamentSquadView(squad, members)
+		return nil
+	})
+	return view, err
+}
+
+// PrepareTournamentWarmup 赛前零积分热身约战(随机池或定向约战 + 自选五行灵脉,绝不污染海选积分与晋级)。
+func (s *Store) PrepareTournamentWarmup(ctx context.Context, captainID, targetSquadID uint64, leyline battlepb.TournamentLeylineElement, lineupIDs []uint64, newMatchID uint64) (*pb.TournamentMatchView, *TournamentLaunchSpec, error) {
+	if err := s.ensureTournamentOpen(); err != nil {
+		return nil, nil, err
+	}
+	rule := s.TournamentCatalog().Rule()
+	if !rule.GetWarmupSparEnabled() {
+		return nil, nil, ErrTournamentWarmupUnavailable
+	}
+	if leyline < 0 || leyline > battlepb.TournamentLeylineElement_TOURNAMENT_LEYLINE_EARTH {
+		leyline = battlepb.TournamentLeylineElement_TOURNAMENT_LEYLINE_UNSPECIFIED
+	}
+	var matchView *pb.TournamentMatchView
+	var launch *TournamentLaunchSpec
+	err := s.Fenced(ctx, func() error {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		stamp, err := now(ctx, tx)
+		if err != nil {
+			return err
+		}
+		cur, err := s.ensureTournamentSeasonTx(ctx, tx, stamp)
+		if err != nil {
+			return err
+		}
+		if cur.Stage != uint32(pb.TournamentStage_TOURNAMENT_STAGE_REGISTRATION) &&
+			cur.Stage != uint32(pb.TournamentStage_TOURNAMENT_STAGE_QUALIFIER) {
+			return ErrTournamentStageClosed
+		}
+		var mySquadID uint64
+		if err = tx.QueryRowContext(ctx, "SELECT squad_id FROM match_tournament_member WHERE season_id=? AND player_id=?", cur.SeasonId, captainID).Scan(&mySquadID); errors.Is(err, sql.ErrNoRows) {
+			return ErrTournamentSquadNotFound
+		} else if err != nil {
+			return err
+		}
+		mySquad, err := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=? FOR UPDATE", mySquadID))
+		if err != nil {
+			return err
+		}
+		if mySquad.CaptainPlayerId != captainID {
+			return ErrTournamentNotCaptain
+		}
+		if mySquad.State != uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_DRAFT) &&
+			mySquad.State != uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_REGISTERED) {
+			return ErrTournamentWarmupUnavailable
+		}
+		if mySquad.MemberCount < cur.BattleTeamSize {
+			return ErrTournamentMemberNotEnough
+		}
+		if targetSquadID == mySquadID {
+			return ErrTournamentWarmupUnavailable
+		}
+		if targetSquadID != 0 {
+			targetSq, tErr := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", targetSquadID))
+			if tErr != nil || targetSq.SeasonId != cur.SeasonId ||
+				(targetSq.State != uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_DRAFT) && targetSq.State != uint32(pb.TournamentSquadState_TOURNAMENT_SQUAD_STATE_REGISTERED)) ||
+				targetSq.MemberCount < cur.BattleTeamSize {
+				return ErrTournamentWarmupUnavailable
+			}
+		}
+		members, err := loadSquadMembersTx(ctx, tx, mySquadID)
+		if err != nil {
+			return err
+		}
+		lineup, err := resolveAndValidateLineup(members, lineupIDs, int(cur.BattleTeamSize))
+		if err != nil {
+			return err
+		}
+		encodedLineup := tournament.EncodeLineup(lineup)
+
+		// 若本队已有进行中/已成局的热身赛,幂等返回。
+		if active, e := scanTournamentMatch(tx.QueryRowContext(ctx,
+			"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND (squad_a_id=? OR squad_b_id=?) AND state IN(2,3) LIMIT 1 FOR UPDATE",
+			cur.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP), mySquadID, mySquadID)); e == nil {
+			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
+			otherID := active.SquadAId
+			if otherID == mySquadID {
+				otherID = active.SquadBId
+			}
+			if other, e2 := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", otherID)); e2 == nil {
+				squads[otherID] = other
+			}
+			matchView = s.toTournamentMatchView(active, squads, nil)
+			return tx.Commit()
+		}
+
+		// 查找可立即撮合的对手等待单:定向约战匹配指定对手(针对我或随机池),随机池优先接针对我的定向约战再接公开池。
+		var paired *pb.MatchTournamentMatchRecord
+		if targetSquadID != 0 {
+			if p, e := scanTournamentMatch(tx.QueryRowContext(ctx,
+				"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND state=? AND squad_a_id=? AND (squad_b_id=? OR squad_b_id=0) ORDER BY match_id ASC LIMIT 1 FOR UPDATE",
+				cur.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP),
+				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT), targetSquadID, mySquadID)); e == nil {
+				paired = p
+			}
+		} else {
+			if p, e := scanTournamentMatch(tx.QueryRowContext(ctx,
+				"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND state=? AND squad_a_id<>? AND (squad_b_id=? OR squad_b_id=0) ORDER BY CASE WHEN squad_b_id=? THEN 0 ELSE 1 END ASC, match_id ASC LIMIT 1 FOR UPDATE",
+				cur.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP),
+				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT), mySquadID, mySquadID, mySquadID)); e == nil {
+				paired = p
+			}
+		}
+
+		if paired != nil {
+			// 若本队之前也挂着一条热身等待单,顺手关闭避免双单残留。
+			_, _ = tx.ExecContext(ctx, "UPDATE match_tournament_match SET state=?,updated_ms=? WHERE season_id=? AND phase=? AND squad_a_id=? AND state=1 AND match_id<>?",
+				uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FORFEIT), stamp, cur.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP), mySquadID, paired.MatchId)
+			chosenLeyline := paired.CurrentLeylineElement
+			if chosenLeyline == 0 && leyline != 0 {
+				chosenLeyline = uint32(leyline)
+			}
+			paired.SquadBId = mySquadID
+			paired.LineupB = encodedLineup
+			paired.ReadyB = true
+			paired.State = uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY)
+			paired.CurrentLeylineElement = chosenLeyline
+			paired.UpdatedMs = stamp
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET squad_b_id=?,lineup_b=?,ready_b=1,state=?,current_leyline_element=?,updated_ms=? WHERE match_id=?",
+				paired.SquadBId, nonNilBytes(paired.LineupB), paired.State, chosenLeyline, stamp, paired.MatchId); err != nil {
+				return err
+			}
+			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
+			sqAName := ""
+			var sqAEmblem uint32 = tournament.DefaultEmblemID
+			if other, e := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", paired.SquadAId)); e == nil {
+				squads[paired.SquadAId] = other
+				sqAName = other.Name
+				sqAEmblem = other.EmblemId
+			}
+			launch = &TournamentLaunchSpec{
+				MatchID:        paired.MatchId,
+				SeasonID:       cur.SeasonId,
+				Phase:          pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP,
+				RoundIndex:     paired.RoundIndex,
+				BattleConfigID: rule.GetBattleConfigId(),
+				TeamA:          tournament.DecodeLineup(paired.LineupA),
+				TeamB:          lineup,
+				Featured:       false,
+				BestOf:         1,
+				GameIndex:      1,
+				LeylineElement: battlepb.TournamentLeylineElement(chosenLeyline),
+				SquadAId:       paired.SquadAId,
+				SquadAName:     sqAName,
+				SquadAEmblemID: sqAEmblem,
+				SquadBId:       mySquadID,
+				SquadBName:     mySquad.Name,
+				SquadBEmblemID: mySquad.EmblemId,
+				IsWarmup:       true,
+			}
+			matchView = s.toTournamentMatchView(paired, squads, nil)
+			return tx.Commit()
+		}
+
+		// 若本队已在热身等待池,原地刷新目标/灵脉/阵容并返回。
+		if existing, e := scanTournamentMatch(tx.QueryRowContext(ctx,
+			"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND squad_a_id=? AND state=1 LIMIT 1 FOR UPDATE",
+			cur.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP), mySquadID)); e == nil {
+			existing.SquadBId = targetSquadID
+			existing.LineupA = encodedLineup
+			existing.CurrentLeylineElement = uint32(leyline)
+			existing.UpdatedMs = stamp
+			if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_match SET squad_b_id=?,lineup_a=?,current_leyline_element=?,updated_ms=? WHERE match_id=?",
+				targetSquadID, nonNilBytes(encodedLineup), uint32(leyline), stamp, existing.MatchId); err != nil {
+				return err
+			}
+			squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
+			if targetSquadID != 0 {
+				if tSq, e2 := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", targetSquadID)); e2 == nil {
+					squads[targetSquadID] = tSq
+				}
+			}
+			matchView = s.toTournamentMatchView(existing, squads, nil)
+			return tx.Commit()
+		}
+
+		if newMatchID == 0 {
+			return errors.New("tournament: missing pre-allocated warmup match_id")
+		}
+		created := &pb.MatchTournamentMatchRecord{
+			MatchId:               newMatchID,
+			SeasonId:              cur.SeasonId,
+			Phase:                 uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_WARMUP),
+			RoundIndex:            1,
+			SlotIndex:             0,
+			SquadAId:              mySquadID,
+			SquadBId:              targetSquadID,
+			LineupA:               encodedLineup,
+			LineupB:               []byte{},
+			ReadyA:                true,
+			ReadyB:                false,
+			State:                 uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT),
+			ScheduledStartMs:      stamp,
+			DeadlineMs:            cur.KnockoutStartMs,
+			UpdatedMs:             stamp,
+			BestOf:                1,
+			CurrentGameIndex:      1,
+			CurrentLeylineElement: uint32(leyline),
+		}
+		if _, err = tx.ExecContext(ctx,
+			"INSERT INTO match_tournament_match("+tournamentMatchCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+			created.MatchId, created.SeasonId, created.Phase, created.RoundIndex, created.SlotIndex,
+			created.SquadAId, created.SquadBId, nonNilBytes(created.LineupA), nonNilBytes(created.LineupB),
+			created.ReadyA, created.ReadyB, created.State, 0, 0, 0, false,
+			created.ScheduledStartMs, created.DeadlineMs, 0, stamp,
+			uint32(1), uint32(1), uint32(0), uint32(0), uint32(leyline), "", uint64(0),
+			false, uint64(0), "", uint64(0), uint32(0), uint64(0), uint64(0), uint32(0),
+			uint32(0), uint32(0),
+		); err != nil {
+			return err
+		}
+		squads := map[uint64]*pb.MatchTournamentSquadRecord{mySquadID: mySquad}
+		if targetSquadID != 0 {
+			if tSq, e2 := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", targetSquadID)); e2 == nil {
+				squads[targetSquadID] = tSq
+			}
+		}
+		matchView = s.toTournamentMatchView(created, squads, nil)
+		return tx.Commit()
+	})
+	return matchView, launch, err
+}
+
+// PredictTournamentMatch 全服玩家零成本免费预测单场尚未开战的淘汰赛胜者(开战前可改选,开战即锁)。
+func (s *Store) PredictTournamentMatch(ctx context.Context, playerID uint64, playerName string, matchID, predictedSquadID uint64) (countA, countB uint32, err error) {
+	if err := s.ensureTournamentOpen(); err != nil {
+		return 0, 0, err
+	}
+	if !s.TournamentCatalog().Rule().GetPredictionEnabled() {
+		return 0, 0, ErrTournamentStageClosed
+	}
+	if playerID == 0 || matchID == 0 || predictedSquadID == 0 {
+		return 0, 0, ErrTournamentPredictionTargetInvalid
+	}
+	if playerName == "" {
+		playerName = fmt.Sprintf("#%d", playerID)
+	}
+	err = s.Fenced(ctx, func() error {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		stamp, err := now(ctx, tx)
+		if err != nil {
+			return err
+		}
+		cur, err := s.ensureTournamentSeasonTx(ctx, tx, stamp)
+		if err != nil {
+			return err
+		}
+		if cur.Stage != uint32(pb.TournamentStage_TOURNAMENT_STAGE_KNOCKOUT) {
+			return ErrTournamentStageClosed
+		}
+		m, err := scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE match_id=? FOR UPDATE", matchID))
+		if errors.Is(err, sql.ErrNoRows) || m.SeasonId != cur.SeasonId || m.Phase != uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT) {
+			return ErrTournamentPredictionClosed
+		}
+		if err != nil {
+			return err
+		}
+		if (m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT) &&
+			m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY)) ||
+			m.SquadAId == 0 || m.SquadBId == 0 {
+			return ErrTournamentPredictionClosed
+		}
+		if predictedSquadID != m.SquadAId && predictedSquadID != m.SquadBId {
+			return ErrTournamentPredictionTargetInvalid
+		}
+		if _, err = tx.ExecContext(ctx,
+			"INSERT INTO match_tournament_prediction("+tournamentPredictionCols+") VALUES(?,?,?,?,?,?,?,0,0,?,?) "+
+				"ON DUPLICATE KEY UPDATE predicted_squad_id=VALUES(predicted_squad_id),player_name=VALUES(player_name),updated_ms=VALUES(updated_ms)",
+			cur.SeasonId, playerID, matchID, predictedSquadID, m.RoundIndex, m.IsThirdPlace, playerName, stamp, stamp,
+		); err != nil {
+			return err
+		}
+		_ = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_prediction WHERE season_id=? AND match_id=? AND predicted_squad_id=?", cur.SeasonId, matchID, m.SquadAId).Scan(&countA)
+		_ = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_prediction WHERE season_id=? AND match_id=? AND predicted_squad_id=?", cur.SeasonId, matchID, m.SquadBId).Scan(&countB)
+		return tx.Commit()
+	})
+	return countA, countB, err
+}
+
+func settleMatchPredictionsTx(ctx context.Context, tx *sql.Tx, season *pb.MatchTournamentSeasonRecord, m *pb.MatchTournamentMatchRecord, winnerSquadID uint64, stamp uint64) error {
+	if season == nil || m == nil || winnerSquadID == 0 || m.Phase != uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT) {
+		return nil
+	}
+	weight := tournament.PredictionWeightForRound(int(season.KnockoutTeamCount), int(m.RoundIndex), m.IsThirdPlace)
+	_, err := tx.ExecContext(ctx,
+		"UPDATE match_tournament_prediction SET result_state=CASE WHEN predicted_squad_id=? THEN 1 ELSE 2 END, earned_points=CASE WHEN predicted_squad_id=? THEN ? ELSE 0 END, updated_ms=? WHERE season_id=? AND match_id=? AND result_state=0",
+		winnerSquadID, winnerSquadID, weight, stamp, season.SeasonId, m.MatchId,
+	)
+	return err
+}
+
+// LoadTournamentPredictionBoard 查询《神机问道榜》Top 50 与本人完整免费预测明细。
+func (s *Store) LoadTournamentPredictionBoard(ctx context.Context, seasonID uint32, playerID uint64) (*pb.GetTournamentPredictionBoardResponse, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	stamp, err := now(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	var season *pb.MatchTournamentSeasonRecord
+	if seasonID == 0 {
+		season, err = s.ensureTournamentSeasonTx(ctx, tx, stamp)
+	} else {
+		season, err = scanTournamentSeason(tx.QueryRowContext(ctx, "SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE season_id=?", seasonID))
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTournamentSquadNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	minHits := s.TournamentCatalog().Rule().GetPredictionRewardMinHits()
+	if minHits == 0 {
+		minHits = 2
+	}
+	resp := &pb.GetTournamentPredictionBoardResponse{
+		SeasonId:         season.SeasonId,
+		MinHitsForReward: minHits,
+		ServerTimeMs:     stamp,
+	}
+
+	type aggRow struct {
+		playerID         uint64
+		playerName       string
+		hitCount         uint32
+		totalPredictions uint32
+		totalPoints      uint32
+		latestMs         uint64
+	}
+	aggByPlayer := map[uint64]*aggRow{}
+	var myRecs []*pb.MatchTournamentPredictionRecord
+
+	rows, err := tx.QueryContext(ctx, "SELECT "+tournamentPredictionCols+" FROM match_tournament_prediction WHERE season_id=?", season.SeasonId)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var r pb.MatchTournamentPredictionRecord
+		if e := rows.Scan(&r.SeasonId, &r.PlayerId, &r.MatchId, &r.PredictedSquadId, &r.RoundIndex, &r.IsThirdPlace, &r.PlayerName, &r.ResultState, &r.EarnedPoints, &r.CreatedMs, &r.UpdatedMs); e != nil {
+			rows.Close()
+			return nil, e
+		}
+		agg := aggByPlayer[r.PlayerId]
+		if agg == nil {
+			agg = &aggRow{playerID: r.PlayerId, playerName: r.PlayerName}
+			aggByPlayer[r.PlayerId] = agg
+		}
+		if r.PlayerName != "" {
+			agg.playerName = r.PlayerName
+		}
+		agg.totalPredictions++
+		if r.ResultState == 1 {
+			agg.hitCount++
+			agg.totalPoints += r.EarnedPoints
+		}
+		if r.UpdatedMs > agg.latestMs {
+			agg.latestMs = r.UpdatedMs
+		}
+		if r.PlayerId == playerID {
+			cp := r
+			myRecs = append(myRecs, &cp)
+		}
+	}
+	rows.Close()
+
+	ranked := make([]*aggRow, 0, len(aggByPlayer))
+	for _, a := range aggByPlayer {
+		ranked = append(ranked, a)
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		a, b := ranked[i], ranked[j]
+		if a.totalPoints != b.totalPoints {
+			return a.totalPoints > b.totalPoints
+		}
+		if a.hitCount != b.hitCount {
+			return a.hitCount > b.hitCount
+		}
+		if a.latestMs != b.latestMs {
+			return a.latestMs < b.latestMs
+		}
+		return a.playerID < b.playerID
+	})
+
+	for idx, a := range ranked {
+		rank := uint32(idx + 1)
+		if a.playerID == playerID {
+			resp.MyRank = rank
+			resp.MyHitCount = a.hitCount
+			resp.MyTotalPoints = a.totalPoints
+		}
+		if idx < 50 {
+			resp.TopPredictors = append(resp.TopPredictors, &pb.TournamentPredictionRankEntry{
+				Rank:             rank,
+				PlayerId:         a.playerID,
+				PlayerName:       a.playerName,
+				HitCount:         a.hitCount,
+				TotalPredictions: a.totalPredictions,
+				TotalPoints:      a.totalPoints,
+			})
+		}
+	}
+
+	if len(myRecs) > 0 {
+		matchByID := map[uint64]*pb.MatchTournamentMatchRecord{}
+		mRows, mErr := tx.QueryContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=?",
+			season.SeasonId, uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT))
+		if mErr == nil {
+			for mRows.Next() {
+				if m, e := scanTournamentMatch(mRows); e == nil {
+					matchByID[m.MatchId] = m
+				}
+			}
+			mRows.Close()
+		}
+		squadNames := map[uint64]string{}
+		sRows, sErr := tx.QueryContext(ctx, "SELECT squad_id,name FROM match_tournament_squad WHERE season_id=?", season.SeasonId)
+		if sErr == nil {
+			for sRows.Next() {
+				var sid uint64
+				var sname string
+				if sRows.Scan(&sid, &sname) == nil {
+					squadNames[sid] = sname
+				}
+			}
+			sRows.Close()
+		}
+		sort.Slice(myRecs, func(i, j int) bool {
+			if myRecs[i].RoundIndex != myRecs[j].RoundIndex {
+				return myRecs[i].RoundIndex < myRecs[j].RoundIndex
+			}
+			return myRecs[i].MatchId < myRecs[j].MatchId
+		})
+		for _, r := range myRecs {
+			entry := &pb.TournamentPredictionEntryView{
+				MatchId:          r.MatchId,
+				RoundIndex:       r.RoundIndex,
+				IsThirdPlace:     r.IsThirdPlace,
+				PredictedSquadId: r.PredictedSquadId,
+				ResultState:      r.ResultState,
+				EarnedPoints:     r.EarnedPoints,
+				UpdatedMs:        r.UpdatedMs,
+			}
+			if m := matchByID[r.MatchId]; m != nil {
+				entry.SlotIndex = m.SlotIndex
+				entry.SquadAId = m.SquadAId
+				entry.SquadAName = squadNames[m.SquadAId]
+				entry.SquadBId = m.SquadBId
+				entry.SquadBName = squadNames[m.SquadBId]
+				entry.WinnerSquadId = m.WinnerSquadId
+			}
+			resp.MyPredictions = append(resp.MyPredictions, entry)
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// SyncTournamentMemberProfiles V3 建房时最佳努力回填场景权威角色名与真实外观(供冠军殿堂与天墉城玉座永久展示获批立绘)。
+func (s *Store) SyncTournamentMemberProfiles(ctx context.Context, seasonID uint32, players []*battlepb.BattlePlayerSnapshot) error {
+	if s == nil || s.DB == nil || seasonID == 0 || len(players) == 0 {
+		return nil
+	}
+	return s.Fenced(ctx, func() error {
+		for _, p := range players {
+			if p == nil || p.GetPlayerId() == 0 {
+				continue
+			}
+			_, _ = s.DB.ExecContext(ctx,
+				"UPDATE match_tournament_member SET "+
+					"player_name=CASE WHEN ?<>'' THEN ? ELSE player_name END,"+
+					"class_id=CASE WHEN ?>0 THEN ? ELSE class_id END,"+
+					"gender=CASE WHEN ?>0 THEN ? ELSE gender END,"+
+					"appearance_id=CASE WHEN ?<>'' THEN ? ELSE appearance_id END "+
+					"WHERE season_id=? AND player_id=?",
+				p.GetPlayerName(), p.GetPlayerName(),
+				p.GetClassId(), p.GetClassId(),
+				p.GetGender(), p.GetGender(),
+				p.GetAppearanceId(), p.GetAppearanceId(),
+				seasonID, p.GetPlayerId(),
+			)
+		}
+		return nil
+	})
+}
+
+// BanTournamentLeyline V4 模块 H：BO3 淘汰赛首局开战前，参战两队队长各禁 1 条五行灵脉并立即按禁选结果重算 3 局灵脉序列。
+func (s *Store) BanTournamentLeyline(ctx context.Context, captainID, matchID uint64, leyline battlepb.TournamentLeylineElement) (*pb.TournamentMatchView, error) {
+	if err := s.ensureTournamentOpen(); err != nil {
+		return nil, err
+	}
+	if !s.TournamentCatalog().Rule().GetLeylineBanEnabled() {
+		return nil, ErrTournamentStageClosed
+	}
+	if captainID == 0 || matchID == 0 || !tournament.IsValidLeylineElement(leyline) {
+		return nil, ErrTournamentMatchNotReady
+	}
+	var matchView *pb.TournamentMatchView
+	err := s.Fenced(ctx, func() error {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		stamp, err := now(ctx, tx)
+		if err != nil {
+			return err
+		}
+		cur, err := s.ensureTournamentSeasonTx(ctx, tx, stamp)
+		if err != nil {
+			return err
+		}
+		if cur.Stage != uint32(pb.TournamentStage_TOURNAMENT_STAGE_KNOCKOUT) {
+			return ErrTournamentStageClosed
+		}
+		m, err := scanTournamentMatch(tx.QueryRowContext(ctx, "SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE match_id=? FOR UPDATE", matchID))
+		if errors.Is(err, sql.ErrNoRows) || m.SeasonId != cur.SeasonId || m.Phase != uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT) {
+			return ErrTournamentMatchNotReady
+		}
+		if err != nil {
+			return err
+		}
+		// 仅允许 BO3 首局尚未开战时禁选(开战/局间/已结束不可改)。
+		if m.BestOf < 3 || m.WinsA > 0 || m.WinsB > 0 || m.SquadAId == 0 || m.SquadBId == 0 ||
+			(m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_WAITING_OPPONENT) &&
+				m.State != uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_READY)) {
+			return ErrTournamentMatchNotReady
+		}
+		sqA, errA := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", m.SquadAId))
+		sqB, errB := scanTournamentSquad(tx.QueryRowContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE squad_id=?", m.SquadBId))
+		if errA != nil || errB != nil {
+			return ErrTournamentSquadNotFound
+		}
+		switch captainID {
+		case sqA.CaptainPlayerId:
+			m.BannedLeylineA = uint32(leyline)
+		case sqB.CaptainPlayerId:
+			m.BannedLeylineB = uint32(leyline)
+		default:
+			return ErrTournamentNotCaptain
+		}
+		seq := tournament.DrawLeylinesWithBans(m.SeasonId, m.MatchId, m.BestOf,
+			battlepb.TournamentLeylineElement(m.BannedLeylineA),
+			battlepb.TournamentLeylineElement(m.BannedLeylineB))
+		m.LeylineSequence = tournament.EncodeLeylineSequence(seq)
+		m.CurrentLeylineElement = uint32(tournament.LeylineForGame(seq, 1))
+		m.UpdatedMs = stamp
+		if _, err = tx.ExecContext(ctx,
+			"UPDATE match_tournament_match SET banned_leyline_a=?,banned_leyline_b=?,leyline_sequence=?,current_leyline_element=?,updated_ms=? WHERE match_id=?",
+			m.BannedLeylineA, m.BannedLeylineB, m.LeylineSequence, m.CurrentLeylineElement, stamp, m.MatchId,
+		); err != nil {
+			return err
+		}
+		squads := map[uint64]*pb.MatchTournamentSquadRecord{sqA.SquadId: sqA, sqB.SquadId: sqB}
+		matchView = s.toTournamentMatchView(m, squads, loadMatchGameBattleIDsTx(ctx, tx, m.MatchId))
+		return tx.Commit()
+	})
+	return matchView, err
+}
+
+// LoadTournamentHighlights V4 模块 I：从指定赛季已完赛的公开淘汰赛中确定性策展 Top 10 本季名局录(零新表)。
+func (s *Store) LoadTournamentHighlights(ctx context.Context, seasonID uint32) (*pb.GetTournamentHighlightsResponse, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	stamp, err := now(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	var season *pb.MatchTournamentSeasonRecord
+	if seasonID == 0 {
+		season, err = s.ensureTournamentSeasonTx(ctx, tx, stamp)
+	} else {
+		season, err = scanTournamentSeason(tx.QueryRowContext(ctx, "SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE season_id=?", seasonID))
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTournamentSquadNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	resp := &pb.GetTournamentHighlightsResponse{
+		SeasonId:     season.SeasonId,
+		ServerTimeMs: stamp,
+	}
+	if !s.TournamentCatalog().Rule().GetPublicKnockoutReplay() {
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		return resp, nil
+	}
+
+	squads := map[uint64]*pb.MatchTournamentSquadRecord{}
+	if sRows, sErr := tx.QueryContext(ctx, "SELECT "+tournamentSquadCols+" FROM match_tournament_squad WHERE season_id=?", season.SeasonId); sErr == nil {
+		for sRows.Next() {
+			if sq, e := scanTournamentSquad(sRows); e == nil {
+				squads[sq.SquadId] = sq
+			}
+		}
+		sRows.Close()
+	}
+
+	mRows, err := tx.QueryContext(ctx,
+		"SELECT "+tournamentMatchCols+" FROM match_tournament_match WHERE season_id=? AND phase=? AND state=?",
+		season.SeasonId,
+		uint32(pb.TournamentMatchPhase_TOURNAMENT_MATCH_PHASE_KNOCKOUT),
+		uint32(pb.TournamentMatchState_TOURNAMENT_MATCH_STATE_FINISHED),
+	)
+	if err != nil {
+		return nil, err
+	}
+	var finished []*pb.MatchTournamentMatchRecord
+	var maxRound uint32
+	for mRows.Next() {
+		m, e := scanTournamentMatch(mRows)
+		if e != nil {
+			mRows.Close()
+			return nil, e
+		}
+		if m.RoundIndex > maxRound {
+			maxRound = m.RoundIndex
+		}
+		finished = append(finished, m)
+	}
+	mRows.Close()
+
+	type candidate struct {
+		rec      *pb.MatchTournamentMatchRecord
+		tag      uint32
+		label    string
+		priority int
+		gameIDs  []uint64
+	}
+	cands := make([]candidate, 0, len(finished))
+	for _, m := range finished {
+		gameIDs := loadMatchGameBattleIDsTx(ctx, tx, m.MatchId)
+		if m.BattleId == 0 && len(gameIDs) == 0 {
+			continue
+		}
+		tag, label, prio := tournament.ClassifyHighlightTag(m.IsThirdPlace, m.RoundIndex, maxRound, m.BestOf, m.WinsA, m.WinsB)
+		cands = append(cands, candidate{rec: m, tag: tag, label: label, priority: prio, gameIDs: gameIDs})
+	}
+	sort.Slice(cands, func(i, j int) bool {
+		a, b := cands[i], cands[j]
+		if a.priority != b.priority {
+			return a.priority < b.priority
+		}
+		if a.rec.MvpScore != b.rec.MvpScore {
+			return a.rec.MvpScore > b.rec.MvpScore
+		}
+		if a.rec.FinishedMs != b.rec.FinishedMs {
+			return a.rec.FinishedMs > b.rec.FinishedMs
+		}
+		return a.rec.MatchId < b.rec.MatchId
+	})
+	limit := len(cands)
+	if limit > 10 {
+		limit = 10
+	}
+	for i := 0; i < limit; i++ {
+		c := cands[i]
+		resp.Highlights = append(resp.Highlights, &pb.TournamentHighlightEntry{
+			Tag:      pb.TournamentHighlightTag(c.tag),
+			TagLabel: c.label,
+			Match:    s.toTournamentMatchView(c.rec, squads, c.gameIDs),
+		})
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

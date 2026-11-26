@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+// PetCosmetic 表的权威 schema。源表 data/PetCosmetic.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 灵宠幻化外观目录表（纯外观表现，零战斗/成长数值加成）：
+//   - id 列带 (cfg_bit_index) = true,由导表器经 petcosmetic_mapping.json 分配永不复用的紧凑位序,
+//     供 PlayerProfileComp.pet_cosmetic_owned_bits(永久拥有位图)使用。
+//   - 表级 (cfg_ids_permanent) = true:上线后禁止物理删行或复用旧 ID,下架外观请将 enabled 置 0。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message PetCosmeticTable {
+  option (cfg_sheet)         = "PetCosmetic";
+  option (cfg_source_file)   = "PetCosmetic.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+
+  // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到拥有位图下标)
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // 稳定外观标识键(全表唯一非空,如 "pet_morph_cangzhanglin")
+  string cosmetic_key = 2;
+  // 中文展示名(如 "苍嶂麟")
+  string name = 3;
+  // 适用灵宠种类 ID(Pet.id;0 = 通用,任意已拥有灵宠皆可幻化)
+  uint32 target_pet_table_id = 4;
+  // 表现复用灵宠种类 ID(Pet.id;0 = 仅按 visual_art_key 解析)
+  uint32 visual_pet_table_id = 5;
+  // 客户端稳定外观资源键(如 "07-cangzhanglin",优先于 visual_pet_table_id)
+  string visual_art_key = 6;
+  // 是否启用:1 = 开放展示与穿戴,0 = 下架(不物理删行)
+  uint32 enabled = 7;
+  // 界面展示排序(升序)
+  uint32 sort_order = 8;
+  // 官方商城永久衣柜对应 SKU ID(0 = 非官方商城直售/待上架)
+  uint64 mall_sku_id = 9;
+  // 未拥有且未上架时展示的取得条件文案
+  string acquire_hint = 10;
+  // 外观说明文案(纯外观描述,零数值)
+  string desc = 11;
+}

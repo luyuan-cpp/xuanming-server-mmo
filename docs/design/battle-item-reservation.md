@@ -1,6 +1,6 @@
 # 战斗道具预留(两阶段:先预留,再扣减或作废)
 
-> 状态:2026-11-10 落码,**未编译、未测试**,待 Codex 验证(§9)。负责人 2026-11-10 拍板「按预留方案做」。
+> 状态:2026-11-10 落码,**未编译、未测试**,待 Gemini 验证(§9)。负责人 2026-11-10 拍板「按预留方案做」。
 > Java 版(0.1.0-SNAPSHOT)待做,登记在 Java 仓 `PARITY.md`(§10)。
 > 2026-11-12:原先记在 §7 的两条残余已做,同样未编译 —— 两个背包都放不下的掉落改投邮件([battle-overflow-mail.md](battle-overflow-mail.md)),
 > 客户端看得到被押住的数量(§4.1)。
@@ -194,7 +194,7 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
 | 2026-11-12 显示占用数量 | `proto/scene/player_bag.proto`(`BagHeldItemInfo`、`BagInfo.held_items = 4`)、`cpp/libs/services/scene/player/system/player_feature_snapshot.cpp`(`FillHeldItems`)、`cpp/tests/bag_test/item_hold_test.cpp`;客户端 `Assets/Scripts/UI/Ugui/Gameplay/{EquipBagModel.cs, GameplayWindow.Fidelity.cs}`、`Assets/Scripts/UI/Ugui/Jubaozhai/CommerceWindow.cs`、`Assets/Tests/EditMode/Battle/EquipForgeModelTests.cs`。两包都放不下改投邮件的改动清单在 [battle-overflow-mail.md](battle-overflow-mail.md) §11 |
 | 别的会话已改 | `go/match/internal/authority/terminal_abort.go` 里 `deadlineAbortHardCapMs` 的注释(「数据覆盖审计交接文档」会话 11-10 改,纯注释、未编译):scene 按上限解冻只放开人,道具仍由预留押着;晚到的 COMPLETE 从预留里扣,晚到的 ABORT / 没有可裁决原件只释放预留;等待上限决定的是「人被冻多久」。`kFreezeHoldCapMs` 没变,`TestDeadlineAbortBoundsFitSceneFreezeHold` 的不等式照旧成立 |
 
-## 9. 验证(全部未执行,交 Codex)
+## 9. 验证(全部未执行,交 Gemini)
 
 仓库根目录,串行,失败不重试,保留首个错误与失败用例输出:
 

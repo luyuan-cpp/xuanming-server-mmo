@@ -583,8 +583,15 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
 
     // 路由信息 fail-closed 校验:instance id 缺失意味着出站防僵尸过滤会被关闭,
     // 这样的战斗打完也送不回结果,直接拒绝开局让 match 走补偿。
+    // 守旗阵 AI 托管守擂快照(ai_controlled=true)无真人路由,不发票、不推帧、不回写个人结算。
+    uint32_t humanPlayerCount = 0;
     for (const auto &snapshot : request.players())
     {
+        if (snapshot.ai_controlled())
+        {
+            continue;
+        }
+        ++humanPlayerCount;
         const auto &routing = snapshot.routing();
         if (routing.gate_instance_id().empty() || routing.scene_instance_id().empty())
         {
@@ -595,6 +602,12 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
             response.mutable_error_message()->set_id(kInvalidParameter);
             return;
         }
+    }
+    if (humanPlayerCount == 0)
+    {
+        LOG_ERROR << "CreateBattle has no human participant: battle_id=" << battleId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
     }
 
     // 配表指纹(cross-zone-matchmaking.md §10;config-table-hot-reload.md §8.4):
@@ -643,7 +656,47 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
 
     for (const auto &snapshot : request.players())
     {
-        room->routingByPlayer.emplace(snapshot.player_id(), snapshot.routing());
+        if (!snapshot.ai_controlled())
+        {
+            room->routingByPlayer.emplace(snapshot.player_id(), snapshot.routing());
+        }
+        ::BattleActorBuildSummary summary;
+        summary.set_player_id(snapshot.player_id());
+        summary.set_name(snapshot.player_name());
+        summary.set_team_index(snapshot.team_index());
+        summary.set_class_id(snapshot.class_id());
+        summary.set_level(snapshot.level());
+        summary.set_formation_id(snapshot.formation_id());
+        summary.set_wuxing_element(turnbattle::wuxing::ElementOfClass(snapshot.class_id()));
+        if (snapshot.has_equipment_effects() && snapshot.equipment_effects().has_season_seal())
+        {
+            summary.set_season_seal_id(snapshot.equipment_effects().season_seal().seal_id());
+        }
+        if (snapshot.pets_size() > 0)
+        {
+            const auto &pet = snapshot.pets(0);
+            const uint32_t petTableId = pet.combat_pet_table_id() != 0 ? pet.combat_pet_table_id() : pet.pet_table_id();
+            summary.set_active_pet_table_id(petTableId);
+            summary.set_active_pet_name(pet.pet_name());
+            summary.set_active_pet_element(turnbattle::wuxing::ElementOfPet(petTableId));
+        }
+        for (const uint32_t skillId : snapshot.skill_table_ids())
+        {
+            if (summary.skill_table_ids_size() >= 12)
+            {
+                break;
+            }
+            summary.add_skill_table_ids(skillId);
+        }
+        if (snapshot.has_tower_context())
+        {
+            for (const uint32_t sigilId : snapshot.tower_context().active_sigil_ids())
+            {
+                summary.add_wuxing_sigil_ids(sigilId);
+            }
+        }
+        summary.set_used_free_preset(request.has_ranked_context() && request.ranked_context().use_free_preset());
+        room->replayActorBuilds.emplace_back(std::move(summary));
     }
 
     // 整场 deadline:超时强制平局收尾(battle_node.proto 契约)。
@@ -726,7 +779,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         RedactStateForViewer(spectatorStart, 0);
         roomPtr->replay.emplace(
             turnbattle::BattleReplayHeader{battleId, request.match_mode(), request.battle_config_id(), request.created_at_ms(),
-                                           turnbattle::BattleTableFingerprint::Current()},
+                                           turnbattle::BattleTableFingerprint::Current(), roomPtr->replayActorBuilds},
             spectatorStart);
     }
 
@@ -1482,6 +1535,74 @@ void BattleRoomManager::HandleUpdateBattlePrep(const ::SessionDetails &sessionDe
     }
 }
 
+void BattleRoomManager::HandleSendBattlePing(const ::SessionDetails &sessionDetails,
+                                             const ::SendBattlePingRequest &request,
+                                             ::SendBattlePingResponse &response)
+{
+    const auto playerId = sessionDetails.player_id();
+    if (playerId == 0)
+    {
+        LOG_WARN << "SendBattlePing session has no player identity: session_id=" << sessionDetails.session_id();
+        response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
+        return;
+    }
+
+    auto *room = FindRoom(request.battle_id());
+    if (room == nullptr)
+    {
+        LOG_DEBUG << "SendBattlePing room does not exist: battle_id=" << request.battle_id()
+                  << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (room->routingByPlayer.find(playerId) == room->routingByPlayer.end())
+    {
+        LOG_WARN << "SendBattlePing player is not in this battle: battle_id=" << request.battle_id()
+                 << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (TerminalPending(*room))
+    {
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+
+    room->engine.MarkPlayerEntered(playerId);
+
+    ::BattleTacticalPing ping;
+    const uint32_t err = room->engine.SubmitBattlePing(
+        playerId, request.target_actor_id(), request.kind(), &ping);
+    if (err != 0)
+    {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+
+    *response.mutable_ping() = ping;
+
+    const auto actorTeam = room->engine.TeamIndexOfPlayer(playerId);
+    if (!actorTeam.has_value())
+    {
+        return;
+    }
+    ::BattlePingS2C notify;
+    notify.set_battle_id(room->battleId);
+    *notify.mutable_ping() = ping;
+    for (const auto &[memberId, routing] : room->routingByPlayer)
+    {
+        (void)routing;
+        const auto memberTeam = room->engine.TeamIndexOfPlayer(memberId);
+        if (!memberTeam.has_value() || *memberTeam != *actorTeam)
+        {
+            continue;
+        }
+        PushBattleFrame(*room, memberId, BattleClientPlayerNotifyBattlePingMessageId, notify);
+    }
+}
+
 void BattleRoomManager::ArmPrepTimer(BattleRoom &room)
 {
     room.actionDeadlineMs = 0;
@@ -1521,7 +1642,7 @@ void BattleRoomManager::FinalizeBattlePrep(const uint64_t battleId)
         RedactStateForViewer(spectatorStart, 0);
         room->replay.emplace(
             turnbattle::BattleReplayHeader{battleId, room->matchMode, room->battleConfigId, room->createdAtMs,
-                                           turnbattle::BattleTableFingerprint::Current()},
+                                           turnbattle::BattleTableFingerprint::Current(), room->replayActorBuilds},
             spectatorStart);
     }
 
@@ -2024,6 +2145,7 @@ void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
     state.clear_self_items();
     state.clear_surrender_vote();
     state.clear_prep_state();
+    state.clear_team_pings();
     // 战斗类属性(装备带来的必杀 / 连击 / 反击 / 反震 / 抗性概率)只供引擎判定:不分视角全员清掉,
     // 自己的看属性面板(equipment-attributes.md §4.5)。所有出站状态(开战包 / 回合结果 / 补拉 /
     // 观战首帧)都经过本函数,新增下发路径必须同样先过这里。
@@ -2049,6 +2171,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     state.clear_self_items();
     state.clear_surrender_vote();
     state.clear_prep_state();
+    state.clear_team_pings();
     if (viewerPlayerId == 0)
     {
         return;
@@ -2059,6 +2182,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     }
     room.engine.FillSurrenderVoteForViewer(state, viewerPlayerId);
     room.engine.FillPrepStateForViewer(state, viewerPlayerId, room.prepDeadlineMs);
+    room.engine.FillTeamPingsForViewer(state, viewerPlayerId);
 }
 
 ::SpectateStateS2C BattleRoomManager::BuildSpectatorState(const BattleRoom &room, const uint32_t observerCount) const

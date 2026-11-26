@@ -686,7 +686,7 @@ Java 版仍以独立仓 `PARITY.md` 为准，不据旧路径或过期交接推�
 7. **回滚**:失败按相反顺序放回;放回也失败时打带 `[PlayerEquip][INSTANCE_LOST]` 标签的 ERROR(含 guid / config),不用 `LOG_FATAL`(那会中止进程);回滚后装备栏内容与调用前不同就重算并推面板。
 8. **加成与 tooltip 同口径**:Item 行 `equip_kind == 0` 的穿着物整件不计;规则层不接受 effect 的属性行既不计入也不下发;无上限档的随机属性以 `value = 0, cap = 0` 下发。`CollectBonus` 不复核佩戴要求(穿上之后降级 / 改表不脱装备)。
 9. **`FillEquipSlots` 只下发槽号小于装备栏容量的槽**(没配名字的槽还要「被占用」才下发,见 §10.7);`DescribeCombatStat` 多行命中取 sort 最小,未命中返回空名。
-10. **RPC 的 method index 是 2 / 3 / 4**(`GetBag` 0、`SortBag` 1 之后);handler 对 `item_id == 0` 回 `kInvalidParameter`。`player_bag_handler.h` 的手工补丁以 Codex 重生成的为准。
+10. **RPC 的 method index 是 2 / 3 / 4**(`GetBag` 0、`SortBag` 1 之后);handler 对 `item_id == 0` 回 `kInvalidParameter`。`player_bag_handler.h` 的手工补丁以 Gemini 重生成的为准。
 11. **启动安装点**:`cpp/nodes/scene/main.cpp`,表加载之后。`bag_test.vcxproj` 为新用例加了两条 OpenSSL include 目录。
 12. `cpp/nodes/gate/SECURITY.md` 里 `GmGrantItem` 的 message_id 是占位,proto-gen 发号后回填。
 

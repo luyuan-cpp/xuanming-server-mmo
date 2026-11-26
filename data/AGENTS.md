@@ -198,7 +198,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildWarMilestone** | `GuildWarMilestone.xlsx` | `guildwarmilestone_table.proto` | 9 | 9 | 4 | — | — | `reward_item1_id` `reward_item2_id` | `reward_item1_id→Item.id` `reward_item2_id→Item.id` | — | — | — |
 | **GuildWarRule** | `GuildWarRule.xlsx` | `guildwarrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 142 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 105 | — | — | — | — | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 115 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 26 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
@@ -206,6 +206,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **MysteryMerchantRule** | `MysteryMerchantRule.xlsx` | `mysterymerchantrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 12 | — | — | `scene_config_id` | — | — | — | — |
 | **Pet** | `Pet.xlsx` | `pet_table.proto` | 28 | 19 | 23 | — | — | — | — | — | — | — |
+| **PetCosmetic** | `PetCosmetic.xlsx` | `petcosmetic_table.proto` | 11 | 11 | 3 | — | — | — | — | `id` | — | — |
 | **PetEntry** | `PetEntry.xlsx` | `petentry_table.proto` | 10 | 10 | 21 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 9 | 9 | 5 | — | — | — | — | — | — | — |
@@ -214,21 +215,26 @@ cd tools/data_table_exporter && py -m pytest -q
 | **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 23 | 23 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
 | **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 11 | 11 | 1 | — | — | — | — | — | — | — |
-| **SeasonRule** | `SeasonRule.xlsx` | `seasonrule_table.proto` | 15 | 15 | 1 | — | — | — | — | — | — | — |
-| **SeasonSeal** | `SeasonSeal.xlsx` | `seasonseal_table.proto` | 12 | 12 | 4 | — | — | `season_id` | `season_id→SeasonRule.id` | — | — | — |
-| **Skill** | `Skill.xlsx` | `skill_table.proto` | 87 | 62 | 139 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
+| **SeasonRule** | `SeasonRule.xlsx` | `seasonrule_table.proto` | 17 | 17 | 2 | — | — | — | — | — | — | — |
+| **SeasonSeal** | `SeasonSeal.xlsx` | `seasonseal_table.proto` | 12 | 12 | 8 | — | — | `season_id` | `season_id→SeasonRule.id` | — | — | — |
+| **Skill** | `Skill.xlsx` | `skill_table.proto` | 87 | 62 | 143 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **SkillScrollCraft** | `SkillScrollCraft.xlsx` | `skillscrollcraft_table.proto` | 16 | 16 | 6 | — | — | `fragment_item_id` | `fragment_item_id→Item.id` | — | — | — |
+| **SkillVfxCosmetic** | `SkillVfxCosmetic.xlsx` | `skillvfxcosmetic_table.proto` | 13 | 13 | 3 | — | — | `skill_table_id` | `skill_table_id→Skill.id` | `id` | — | — |
+| **SpiritShopGoods** | `SpiritShopGoods.xlsx` | `spiritshopgoods_table.proto` | 21 | 21 | 7 | — | — | `item_id_1` | `item_id_1→Item.id` | — | — | — |
+| **SpiritShopLimitGroup** | `SpiritShopLimitGroup.xlsx` | `spiritshoplimitgroup_table.proto` | 4 | 4 | 1 | — | — | — | — | — | — | — |
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
-| **TournamentReward** | `TournamentReward.xlsx` | `tournamentreward_table.proto` | 18 | 12 | 7 | — | — | `tier_kind` | `item_ids→Item.id` | — | — | — |
-| **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 20 | 20 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
+| **TournamentReward** | `TournamentReward.xlsx` | `tournamentreward_table.proto` | 18 | 12 | 9 | — | — | `tier_kind` | `item_ids→Item.id` | — | — | — |
+| **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 30 | 30 | 1 | — | — | `battle_config_id` `salute_item_id` | `battle_config_id→Dungeon.id` `salute_item_id→Item.id` | — | — | — |
+| **TravelPassSeason** | `TravelPassSeason.xlsx` | `travelpassseason_table.proto` | 15 | 15 | 1 | — | — | — | — | — | — | — |
+| **TravelPassTier** | `TravelPassTier.xlsx` | `travelpasstier_table.proto` | 14 | 14 | 10 | — | — | `pass_id` | `pass_id→TravelPassSeason.id` | — | — | — |
 | **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 12 | — | — | `chapter_id` | — | — | — | — |
 | **TrialJournalMilestone** | `TrialJournalMilestone.xlsx` | `trialjournalmilestone_table.proto` | 15 | 15 | 11 | — | — | `scope_chapter_id` | — | `id` | — | — |
 | **TrialJournalSeal** | `TrialJournalSeal.xlsx` | `trialjournalseal_table.proto` | 8 | 8 | 33 | — | — | `entry_id` | `entry_id→TrialJournalEntry.id` | `id` | — | — |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **72** 张表、**916** 个物理列、**763** 个进产物的字段。
+合计 **78** 张表、**1006** 个物理列、**853** 个进产物的字段。
 
 <!-- END GENERATED -->

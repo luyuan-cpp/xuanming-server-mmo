@@ -21,10 +21,10 @@ const (
 
 // Catalog 是全服赛季战队锦标赛《群仙问道赛》的不可变配置目录(支持启动校验与表包热更原子切换)。
 type Catalog struct {
-	rule            *tablepb.TournamentRuleTable
-	rewardsByID     map[uint32]*tablepb.TournamentRewardTable
-	rewardsByTier   map[uint32][]*tablepb.TournamentRewardTable
-	orderedRewards  []*tablepb.TournamentRewardTable
+	rule           *tablepb.TournamentRuleTable
+	rewardsByID    map[uint32]*tablepb.TournamentRewardTable
+	rewardsByTier  map[uint32][]*tablepb.TournamentRewardTable
+	orderedRewards []*tablepb.TournamentRewardTable
 }
 
 // BuildFromTableSet 从表包候选 TableSet 编译校验锦标赛目录(fail-closed)。
@@ -94,7 +94,7 @@ func Build(rule *tablepb.TournamentRuleTable, rewards []*tablepb.TournamentRewar
 func DefaultFallback() *Catalog {
 	rule := &tablepb.TournamentRuleTable{
 		Id:                          1,
-		RuleVersion:                 1,
+		RuleVersion:                 4,
 		Enabled:                     true,
 		BattleConfigId:              5,
 		BattleTeamSize:              3,
@@ -112,6 +112,17 @@ func DefaultFallback() *Catalog {
 		QualifierDrawPoints:         1,
 		QualifierLossPoints:         0,
 		InviteTtlSeconds:            259200,
+		Bo3Top4Enabled:              true,
+		IntermissionSeconds:         60,
+		PublicKnockoutReplay:        true,
+		SaluteGoldAmount:            5000,
+		SaluteItemId:                20,
+		SaluteItemCount:             3,
+		WarmupSparEnabled:           true,
+		PredictionEnabled:           true,
+		PredictionRewardMinHits:     2,
+		ThirdPlaceMatchEnabled:      true,
+		LeylineBanEnabled:           true,
 	}
 	rewards := []*tablepb.TournamentRewardTable{
 		{Id: 1, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_CHAMPION), MinRank: 1, MaxRank: 1, GoldAmount: 120000, ItemIds: []uint32{3403, 3406, 20}, ItemCounts: []uint32{30, 30, 60}, TitleCode: "tournament_champion", BadgeCode: "badge_tournament_champion", MailTitle: "群仙问道赛·全服总冠军奖励", MailBody: "恭喜你的战队夺得本赛季群仙问道赛全服总冠军！", Desc: "全服总冠军（第1名）"},
@@ -121,6 +132,8 @@ func DefaultFallback() *Catalog {
 		{Id: 5, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_TOP16), MinRank: 9, MaxRank: 16, GoldAmount: 20000, ItemIds: []uint32{3403, 3406, 20}, ItemCounts: []uint32{6, 6, 15}, BadgeCode: "badge_tournament_top16", MailTitle: "群仙问道赛·全服十六强奖励", MailBody: "恭喜你的战队入围本赛季群仙问道赛十六强！", Desc: "全服十六强（第9-16名）"},
 		{Id: 6, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_PARTICIPANT), MinRank: 0, MaxRank: 0, GoldAmount: 12000, ItemIds: []uint32{3403, 3406, 20}, ItemCounts: []uint32{4, 4, 10}, BadgeCode: "badge_tournament_participant", MailTitle: "群仙问道赛·赛季参赛保底奖", MailBody: "感谢参与本赛季群仙问道赛并完成达标场次！", Desc: "参赛保底（完赛≥2场）"},
 		{Id: 7, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_CHEER), MinRank: 0, MaxRank: 0, GoldAmount: 5000, ItemIds: []uint32{3403, 20}, ItemCounts: []uint32{1, 5}, BadgeCode: "badge_tournament_cheer", MailTitle: "群仙问道赛·观赛助威纪念奖", MailBody: "你免费助威的战队闯入四强或夺冠，奉上纪念礼！", Desc: "免费助威命中（进四强/夺冠）"},
+		{Id: 8, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_THIRD_PLACE), MinRank: 3, MaxRank: 3, GoldAmount: 65000, ItemIds: []uint32{3403, 3406, 20}, ItemCounts: []uint32{18, 18, 35}, TitleCode: "tournament_third_place", BadgeCode: "badge_tournament_third_place", MailTitle: "群仙问道赛·季军嘉奖", MailBody: "恭喜阁下在群仙问道赛季军争夺战中力克群雄斩获季军！特赐绑定修炼物资与季军荣耀。", Desc: "季军争夺战第3名专属奖励(绑定自用)"},
+		{Id: 9, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_PREDICTION), MinRank: 0, MaxRank: 0, GoldAmount: 12000, ItemIds: []uint32{3406, 20}, ItemCounts: []uint32{6, 10}, TitleCode: "tournament_oracle", BadgeCode: "badge_tournament_oracle", MailTitle: "群仙问道赛·神机慧眼礼", MailBody: "恭喜道友在群仙问道赛神机竞猜中料事如神达到领奖门槛！特赐绑定修炼物资与慧眼识仙称号。", Desc: "免费神机竞猜命中达标奖励(绑定自用)"},
 	}
 	cat, _ := Build(rule, rewards)
 	return cat
@@ -146,8 +159,16 @@ func (c *Catalog) RewardForPlacement(finalRank uint32, qualifierPlayed uint32) *
 	if c == nil {
 		return nil
 	}
+	if finalRank == 3 && c.Rule().GetThirdPlaceMatchEnabled() {
+		if rows := c.rewardsByTier[uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_THIRD_PLACE)]; len(rows) > 0 {
+			return rows[0]
+		}
+	}
 	if finalRank > 0 {
 		for _, r := range c.orderedRewards {
+			if r.GetTierKind() == uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_THIRD_PLACE) && !c.Rule().GetThirdPlaceMatchEnabled() {
+				continue
+			}
 			if r.GetMinRank() > 0 && finalRank >= r.GetMinRank() && finalRank <= r.GetMaxRank() {
 				return r
 			}
@@ -167,6 +188,17 @@ func (c *Catalog) CheerReward() *tablepb.TournamentRewardTable {
 		return nil
 	}
 	if rows := c.rewardsByTier[uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_CHEER)]; len(rows) > 0 {
+		return rows[0]
+	}
+	return nil
+}
+
+// PredictionReward 返回神机竞猜命中达标的绑定纪念礼档。
+func (c *Catalog) PredictionReward() *tablepb.TournamentRewardTable {
+	if c == nil {
+		return nil
+	}
+	if rows := c.rewardsByTier[uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_PREDICTION)]; len(rows) > 0 {
 		return rows[0]
 	}
 	return nil
@@ -224,4 +256,31 @@ func BuildMailAttachments(r *tablepb.TournamentRewardTable) (*mailpb.MailAttachm
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(att)
 	return att, raw, err
+}
+
+// BuildSaluteMailAttachments 构造每日免费观道致敬的绑定自用邮件附件(仅绑定银两 + 绑定道具)。
+func BuildSaluteMailAttachments(rule *tablepb.TournamentRuleTable) (*mailpb.MailAttachments, uint64, []*matchpb.TournamentRewardItem) {
+	att := &mailpb.MailAttachments{}
+	var gold uint64
+	var items []*matchpb.TournamentRewardItem
+	if rule != nil {
+		gold = uint64(rule.GetSaluteGoldAmount())
+		if gold > 0 {
+			att.Currencies = append(att.Currencies, &mailpb.MailCurrency{
+				CurrencyType: GoldCurrencyType,
+				Amount:       gold,
+			})
+		}
+		if rule.GetSaluteItemId() != 0 && rule.GetSaluteItemCount() != 0 {
+			att.Items = append(att.Items, &mailpb.MailItem{
+				ConfigId: rule.GetSaluteItemId(),
+				Count:    rule.GetSaluteItemCount(),
+			})
+			items = append(items, &matchpb.TournamentRewardItem{
+				ItemId: rule.GetSaluteItemId(),
+				Count:  rule.GetSaluteItemCount(),
+			})
+		}
+	}
+	return att, gold, items
 }

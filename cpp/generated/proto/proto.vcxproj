@@ -512,4 +512,14 @@
     <ClCompile Include="common\component\player_festival_beast_comp.pb.cc" />
     <ClInclude Include="common\component\player_festival_beast_comp.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_spirit_shop_comp.pb.cc" />
+    <ClCompile Include="scene\player_spirit_shop.pb.cc" />
+    <ClInclude Include="common\component\player_spirit_shop_comp.pb.h" />
+    <ClInclude Include="scene\player_spirit_shop.pb.h" />
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_travel_pass_comp.pb.cc" />
+    <ClInclude Include="common\component\player_travel_pass_comp.pb.h" />
+  </ItemGroup>
 </Project>

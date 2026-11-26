@@ -5,7 +5,7 @@
 > - **评审修复**：2026-10-16 ~ 17 按实现评审（交接 §6：H1、M1–M7、L1–L14）分三批修：第 A 批 Go 服务、第 B 批 C++ scene、第 C 批部署 / 运维 / 文档。本稿已按修复后的代码订正，改动见附录 F。
 > - **验证（2026-10-18）**：Go 服务单测与真库集成已有通过证据；data_service / merge_zone 检查、14 个 Go 服务历史构建、C++ 全解 Debug|x64 编译及 promtool 18 条规则通过。九项部署脚本均通过，8 个计数套件合计 539/539，另有 lobby 渲染通过（交接 §3 第 2 条）。
 > - **后续验收**：用户已通知 360 加好信任；`-race`、C++ 运行测试、迁移与七场景冒烟交续验聊天串行执行，本线尚无最终回执。Java 收件箱仍待实现（§12）。Go 构建之后共享模块锁被其他会话调整，旧构建只代表执行时输入，复用由续验线核验。
-> - **2026-11-05 单玩家物品获取封禁**（交接（原 `docs/handoff/aoi-and-player-safeguards-20261104.md`，已清理，见 `ccf2840b2`） §2）：GM 域新增 `GM_BLOCK_ITEM_GAIN` / `GM_UNBLOCK_ITEM_GAIN`，效果落 `player_database.item_gain_block`（字段 24），各物品获得入口共用 `GainBlockService::IsItemGainBlocked`（§2.2「单玩家物品获取封禁」）。源码已改，**未生成协议、未编译、未测试**，待 Codex 验证。
+> - **2026-11-05 单玩家物品获取封禁**（交接（原 `docs/handoff/aoi-and-player-safeguards-20261104.md`，已清理，见 `ccf2840b2`） §2）：GM 域新增 `GM_BLOCK_ITEM_GAIN` / `GM_UNBLOCK_ITEM_GAIN`，效果落 `player_database.item_gain_block`（字段 24），各物品获得入口共用 `GainBlockService::IsItemGainBlocked`（§2.2「单玩家物品获取封禁」）。源码已改，**未生成协议、未编译、未测试**，待 Gemini 验证。
 > **版本历史**：v0.1 综合稿；v0.2 对抗评审修订（consistency / repo-fit / ops 三份评审的逐条处置见文末「评审记录」）；v1.0 用户拍板定稿（相对 v0.2 的改动见附录 D）；2026-10-17 按落码与评审修复订正（附录 F）。
 >
 > **与 [reliable-player-inbox-20261014.md](reliable-player-inbox-20261014.md) 的关系**
@@ -564,7 +564,7 @@ message PlayerInboxLedgerComp {
 - 所以字段号按 C4 协调：围栏设计保留 18 和 19（§11.1 已确认），收件箱取 20。加列纪律不允许留空洞（见下一条），收件箱第 1 批必须在 18、19 已声明之后落码；若届时围栏仍未落码，第 1 批开始前与围栏会话重新协调，不先占 18。
 - 加列纪律（`mysql_database_table.proto:139-145`）：声明顺序等于字段号顺序，中间不留空洞，否则 `INSERT … SELECT *` 会静默串档。不变量 I3 同样适用（`:146-154`）。
 - **放行清单**：`guild-phase2/90-consistency.md:307` 要求 18 号起新增的字段，在同一次改动里追加进三处放行清单：G-03 第 3 条、`03-names.md` §3.15a、`92-handoff.md` 步骤 4。围栏文档 §3.4 另列了 4 处未点名的位置，一并追加。
-- **迁移断言**：第 1 批 Codex 验证时，`cmd/migrate plan` 只能出现这一条 ADD COLUMN（以及届时已放行的其他列）。
+- **迁移断言**：第 1 批 Gemini 验证时，`cmd/migrate plan` 只能出现这一条 ADD COLUMN（以及届时已放行的其他列）。
 - **处置效果与账本同一次落盘**（IB-3）：货币类处置的效果在 `currency`（`blocked_types` / `debts`），单玩家物品获取封禁在 `item_gain_block`（字段 24，2026-11-05，§2.2）。三者在同一次 `PlayerDatabaseMessageFieldsMarshal` 里写出；`player_database` 现在只是存盘的内存形状、按行投影进 `player_store`，一次存盘的所有脏行同事务、同一个整笔序号（`player-save-direct-commit.md` §1.1），所以不要求效果与账本落在同一行。
 
 `drained_digest` 这个提示值已从持久记录里删掉：按 AGENTS §11.6，能重算的提示值不进落库记录。v1 也不再需要它（§7.3）。
@@ -1396,7 +1396,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 
 ## 11. 分批落地计划
 
-**每一批开始前，须把该批文件清单报给用户并获授权（AGENTS §10.2）。** 第 1 批已于 2026-10-15 获授权（附录 E），条件是 P1、P2 解除后再开工；第 2–4 批仍按此办理。每一批完成后都停下来，等 Codex 验证。下面的清单都按独立进程形态（D3）。
+**每一批开始前，须把该批文件清单报给用户并获授权（AGENTS §10.2）。** 第 1 批已于 2026-10-15 获授权（附录 E），条件是 P1、P2 解除后再开工；第 2–4 批仍按此办理。每一批完成后都停下来，等 Gemini 验证。下面的清单都按独立进程形态（D3）。
 
 ### 11.1 与其他会话的协调项
 
@@ -1477,7 +1477,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - scene 的 `handler/event/player_inbox_event_handler.{h,cpp}`、`event_handler.cpp`、`rpc_event_registry.cpp`
 - tip 的 proto 和 `go/shared/generated/tip/{segments,faults}.go`
 
-**Codex 验证**（仓库根目录，按顺序执行）：
+**Gemini 验证**（仓库根目录，按顺序执行）：
 1. `pwsh tools/scripts/dev_tools.ps1 -Command proto-gen-run` 连跑两次，第二次之后 `git diff` 应为空。
 2. 跑 `dev.bat gen` 导表。确认 `segments.go` 里出现 base=29000 的段，且 `faults.go` 的新段里只有 StoreUnavailable 一个码。
 3. `pwsh tools/scripts/dev_tools.ps1 -Command go-svc-build`：所有 Go 服务都要编，因为 message_id 全变了。
@@ -1499,7 +1499,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - `internal/inbox/`：`registry.go`、`fence.go`、`seq.go`、`shard.go`、`store.go`、`notify.go`、`loops.go`（补发、gauge、对账、领导者），以及各自的 `_test.go`，另加 `store_integration_test.go`。
 - `internal/server/`：`player_inbox_server.go`、`player_inbox_admin_server.go`、`admin_auth.go`，以及测试。
 - `internal/logic/`：`gm_sanction_logic.go` 及测试。
-- `go.sum` 由 Codex 跑 `go mod tidy` 生成。
+- `go.sum` 由 Gemini 跑 `go mod tidy` 生成。
 
 **验收**：
 
@@ -1524,7 +1524,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 | 告警守卫 | `TestAlertRulesReferenceRegisteredMetrics`：告警文件里的指标名都已注册 |
 | 测试库守卫（L14） | 集成测试 DROP 之前库名必须命中 `^(player_inbox_it\|player_inbox_it_\d+_\d+)$` |
 
-**Codex 命令**（在 `go/player_inbox` 目录下）：
+**Gemini 命令**（在 `go/player_inbox` 目录下）：
 - `gofmt -l ./internal`，应无输出。
 - `go vet ./... && go build ./...`
 - `go test ./... -count=1`
@@ -1560,7 +1560,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - `proto/common/base/config.proto` 与 `cpp/libs/engine/config/config.cpp`（`readGameConfig` 手工逐键解析，`:235`；`configuration_table_test.cpp:493` 有加载用例可照着补）：`GameConfig` 加 `player_inbox` 段（`consumer_enabled`、`periodic_fetch_minutes`），并同改加载器。键缺失时，加载器显式取默认值 30 分钟，不依赖 proto3 的 0。用户 2026-10-15 拍板把这两项从第 1 批移到本批（附录 E P6）；`config.proto` 的生成产物（约 6 个）随本批生成。
 - 工程文件：`cpp/libs/services/scene/{CMakeLists.txt, scene.vcxproj, .filters}`、`cpp/nodes/scene/{CMakeLists.txt, scene.vcxproj, .filters}`、`currency_test.vcxproj`（`currency_test` 没有 CMake 文件，也没有 `.filters`，只登记 vcxproj）。
 
-**Codex 命令**：
+**Gemini 命令**：
 - 串行（`/m:1`）用 MSBuild 编 `scene` 和 `currency_test` 两个工程，配置 Debug|x64。
 - 运行 `currency_test.exe --gtest_filter=PlayerInbox*:GmSanctionInbox*:AssetOp*:Currency*`（`PlayerInbox*` 同时覆盖 rules 与 system 两组），再不带过滤器、加 `--gtest_shuffle` 跑一遍。资产相关的用例必须原样通过。
 - 本地栈冒烟，开始前按 AGENTS §6.2 清数据：
@@ -1601,7 +1601,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - `deploy/k8s/AGENTS.md:91`。
 - 测试：`k8s_migrate_gate.tests.ps1`、`start_game_command_contract.tests.ps1`；`k8s_deploy_contract.tests.ps1` 里「连 MySQL 的 ConfigMap 恰好是 friend 和 trade」的断言也要改。
 
-Codex 跑 `pwsh -File tools/scripts/tests/*.tests.ps1` 里受影响的几个文件，以及对应的 Go 测试。
+Gemini 跑 `pwsh -File tools/scripts/tests/*.tests.ps1` 里受影响的几个文件，以及对应的 Go 测试。
 
 ### 11.7 上线顺序与回滚下限
 
@@ -1857,7 +1857,7 @@ Codex 跑 `pwsh -File tools/scripts/tests/*.tests.ps1` 里受影响的几个文�
   - 本批手写定为 **37 个**：A 组 5 个，B 组 31 个，另加 `rollback_database_table.proto`。生成约 120–135 个，含 D9 注释的产物，不含 `config.proto`。
 - **阻塞进展（2026-10-15）**：
   - P1：围栏会话已把 `fence_owner_epoch = 18`、`fence_save_seq = 19`（以及 `player_database_1` 的 3、4）写进工作区，尚未提交，并按 G-03 纪律更新了 90-consistency G-03、03-names §3.15a、92-handoff 步骤 4，注明「20 已由玩家收件箱预定」。本批取 20 时，照同一纪律把 20 追加进这三处清单。
-  - P2：用户同意由 Codex 单独执行积压全量生成，并单独提交；放行变量 `PROTOGEN_ALLOW_MASS_EVENT_TOMBSTONE=1` 只用于这一次，用来作废 29 个事件号。执行指令见 PROGRESS「2026-10-15 给 Codex：积压全量 proto 生成」。在那次生成提交之前，本会话不写任何 proto，避免被卷进去。
+  - P2：用户同意由 Gemini 单独执行积压全量生成，并单独提交；放行变量 `PROTOGEN_ALLOW_MASS_EVENT_TOMBSTONE=1` 只用于这一次，用来作废 29 个事件号。执行指令见 PROGRESS「2026-10-15 给 Codex：积压全量 proto 生成」。在那次生成提交之前，本会话不写任何 proto，避免被卷进去。
 - **有 2 处要你定**：`config.proto` 是否推到第 3 批（P6）；D9 的 `player_debt` 弃用注释是否随本批落（P7）。
 
 ### 二、开工前置条件与冲突
@@ -1999,9 +1999,9 @@ P2 的积压缺口（都在 HEAD 上核过）：
 - **Java 功能实现**：第 1 批只在合入后做契约同步（下一节第 7 步）。
 - **不夹带的已有缺口**：`proto.vcxproj.filters` 缺 `battle_settlement_ledger_comp`；robot vendor 缺 `equip_error_tip.pb.go`。
 
-### 八、Codex 验证步骤（在设计 §11.3 的 6 步基础上修正）
+### 八、Gemini 验证步骤（在设计 §11.3 的 6 步基础上修正）
 
-按 AGENTS §10.1，以下由 Codex 执行；Claude 不跑。所有命令在仓库根目录执行，C++ 串行编译。
+按 AGENTS §10.1，以下由 Gemini 执行；Claude 不跑。所有命令在仓库根目录执行，C++ 串行编译。
 
 0. **前置检查**，任一项不满足就停下报告：
    - `git status --porcelain -- tools/proto_generator` 为空（P3）。

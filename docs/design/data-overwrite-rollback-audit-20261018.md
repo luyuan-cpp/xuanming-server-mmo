@@ -1,9 +1,9 @@
 # 全仓数据问题与覆盖回档审计（2026-10-18）
 
 > 只读静态审计，**未编译、未运行**。对象是 2026-10-18 的工作区（包括其他会话尚未提交的改动）。
-> 本文只登记问题和修复方向，不包含任何代码修改。修复要按 AGENTS.md §10.1 交给 Codex 验证，并按 §12 同步 Java 版。
+> 本文只登记问题和修复方向，不包含任何代码修改。修复要按 AGENTS.md §10.1 交给 Gemini 验证，并按 §12 同步 Java 版。
 > **2026-10-19 状态：** §2.1–§2.3 已修复，验证还没跑完；§2.4、§2.5 尚未动手。汇总见 §7，上线前的复查计划见 §8。
-> **2026-10-19 更新：** §2.4 三条已落码并带回归测试，未编译、未测试，待 Codex 验证；§2.5 仍未动手。
+> **2026-10-19 更新：** §2.4 三条已落码并带回归测试，未编译、未测试，待 Gemini 验证；§2.5 仍未动手。
 > **2026-11-06 现状：** 10-30 映射直读 TiDB、10-31 玩家数据只存 TiDB 之后，本文全部条目按新代码重判过：随迁移失效的不再修，仍成立的已分批修完（未编译、未测试）。§4 里仍成立的各条，修复说明直接写在该条下面；汇总与逐条去向见 [第二轮审计](data-overwrite-rollback-audit-r2-20261019.md) §1「最终结论」、§5.0、§6「2026-11-06 收口」。本文 §7 是 10-19 时的状态，保留作历史。
 
 ## 0. 结论
@@ -63,9 +63,9 @@
 - 纵深防御：gate 的 `ApplyRoute` 在 epoch 变化时也转发一次。
 - 补指标：`stale_owner_write_rejected` 与"退出中且从未落地"同时出现，就是回档的直接证据，应单独计数。
 
-**修复（2026-10-18，代码与测试已落工作区，未编译、未测试，待 Codex 验证）：** 方案与不变量见 [location-release-binding.md](location-release-binding.md)。scene_manager 的 LeaveScene 只在拿到当前代 handoff 标记 / 持有节点已死 / 没有持有者时才删 location，否则保留并经 `ReleasePlayer.session_ended` 请持有节点释放（等满 600s 上限才按旧行为删并计 `forced`）；gate 收到 LeaveGame 时代发 ExitGame 并清空会话路由状态，`ApplyRoute` 加同节点新 epoch 规则；新增 scene `stale_owner_rejected_exiting` 与 `scene_manager_leave_holder_release_total`。
+**修复（2026-10-18，代码与测试已落工作区，未编译、未测试，待 Gemini 验证）：** 方案与不变量见 [location-release-binding.md](location-release-binding.md)。scene_manager 的 LeaveScene 只在拿到当前代 handoff 标记 / 持有节点已死 / 没有持有者时才删 location，否则保留并经 `ReleasePlayer.session_ended` 请持有节点释放（等满 600s 上限才按旧行为删并计 `forced`）；gate 收到 LeaveGame 时代发 ExitGame 并清空会话路由状态，`ApplyRoute` 加同节点新 epoch 规则；新增 scene `stale_owner_rejected_exiting` 与 `scene_manager_leave_holder_release_total`。
 
-**修复后续（2026-10-18 ~ 10-19，均已落工作区，未编译、未测试、未提交，待 Codex 验证）：**
+**修复后续（2026-10-18 ~ 10-19，均已落工作区，未编译、未测试、未提交，待 Gemini 验证）：**
 - **登录撞上未释放的持有者**（设计 §12，收口 §6 残余 5）：gate 崩溃后玩家立刻从别的 gate 重登、被派到别的节点时，换手门回 18 之前由 scene_manager **同步**请 location 的持有节点按会话结束释放，不再等旧会话的断线租约到期才有人请它。指标 `scene_manager_enter_holder_release_total{verdict}`。
 - **迟到的会话结束释放误退新会话**（设计 §13，收口 §12.5 残余 1）：
   - 问题：同物理节点重登不铸造 owner_epoch，同一代下实体会被新登录复用。`session_ended` 释放迟到执行时（登录撞门的同步请求超时之后 / LeaveScene 的后台派发晚于新登录），只比 owner_epoch 会把已绑上新会话的实体按断线踢下线。先存盘、不回档，但在线玩家被踢。
@@ -89,7 +89,7 @@
 - 补投意图记录尝试次数，做指数退避，设上限后转告警。
 - go/db 对确定性拒写在 barrier 上标记终态，补投器看到终态就停止重投。
 
-**修复（2026-10-18，Claude，未编译，待 Codex 验证）**：本节两条与 go-db-pipeline#2 已落码。做法见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md) 文末「2026-10-18 存盘协议世代门禁与补投有界」，以及 §4.7、§8.4、§8.6 的同日更正；进度见 `docs/PROGRESS.md` 同日条目。
+**修复（2026-10-18，Claude，未编译，待 Gemini 验证）**：本节两条与 go-db-pipeline#2 已落码。做法见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md) 文末「2026-10-18 存盘协议世代门禁与补投有界」，以及 §4.7、§8.4、§8.6 的同日更正；进度见 `docs/PROGRESS.md` 同日条目。
 - go/db 缺省改为 `dual`。
 - legacy 由世代标记与补投桶机器判定，有严格世代证据时拒启；运行中发现即停机。
 - 补投改为首见宽限、指数退避、次数上限转告警、终态停止，并在在途重试、主库冷却、legacy 存活时跳过。
@@ -105,7 +105,7 @@
 - 键改为与会话栅栏一致的 `{gate_instance_id}:{incarnation}`。
 - gate 对 CreatePlayer / EnterGame 要求本连接先完成 Login。
 
-> 2026-10-18 已修，未编译、未运行，待 Codex 验证。改动与滚动升级说明见 [client-request-ordering.md](./client-request-ordering.md) §7.2 第 2 条，Java 版不受影响。
+> 2026-10-18 已修，未编译、未运行，待 Gemini 验证。改动与滚动升级说明见 [client-request-ordering.md](./client-request-ordering.md) §7.2 第 2 条，Java 版不受影响。
 
 ### 2.4 战斗结算丢数据
 
@@ -120,7 +120,7 @@
 - 区分 `kAssetBlocked`（跳过金币、继续结算）与 `kAssetFrozen`（延后）。
 - 停机时先 flush 并处理完回执，再清房；或者把 pending 的落库提前到发结果之前。
 
-**修复（2026-10-19，Claude，代码与回归测试已落工作区，未编译、未测试、未提交，待 Codex 验证）：**
+**修复（2026-10-19，Claude，代码与回归测试已落工作区，未编译、未测试、未提交，待 Gemini 验证）：**
 - **cpp-economy#0**：`ApplySettlementToEntity` 在应用缓存与金币之前，调用 `HasItemGuidsForDrops` 预检。
   - 需求量取 `BagService::MaxNewInstancesFor(掉落)`：每个 config 按 `StacksNeededFor(count, max_stack)` 计，是上界。主背包放不下时一个号都不铸，所以一份余量也够「转投临时格」那一次。
   - 余量不够就整笔返回 false，零副作用，保留 pending 等重投；打 `metric=battle_settlement_item_guid_shortage`。
@@ -158,13 +158,13 @@
 | go-asset-services#0 | `Commerce.Tick` 只要单条合同出错就整轮返回。失败行的 `updated_ms` 不变，永远排在队头，全服交易被卡住。最容易触发的是离线买家累计 16 条未决 credit 后返回的 `ErrTooManyPending` | `go/trade/internal/commerce/engine.go:768-822` | 成立，medium | `AssetOp.Enabled` |
 | go-asset-services#1 | 被自动放弃（180 天）或人工终结的托管扣款腿不写 `durable`，合同永远停在 pay/escrow，卖家托管的资产被扣留。买家点击购买后下线，就能把卖家资产扣作人质 | `engine.go:676-686`；`go/trade/internal/data/asset_op_repo.go:1013-1021` | 成立，medium | `AssetOp.Enabled` |
 
-**修复（social-match-battle#0：2026-10-23，Claude，复核部分成立，未编译、未测试，待 Codex 验证；负责人 2026-10-23 拍板首发开全球匹配，本条为上线阻塞）：**
+**修复（social-match-battle#0：2026-10-23，Claude，复核部分成立，未编译、未测试，待 Gemini 验证；负责人 2026-10-23 拍板首发开全球匹配，本条为上线阻塞）：**
 - 并行会话的 v1 终局协议已给「有 Create 原件」的成局加了截止后 SQL ABORT，第一轮 §4 第 11 条也被它覆盖。仍成立两处：没有原件的成局要等目标 battle 回 ABORTED，目标消失、换 UUID、拨号失败时永无出口；有原件且已过截止的成局被 `AcquireWork` / `Pending` 反复续租，到期 ABORT 被无限推迟。
 - 修复：本代租约下无原件即正面证据（`Store.CreateIntentPersisted`），`globalDestroy` 不再等目标应答，由 `Finish(false)` 在行锁内复核同租约且仍无原件，多副本只有持租者能提交；过截止的有原件成局不再发租约（`ErrAwaitingExpiredOutcome`），交给 `RecoverExpiredOutcomes` 争唯一一次 SQL ABORT。截止前一次超时或实例消失仍只记 UNKNOWN，不释放。没有采用「注册中心 UUID 消失超过宽限期」作证据。另加到期巡检 `expired_unrecoverable` 指标。说明见 [cross-zone-matchmaking.md](cross-zone-matchmaking.md) §13.3；命令见 PROGRESS「2026-10-24 Claude：第一轮审计 §2.5 social-match-battle#0」。
 - 残余：截止竞态（强制平局与到期 ABORT 抢同一主键）归并行 v1 轨道，须在其验收前加宽限；安全论证依赖该轨道未提交的 `Finish(false)` 复核。
 - Java 版：无原件卡死同样存在，Java 待做，已登记 PARITY。
 
-**修复（go-asset-services#0 / #1：2026-10-20 落码，2026-10-22 按独立评审修正；Claude，未编译、未测试，待 Codex 验证）：**
+**修复（go-asset-services#0 / #1：2026-10-20 落码，2026-10-22 按独立评审修正；Claude，未编译、未测试，待 Gemini 验证）：**
 - **#0**：`Engine.Tick` 改为单行隔离（`go/trade/internal/commerce/tick_isolation.go`）。失败分 retry / too_many_pending / corrupt / conflict / role_conflict：暂时失败按有界抖动退避推迟，推迟以 Due 读到的 version 为条件、不改 version，不会旧盖新；确定性坏数据隔离为 Manual，不再无限重试；Due 只取 `updated_ms<=now`。评审发现 `7d9208237` 起每通道只给 3s、而单行子预算固定 5s，卡住的行与整轮同时到期、不推迟，队头阻塞复现；已改为单行预算从父截止时刻推出，并预留 ACK 与推迟的余量。bid_held、acceptBid、撮合、收据 ACK、商城各循环同样处理。
 - **#1**：`LegResult` 终局只看 status、不看 durable，放弃与人工终结的扣款腿走与 scene 判拒同一条补偿，只补偿一次；人工判 APPLIED 的实例扣款没有原件时立即隔离，不上架。
 - 新增 trade-commerce 告警 5 条与 [trade-commerce-quarantine-runbook.md](../ops/trade-commerce-quarantine-runbook.md)。说明见 [jubaozhai-market.md](jubaozhai-market.md) §15.3；命令见 PROGRESS「2026-10-24 Claude：第一轮审计 §2.5 go-asset-services#0 / #1 交易合同推进修复」。
@@ -182,7 +182,7 @@
 | data-service#2 | 全局库重建或回档后号段从 1 重新种，item/txlog/snapshot 会重发已用号 | 已登记的运维事件；player 号有 login 探测兜底 |
 | data-service#3 | 落点映射只存在 mapping Redis，丢失后会写错库 | 已登记、修复在途；受害面窄 |
 | login-session-route#2 | 账号角色目录只在核心 Redis，丢键后角色从账号消失 | 已登记；需要 Redis 丢数据；角色数据仍在库里 |
-| cpp-economy#2 | 主背包满时掉落进临时格，临时格没有取出接口，满 200 个后按 FIFO 淘汰 | 实例仍随存档持久化，补一个搬运 RPC 即可找回；"没有取出接口"是新发现。**2026-11-05 已修（Claude，未编译，待 Codex 验证）**：临时格改为满即拒（不再淘汰，入账在副作用之前被拒、由来源保留），新增 `RetrieveTemporaryItems` 取回一件或全部，见 [bag-rule-policy-layering.md](bag-rule-policy-layering.md) §6.6 |
+| cpp-economy#2 | 主背包满时掉落进临时格，临时格没有取出接口，满 200 个后按 FIFO 淘汰 | 实例仍随存档持久化，补一个搬运 RPC 即可找回；"没有取出接口"是新发现。**2026-11-05 已修（Claude，未编译，待 Gemini 验证）**：临时格改为满即拒（不再淘汰，入账在副作用之前被拒、由来源保留），新增 `RetrieveTemporaryItems` 取回一件或全部，见 [bag-rule-policy-layering.md](bag-rule-policy-layering.md) §6.6 |
 | ops-tools-java#0 | copy 模式在开服后撤销合服，会静默回档到合服时刻 | 非默认的 copy 模式，且需要违反 runbook §10.2；dst 上的行不删除 |
 | ops-tools-java#1 | 灾难级 PITR 只回退 zone 库，全局库不回退，会造成复制或白亏 | 负责人已接受的代价（zone_data_rollback.md 2026-10-18 修订）；当前 `-Apply` 不可执行。建议在 inventory 阶段输出跨库资产操作清单 |
 
@@ -193,7 +193,7 @@
 - **C++ 存盘与加载**
   - `SanitizeSkillList` 在加载时按当前技能表永久删除玩家技能（`player_skill.cpp:104`，两个区域独立报告）。
   - 父快照提交前不检查行大小，DBTask 被永久拒绝后玩家被登录预检锁死（`player_lifecycle.cpp:3292`）。
-    - **重判与修复（2026-11-06，Claude；未编译、未测试，待 Codex 验证）**：DBTask 与登录预检随存盘重构删除，原问题不再成立。新路径上重现为：存档超预算（单行 1 MiB / 单笔 3 MiB，go/db 判 `TOO_LARGE`；超过 4 MiB 传输上限的那一笔，scene 发送前就拒掉）之后，这名玩家每次存盘都被拒，退出时回到上一次提交。go/db 一侧已有 `DbPlayerStorePayloadRejected`，scene 本地拒掉的那一笔 go/db 收不到，以前只有一条 ERROR 日志。本次补了 scene 侧的拒存计数 `player_store_refused_stats`（`too_large` / `invalid` / `other`），有三处出口：30s 汇总行 `[PlayerStoreRefused]`、Prometheus `scene_player_store_save_refused_total{result}`、critical 告警 `ScenePlayerStoreSaveRefused`（`deploy/k8s/player-store-alerts.yaml`，契约测试钉住指标名与取值）。只计最终的拒绝；排队里还有更新快照时那一笔不计。超预算本身的根治（按 kind 分行后看实测再分）不在本条，`player-save-direct-commit.md` §4 已写明「压测看到某一行顶到上限再分」。
+    - **重判与修复（2026-11-06，Claude；未编译、未测试，待 Gemini 验证）**：DBTask 与登录预检随存盘重构删除，原问题不再成立。新路径上重现为：存档超预算（单行 1 MiB / 单笔 3 MiB，go/db 判 `TOO_LARGE`；超过 4 MiB 传输上限的那一笔，scene 发送前就拒掉）之后，这名玩家每次存盘都被拒，退出时回到上一次提交。go/db 一侧已有 `DbPlayerStorePayloadRejected`，scene 本地拒掉的那一笔 go/db 收不到，以前只有一条 ERROR 日志。本次补了 scene 侧的拒存计数 `player_store_refused_stats`（`too_large` / `invalid` / `other`），有三处出口：30s 汇总行 `[PlayerStoreRefused]`、Prometheus `scene_player_store_save_refused_total{result}`、critical 告警 `ScenePlayerStoreSaveRefused`（`deploy/k8s/player-store-alerts.yaml`，契约测试钉住指标名与取值）。只计最终的拒绝；排队里还有更新快照时那一笔不计。超预算本身的根治（按 kind 分行后看实测再分）不在本条，`player-save-direct-commit.md` §4 已写明「压测看到某一行顶到上限再分」。
   - 严格提交屏障取消了 owner 缺键补种，Redis 丢数据后在线玩家会被判废黜，scene-owner-reentry-barrier.md §6.2 描述已过时（`redis_client.h:153`）。
   - 存盘不保留未知字段，scene 回退到旧镜像时会抹掉新字段（`player_data_loader.h:16`）。
 - **C++ 资产**
@@ -203,7 +203,7 @@
 - **login**
   - 账号 blob 有两个写者不走建角锁（`entergamelogic.go:256`）。
   - 会话栅栏的 player 绑定随 TTL 过期，之后同一连接可以绑第二个角色（`sessionfence/fence.go:158`）。
-    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Codex 验证）**：绑定只由 Leave / Close 解除，已绑定的记录改用一周兜底寿命（只回收 Disconnect 没送到的记录），绑定、进游戏入口、登录提交（登录态续期）都把它续满，入口续期不再把绑定压回 6 分钟；gate 加纵深防御：会话已绑定角色、没 LeaveGame 就进另一个角色时在收包处回 kLoginInProgress 信封，不转发。同批顺带：客户端自己发的 Disconnect（58）在 gate 入口按未授权号拒绝。规则与残余见 [client-request-ordering.md](client-request-ordering.md) §6.2「TTL」。Java 版已有等价（绑定存在 gate 连接的 SessionContext，已绑定的会话 EnterGame 一律 2028；客户端发的 58 在 Java login 只记日志），不登记 PARITY。
+    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Gemini 验证）**：绑定只由 Leave / Close 解除，已绑定的记录改用一周兜底寿命（只回收 Disconnect 没送到的记录），绑定、进游戏入口、登录提交（登录态续期）都把它续满，入口续期不再把绑定压回 6 分钟；gate 加纵深防御：会话已绑定角色、没 LeaveGame 就进另一个角色时在收包处回 kLoginInProgress 信封，不转发。同批顺带：客户端自己发的 Disconnect（58）在 gate 入口按未授权号拒绝。规则与残余见 [client-request-ordering.md](client-request-ordering.md) §6.2「TTL」。Java 版已有等价（绑定存在 gate 连接的 SessionContext，已绑定的会话 EnterGame 一律 2028；客户端发的 58 在 Java login 只记日志），不登记 PARITY。
 - **资产服务**
   - 收件箱 Ack 以 Redis 落盘为依据，Redis 丢尾后 GM 处置静默丢失（`store_consume.go:308`）。
 - **匹配**
@@ -219,9 +219,9 @@
   - 商城第二笔支付回执被拒，且不生成退款（`CommerceStore.java:126`）。
 - **身份原语**
   - FenceClock 在生产上退化为单调钟（`fenceclock.go:102`，文档称已修但仍有问题）。
-    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Codex 验证）**：墙钟在 Ack / SeedAck / Stale 读入时一律 `Round(0)` 去掉单调读数；补用真实 `time.Now` 构造的回归用例 `TestFenceClock_RealWallClockAnchorCarriesNoMonotonicReading`。附带评估：后台循环不加"两拍墙钟间隔过大"的冻结检测，理由见 [node-id-overhaul-plan-20260908.md](node-id-overhaul-plan-20260908.md) §3.4。当前只影响 scene_manager 的 scene_id。
+    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Gemini 验证）**：墙钟在 Ack / SeedAck / Stale 读入时一律 `Round(0)` 去掉单调读数；补用真实 `time.Now` 构造的回归用例 `TestFenceClock_RealWallClockAnchorCarriesNoMonotonicReading`。附带评估：后台循环不加"两拍墙钟间隔过大"的冻结检测，理由见 [node-id-overhaul-plan-20260908.md](node-id-overhaul-plan-20260908.md) §3.4。当前只影响 scene_manager 的 scene_id。
   - reclaim 在 slots 键过期时绕过隔离期（`allocator.go:1113`）。
-    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Codex 验证）**：重建分支与 `CreateRev==0` 同一笔 Txn 比较两把水位 key 的 ModRevision 与本进程最后观测值，不等即不重建、永久 fence；本地缓存加记水位 revision，供缓存启动后重新注册。用例 `TestReclaim_RefusesToRecreateASlotAnotherHolderUsedWhileWeWereAway`、`TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere`（原 F5 用例按新语义改写）及两条缓存单测。规则见同一设计稿 §3.4 / §3.5。
+    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Gemini 验证）**：重建分支与 `CreateRev==0` 同一笔 Txn 比较两把水位 key 的 ModRevision 与本进程最后观测值，不等即不重建、永久 fence；本地缓存加记水位 revision，供缓存启动后重新注册。用例 `TestReclaim_RefusesToRecreateASlotAnotherHolderUsedWhileWeWereAway`、`TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere`（原 F5 用例按新语义改写）及两条缓存单测。规则见同一设计稿 §3.4 / §3.5。
     - Java 版（两条合看）：没有水位 / 隔离期 / 重建协议，第 21 条不适用；但 `NodeIdLease.isValid()` 只看 `System.nanoTime`（Linux 上同样不含挂起时间），VM 挂起超过 TTL 后恢复的那一刻仍判有效，与第 20 条同类，Java 待做（本轮只读核对，未改 Java 仓、未登记 PARITY）。
   - login 的毫秒水位前推量 2000ms 不满足契约（`login.go:51`，只在关闭号段时可达）。
 
@@ -241,7 +241,7 @@
 
 ## 7. 修复与验证状态（截至 2026-10-19；之后的去向见第二轮审计 §5.0 与 §6「2026-11-06 收口」）
 
-审计之后，2026-10-18 起开了 3 个修复会话，§2.1 的修复会话又派生出 2 个后续会话。代码均由 Claude 落进工作区，已随用户的工作区快照提交（`8b9592de3`、`e611b5d8d`、`1fc103dce`）。协议生成、编译、测试由 Codex 负责。下表"验证"一列以 `docs/PROGRESS.md` 里 Codex 的条目为准。
+审计之后，2026-10-18 起开了 3 个修复会话，§2.1 的修复会话又派生出 2 个后续会话。代码均由 Claude 落进工作区，已随用户的工作区快照提交（`8b9592de3`、`e611b5d8d`、`1fc103dce`）。协议生成、编译、测试由 Gemini 负责。下表"验证"一列以 `docs/PROGRESS.md` 里 Codex 的条目为准。
 
 | 审计项 | 修复内容 | 设计 / 进度条目 | 验证 |
 |---|---|---|---|
@@ -250,7 +250,7 @@
 | └ 迟到的会话结束释放带覆盖身份（设计 §13） | `ReleasePlayerRequest` 追加 `covered_session_id=6` / `covered_login_generation=7`；scene 按登录身份比对后再决定是否退出 | PROGRESS「会话结束释放带覆盖身份」 | scene_manager：vet、定向用例、全量 444 + 226 个用例通过。C++ 55 项中 54 项通过；`EnterFenceEcs.LoadCallbackBindsNewestAdmitted` 因测试夹具给的是空快照而失败，Codex 已备夹具补丁，待负责人决定 |
 | §2.2 go/db 协议世代门禁与补投上限 | 缺省改为 dual；legacy 由机器判定，有证据时拒绝启动；补投加首见宽限、指数退避、次数上限和终态 | [db-write-fencing-mysql.md](db-write-fencing-mysql.md) 文末附注；PROGRESS「存盘协议世代门禁与补投有界」 | **7 步验证都没跑。** 负责人确认尚未上线：首次上线直接用 dual 加严格屏障整批起步，混跑和降级相关的残余不构成阻塞 |
 | §2.3 `login_session` 键绑定 gate 实例与代次 | 键改为 `{gate_instance_id}:{incarnation}`，旧版 gate 走兼容键；gate 要求先 Login | [client-request-ordering.md](client-request-ordering.md) §7.2 第 2 条；PROGRESS「修跨账号登录态继承」 | Codex 已跑 login 两个相关包：249 通过，vet 与 build 通过。没有跑真实多 gate 环境 |
-| §2.4 战斗结算三处 | 号段预检后整笔延后；金币封禁只跳过金币；全球模式个人 pending 在发结果前落库，回执后只派发、不改写 | 本文 §2.4「修复」；[cross-zone-matchmaking.md](cross-zone-matchmaking.md) §13.6「2026-10-19 更正」；PROGRESS「审计 §2.4 战斗结算三处」 | **未编译、未测试**，待 Codex 跑 `bag_test`、`turn_battle_engine_test` 与 battle 节点构建。Java 版三条同样存在，待做 |
+| §2.4 战斗结算三处 | 号段预检后整笔延后；金币封禁只跳过金币；全球模式个人 pending 在发结果前落库，回执后只派发、不改写 | 本文 §2.4「修复」；[cross-zone-matchmaking.md](cross-zone-matchmaking.md) §13.6「2026-10-19 更正」；PROGRESS「审计 §2.4 战斗结算三处」 | **未编译、未测试**，待 Gemini 跑 `bag_test`、`turn_battle_engine_test` 与 battle 节点构建。Java 版三条同样存在，待做 |
 | §2.5 全球匹配、交易三处 | **未动手**（对应功能未开通） | — | — |
 | §3、§4 low 项 | 只有"存盘不保留未知字段"一项另出了设计稿：[mixed-version-persist-field-protection.md](mixed-version-persist-field-protection.md)，v0.2，未落码，待负责人拍板 | PROGRESS「新旧版本混跑的玩家持久字段保护设计稿 v0.2」 | — |
 
@@ -265,7 +265,7 @@
 
 **建议顺序**（前一阶段不过，不开下一阶段）：
 
-1. **先把已落的修复验证完（Codex）。**
+1. **先把已落的修复验证完（Gemini）。**
    - §2.2 的 7 步验证。
    - §2.1 遗留的测试：player_locator、`routing_identity_test`、`cross_zone_test`，以及夹具失败那一条。
    - 真实环境故障演练：登出、租约到期、gate kill -9、Redis 对单节点写失败。演练时 scene_manager 必须设 `AllowUnsafeCrossNodeHandoff: false`，否则测不到修复。
@@ -282,7 +282,7 @@
      - 按故障：Redis 丢尾或主从切换、Kafka 重投、节点崩溃、时钟回拨、滚动升级混版；
      - 按入口：每个 handler 与 RPC。
    - **Java 版做同类审计**：在 Java 仓库执行，按该仓库的 `AGENTS.md`。
-4. **运行期一致性压测（Codex）。** 按 [data-consistency-stress-testing.md](data-consistency-stress-testing.md) 跑 L2 校验器、L3 机器人、L4 混沌（消费中途杀进程、Redis 故障切换、gate 与 battle 节点强杀），结论按 AGENTS §6 出对比表。
+4. **运行期一致性压测（Gemini）。** 按 [data-consistency-stress-testing.md](data-consistency-stress-testing.md) 跑 L2 校验器、L3 机器人、L4 混沌（消费中途杀进程、Redis 故障切换、gate 与 battle 节点强杀），结论按 AGENTS §6 出对比表。
 5. **代码冻结后做最后一次增量审计。** 范围是从第 3 步的基线到发布提交的差异。
 
 **额度参考**（同账号实测，见会话记忆）：

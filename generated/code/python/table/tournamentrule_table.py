@@ -52,6 +52,7 @@ class Snapshot:
     #: 主键唯一：一个 id 一行。
     by_id: dict[int, Row]
     idx_battle_config_id: dict[int, tuple[Row, ...]]
+    idx_salute_item_id: dict[int, tuple[Row, ...]]
 
 
 #: 还没 load 过时的空快照。让「没加载」和「加载成 0 行」走同一条读路径，
@@ -61,6 +62,7 @@ _EMPTY_SNAPSHOT: Snapshot = Snapshot(
     rows=(),
     by_id={},
     idx_battle_config_id={},
+    idx_salute_item_id={},
 )
 
 
@@ -104,10 +106,12 @@ class TournamentRuleTableManager:
         rows: tuple[Row, ...] = tuple(container.data)
         by_id: dict[int, Row] = {}
         idx_battle_config_id: dict[int, list[Row]] = {}
+        idx_salute_item_id: dict[int, list[Row]] = {}
 
         for row in rows:
             by_id[row.id] = row
             idx_battle_config_id.setdefault(row.battle_config_id, []).append(row)
+            idx_salute_item_id.setdefault(row.salute_item_id, []).append(row)
 
         # 多值索引建的时候用 list（要 append），落进快照前一律冻成 tuple：查询返回的
         # 就是索引里那个对象本体，是 list 的话调用方一个 .append() 就改到了别人的索引 ——
@@ -117,6 +121,7 @@ class TournamentRuleTableManager:
             rows=rows,
             by_id=by_id,
             idx_battle_config_id={k: tuple(v) for k, v in idx_battle_config_id.items()},
+            idx_salute_item_id={k: tuple(v) for k, v in idx_salute_item_id.items()},
         )
 
     def apply_snapshot(self, snapshot: Snapshot) -> None:
@@ -167,6 +172,10 @@ class TournamentRuleTableManager:
         """二级索引：``battle_config_id`` == key 的全部行。"""
         return self._snap.idx_battle_config_id.get(key, _NO_ROWS)
 
+    def get_by_salute_item_id(self, key: int) -> tuple[Row, ...]:
+        """二级索引：``salute_item_id`` == key 的全部行。"""
+        return self._snap.idx_salute_item_id.get(key, _NO_ROWS)
+
     # ---- Exists ----
 
     def exists(self, id_: int) -> bool:
@@ -179,6 +188,9 @@ class TournamentRuleTableManager:
 
     def count_by_battle_config_id_index(self, key: int) -> int:
         return len(self._snap.idx_battle_config_id.get(key, _NO_ROWS))
+
+    def count_by_salute_item_id_index(self, key: int) -> int:
+        return len(self._snap.idx_salute_item_id.get(key, _NO_ROWS))
 
     # ---- RandOne ----
 
@@ -206,6 +218,7 @@ class TournamentRuleTableManager:
 
     # 外键登记（解析函数在 tournamentrule_table_fk.py，不在这里）：
     # FK: battle_config_id -> Dungeon.id
+    # FK: salute_item_id -> Item.id
 
 
 #: 模块级单例。别再 ``TournamentRuleTableManager()`` 自己新建一个 —— 那个实例是空的，

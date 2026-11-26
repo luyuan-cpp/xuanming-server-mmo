@@ -444,6 +444,9 @@ func (l *GuildLogic) KickGuildMember(ctx context.Context, req *pb.KickGuildMembe
 	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.KickGuildMemberResponse{ErrorMessage: tip}, err
 	}
+	if l.war != nil && l.war.Repo != nil {
+		_ = l.war.Repo.RemovePlayerGarrison(ctx, target)
+	}
 	// 被踢者已经不在快照里,但他必须收到这条推送 —— 否则他的界面会一直停在
 	// "我还在帮里"的旧状态,直到下次手动刷新。
 	recipients := append(membersExcept(res.Guild, actor), target)

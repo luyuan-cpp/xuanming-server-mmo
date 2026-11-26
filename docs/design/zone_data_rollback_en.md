@@ -155,7 +155,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
   -ZoneName <zone> -ZoneId <id> -NodeImage <image> -WaitReady
 ```
 
-> **Correction (2026-10-15; implemented, not compiled or tested, pending Codex verification)**: go/db's db_task consumer group is moving, zone by zone,
+> **Correction (2026-10-15; implemented, not compiled or tested, pending Gemini verification)**: go/db's db_task consumer group is moving, zone by zone,
 > from the shared `db_rpc_consumer_group` (the legacy group) to a per-zone `db_rpc_consumer_group_z<ZoneId>` (the zone group). The manual steps above are
 > superseded by the one-shot script `tools/scripts/k8s_zone_rollback.ps1` (`dev_tools.ps1 -Command k8s-zone-rollback`, dry-run unless `-Apply`). Its Kafka
 > handling now: the old Step 2 drain wait is removed (`-KafkaDrainTimeoutSec` is gone); step 0 c takes a read-only LAG snapshot of both groups on this topic
@@ -167,7 +167,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
 > "2026-10-15 修订" section of [zone_data_rollback.md](zone_data_rollback.md) (Chinese, authoritative) and in
 > [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md).
 
-> **Correction (2026-10-17; implemented, not compiled or tested, pending Codex verification)**: script fixes after the R7 review. Details are in the
+> **Correction (2026-10-17; implemented, not compiled or tested, pending Gemini verification)**: script fixes after the R7 review. Details are in the
 > "2026-10-17 修订" section of [zone_data_rollback.md](zone_data_rollback.md) (Chinese, authoritative) and in §5 / §6 of
 > [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md).
 > - **Step 0 e** (`Assert-Step6KafkaFactsReadable`, `-Apply` only, after step 0 d and before Step 1): reads both groups' offsets through the same path Step 6 uses,
@@ -191,7 +191,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
 >   topic's cursors (SCAN `consumer:applied:<topic>:*` and `consumer:applied_epoch:<topic>:*`, UNLINK page by page) and add a step 0 check that the target time is
 >   not earlier than each partition's log start (no such check exists today). Costs are compared in zone_data_rollback.md.
 
-> **Correction (2026-10-18; rollback semantics decided; implemented, not compiled or tested, pending Codex verification)**: on 2026-10-17 the owner chose
+> **Correction (2026-10-18; rollback semantics decided; implemented, not compiled or tested, pending Gemini verification)**: on 2026-10-17 the owner chose
 > "discard every write after TargetTime": a rollback returns the zone to what MySQL had committed at T. The full procedure, the handling of every leftover state
 > family, the cost, the residual risks and the items still awaiting the owner are in the "2026-10-18 修订" section of [zone_data_rollback.md](zone_data_rollback.md)
 > (Chinese, authoritative). In short:
@@ -235,7 +235,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
 | MySQL scheduled backup + binlog archiving | K8s MySQL pod has no automatic backup configured; needs a CronJob or cloud RDS | **High** |
 | Redis RDB/AOF periodic snapshot archiving | Current `--appendonly yes` ensures persistence but has no point-in-time recovery capability | Low (can FLUSHDB) |
 | Kafka offset rollback tool | Need a script to reset consumer group offset to a specified timestamp (implemented since 2026-05-15 as `tools/scripts/kafka_offset_reset.ps1`, `dev_tools.ps1 -Command kafka-offset-reset`, per [zone_data_rollback.md](zone_data_rollback.md)) | ~~Medium~~ |
-| One-click zone rollback script | Encapsulate the above steps as `dev_tools.ps1 -Command k8s-zone-rollback` (implemented since 2026-05-15 as `tools/scripts/k8s_zone_rollback.ps1`, per the authoritative table in [zone_data_rollback.md](zone_data_rollback.md); its 2026-10-15 Kafka-step revision is in the Correction above and is not compiled or tested, pending Codex verification; since 2026-10-18 the semantics are decided, see "Correction (2026-10-18)" above, and `-Apply` cannot run until the discard tool lands) | ~~Medium~~ |
+| One-click zone rollback script | Encapsulate the above steps as `dev_tools.ps1 -Command k8s-zone-rollback` (implemented since 2026-05-15 as `tools/scripts/k8s_zone_rollback.ps1`, per the authoritative table in [zone_data_rollback.md](zone_data_rollback.md); its 2026-10-15 Kafka-step revision is in the Correction above and is not compiled or tested, pending Gemini verification; since 2026-10-18 the semantics are decided, see "Correction (2026-10-18)" above, and `-Apply` cannot run until the discard tool lands) | ~~Medium~~ |
 
 ---
 

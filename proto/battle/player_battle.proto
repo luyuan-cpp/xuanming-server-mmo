@@ -70,6 +70,15 @@ message BattleStateS2C {
   uint32 surrender_unlock_round = 24;           // PVP 投降解锁回合号（0=不可投降，PVP 为 5）
   BattleSurrenderVoteState surrender_vote = 25; // 本队当前投降投票或冷却状态（对手与观众视角由节点清空）
   BattlePrepState prep_state = 26;              // 论剑 V3 战前 15 秒明牌变阵状态（非变阵期留空；对手与观众按视角脱敏）
+  TournamentBattleContext tournament_context = 27; // 全服赛季战队锦标赛 V2：BO3 局分与五行灵脉阵眼上下文（供参战与观众展示）
+  uint32 team_a_formation_id = 28;                 // A 方生效五行阵法（0=无，1..5）
+  uint32 team_b_formation_id = 29;                 // B 方生效五行阵法（0=无，1..5）
+  WuxingTowerBattleContext tower_context = 30;     // 五行幻境周常爬塔上下文（层数/灵脉/本轮已选符印）
+  CustomDuelRules custom_duel_rules = 31;          // 道友切磋坊生效自定义规则（供参战与观众展示）
+  bool wuxing_synergy_active_this_round = 32;      // 本回合是否激活人宠五行相生合击（每 3 回合）
+  uint32 season_weekly_affix_id = 33;              // 本局生效的赛季全员对称周环境词缀（0=无，1..4）
+  uint32 boss_weekly_affix_id = 34;                // 首领试炼本周冻结五行词缀（0=无/非首领试炼，1金/2木/3水/4火/5土）
+  repeated BattleTacticalPing team_pings = 35;     // 论剑 V4 队内一键战术标点（仅同队可见；敌方与观众视图由节点清空）
 }
 
 message BattleStartS2C {
@@ -116,6 +125,10 @@ message BattleEndS2C {
   uint32 material_tradable_units_added = 7; // 本局实际新增材料中可交易份数（0 或 1）
   bool material_pvp_loss_ineligible = 8;    // true = PVP 负/平未达有效对抗门槛（+0 且不扣永久 660 额度）
   FestivalBeastSettlementSummary festival_beast_settlement = 9; // 瑞兽迎春活动局结算摘要
+  uint32 season_seal_points_added = 10;     // 本局实际新增赛季印进度点（0/1/2）
+  uint32 season_seal_progress_after = 11;   // 本局结算后本季赛季印累计进度点
+  uint32 season_seal_max_points = 12;       // 本季赛季印满级上限（0 = 非赛季合格局）
+  bool season_honor_newly_unlocked = 13;    // true = 本局刚满级永久解锁本季零数值纪念称谓与徽章
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;
@@ -221,6 +234,24 @@ message BattlePrepUpdateS2C {
   BattlePrepState prep_state = 2;
 }
 
+// 论剑 V4 队内一键战术标点提交（参战者；经战斗直连发往 battle 节点，变阵期与每回合行动窗皆可用）。
+message SendBattlePingRequest {
+  uint64 battle_id = 1;
+  uint64 target_actor_id = 2;
+  BattlePingKind kind = 3;
+}
+
+message SendBattlePingResponse {
+  TipInfoMessage error_message = 1;
+  BattleTacticalPing ping = 2; // 成功时回填本次生效标点
+}
+
+// 论剑 V4 队内战术标点推送（严格仅向发送者所属同队成员单播，绝不向对手或观众推送）。
+message BattlePingS2C {
+  uint64 battle_id = 1;
+  BattleTacticalPing ping = 2;
+}
+
 // ==== 客户端直连 battle 节点(设计文档 turn-based-battle-server.md §18,D23-D28)====
 //
 // 大厅一条连接(gate),战斗另一条连接(直连 battle 节点 TCP 端口,票据入场)。
@@ -324,6 +355,10 @@ service BattleClientPlayer {
   // ---- 论剑 V3 战前 15 秒明牌变阵(docs/design/ranked-play-v3-tactical-prep.md):换赛季印/换首发宠与锁定 ----
   rpc UpdateBattlePrep (UpdateBattlePrepRequest) returns (UpdateBattlePrepResponse);
   rpc NotifyBattlePrepUpdate (BattlePrepUpdateS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // ---- 论剑 V4 队内一键战术标点(docs/planning/ranked-play-v4-team-tactics-and-highlights.md):零文字同队战术信号 ----
+  rpc SendBattlePing (SendBattlePingRequest) returns (SendBattlePingResponse);
+  rpc NotifyBattlePing (BattlePingS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }
 
 // ==== 战报回放(docs/design/battle-report-replay.md)====
@@ -359,6 +394,7 @@ message BattleReplay {
   repeated TurnResultS2C rounds = 11;  // 按回合序;每帧带结算后的全量状态,可以从任一回合开始播
   BattleStateS2C final_state = 12;     // 只在 DEADLINE_DRAW 时填:强制结束那一刻的状态
   bool truncated = 13;                 // 超过录制上限,rounds 只录到截断前
+  repeated BattleActorBuildSummary actor_builds = 14; // 开局冻结的参战者脱敏公开配装摘要（供战报一键看配装）
 }
 
 // 回放的外壳:battle → match 提交、match 存库、match → 客户端下发都用它。

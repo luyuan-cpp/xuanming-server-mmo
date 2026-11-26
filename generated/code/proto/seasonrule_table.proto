@@ -24,6 +24,8 @@ message SeasonRuleTable {
 	uint64 catchup_price_per_point = 13;
 	uint32 default_seal_id = 14;
 	string desc = 15;
+	string honor_title_name = 16;
+	string honor_badge_icon_key = 17;
 }
 
 message SeasonRuleTableData {

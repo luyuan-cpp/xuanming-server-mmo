@@ -1,0 +1,46 @@
+{
+ "data": [
+  {
+   "acquire_hint": "官方永久衣柜直售（敬请期待上架）",
+   "desc": "特效仅改变战斗画面，为玄符落曜赋予鎏金符纹光效，不改变伤害、范围与目标规则。",
+   "enabled": 1,
+   "fx_id": "xuanfu_luoyao_impact",
+   "id": 1,
+   "mall_sku_id": 0,
+   "name": "鎏金符纹",
+   "projectile_fx_id": "xuanfu_luoyao_projectile",
+   "skill_table_id": 1201,
+   "sort_order": 10,
+   "tint_hex": "#FFE28A",
+   "vfx_key": "vfx_xuanfu_gilded"
+  },
+  {
+   "acquire_hint": "官方永久衣柜直售（敬请期待上架）",
+   "desc": "特效仅改变战斗画面，为紫霄雷阵赋予紫霄惊雷光效，不改变伤害、范围与目标规则。",
+   "enabled": 1,
+   "fx_id": "zixiao_leizhen_strike",
+   "id": 2,
+   "mall_sku_id": 0,
+   "name": "紫霄惊雷",
+   "skill_table_id": 1202,
+   "sort_order": 20,
+   "telegraph_fx_id": "zixiao_leizhen_telegraph",
+   "tint_hex": "#D2A8FF",
+   "vfx_key": "vfx_zixiao_amethyst"
+  },
+  {
+   "acquire_hint": "赛季荣誉或官方永久衣柜获取",
+   "desc": "特效仅改变战斗画面，为寒星凝魄赋予寒星流华光效，不改变伤害、范围与目标规则。",
+   "enabled": 1,
+   "fx_id": "hanxing_ningpo_impact",
+   "id": 3,
+   "mall_sku_id": 0,
+   "name": "寒星流华",
+   "projectile_fx_id": "hanxing_ningpo_projectile",
+   "skill_table_id": 1203,
+   "sort_order": 30,
+   "tint_hex": "#A8F5FF",
+   "vfx_key": "vfx_hanxing_aurora"
+  }
+ ]
+}

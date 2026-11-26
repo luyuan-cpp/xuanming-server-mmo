@@ -1,0 +1,29 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "SkillVfxCosmeticTableOuterClass";
+option java_multiple_files = true;
+
+
+message SkillVfxCosmeticTable {
+	uint32 id = 1;
+	string vfx_key = 2;
+	string name = 3;
+	uint32 skill_table_id = 4;
+	string fx_id = 5;
+	string projectile_fx_id = 6;
+	string telegraph_fx_id = 7;
+	string tint_hex = 8;
+	uint32 enabled = 9;
+	uint32 sort_order = 10;
+	uint64 mall_sku_id = 11;
+	string acquire_hint = 12;
+	string desc = 13;
+}
+
+message SkillVfxCosmeticTableData {
+	repeated SkillVfxCosmeticTable data = 1;
+}

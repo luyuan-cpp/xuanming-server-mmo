@@ -529,10 +529,11 @@ func (c *TrialResultConsumer) processRecordOnce(ctx context.Context, msg kafkago
 	return nil
 }
 
-// isGuildTrialResult 报告一条结果是否属于帮会同道历练。没有活动上下文(普通对局)、或是别的活动类型 → false。
-// 上下文残缺(各 id 为 0)但 kind 是历练的仍算:交给 handler 判成"上下文不可用",不在这里悄悄吞掉。
+// isGuildTrialResult 报告一条结果是否属于帮会同道历练或帮会全天帮战 V2。
 func isGuildTrialResult(ev *kafkapb.BattleResultEvent) bool {
-	return ev.GetActivityContext().GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL
+	k := ev.GetActivityContext().GetKind()
+	return k == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL ||
+		k == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR
 }
 
 // settle 调 handler 直到它回 nil(纪律 2)。返回 false = ctx 已结束、handler 仍未成功,调用方不得提交。

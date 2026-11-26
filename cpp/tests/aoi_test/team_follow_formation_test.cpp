@@ -466,3 +466,52 @@ TEST(TeamFollowBroadcastTest, BroadcastsOnStartStopTurnSpeedChangeAndPeriodicall
 	EXPECT_TRUE(TeamFollowShouldBroadcast(east, {true, 10.8, 0.0}, 1)) << "追赶时变速";
 	EXPECT_FALSE(TeamFollowShouldBroadcast(east, {true, 9.5, 0.0}, 1));
 }
+
+TEST(TeamFollowFormationTest, EchelonAndWuxingSpreadLaterallyAndFoldBackInNarrowCorridor)
+{
+	TeamFollowFormation formation(P(0.0, 0.0), kTeamFollowSpacing, TeamFollowStyle::kEchelon);
+	for (uint32_t i = 0; i < 4; ++i)
+	{
+		ASSERT_TRUE(formation.Add(TeamFollowMember{100 + i, i + 1, 0.0}));
+	}
+	std::vector<TeamFollowStep> steps;
+	// 队长沿 +X 走 15 米,留足所有槽位轨迹
+	for (int tick = 1; tick <= 60; ++tick)
+	{
+		formation.Tick(P(0.25 * tick, 0.0), 0.1, {}, steps);
+	}
+	ASSERT_EQ(steps.size(), 4u);
+	// +X 方向的右法向量是 (0, -1),所以负侧移在 +Y、正侧移在 -Y;左右对称且非零。
+	EXPECT_NEAR(steps[0].position.y, 2.0, 1e-6);
+	EXPECT_NEAR(steps[1].position.y, -2.0, 1e-6);
+	EXPECT_NEAR(steps[2].position.y, 3.6, 1e-6);
+	EXPECT_NEAR(steps[3].position.y, -3.6, 1e-6);
+
+	// 切换到五行聚阵:前两翼收紧到 ±2.4,后两名回中轴 y=0
+	formation.SetStyle(TeamFollowStyle::kWuxing);
+	for (int tick = 1; tick <= 20; ++tick)
+	{
+		formation.Tick(P(15.0 + 0.25 * tick, 0.0), 0.1, {}, steps);
+	}
+	EXPECT_NEAR(steps[0].position.y, 2.4, 1e-6);
+	EXPECT_NEAR(steps[1].position.y, -2.4, 1e-6);
+	EXPECT_NEAR(steps[2].position.y, 0.0, 1e-6);
+	EXPECT_NEAR(steps[3].position.y, 0.0, 1e-6);
+
+	// 进入仅 1 米宽窄道(|y| > 0.5 不可走):侧翼队员平滑自动收拢回队长轨迹中心 y=0,不穿墙不卡死
+	const TeamFollowTrail::WalkableCheck narrowCorridor = [](const FollowPoint&, const FollowPoint& to) {
+		return std::abs(to.y) <= 0.5;
+	};
+	for (int tick = 1; tick <= 20; ++tick)
+	{
+		formation.Tick(P(20.0 + 0.25 * tick, 0.0), 0.1, narrowCorridor, steps);
+		for (const auto& step : steps)
+		{
+			EXPECT_LE(std::abs(step.position.y), 0.5 + 1e-6);
+		}
+	}
+	for (const auto& step : steps)
+	{
+		EXPECT_NEAR(step.position.y, 0.0, 1e-6);
+	}
+}

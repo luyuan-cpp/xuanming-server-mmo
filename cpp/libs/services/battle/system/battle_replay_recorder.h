@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "proto/battle/battle_data.pb.h"
 #include "proto/battle/player_battle.pb.h"
@@ -33,6 +34,7 @@ struct BattleReplayHeader
     uint32_t battleConfigId = 0;
     uint64_t startedAtMs = 0;    // CreateBattleRequest.created_at_ms
     std::string tableFingerprint; // 本节点的战斗配表指纹
+    std::vector<::BattleActorBuildSummary> actorBuilds; // 公开脱敏配装摘要（战报一键看配装）
 };
 
 class BattleReplayRecorder

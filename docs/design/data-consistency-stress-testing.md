@@ -217,7 +217,7 @@ Convergence kinds:
 
 Pair this with `kafka-consumer-groups.sh --describe --group <go/db consumer group>`
 for I3 (no backlog). The group name depends on how go/db was started (corrected
-2026-10-16; the code is in place, not compiled or tested, pending Codex verification):
+2026-10-16; the code is in place, not compiled or tested, pending Gemini verification):
 
 | How go/db runs | Consumer group | Topic |
 | --- | --- | --- |

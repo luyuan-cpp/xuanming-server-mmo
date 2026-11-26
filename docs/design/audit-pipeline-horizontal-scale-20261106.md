@@ -1,6 +1,6 @@
 # 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
 
-状态:四部分(A–D)已全部落码,**未编译、未测试,待 Codex 验证**(先重生协议)。改动清单见 §5,验证步骤见 `docs/PROGRESS.md` 2026-11-06「审计流水链路水平扩展」条目。
+状态:四部分(A–D)已全部落码,**未编译、未测试,待 Gemini 验证**(先重生协议)。改动清单见 §5,验证步骤见 `docs/PROGRESS.md` 2026-11-06「审计流水链路水平扩展」条目。
 上游:[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md) 第 15 条;相关:[区服数据回档](./zone_data_rollback.md)(快照的使用方)、
 [TiDB 全区全服数据层](./global-data-layer-tidb-decision.md)、运维手册 [审计 topic 换代](../ops/audit-topic-generation-bump-runbook.md)。
 

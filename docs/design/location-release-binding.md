@@ -1,7 +1,7 @@
 # 删 location 绑定"持有者已释放"(审计 §2.1 修复)
 
 - 日期:2026-10-18
-- 状态:设计定稿,代码与测试同批落在工作区;**未编译、未测试,待 Codex 验证**(命令见 §10 与 `docs/PROGRESS.md` 同日条目)。
+- 状态:设计定稿,代码与测试同批落在工作区;**未编译、未测试,待 Gemini 验证**(命令见 §10 与 `docs/PROGRESS.md` 同日条目)。
 - 来源:[data-overwrite-rollback-audit-20261018.md](data-overwrite-rollback-audit-20261018.md) §2.1 的三条 medium:
   load-handover#1(⊇ login-session-route#0)、load-handover#0、cpp-save-producer#0(= load-handover#2)。
 - 关联:[scene-owner-reentry-barrier.md](scene-owner-reentry-barrier.md)(owner_epoch 与换手门)、
@@ -363,7 +363,7 @@ Redis 7)。脚本出错时按"刚开始等"返回 0,只会多等。
 
 ## 9. 改动清单
 
-手写(生成产物由 Codex 重生,不手改):
+手写(生成产物由 Gemini 重生,不手改):
 
 - proto:`proto/scene_manager/scene_node_service.proto`(`ReleasePlayerRequest.session_ended = 5`)。
 - scene_manager:`internal/logic/{leave_release.go(新), leavescenelogic.go, scene_node_client.go}`、`internal/config/config.go`、
@@ -377,7 +377,7 @@ Redis 7)。脚本出错时按"刚开始等"返回 0,只会多等。
   client_session_handler.cpp}`(工作区里由别的会话从 client_message_processor.* 改名而来)、`cpp/tests/routing_identity_test/routing_identity_test.cpp`。
 - 文档:本文、审计 §2.1、`docs/README.md`、`docs/PROGRESS.md`。
 
-## 10. 验证(Codex)
+## 10. 验证(Gemini)
 
 见 `docs/PROGRESS.md` 2026-10-18「删 location 绑定持有者释放」条目:先 proto-gen,再 Go 两个模块的 vet / test,
 再串行 MSBuild 与 C++ 两个测试工程。通过标准:新增用例全绿,`leavescene_*`、`release_dispatch_test`、`ReleaseFence*`、
@@ -401,7 +401,7 @@ Java 版(`D:\luyuan\xuanming-server-mmo`)按其 `PARITY.md`(本次只读核对,�
 
 ## 12. 登录撞上未释放的持有者(§6 残余 5 的收口)
 
-- 日期:2026-10-18。状态:代码与测试落在工作区;**未编译、未测试,待 Codex 验证**(命令见 `docs/PROGRESS.md` 同日「登录撞上未释放的持有者」条目)。
+- 日期:2026-10-18。状态:代码与测试落在工作区;**未编译、未测试,待 Gemini 验证**(命令见 `docs/PROGRESS.md` 同日「登录撞上未释放的持有者」条目)。
 - 只改 scene_manager。C++ 侧复用 §3.3 的 `HandleSessionEndedRelease`,proto 不改。
 
 ### 12.1 问题
@@ -545,7 +545,7 @@ X 的处置与 §3.3 完全相同 —— 本质上是**替崩溃的 gate 补发�
 
 ## 13. 会话结束释放带覆盖身份(§12.5 残余 1 的收口)
 
-- 日期:2026-10-18。状态:代码与测试落在工作区;**未编译、未测试,待 Codex 验证**(命令见 `docs/PROGRESS.md` 同日「会话结束释放带覆盖身份」条目)。
+- 日期:2026-10-18。状态:代码与测试落在工作区;**未编译、未测试,待 Gemini 验证**(命令见 `docs/PROGRESS.md` 同日「会话结束释放带覆盖身份」条目)。
 - 改服务端内部 proto(`ReleasePlayerRequest` 追加两个字段)、scene_manager 两个派发点、scene 侧一道纯判定。不改 Redis 键、不改存盘。
 
 ### 13.1 问题
@@ -661,7 +661,7 @@ binding_skip_conflict`;后两项有增长时整行升 WARN(`release_fence::Bindi
 
 ### 13.9 改动清单
 
-- proto:`proto/scene_manager/scene_node_service.proto`(`ReleasePlayerRequest.covered_session_id = 6`、`covered_login_generation = 7`)。生成产物由 Codex 重生,不手改。
+- proto:`proto/scene_manager/scene_node_service.proto`(`ReleasePlayerRequest.covered_session_id = 6`、`covered_login_generation = 7`)。生成产物由 Gemini 重生,不手改。
 - scene_manager:`internal/logic/scene_node_client.go`(`RequestNodeReleaseEndedSession` / `dispatchSessionEndedRelease` 多一个 covered 参数)、
   `leavescenelogic.go`(pending 派发填离场身份)、`enter_holder_release.go`(同步请求填这次登录的身份);测试 `leave_release_test.go`、
   `enter_holder_release_test.go`(记录器带 covered、补断言)。
@@ -692,7 +692,7 @@ Java 不改。本次 proto 改动只在服务端内部,不涉及客户端契约;
 
 - 来源:[data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.1 / §3.2 对本文修复的复核,
   四条:r2-gate#1、r2-sm#3、r2-sm#1、r2-sm#2。
-- 状态:四条都对照当前代码复核成立,已修;代码与回归用例落在工作区,**未编译、未测试,待 Codex 验证**(命令见
+- 状态:四条都对照当前代码复核成立,已修;代码与回归用例落在工作区,**未编译、未测试,待 Gemini 验证**(命令见
   `docs/PROGRESS.md` 2026-10-19「location 释放绑定第二轮审计修复」条目)。不改 proto、不改 Redis 键格式(计时键的值格式不变)。
 
 ### 14.1 复核与修法
@@ -751,7 +751,7 @@ miniredis 的服务端时钟(`mr.SetTime`),不再依赖真实墙钟;`routing_ide
 
 ### 14.5 EnterScene 陈旧位置判定补注册表正面证据(r2-sm#3 同源,2026-10-19 另批)
 
-- 来源:§14.3 登记的 r2-sm#3 同源残余。状态:复核成立,已修;代码与回归用例落在工作区,**未编译、未测试,待 Codex 验证**
+- 来源:§14.3 登记的 r2-sm#3 同源残余。状态:复核成立,已修;代码与回归用例落在工作区,**未编译、未测试,待 Gemini 验证**
   (命令见 `docs/PROGRESS.md` 2026-10-19「EnterScene 陈旧位置判定补注册表正面证据」条目)。不改 proto、Redis 键与指标。
 - 调用点:`playerLocationOwnerGone` 全仓只有一处调用(`enterscenelogic.go` 读完 location、落点身份裁决之后,`playerLocationOwnerDead`
   之前)。返回 true 时清空 currentLoc / currentLocRaw / currentZoneID,之后各分支都按"没有位置记录"走。逐个入口看「负载键整键丢失
@@ -814,9 +814,9 @@ Lookup是缓存修复的观察点，不与Redis合并成角色授权事务。Loo
 补正前次只读推导：不能仅凭“旧R曾写到无实体节点”断言永久HandoffPending；现有enter_holder_release路径会按原E请求持有节点，节点无实体时也可按原epoch条件补写真实释放标记。此接缝保留，不为软调度创建第二份永久SQL head。*（2026-10-23 批注：r2-lc#2 之后这条补写改为带围栏的凭证 —— 读本进程实例在原 E 下登记的 `handoff_fence` 原件、重核本节点仍完全不持有后以原件 CAS，见 §3.3 第 2 项的更正；本节点从未为原 E 登记成功时拿不出资格，见那里的残余 1。）*新增回归源码覆盖旧done拒绝、目录未知/冻结、2^53相邻及uint64最大R、raw+tag竞态、未知原件不补权、R2前缀后的迟到回滚、同R bump/keep及回滚重放不复活handoff。尚未运行编译/测试。
 
 
-## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（2026-10-30 落码，11-05 补「先围存档写权行」；11-06 Codex 复验通过）
+## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（2026-10-30 落码，11-05 补「先围存档写权行」；11-06 Gemini 复验通过）
 
-负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留，只有「原件 E ≠ E」一处 11-05 按评审改成了「< E」，见 §17.9 差异 7）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例 11-05 随 `0f484db0d` 进主干。**11-06 Codex 复验通过**：`go/scene_manager` 的 build、vet 与 `./internal/logic/...` 全量 756 个顶层用例 PASS、0 FAIL、0 SKIP，含本节全部用例，跨语言钉住用例没有 SKIP（PROGRESS 2026-11-06「修正 scene_manager 五项旧夹具」）。
+负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留，只有「原件 E ≠ E」一处 11-05 按评审改成了「< E」，见 §17.9 差异 7）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例 11-05 随 `0f484db0d` 进主干。**11-06 Gemini 复验通过**：`go/scene_manager` 的 build、vet 与 `./internal/logic/...` 全量 756 个顶层用例 PASS、0 FAIL、0 SKIP，含本节全部用例，跨语言钉住用例没有 SKIP（PROGRESS 2026-11-06「修正 scene_manager 五项旧夹具」）。
 
 ### 17.1 问题
 
@@ -891,10 +891,10 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 2. 协调：`go/scene_manager/internal/logic/{leave_release.go, leavescenelogic.go, enter_holder_release.go, owner_epoch.go, owner_replaced.go}` 在 2026-10-24 有大量其他会话的未提交改动（PROGRESS「2026-10-23 跨 zone 收尾:GO-3 同号重启接管…」「scene_manager 死节点收尾…」，以及 zone Redis 回退防护会话的铸造地板 + WAITAOF）。开工前用 ListAgents 找到这些会话，确认文件归属；新 Lua 尽量放进新文件（例如 `unqualified_holder_revoke.go`），调用点只做小段锚点改动。
 3. 落码：Lua 与 Go 判定、LeaveScene 与 EnterScene 释放门两个调用点、宽限配置键（`scene_manager` config，缺省 120s，启动时校验必须大于 85s）、指标、上面的回归用例。
 4. 文档：本节改为"已落码"，§3.3 残余 1 与 `cross-zone-scene-travel.md` 残余 2 改为指向本节，`docs/ops/cross-zone-failure-test-runbook.md` 补 `revoked_unqualified` 的观测与演练项。
-5. 交 Codex：`go/scene_manager` 的 gofmt、`go vet ./internal/logic`、定向与全量 `go test ./internal/logic`；没有 C++ 或 proto 变更。
+5. 交 Gemini：`go/scene_manager` 的 gofmt、`go vet ./internal/logic`、定向与全量 `go test ./internal/logic`；没有 C++ 或 proto 变更。
 6. Java 版：不适用。Java 的交接是一笔 MySQL 交出事务（PARITY 有意差异 D1），没有 location 标记链与 owner_epoch 铸造。按约定不登记 PARITY。
 
-### 17.9 落码记录（2026-10-30 落码，11-05 按存档直写与玩家域 Redis 补一轮；11-06 Codex 复验通过）
+### 17.9 落码记录（2026-10-30 落码，11-05 按存档直写与玩家域 Redis 补一轮；11-06 Gemini 复验通过）
 
 10-31 起两处底层变了，本节按 11-05 的代码写：玩家存档改为直写 TiDB，存盘与认领由写权行（`player_store` 的 kind 0 行）挡旧写，见 [player-save-direct-commit.md](player-save-direct-commit.md) §4；交接资格从 `save_barrier` 搬到独立 hash `player:{id}:handoff_fence`，玩家键都带 `{id}`，走玩家域句柄；场景人数改为成员集合，放在控制域。撤销实现由那次改造的会话随 `65c69f4a9` / `e33b99351` 适配过（键、成员、句柄），11-05 本会话补上撤销之前先围存档写权行这一步（「数据覆写审计 R2 交接」会话按存档直写之后的代码复核时提出）。同日一次独立的对抗评审（只读子代理）之后又收紧四处：预判只认 owner_epoch 键原值；原件代次 > E 不撤销；等待计时键的 TTL 盖住宽限；摘成员没做完改由成员集合对账兜底。见下面差异 2、3、7 与残余 4。评审对着的是同日先写的「撤销后补释放 + 发件箱」版本，结论按改后的代码逐条复核过；只针对发件箱的几条随方案作废。
 
@@ -1010,7 +1010,7 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 | EnterScene 一侧围写权行失败：不撤销、照回 18、状态不变 | `TestEnterScene_LoginRevokeWaitsWhenPlayerStoreFenceFails` |
 | scene 自发的 18 不撤销 | `TestEnterScene_SceneInitiatedRejectionNeverRevokes` |
 
-**验证（Codex）**：
+**验证（Gemini）**：
 - 命令见 `docs/PROGRESS.md` 2026-11-05「§17 无资格撤销订正」条目。它取代同日「location 无资格持有者带围栏撤销（§17）落码收尾」条目里的发件箱描述与验证命令。
 - 11-06 的 scene_manager 全量复验已覆盖这些用例，结果见本节开头。
 - 11-10 之后只改了注释与文档（`svc/role_directory.go`、`svc/servicecontext.go` 两处注释，外加后者一行 gofmt 对齐），改动文件 `gofmt -l` 无输出。运维观测与演练见 `docs/ops/cross-zone-failure-test-runbook.md` v3.2 / v3.3（§2.3、§2.4、场景 UQ）。

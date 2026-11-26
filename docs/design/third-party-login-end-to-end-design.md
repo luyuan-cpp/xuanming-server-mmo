@@ -202,15 +202,15 @@ Unity 客户端里这几种第三方登录都用 `LoginCredential.ForThirdParty(
 | Java Gateway `/api/login` controller + DTO、grpc-java 客户端 | 已完成（LoginController / LoginService / LoginRpcClient） |
 | login.yaml 配置 WeChat / QQ（K8s Secret） | 已完成：`AppSecretEnv` + 启动期门禁；`k8s_deploy.ps1` 渲染 + Secret `login-oauth`（2026-10-18） |
 | loginlogic 自动注册分支对 wechat / qq 走通 | 已完成（全局 SQL 账号目录，首次登录自动建目录行；2026-10-21 前是 login Redis 的 `account:<account>`） |
-| 微信 / 抖音小游戏登录（`wechat_minigame` / `douyin_minigame`） | 2026-11-12 服务端落码，未编译、未测试，待 Codex 验证（§十一） |
-| 小游戏登录的 K8s 渲染（部署参数、Secret、防误关） | 2026-11-12 已落码，未运行，待 Codex 跑契约测试（§11.3） |
+| 微信 / 抖音小游戏登录（`wechat_minigame` / `douyin_minigame`） | 2026-11-12 服务端落码，未编译、未测试，待 Gemini 验证（§十一） |
+| 小游戏登录的 K8s 渲染（部署参数、Secret、防误关） | 2026-11-12 已落码，未运行，待 Gemini 跑契约测试（§11.3） |
 | 单元测试：mock 渠道 HTTP、错误传播 | 已落码；2026-10-19 Go 定向 7 项通过，全量 519 个顶层与 375 个子测试通过、4 个顶层环境条件跳过，旧行为两例精确断言红灯成立；证据与范围见 交接文档（原 `docs/handoff/handoff-tip-fault-gateway-500-20261018.md`，已清理，见 `ccf2840b2`） |
 | 本地沙箱端到端（sandbox_mock） | 工具已有；linux 登录栈 QQ AppId 与 mock 不一致的问题已修（2026-10-18） |
 | 真实微信 / QQ 沙箱联调 → /api/login → /api/assign-gate → gate | **未做**，需要有真凭证的人按 runbook §C.2 执行 |
 | 单 zone 灰度 24 小时、全量开放 | 未做 |
 | `Auth.EnabledTypes` 灰度配置 | 不存在这个配置；按 zone 开关第三方登录仍是后续设计 |
 | 网关按 tip 故障列回 500（§三） | 已落码（两版同批），导表与 147 项导表器测试已有证据；本轮主仓 gateway 204 项通过、5 项条件跳过，config_node 367 份源码编译通过且无测试；示例 starter 在 Surefire 加载前失败，后续验收停止。独立 Java 历史定向 42 项仅按输入 SHA 条件复用，不表示全 reactor 通过。详见 交接文档（原 `docs/handoff/handoff-tip-fault-gateway-500-20261018.md`，已清理，见 `ccf2840b2`）；客户端可选文案补丁未打 |
-| Apple / Google 登录（`apple` / `google`） | 2026-11-13 服务端、沙箱 mock 与 K8s 渲染落码，未编译、未测试，待 Codex 验证（§十二） |
+| Apple / Google 登录（`apple` / `google`） | 2026-11-13 服务端、沙箱 mock 与 K8s 渲染落码，未编译、未测试，待 Gemini 验证（§十二） |
 | UserBindings 账号合并表 | 后续 |
 
 ---
@@ -316,7 +316,7 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 
 ---
 
-## 十一、小游戏登录（2026-11-12，已落码，未编译、未测试，待 Codex 验证）
+## 十一、小游戏登录（2026-11-12，已落码，未编译、未测试，待 Gemini 验证）
 
 用户 2026-10-19 定微信、抖音走小游戏形态（[充值设计](./payment-recharge.md) 文首）。小游戏的登录凭证和 App 不是同一套接口，原有的 `wechat` provider 换不了小游戏的 code，所以加两个 provider。
 
@@ -369,7 +369,7 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 
 ---
 
-## 十二、Apple / Google 登录（2026-11-13，已落码，未编译、未测试，待 Codex 验证）
+## 十二、Apple / Google 登录（2026-11-13，已落码，未编译、未测试，待 Gemini 验证）
 
 海外上架用。用了第三方登录的 iOS App 要同时提供注重隐私的等价登录方式（App Store 审核指南 4.8），通行做法是 Sign in with Apple；安卓的通行做法是 Google 登录。两家都是 OIDC：客户端 SDK 直接拿到渠道签名的身份令牌（ID token），服务端用渠道公布的公钥验签，不需要应用密钥，也不调渠道的换票接口。
 

@@ -7295,6 +7295,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
     kDescFieldNumber = 16,
     kCultivationTierNameFieldNumber = 18,
     kCultivationArtKeyFieldNumber = 19,
+    kCosmeticArtKeyFieldNumber = 23,
     kDerivedFieldNumber = 14,
     kEntriesFieldNumber = 20,
     kNextTierFieldNumber = 21,
@@ -7310,6 +7311,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
     kResetCostGoldFieldNumber = 11,
     kGrowthFieldNumber = 12,
     kCultivationTierFieldNumber = 17,
+    kCosmeticIdFieldNumber = 22,
   };
   // repeated .PetDimensionInfo dimensions = 13;
   [[nodiscard]] int dimensions_size()
@@ -7410,6 +7412,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
   const ::std::string& _internal_cultivation_art_key() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_cultivation_art_key(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_cultivation_art_key();
+
+  public:
+  // string cosmetic_art_key = 23;
+  void clear_cosmetic_art_key() ;
+  [[nodiscard]] const ::std::string& cosmetic_art_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_cosmetic_art_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_cosmetic_art_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_cosmetic_art_key();
+  void set_allocated_cosmetic_art_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_cosmetic_art_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_cosmetic_art_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_cosmetic_art_key();
 
   public:
   // .PetDerivedInfo derived = 14;
@@ -7580,12 +7597,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
   void _internal_set_cultivation_tier(::uint32_t value);
 
   public:
+  // uint32 cosmetic_id = 22;
+  void clear_cosmetic_id() ;
+  [[nodiscard]] ::uint32_t cosmetic_id() const;
+  void set_cosmetic_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cosmetic_id() const;
+  void _internal_set_cosmetic_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
-                          4, 80,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          4, 96,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7620,6 +7647,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
     ::google::protobuf::internal::ArenaStringPtr desc_;
     ::google::protobuf::internal::ArenaStringPtr cultivation_tier_name_;
     ::google::protobuf::internal::ArenaStringPtr cultivation_art_key_;
+    ::google::protobuf::internal::ArenaStringPtr cosmetic_art_key_;
     ::PetDerivedInfo* PROTOBUF_NULLABLE derived_;
     ::PetEntriesInfo* PROTOBUF_NULLABLE entries_;
     ::PetTierAscensionInfo* PROTOBUF_NULLABLE next_tier_;
@@ -7635,6 +7663,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
     ::uint64_t reset_cost_gold_;
     ::uint32_t growth_;
     ::uint32_t cultivation_tier_;
+    ::uint32_t cosmetic_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11489,7 +11518,7 @@ inline void PetTierAscensionInfo::_internal_set_block_tip_id(::uint32_t value) {
 inline void PetInfo::clear_pet_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t PetInfo::pet_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.pet_id)
@@ -11497,7 +11526,7 @@ inline ::uint64_t PetInfo::pet_id() const {
 }
 inline void PetInfo::set_pet_id(::uint64_t value) {
   _internal_set_pet_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PetInfo.pet_id)
 }
 inline ::uint64_t PetInfo::_internal_pet_id() const {
@@ -11513,7 +11542,7 @@ inline void PetInfo::_internal_set_pet_id(::uint64_t value) {
 inline void PetInfo::clear_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t PetInfo::pet_table_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.pet_table_id)
@@ -11521,7 +11550,7 @@ inline ::uint32_t PetInfo::pet_table_id() const {
 }
 inline void PetInfo::set_pet_table_id(::uint32_t value) {
   _internal_set_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PetInfo.pet_table_id)
 }
 inline ::uint32_t PetInfo::_internal_pet_table_id() const {
@@ -11601,7 +11630,7 @@ inline void PetInfo::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) 
 inline void PetInfo::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PetInfo::level() const {
   // @@protoc_insertion_point(field_get:PetInfo.level)
@@ -11609,7 +11638,7 @@ inline ::uint32_t PetInfo::level() const {
 }
 inline void PetInfo::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PetInfo.level)
 }
 inline ::uint32_t PetInfo::_internal_level() const {
@@ -11625,7 +11654,7 @@ inline void PetInfo::_internal_set_level(::uint32_t value) {
 inline void PetInfo::clear_quality() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.quality_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t PetInfo::quality() const {
   // @@protoc_insertion_point(field_get:PetInfo.quality)
@@ -11633,7 +11662,7 @@ inline ::uint32_t PetInfo::quality() const {
 }
 inline void PetInfo::set_quality(::uint32_t value) {
   _internal_set_quality(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PetInfo.quality)
 }
 inline ::uint32_t PetInfo::_internal_quality() const {
@@ -11649,7 +11678,7 @@ inline void PetInfo::_internal_set_quality(::uint32_t value) {
 inline void PetInfo::clear_model_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.model_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t PetInfo::model_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.model_id)
@@ -11657,7 +11686,7 @@ inline ::uint32_t PetInfo::model_id() const {
 }
 inline void PetInfo::set_model_id(::uint32_t value) {
   _internal_set_model_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:PetInfo.model_id)
 }
 inline ::uint32_t PetInfo::_internal_model_id() const {
@@ -11673,7 +11702,7 @@ inline void PetInfo::_internal_set_model_id(::uint32_t value) {
 inline void PetInfo::clear_is_active() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_active_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool PetInfo::is_active() const {
   // @@protoc_insertion_point(field_get:PetInfo.is_active)
@@ -11681,7 +11710,7 @@ inline bool PetInfo::is_active() const {
 }
 inline void PetInfo::set_is_active(bool value) {
   _internal_set_is_active(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:PetInfo.is_active)
 }
 inline bool PetInfo::_internal_is_active() const {
@@ -11697,7 +11726,7 @@ inline void PetInfo::_internal_set_is_active(bool value) {
 inline void PetInfo::clear_total_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t PetInfo::total_points() const {
   // @@protoc_insertion_point(field_get:PetInfo.total_points)
@@ -11705,7 +11734,7 @@ inline ::uint32_t PetInfo::total_points() const {
 }
 inline void PetInfo::set_total_points(::uint32_t value) {
   _internal_set_total_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:PetInfo.total_points)
 }
 inline ::uint32_t PetInfo::_internal_total_points() const {
@@ -11721,7 +11750,7 @@ inline void PetInfo::_internal_set_total_points(::uint32_t value) {
 inline void PetInfo::clear_remaining_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t PetInfo::remaining_points() const {
   // @@protoc_insertion_point(field_get:PetInfo.remaining_points)
@@ -11729,7 +11758,7 @@ inline ::uint32_t PetInfo::remaining_points() const {
 }
 inline void PetInfo::set_remaining_points(::uint32_t value) {
   _internal_set_remaining_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:PetInfo.remaining_points)
 }
 inline ::uint32_t PetInfo::_internal_remaining_points() const {
@@ -11745,7 +11774,7 @@ inline void PetInfo::_internal_set_remaining_points(::uint32_t value) {
 inline void PetInfo::clear_pool_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pool_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t PetInfo::pool_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.pool_id)
@@ -11753,7 +11782,7 @@ inline ::uint32_t PetInfo::pool_id() const {
 }
 inline void PetInfo::set_pool_id(::uint32_t value) {
   _internal_set_pool_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:PetInfo.pool_id)
 }
 inline ::uint32_t PetInfo::_internal_pool_id() const {
@@ -11769,7 +11798,7 @@ inline void PetInfo::_internal_set_pool_id(::uint32_t value) {
 inline void PetInfo::clear_reset_cost_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reset_cost_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t PetInfo::reset_cost_gold() const {
   // @@protoc_insertion_point(field_get:PetInfo.reset_cost_gold)
@@ -11777,7 +11806,7 @@ inline ::uint64_t PetInfo::reset_cost_gold() const {
 }
 inline void PetInfo::set_reset_cost_gold(::uint64_t value) {
   _internal_set_reset_cost_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:PetInfo.reset_cost_gold)
 }
 inline ::uint64_t PetInfo::_internal_reset_cost_gold() const {
@@ -11793,7 +11822,7 @@ inline void PetInfo::_internal_set_reset_cost_gold(::uint64_t value) {
 inline void PetInfo::clear_growth() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.growth_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t PetInfo::growth() const {
   // @@protoc_insertion_point(field_get:PetInfo.growth)
@@ -11801,7 +11830,7 @@ inline ::uint32_t PetInfo::growth() const {
 }
 inline void PetInfo::set_growth(::uint32_t value) {
   _internal_set_growth(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:PetInfo.growth)
 }
 inline ::uint32_t PetInfo::_internal_growth() const {
@@ -11870,14 +11899,14 @@ PetInfo::_internal_mutable_dimensions() {
 
 // .PetDerivedInfo derived = 14;
 inline bool PetInfo::has_derived() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
   PROTOBUF_ASSUME(!value || _impl_.derived_ != nullptr);
   return value;
 }
 inline void PetInfo::clear_derived() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.derived_ != nullptr) _impl_.derived_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline const ::PetDerivedInfo& PetInfo::_internal_derived() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11896,16 +11925,16 @@ inline void PetInfo::unsafe_arena_set_allocated_derived(
   }
   _impl_.derived_ = reinterpret_cast<::PetDerivedInfo*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PetInfo.derived)
 }
 inline ::PetDerivedInfo* PROTOBUF_NULLABLE PetInfo::release_derived() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::PetDerivedInfo* released = _impl_.derived_;
   _impl_.derived_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11925,7 +11954,7 @@ inline ::PetDerivedInfo* PROTOBUF_NULLABLE PetInfo::unsafe_arena_release_derived
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PetInfo.derived)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::PetDerivedInfo* temp = _impl_.derived_;
   _impl_.derived_ = nullptr;
   return temp;
@@ -11940,7 +11969,7 @@ inline ::PetDerivedInfo* PROTOBUF_NONNULL PetInfo::_internal_mutable_derived() {
 }
 inline ::PetDerivedInfo* PROTOBUF_NONNULL PetInfo::mutable_derived()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::PetDerivedInfo* _msg = _internal_mutable_derived();
   // @@protoc_insertion_point(field_mutable:PetInfo.derived)
   return _msg;
@@ -11957,9 +11986,9 @@ inline void PetInfo::set_allocated_derived(::PetDerivedInfo* PROTOBUF_NULLABLE v
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
 
   _impl_.derived_ = reinterpret_cast<::PetDerivedInfo*>(value);
@@ -12021,7 +12050,7 @@ PetInfo::_internal_mutable_skill_table_ids() {
 inline void PetInfo::clear_cultivation_tier() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cultivation_tier_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t PetInfo::cultivation_tier() const {
   // @@protoc_insertion_point(field_get:PetInfo.cultivation_tier)
@@ -12029,7 +12058,7 @@ inline ::uint32_t PetInfo::cultivation_tier() const {
 }
 inline void PetInfo::set_cultivation_tier(::uint32_t value) {
   _internal_set_cultivation_tier(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:PetInfo.cultivation_tier)
 }
 inline ::uint32_t PetInfo::_internal_cultivation_tier() const {
@@ -12171,14 +12200,14 @@ inline void PetInfo::set_allocated_cultivation_art_key(::std::string* PROTOBUF_N
 
 // .PetEntriesInfo entries = 20;
 inline bool PetInfo::has_entries() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
   PROTOBUF_ASSUME(!value || _impl_.entries_ != nullptr);
   return value;
 }
 inline void PetInfo::clear_entries() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.entries_ != nullptr) _impl_.entries_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline const ::PetEntriesInfo& PetInfo::_internal_entries() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -12197,16 +12226,16 @@ inline void PetInfo::unsafe_arena_set_allocated_entries(
   }
   _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PetInfo.entries)
 }
 inline ::PetEntriesInfo* PROTOBUF_NULLABLE PetInfo::release_entries() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PetEntriesInfo* released = _impl_.entries_;
   _impl_.entries_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -12226,7 +12255,7 @@ inline ::PetEntriesInfo* PROTOBUF_NULLABLE PetInfo::unsafe_arena_release_entries
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PetInfo.entries)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PetEntriesInfo* temp = _impl_.entries_;
   _impl_.entries_ = nullptr;
   return temp;
@@ -12241,7 +12270,7 @@ inline ::PetEntriesInfo* PROTOBUF_NONNULL PetInfo::_internal_mutable_entries() {
 }
 inline ::PetEntriesInfo* PROTOBUF_NONNULL PetInfo::mutable_entries()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PetEntriesInfo* _msg = _internal_mutable_entries();
   // @@protoc_insertion_point(field_mutable:PetInfo.entries)
   return _msg;
@@ -12258,9 +12287,9 @@ inline void PetInfo::set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE v
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
 
   _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
@@ -12269,14 +12298,14 @@ inline void PetInfo::set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE v
 
 // .PetTierAscensionInfo next_tier = 21;
 inline bool PetInfo::has_next_tier() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
   PROTOBUF_ASSUME(!value || _impl_.next_tier_ != nullptr);
   return value;
 }
 inline void PetInfo::clear_next_tier() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.next_tier_ != nullptr) _impl_.next_tier_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline const ::PetTierAscensionInfo& PetInfo::_internal_next_tier() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -12295,16 +12324,16 @@ inline void PetInfo::unsafe_arena_set_allocated_next_tier(
   }
   _impl_.next_tier_ = reinterpret_cast<::PetTierAscensionInfo*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PetInfo.next_tier)
 }
 inline ::PetTierAscensionInfo* PROTOBUF_NULLABLE PetInfo::release_next_tier() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::PetTierAscensionInfo* released = _impl_.next_tier_;
   _impl_.next_tier_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -12324,7 +12353,7 @@ inline ::PetTierAscensionInfo* PROTOBUF_NULLABLE PetInfo::unsafe_arena_release_n
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PetInfo.next_tier)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::PetTierAscensionInfo* temp = _impl_.next_tier_;
   _impl_.next_tier_ = nullptr;
   return temp;
@@ -12339,7 +12368,7 @@ inline ::PetTierAscensionInfo* PROTOBUF_NONNULL PetInfo::_internal_mutable_next_
 }
 inline ::PetTierAscensionInfo* PROTOBUF_NONNULL PetInfo::mutable_next_tier()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::PetTierAscensionInfo* _msg = _internal_mutable_next_tier();
   // @@protoc_insertion_point(field_mutable:PetInfo.next_tier)
   return _msg;
@@ -12356,9 +12385,9 @@ inline void PetInfo::set_allocated_next_tier(::PetTierAscensionInfo* PROTOBUF_NU
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
 
   _impl_.next_tier_ = reinterpret_cast<::PetTierAscensionInfo*>(value);
@@ -12427,6 +12456,94 @@ inline void PetInfo::set_allocated_desc(::std::string* PROTOBUF_NULLABLE value) 
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:PetInfo.desc)
+}
+
+// uint32 cosmetic_id = 22;
+inline void PetInfo::clear_cosmetic_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t PetInfo::cosmetic_id() const {
+  // @@protoc_insertion_point(field_get:PetInfo.cosmetic_id)
+  return _internal_cosmetic_id();
+}
+inline void PetInfo::set_cosmetic_id(::uint32_t value) {
+  _internal_set_cosmetic_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:PetInfo.cosmetic_id)
+}
+inline ::uint32_t PetInfo::_internal_cosmetic_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cosmetic_id_;
+}
+inline void PetInfo::_internal_set_cosmetic_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_id_ = value;
+}
+
+// string cosmetic_art_key = 23;
+inline void PetInfo::clear_cosmetic_art_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_art_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& PetInfo::cosmetic_art_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetInfo.cosmetic_art_key)
+  return _internal_cosmetic_art_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetInfo::set_cosmetic_art_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.cosmetic_art_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetInfo.cosmetic_art_key)
+}
+inline ::std::string* PROTOBUF_NONNULL PetInfo::mutable_cosmetic_art_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_cosmetic_art_key();
+  // @@protoc_insertion_point(field_mutable:PetInfo.cosmetic_art_key)
+  return _s;
+}
+inline const ::std::string& PetInfo::_internal_cosmetic_art_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cosmetic_art_key_.Get();
+}
+inline void PetInfo::_internal_set_cosmetic_art_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_art_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetInfo::_internal_mutable_cosmetic_art_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.cosmetic_art_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetInfo::release_cosmetic_art_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetInfo.cosmetic_art_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.cosmetic_art_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.cosmetic_art_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetInfo::set_allocated_cosmetic_art_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.cosmetic_art_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.cosmetic_art_key_.IsDefault()) {
+    _impl_.cosmetic_art_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetInfo.cosmetic_art_key)
 }
 
 // -------------------------------------------------------------------

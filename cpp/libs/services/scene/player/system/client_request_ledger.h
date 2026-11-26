@@ -61,6 +61,9 @@ enum class ClientRequestKind : uint8_t
 	kSkillScrollCraft = 12,           // SceneSkillClientPlayer.CraftSkillBook:分卷宗拓印常规/稀世技能书
 	kLearnSkillBook = 13,             // SceneSkillClientPlayer.LearnSkillBook:研习未学技能书永久解锁
 	kDismantleSkillBook = 14,         // SceneSkillClientPlayer.DismantleSkillBook:拆解未学常规书返还残页
+	kBuySpiritShopGoods = 15,         // SceneSpiritShopClientPlayer.BuySpiritShopGoods:官方灵石百宝阁购买
+	kUnlockTravelPassPremium = 16,    // SceneActivityClientPlayer.UnlockTravelPassPremium:解锁游历手记典藏轨
+	kClaimTravelPassReward = 17,      // SceneActivityClientPlayer.ClaimTravelPassReward:领取游历手记奖励
 	kCount
 };
 
@@ -80,7 +83,9 @@ inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhanc
 														  "buy_afk_pass", "switch_appearance", "start_appearance_trial",
 														  "catchup_season_seal", "claim_trial_journal_milestone",
 														  "redeem_bound_artifact_voucher", "skill_scroll_craft",
-														  "learn_skill_book", "dismantle_skill_book"};
+														  "learn_skill_book", "dismantle_skill_book",
+														  "buy_spirit_shop_goods",
+														  "unlock_travel_pass_premium", "claim_travel_pass_reward"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -130,6 +135,7 @@ struct ClientRequestResult
 	uint32_t craftedSkillTableId{0};
 	uint64_t scrollCraftRevision{0};
 	uint32_t scrollBonusFragments{0};
+	uint32_t travelPassClaimedCount{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

@@ -1,7 +1,7 @@
 # 服务端发布打包标准(对标 luyuan-go/xuanming-server)
 
 **Created:** 2026-09-14
-**状态:** P1–P4 已落码(2026-09-16/17),**未编译、未运行、未按 §6 验证**——按 AGENTS §10.1 由 Codex 执行。
+**状态:** P1–P4 已落码(2026-09-16/17),**未编译、未运行、未按 §6 验证**——按 AGENTS §10.1 由 Gemini 执行。
 §5 的四个待拍板项用户未逐项回答,**按推荐项默认执行**(GitHub Actions / 四批全做 / 不做 SBOM 签名扫描 / 不引入 GoReleaser·MinIO·Harbor·Argo CD)。
 实施状态、评审结论与遗留缺口见 §7。
 **关联:** [docs/ops/release-checklist.md](../ops/release-checklist.md)、`tools/scripts/lib/release_common.ps1`、`tools/scripts/release_preflight.ps1`、[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-14(迁移 Job)
@@ -210,7 +210,7 @@ dev 流水线浅克隆不拉 tag,所以 release 不复用 dev job(`A:docs/design
 
 ---
 
-## 6. 验证(交 Codex,按 AGENTS §10.1)
+## 6. 验证(交 Gemini,按 AGENTS §10.1)
 
 每批落码后在交付说明里给出完整命令;通用口径:
 - **P1**:受影响 Go module 逐个 `go build ./... && go test ./...`;构建一个 go-svc 镜像后 `docker run --rm <img> 2>&1 | head -1` 首行必须含 `version=` 且 commit 不为 `unknown`;本地 `go_services.ps1` 构建的 exe 用 `go version -m <exe>` 看到 `-trimpath` 与 ldflags。

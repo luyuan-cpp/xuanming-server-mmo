@@ -229,8 +229,20 @@ type PlayerUint64Comp struct {
 	// 事实源就是这一份(存档 PROFILE 行):唯一写入方 AfkPassSystem(灵石开通、GM),其余代码只读;
 	// 玩家域 Redis 的 player:afk_pass:{<player_id>} 只是它提交之后的投影。
 	AfkPassExpiresAt uint64 `protobuf:"varint,2,opt,name=afk_pass_expires_at,json=afkPassExpiresAt,proto3" json:"afk_pass_expires_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 离线托管期间离队 / 解散时是否自动回到默认主城安全区(默认 false = 留在原地)。
+	AfkAutoReturnCityOnTeamEnd bool `protobuf:"varint,3,opt,name=afk_auto_return_city_on_team_end,json=afkAutoReturnCityOnTeamEnd,proto3" json:"afk_auto_return_city_on_team_end,omitempty"`
+	// 离线托管收获简报计数(跨节点托管跟随、排空疏散与崩溃恢复均随 PROFILE 行落盘保留,
+	// 战斗结算同帧累加与奖励同事务提交;仅统计实际入账,不额外发放任何产出)。
+	HostedRecapStartedAt    uint64 `protobuf:"varint,4,opt,name=hosted_recap_started_at,json=hostedRecapStartedAt,proto3" json:"hosted_recap_started_at,omitempty"`          // 本次托管开始 Unix 秒;0 = 无进行中或待确认简报
+	HostedRecapEndedAt      uint64 `protobuf:"varint,5,opt,name=hosted_recap_ended_at,json=hostedRecapEndedAt,proto3" json:"hosted_recap_ended_at,omitempty"`                // 本次托管结束 Unix 秒;0 = 仍在托管中
+	HostedRecapBattleCount  uint32 `protobuf:"varint,6,opt,name=hosted_recap_battle_count,json=hostedRecapBattleCount,proto3" json:"hosted_recap_battle_count,omitempty"`    // 托管期间实际结算场次
+	HostedRecapWinCount     uint32 `protobuf:"varint,7,opt,name=hosted_recap_win_count,json=hostedRecapWinCount,proto3" json:"hosted_recap_win_count,omitempty"`             // 托管期间胜利场次
+	HostedRecapExpGained    uint64 `protobuf:"varint,8,opt,name=hosted_recap_exp_gained,json=hostedRecapExpGained,proto3" json:"hosted_recap_exp_gained,omitempty"`          // 托管期间实际入账经验
+	HostedRecapSilverGained uint64 `protobuf:"varint,9,opt,name=hosted_recap_silver_gained,json=hostedRecapSilverGained,proto3" json:"hosted_recap_silver_gained,omitempty"` // 托管期间实际入账银两
+	HostedRecapItemCount    uint32 `protobuf:"varint,10,opt,name=hosted_recap_item_count,json=hostedRecapItemCount,proto3" json:"hosted_recap_item_count,omitempty"`         // 托管期间实际入账物品件数(含溢出转邮件)
+	HostedRecapPendingAck   bool   `protobuf:"varint,11,opt,name=hosted_recap_pending_ack,json=hostedRecapPendingAck,proto3" json:"hosted_recap_pending_ack,omitempty"`      // 托管结束待客户端确认;AckHostedRecap 按 started_at 幂等清零
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *PlayerUint64Comp) Reset() {
@@ -275,6 +287,69 @@ func (x *PlayerUint64Comp) GetAfkPassExpiresAt() uint64 {
 		return x.AfkPassExpiresAt
 	}
 	return 0
+}
+
+func (x *PlayerUint64Comp) GetAfkAutoReturnCityOnTeamEnd() bool {
+	if x != nil {
+		return x.AfkAutoReturnCityOnTeamEnd
+	}
+	return false
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapStartedAt() uint64 {
+	if x != nil {
+		return x.HostedRecapStartedAt
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapEndedAt() uint64 {
+	if x != nil {
+		return x.HostedRecapEndedAt
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapBattleCount() uint32 {
+	if x != nil {
+		return x.HostedRecapBattleCount
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapWinCount() uint32 {
+	if x != nil {
+		return x.HostedRecapWinCount
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapExpGained() uint64 {
+	if x != nil {
+		return x.HostedRecapExpGained
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapSilverGained() uint64 {
+	if x != nil {
+		return x.HostedRecapSilverGained
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapItemCount() uint32 {
+	if x != nil {
+		return x.HostedRecapItemCount
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetHostedRecapPendingAck() bool {
+	if x != nil {
+		return x.HostedRecapPendingAck
+	}
+	return false
 }
 
 type PlayerUint32Comp struct {
@@ -356,8 +431,14 @@ type PlayerProfileComp struct {
 	// 置 1 表示该角色已永久拥有对应形象,可随时 0 消耗免费切换;高位未知 bit 混跑时原样透传不截断。
 	// 当前永久形象 appearance_id(若存在于配表)天然视作已拥有,并在首次切换离场时自动补位落盘。
 	AppearanceOwnedBits []byte `protobuf:"bytes,11,opt,name=appearance_owned_bits,json=appearanceOwnedBits,proto3" json:"appearance_owned_bits,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 已永久拥有的灵宠幻化外观位图(PetCosmetic.id 经 cfg_bit_index 映射,低位在前,高位未知 bit 原样透传)。
+	PetCosmeticOwnedBits []byte `protobuf:"bytes,12,opt,name=pet_cosmetic_owned_bits,json=petCosmeticOwnedBits,proto3" json:"pet_cosmetic_owned_bits,omitempty"`
+	// 已永久拥有的技能特效外观位图(SkillVfxCosmetic.id 经 cfg_bit_index 映射,低位在前,高位未知 bit 原样透传)。
+	SkillVfxOwnedBits []byte `protobuf:"bytes,13,opt,name=skill_vfx_owned_bits,json=skillVfxOwnedBits,proto3" json:"skill_vfx_owned_bits,omitempty"`
+	// 玩家已启用的技能特效覆盖(skill_table_id -> SkillVfxCosmetic.id;缺键或 0 表示默认表现,纯战斗画面表现零数值)。
+	EquippedSkillVfx map[uint32]uint32 `protobuf:"bytes,14,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PlayerProfileComp) Reset() {
@@ -463,6 +544,27 @@ func (x *PlayerProfileComp) GetAppearanceSwitchSeq() uint64 {
 func (x *PlayerProfileComp) GetAppearanceOwnedBits() []byte {
 	if x != nil {
 		return x.AppearanceOwnedBits
+	}
+	return nil
+}
+
+func (x *PlayerProfileComp) GetPetCosmeticOwnedBits() []byte {
+	if x != nil {
+		return x.PetCosmeticOwnedBits
+	}
+	return nil
+}
+
+func (x *PlayerProfileComp) GetSkillVfxOwnedBits() []byte {
+	if x != nil {
+		return x.SkillVfxOwnedBits
+	}
+	return nil
+}
+
+func (x *PlayerProfileComp) GetEquippedSkillVfx() map[uint32]uint32 {
+	if x != nil {
+		return x.EquippedSkillVfx
 	}
 	return nil
 }
@@ -634,12 +736,22 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\aAccount\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\"B\n" +
 	"\x10UnregisterPlayer\x12.\n" +
-	"\x13logout_initiated_ms\x18\x01 \x01(\x03R\x11logoutInitiatedMs\"x\n" +
+	"\x13logout_initiated_ms\x18\x01 \x01(\x03R\x11logoutInitiatedMs\"\xfc\x04\n" +
 	"\x10PlayerUint64Comp\x125\n" +
 	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\x12-\n" +
-	"\x13afk_pass_expires_at\x18\x02 \x01(\x04R\x10afkPassExpiresAt\"(\n" +
+	"\x13afk_pass_expires_at\x18\x02 \x01(\x04R\x10afkPassExpiresAt\x12D\n" +
+	" afk_auto_return_city_on_team_end\x18\x03 \x01(\bR\x1aafkAutoReturnCityOnTeamEnd\x125\n" +
+	"\x17hosted_recap_started_at\x18\x04 \x01(\x04R\x14hostedRecapStartedAt\x121\n" +
+	"\x15hosted_recap_ended_at\x18\x05 \x01(\x04R\x12hostedRecapEndedAt\x129\n" +
+	"\x19hosted_recap_battle_count\x18\x06 \x01(\rR\x16hostedRecapBattleCount\x123\n" +
+	"\x16hosted_recap_win_count\x18\a \x01(\rR\x13hostedRecapWinCount\x125\n" +
+	"\x17hosted_recap_exp_gained\x18\b \x01(\x04R\x14hostedRecapExpGained\x12;\n" +
+	"\x1ahosted_recap_silver_gained\x18\t \x01(\x04R\x17hostedRecapSilverGained\x125\n" +
+	"\x17hosted_recap_item_count\x18\n" +
+	" \x01(\rR\x14hostedRecapItemCount\x127\n" +
+	"\x18hosted_recap_pending_ack\x18\v \x01(\bR\x15hostedRecapPendingAck\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"\xcf\x03\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"\xd4\x05\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
@@ -654,7 +766,13 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x10trial_expires_at\x18\t \x01(\x04R\x0etrialExpiresAt\x122\n" +
 	"\x15appearance_switch_seq\x18\n" +
 	" \x01(\x04R\x13appearanceSwitchSeq\x122\n" +
-	"\x15appearance_owned_bits\x18\v \x01(\fR\x13appearanceOwnedBits\"\xaf\x01\n" +
+	"\x15appearance_owned_bits\x18\v \x01(\fR\x13appearanceOwnedBits\x125\n" +
+	"\x17pet_cosmetic_owned_bits\x18\f \x01(\fR\x14petCosmeticOwnedBits\x12/\n" +
+	"\x14skill_vfx_owned_bits\x18\r \x01(\fR\x11skillVfxOwnedBits\x12V\n" +
+	"\x12equipped_skill_vfx\x18\x0e \x03(\v2(.PlayerProfileComp.EquippedSkillVfxEntryR\x10equippedSkillVfx\x1aC\n" +
+	"\x15EquippedSkillVfxEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaf\x01\n" +
 	"\x0ePlayerRenameOp\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -681,7 +799,7 @@ func file_proto_common_component_player_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*NormalLogin)(nil),           // 0: NormalLogin
 	(*CoverLogin)(nil),            // 1: CoverLogin
@@ -693,14 +811,16 @@ var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*PlayerProfileComp)(nil),     // 7: PlayerProfileComp
 	(*PlayerRenameOp)(nil),        // 8: PlayerRenameOp
 	(*PlayerStressTestProbe)(nil), // 9: PlayerStressTestProbe
+	nil,                           // 10: PlayerProfileComp.EquippedSkillVfxEntry
 }
 var file_proto_common_component_player_comp_proto_depIdxs = []int32{
-	8, // 0: PlayerProfileComp.rename_op:type_name -> PlayerRenameOp
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8,  // 0: PlayerProfileComp.rename_op:type_name -> PlayerRenameOp
+	10, // 1: PlayerProfileComp.equipped_skill_vfx:type_name -> PlayerProfileComp.EquippedSkillVfxEntry
+	2,  // [2:2] is the sub-list for method output_type
+	2,  // [2:2] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_comp_proto_init() }
@@ -714,7 +834,7 @@ func file_proto_common_component_player_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_comp_proto_rawDesc), len(file_proto_common_component_player_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

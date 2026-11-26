@@ -1,7 +1,7 @@
 # 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 
 - **日期**:2026-11-19。
-- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Codex 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。
+- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Gemini 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。
 - **授权**:改动约 60 个文件,超过 AGENTS.md §10.2 的 30 个文件门槛。负责人 2026-11-19 逐项同意 W1(共用端口)、W7(新增地址字段)、W10(客户端改法),说明 TLS 放在哪按最标准的做法定、Unity 有官方 WebSocket 就用官方的(前提是能上小游戏),确认原生 App 仍然直连之后回复「开始改」。
 - **范围**:让微信、抖音小游戏客户端连上 gate(大厅长连接)和 battle(每局直连、观战直连)。登录侧的小游戏登录已落码(`auth_type` 为 `wechat_minigame` / `douyin_minigame`,见 [第三方登录端到端设计](third-party-login-end-to-end-design.md) §十一),本文只管登录之后的长连接。
 - **决策编号**:本文 W1–W11。地址模型沿用 [集群外客户端入口](k8s-client-entry.md) D76(进程自报客户端可达地址)。
@@ -196,7 +196,7 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 - 不碰任何存储与提交点。新字段全部是追加的可选字段;项目未上线,`AdmitSlot` 的 Redis 数据可清空,`omitempty` 也让新旧形状互相可读。
 - 客户端可见契约有变化:`/api/assign-gate` 与 `/api/queue-status` 的应答、msg 124、战斗分配、地域测速目标各加一个可选的 WebSocket 地址;gate / battle 的客户端端口多接一种连接。AGENTS.md §12 要求两版同批改;本批按任务约定只在 Java 仓 `PARITY.md` 登记待做,Java 版在补齐之前不接小游戏,新字段对它现有的客户端没有影响。
 
-## 7. 验证(交 Codex,AGENTS.md §10.1)
+## 7. 验证(交 Gemini,AGENTS.md §10.1)
 
 具体命令在 `docs/PROGRESS.md` 的同名条目里。要点:
 
@@ -244,7 +244,7 @@ Unity 客户端(14,不含生成的 C# 协议):
 robot(20,W11):
 - 新增:`robot/pkg/transport.go`、`robot/pkg/wire_conn.go`、`robot/pkg/transport_test.go`、`robot/http_assign_gate_ws_url_test.go`。
 - 修改:`robot/pkg/{client,redirect,heartbeat}.go`、测试 `robot/pkg/{client_test,heartbeat_test}.go`、`robot/{gate,http_assign_gate,battle_direct_conn,network_probe,heartbeat_idle_smoke_scenario,main}.go`、`robot/logic/handler/scene_client_player_common_redirect_to_gate.go`、`robot/config/config.go`、`robot/go.mod`(`golang.org/x/net` 改为直接依赖,版本不变)、`robot/README.md`、`robot/etc/robot.yaml`(注释掉的示例)。
-- `robot/vendor` 由 Codex 跑 `go mod vendor` 更新,不手改。
+- `robot/vendor` 由 Gemini 跑 `go mod vendor` 更新,不手改。
 
 文档:本文、`docs/README.md`、`docs/PROGRESS.md`、`docs/design/k8s-client-entry.md`(互链)、`docs/design/third-party-login-end-to-end-design.md` §11.3、Java 仓 `PARITY.md`。
 

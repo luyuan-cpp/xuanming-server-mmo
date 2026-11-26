@@ -24,6 +24,7 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/afk_pass.h"
 #include "services/scene/player/system/afk_pass_rules.h"
+#include "services/scene/player/system/connection_lost_hold.h"
 #include "table/code/afkpassrule_table.h"
 #include "table/proto/tip/afk_pass_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -449,4 +450,59 @@ TEST_F(AfkPassSystemTest, FailedProjectionSetAndDelSelfHealOnLaterCommitOrRefres
 
 	AfkPassSystem::RefreshProjection(player, kNow + 6);
 	EXPECT_EQ(projections.size(), 5u) << "DEL 确认后不再重复发";
+}
+
+TEST_F(AfkPassSystemTest, SettingsAndHostedRecapLifecycleSurviveCrossNodeAndAckIdempotently)
+{
+	AfkPassInfo info;
+	// 1. 冻结态拒改偏好设置
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+	EXPECT_EQ(AfkPassSystem::SetSettings(player, true, kNow, info), kAfkPassFrozen);
+	EXPECT_FALSE(AfkPassSystem::AutoReturnCityOnTeamEnd(player));
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+
+	// 2. 正常修改偏好并回填 FillInfo
+	EXPECT_EQ(AfkPassSystem::SetSettings(player, true, kNow, info), kSuccess);
+	EXPECT_TRUE(info.auto_return_city_on_team_end());
+	EXPECT_TRUE(AfkPassSystem::AutoReturnCityOnTeamEnd(player));
+
+	// 3. 未进入托管时的战斗结算不计入离线托管收获简报
+	AfkPassSystem::RecordHostedBattleSettlement(player, true, 500, 1000, 3, kNow + 10);
+	AfkPassSystem::FillInfo(player, kNow + 10, info);
+	EXPECT_FALSE(info.has_hosted_recap());
+
+	// 4. 开始托管并累计战斗收益
+	auto& held = tlsEcs.actorRegistry.emplace<PlayerConnectionLostComp>(player);
+	held.hostingStarted = true;
+	AfkPassSystem::OnHostingStarted(player, kNow + 100);
+	AfkPassSystem::RecordHostedBattleSettlement(player, true, 1200, 3500, 2, kNow + 130);
+	AfkPassSystem::RecordHostedBattleSettlement(player, false, 400, 500, 1, kNow + 190);
+
+	// 5. 跨节点托管到达再次调用 OnHostingStarted:沿用原起点与已累计收获,不归零
+	AfkPassSystem::OnHostingStarted(player, kNow + 250);
+	AfkPassSystem::RecordHostedBattleSettlement(player, true, 800, 2000, 4, kNow + 300);
+
+	// 6. 重连接回:封存 ended_at 并置 pending_ack
+	tlsEcs.actorRegistry.remove<PlayerConnectionLostComp>(player);
+	AfkPassSystem::OnHostingEnded(player, kNow + 600, /*requestSave=*/false);
+	AfkPassSystem::FillInfo(player, kNow + 605, info);
+	ASSERT_TRUE(info.has_hosted_recap());
+	EXPECT_EQ(info.hosted_recap().started_at(), kNow + 100);
+	EXPECT_EQ(info.hosted_recap().ended_at(), kNow + 600);
+	EXPECT_EQ(info.hosted_recap().battle_count(), 3u);
+	EXPECT_EQ(info.hosted_recap().win_count(), 2u);
+	EXPECT_EQ(info.hosted_recap().exp_gained(), 2400u);
+	EXPECT_EQ(info.hosted_recap().silver_gained(), 6000u);
+	EXPECT_EQ(info.hosted_recap().item_count(), 7u);
+	EXPECT_TRUE(info.hosted_recap().pending_ack());
+
+	// 7. started_at 不匹配的旧确认不误清当前简报;匹配后清除且再次确认幂等
+	EXPECT_EQ(AfkPassSystem::AckHostedRecap(player, kNow + 1, kNow + 610, info), kSuccess);
+	ASSERT_TRUE(info.has_hosted_recap());
+	EXPECT_TRUE(info.hosted_recap().pending_ack());
+
+	EXPECT_EQ(AfkPassSystem::AckHostedRecap(player, kNow + 100, kNow + 615, info), kSuccess);
+	EXPECT_FALSE(info.has_hosted_recap());
+	EXPECT_EQ(AfkPassSystem::AckHostedRecap(player, kNow + 100, kNow + 620, info), kSuccess);
+	EXPECT_FALSE(info.has_hosted_recap());
 }

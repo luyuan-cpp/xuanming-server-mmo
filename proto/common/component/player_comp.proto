@@ -42,6 +42,18 @@ message PlayerUint64Comp
 	// 事实源就是这一份(存档 PROFILE 行):唯一写入方 AfkPassSystem(灵石开通、GM),其余代码只读;
 	// 玩家域 Redis 的 player:afk_pass:{<player_id>} 只是它提交之后的投影。
 	uint64 afk_pass_expires_at = 2;
+	// 离线托管期间离队 / 解散时是否自动回到默认主城安全区(默认 false = 留在原地)。
+	bool afk_auto_return_city_on_team_end = 3;
+	// 离线托管收获简报计数(跨节点托管跟随、排空疏散与崩溃恢复均随 PROFILE 行落盘保留,
+	// 战斗结算同帧累加与奖励同事务提交;仅统计实际入账,不额外发放任何产出)。
+	uint64 hosted_recap_started_at = 4;    // 本次托管开始 Unix 秒;0 = 无进行中或待确认简报
+	uint64 hosted_recap_ended_at = 5;      // 本次托管结束 Unix 秒;0 = 仍在托管中
+	uint32 hosted_recap_battle_count = 6;  // 托管期间实际结算场次
+	uint32 hosted_recap_win_count = 7;     // 托管期间胜利场次
+	uint64 hosted_recap_exp_gained = 8;    // 托管期间实际入账经验
+	uint64 hosted_recap_silver_gained = 9; // 托管期间实际入账银两
+	uint32 hosted_recap_item_count = 10;   // 托管期间实际入账物品件数(含溢出转邮件)
+	bool hosted_recap_pending_ack = 11;    // 托管结束待客户端确认;AckHostedRecap 按 started_at 幂等清零
 }
 
 message PlayerUint32Comp
@@ -84,6 +96,12 @@ message PlayerProfileComp
 	// 置 1 表示该角色已永久拥有对应形象,可随时 0 消耗免费切换;高位未知 bit 混跑时原样透传不截断。
 	// 当前永久形象 appearance_id(若存在于配表)天然视作已拥有,并在首次切换离场时自动补位落盘。
 	bytes appearance_owned_bits = 11;
+	// 已永久拥有的灵宠幻化外观位图(PetCosmetic.id 经 cfg_bit_index 映射,低位在前,高位未知 bit 原样透传)。
+	bytes pet_cosmetic_owned_bits = 12;
+	// 已永久拥有的技能特效外观位图(SkillVfxCosmetic.id 经 cfg_bit_index 映射,低位在前,高位未知 bit 原样透传)。
+	bytes skill_vfx_owned_bits = 13;
+	// 玩家已启用的技能特效覆盖(skill_table_id -> SkillVfxCosmetic.id;缺键或 0 表示默认表现,纯战斗画面表现零数值)。
+	map<uint32, uint32> equipped_skill_vfx = 14;
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:

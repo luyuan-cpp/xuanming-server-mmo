@@ -9,11 +9,25 @@ import (
 	"match/internal/metrics"
 	"match/internal/svc"
 
+	battlepb "proto/battle"
 	base "proto/common/base"
 	matchpb "proto/match"
+	"shared/generated/pb/table"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+func validateCustomDuelRules(rules *battlepb.CustomDuelRules) bool {
+	if rules == nil {
+		return true
+	}
+	switch rules.GetRoundLimitOverride() {
+	case 0, 8, 12, 20:
+		return true
+	default:
+		return false
+	}
+}
 
 type ChallengeLogic struct {
 	ctx    context.Context
@@ -61,6 +75,12 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 		metrics.ObserveChallenge("invite", "template_not_open")
 		return &matchpb.ChallengePlayerResponse{
 			ErrorMessage: tipErr(constants.ErrModeNotOpen, "该切磋玩法暂未开放"),
+		}, nil
+	}
+	if !validateCustomDuelRules(in.GetCustomRules()) {
+		metrics.ObserveChallenge("invite", "invalid_rules")
+		return &matchpb.ChallengePlayerResponse{
+			ErrorMessage: tipErr(uint32(table.CommonError_kInvalidParameter), "切磋回合上限仅支持默认或 8/12/20 回合"),
 		}, nil
 	}
 	return l.createGlobalChallenge(in, challengerId)

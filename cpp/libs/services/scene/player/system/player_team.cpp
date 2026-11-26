@@ -45,10 +45,12 @@
 #include "modules/scene/comp/scene_comp.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
-#include "player/system/player_lifecycle.h" // IsSceneChangeBusy / RequestSceneChange:普通 EnterScene 的发送侧闸与唯一发送入口
-#include "player/system/team_follow_system.h" // 同场景归队:声明了跟随的队员交给服务器驱动走位
+#include "player/system/afk_pass.h"            // AutoReturnCityOnTeamEnd:托管离队/解散自动回主城安全区偏好
+#include "player/system/player_lifecycle.h"    // IsSceneChangeBusy / RequestSceneChange:普通 EnterScene 的发送侧闸与唯一发送入口
+#include "player/system/team_follow_system.h"  // 同场景归队:声明了跟随的队员交给服务器驱动走位
 #include "spatial/comp/scene_node_scene_comp.h" // AoiListComp:归队前判断队员与队长是否互相可见
 #include "spatial/system/movement.h"            // TeleportWithinScene:归队瞬移
+#include "table/code/world_table.h"             // 默认大世界主城配置号(与 Go scene_manager defaultWorldConfID 同源)
 
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "proto/common/component/actor_comp.pb.h" // Transform:归队时读队长位置
@@ -236,6 +238,111 @@ namespace
 		const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntity->sceneEntity);
 		return sceneInfo != nullptr ? sceneInfo->scene_id() : 0;
 	}
+
+	uint32_t CurrentSceneConfigId(entt::entity player)
+	{
+		const auto* sceneEntity = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+		if (sceneEntity == nullptr)
+		{
+			return 0;
+		}
+		const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntity->sceneEntity);
+		return sceneInfo != nullptr ? sceneInfo->scene_config_id() : 0;
+	}
+
+	// 托管角色在战斗中离队 / 解散时延后到战后解冻立即自动回默认主城安全区。
+	struct AfkReturnCityPendingComp {};
+	thread_local uint32_t tlsDefaultMainCityOverrideForTest = 0;
+
+	uint32_t DefaultMainCityConfigId()
+	{
+		if (tlsDefaultMainCityOverrideForTest != 0)
+		{
+			return tlsDefaultMainCityOverrideForTest;
+		}
+		const auto& rows = WorldTableManager::Instance().GetSnapshot().data.data();
+		return rows.empty() ? 0 : rows.Get(0).scene_id();
+	}
+
+	TeamFollowStyle ToFollowStyle(teampb::TeamFollowFormationStyle style)
+	{
+		switch (style)
+		{
+		case teampb::TEAM_FOLLOW_FORMATION_ECHELON:
+			return TeamFollowStyle::kEchelon;
+		case teampb::TEAM_FOLLOW_FORMATION_WUXING:
+			return TeamFollowStyle::kWuxing;
+		case teampb::TEAM_FOLLOW_FORMATION_COLUMN:
+		default:
+			return TeamFollowStyle::kColumn;
+		}
+	}
+
+	// 离线托管角色离队 / 被踢 / 解散时按偏好自动回到默认主城安全区(与跨节点托管跟随共用 hosted_placement 链)。
+	void TryReturnHostedPlayerToMainCity(entt::entity player)
+	{
+		auto& registry = tlsEcs.actorRegistry;
+		if (!registry.valid(player))
+		{
+			return;
+		}
+		const uint64_t playerId = GuidOf(player);
+		if (playerId == 0 || !AfkPassSystem::AutoReturnCityOnTeamEnd(player))
+		{
+			registry.remove<AfkReturnCityPendingComp>(player);
+			return;
+		}
+		if (HasLiveSession(player, playerId))
+		{
+			registry.remove<AfkReturnCityPendingComp>(player);
+			return; // 玩家已重连在线:绝不打断在线玩家自己决定去向
+		}
+		const auto hostedIdentity = PlayerLifecycleSystem::OfflineHostedIdentity(player);
+		if (!hostedIdentity)
+		{
+			registry.remove<AfkReturnCityPendingComp>(player);
+			return;
+		}
+		if (PlayerBattleSystem::IsInBattle(player))
+		{
+			registry.emplace_or_replace<AfkReturnCityPendingComp>(player);
+			LOG_INFO << "[PlayerTeam] metric=hosted_auto_return_city_deferred reason=in_battle player_id=" << playerId;
+			return;
+		}
+		if (!CanFollow(player, playerId))
+		{
+			return;
+		}
+		const uint32_t defaultCityConfId = DefaultMainCityConfigId();
+		if (defaultCityConfId == 0 || CurrentSceneConfigId(player) == defaultCityConfId)
+		{
+			registry.remove<AfkReturnCityPendingComp>(player);
+			return; // 已经在默认主城安全区或未配置大世界表
+		}
+		const auto smEntity = SelectSceneManagerEntity(playerId);
+		if (smEntity == entt::null)
+		{
+			LOG_WARN << "[PlayerTeam] No available SceneManager node; hosted auto-return-city abandoned, player_id="
+					 << playerId;
+			return;
+		}
+		registry.remove<AfkReturnCityPendingComp>(player);
+
+		::scene_manager::EnterSceneRequest request;
+		request.set_player_id(playerId);
+		request.set_scene_id(0);
+		request.set_scene_conf_id(defaultCityConfId);
+		request.set_gate_zone_id(GetZoneId());
+		request.set_zone_id(GetZoneId());
+		request.set_session_id(hostedIdentity->sessionId);
+		request.set_login_generation(hostedIdentity->loginGeneration);
+		request.set_hosted_placement(true);
+
+		const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(player, smEntity, request,
+																				 /*playerRequested=*/false);
+		LOG_INFO << "[PlayerTeam] metric=hosted_auto_return_city player_id=" << playerId
+				 << " target_scene_conf_id=" << defaultCityConfId << " corr=" << correlationId;
+	}
 } // namespace
 
 struct PlayerTeamFollowScope::State
@@ -311,6 +418,10 @@ void PlayerTeamSystem::OnRefreshEvent(const PlayerTeamRefreshEvent& event)
 
 void PlayerTeamSystem::OnBattleFreezeCleared(entt::entity player)
 {
+	if (tlsEcs.actorRegistry.valid(player) && tlsEcs.actorRegistry.any_of<AfkReturnCityPendingComp>(player))
+	{
+		TryReturnHostedPlayerToMainCity(player);
+	}
 	RefreshAndFollow(player);
 }
 
@@ -461,8 +572,12 @@ void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
                 for (const auto& item : record.members()) {
                     if (item.player_id() == playerId) TeamFollowSystem::RememberJoinSeq(player, item.join_seq());
                 }
-                if (record.leader_id() == playerId) TeamFollowSystem::OnBecameLeader(player);
-                else TeamFollowSystem::OnNotLeader(player);
+                if (record.leader_id() == playerId) {
+                    TeamFollowSystem::RememberFormationStyle(player, ToFollowStyle(record.follow_formation()));
+                    TeamFollowSystem::OnBecameLeader(player);
+                } else {
+                    TeamFollowSystem::OnNotLeader(player);
+                }
             }
             if (mode == FollowMode::kRefreshOnly || reply->team_id() == 0) return;
             if (record.leader_id() != playerId) {
@@ -504,6 +619,14 @@ void PlayerTeamSystem::ApplyMembership(entt::entity player, uint64_t teamId, uin
 		RefreshTeammateAoi(player);
 		// 离队 / 被踢 / 解散 / 换队:作为队员停止被驱动,作为队长解散队形。
 		TeamFollowSystem::OnTeamChanged(player);
+		if (teamId != 0)
+		{
+			tlsEcs.actorRegistry.remove<AfkReturnCityPendingComp>(player);
+		}
+		else if (oldTeamId != 0)
+		{
+			TryReturnHostedPlayerToMainCity(player);
+		}
 	}
 }
 
@@ -735,4 +858,9 @@ void PlayerTeamSystem::SetLeadershipSnapshotForTest(entt::entity player, bool is
 	}
 	auto& snapshot = tlsEcs.actorRegistry.get_or_emplace<TeamSnapshotVersion>(player);
 	snapshot.isLeader = isLeader;
+}
+
+void PlayerTeamSystem::SetDefaultMainCityForTest(uint32_t sceneConfigId)
+{
+	tlsDefaultMainCityOverrideForTest = sceneConfigId;
 }

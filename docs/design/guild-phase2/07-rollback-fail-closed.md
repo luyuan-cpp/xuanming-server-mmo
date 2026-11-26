@@ -741,7 +741,7 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 > - `internal/metrics/metrics_test.go`:M1。
 > - D18(c) 没法让单测真的等满 130s:用 fake 在复查调用里断言 ctx 带截止时间、再回 `DeadlineExceeded`,验证"复查超预算 → DivergedAfterWrite + `post-write recheck failed` 日志";截止时间 ≤ `guildRecheckDelay + guildRecheckBudget` 由 D18(b) 断言。
 
-### 7.10.3 给用户 / Codex 的验证序列(Claude 不执行;未编译,待验证)
+### 7.10.3 给用户 / Gemini 的验证序列(Claude 不执行;未编译,待验证)
 
 前置:B5a、B5b 已合入;本机已装 Python(proto-gen 需要);MySQL / Redis 本地可用(repo 测试)。protoc 与 protoc-gen-go 在 PATH。**B5d-2a 涉及 C++ 工程**(新 proto 文件的生成物要登记并编译,§7.10.1);MSBuild 必须串行 `/m:1 /nr:false`,同一时刻只允许一个构建方(90 G-08),开跑前与其它会话确认没人在跑导表 / proto-gen / MSBuild。B5d-1、B5d-2b 只追加字段与方法,不新增 C++ 文件,但重生的 `.pb.cc` 同样要过步 4 的编译。
 
@@ -765,7 +765,7 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 
 > **2026-09-28 落码修正(B5d-2b)**:① 步 8 的包范围 `./internal/...` 已含新包 `internal/guildcheck`(D1–D6、D15–D16 在那里)与 `internal/server`(D8 token 半边)。② 步 11 的地址是 dev yaml 的 `MetricsListenAddr: ":9260"`(`-Zone N` 时按 `go_services.ps1` 规则位移)。③ 步 12 在 Q2 = ② 之后分两种:dev yaml 默认**不配** `AdminToken` → 回 gRPC `PermissionDenied` + `error_code=23`(`ErrCodeAdminAuthRequired`,回档 RPC 整体停用,先于栅栏);临时配上 `AdminToken` 并带 `x-admin-token` 调 → 才是 `ErrCodeNotImplemented`(栅栏为 nil,先于本闸)。两者都是预期。④ 步 10 另看 data_service 启动日志有 `guild divergence checker ready: endpoints=[127.0.0.1:50300]`,没有 `guild check config invalid` / `client build failed`。⑤ 步 2a 之后 `go\data_service` 才编得过:`servicecontext.go`、`guildcheck`、`rollback_logic.go` 用到 `guildpb.GuildInternalClient` / `NewGuildInternalClient` / `ListAppliedAssetOpsSinceRequest`(B5d-2a 的生成物),`dataserviceserver.go` 用到本批新增的 proto 字段。
 
-没有 Codex / 用户的运行结果之前,不得写"编译通过""测试绿"。
+没有 Gemini / 用户的运行结果之前,不得写"编译通过""测试绿"。
 
 ### 7.10.4 滚动升级与回滚
 

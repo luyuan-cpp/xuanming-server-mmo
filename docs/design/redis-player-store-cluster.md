@@ -560,7 +560,7 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 
 ## 13. 分批落码计划
 
-每批不超过 30 个文件（含测试），批间做语义评审；全部构建、测试、压测由 Codex 执行（AGENTS.md §10.1）。**同一键族的 C++ / Go 镜像、以及读写该键族的工具（merge_zone、barrierrestore、debug_*），在同一批内改完；来不及改的工具在该批改为拒绝运行（fail-closed），不得留到后面批次带着旧键名静默空过。**
+每批不超过 30 个文件（含测试），批间做语义评审；全部构建、测试、压测由 Gemini 执行（AGENTS.md §10.1）。**同一键族的 C++ / Go 镜像、以及读写该键族的工具（merge_zone、barrierrestore、debug_*），在同一批内改完；来不及改的工具在该批改为拒绝运行（fail-closed），不得留到后面批次带着旧键名静默空过。**
 
 | 批 | 内容 | 状态 |
 |---|---|---|
@@ -603,7 +603,7 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 - **压测**:`stress_snap.ps1` 的 target 加 `k8s-cluster:<ns>/<sts>`、`docker-cluster:<container>:<port>`,每个时刻现列主节点。`stress_summarize.ps1` 的 R1、R2 逐主节点出行,再合成 `<name>-all`。
 - **`k8s_zone_rollback.ps1`**:部署事实 Schema 5 加 `PlayerRedis`,线上是集群时缺种子或主节点数在停服之前拒绝。回档工具 `zone_rollback_discard` 本身还没有落地,脚本写了它要接的参数契约。
 
-## 14. 验证与验收（交 Codex 执行）
+## 14. 验证与验收（交 Gemini 执行）
 
 ### 14.1 单元与契约
 

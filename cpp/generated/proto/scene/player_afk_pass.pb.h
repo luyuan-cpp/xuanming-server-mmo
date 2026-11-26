@@ -57,6 +57,22 @@ struct TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
 }  // extern "C"
+class AckHostedRecapRequest;
+struct AckHostedRecapRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AckHostedRecapRequestGlobalsTypeInternal AckHostedRecapRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AckHostedRecapRequest_class_data_;
+#else
+extern const AckHostedRecapRequestGlobalsTypeInternal AckHostedRecapRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class AckHostedRecapResponse;
+struct AckHostedRecapResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AckHostedRecapResponseGlobalsTypeInternal AckHostedRecapResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AckHostedRecapResponse_class_data_;
+#else
+extern const AckHostedRecapResponseGlobalsTypeInternal AckHostedRecapResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class AfkPassInfo;
 struct AfkPassInfoGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -113,6 +129,30 @@ extern const ::google::protobuf::internal::ClassDataFull GmSetAfkPassResponse_cl
 #else
 extern const GmSetAfkPassResponseGlobalsTypeInternal GmSetAfkPassResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class HostedRecapSummary;
+struct HostedRecapSummaryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern HostedRecapSummaryGlobalsTypeInternal HostedRecapSummary_globals_;
+extern const ::google::protobuf::internal::ClassDataFull HostedRecapSummary_class_data_;
+#else
+extern const HostedRecapSummaryGlobalsTypeInternal HostedRecapSummary_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetAfkPassSettingsRequest;
+struct SetAfkPassSettingsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetAfkPassSettingsRequestGlobalsTypeInternal SetAfkPassSettingsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetAfkPassSettingsRequest_class_data_;
+#else
+extern const SetAfkPassSettingsRequestGlobalsTypeInternal SetAfkPassSettingsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetAfkPassSettingsResponse;
+struct SetAfkPassSettingsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetAfkPassSettingsResponseGlobalsTypeInternal SetAfkPassSettingsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetAfkPassSettingsResponse_class_data_;
+#else
+extern const SetAfkPassSettingsResponseGlobalsTypeInternal SetAfkPassSettingsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -122,6 +162,492 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetAfkPassSettingsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SetAfkPassSettingsRequest) */ {
+ public:
+  inline SetAfkPassSettingsRequest() : SetAfkPassSettingsRequest(nullptr) {}
+  ~SetAfkPassSettingsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetAfkPassSettingsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetAfkPassSettingsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetAfkPassSettingsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetAfkPassSettingsRequest(const SetAfkPassSettingsRequest& from) : SetAfkPassSettingsRequest(nullptr, from) {}
+  inline SetAfkPassSettingsRequest(SetAfkPassSettingsRequest&& from) noexcept : SetAfkPassSettingsRequest(nullptr, ::std::move(from)) {}
+  inline SetAfkPassSettingsRequest& operator=(const SetAfkPassSettingsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetAfkPassSettingsRequest& operator=(SetAfkPassSettingsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetAfkPassSettingsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetAfkPassSettingsRequest>(&SetAfkPassSettingsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(SetAfkPassSettingsRequest& a, SetAfkPassSettingsRequest& b) { a.Swap(&b); }
+  inline void Swap(SetAfkPassSettingsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetAfkPassSettingsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetAfkPassSettingsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetAfkPassSettingsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetAfkPassSettingsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetAfkPassSettingsRequest& from) { SetAfkPassSettingsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetAfkPassSettingsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SetAfkPassSettingsRequest"; }
+
+  explicit SetAfkPassSettingsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetAfkPassSettingsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetAfkPassSettingsRequest& from);
+  SetAfkPassSettingsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetAfkPassSettingsRequest&& from) noexcept
+      : SetAfkPassSettingsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAutoReturnCityOnTeamEndFieldNumber = 1,
+  };
+  // bool auto_return_city_on_team_end = 1;
+  void clear_auto_return_city_on_team_end() ;
+  [[nodiscard]] bool auto_return_city_on_team_end() const;
+  void set_auto_return_city_on_team_end(bool value);
+
+  private:
+  bool _internal_auto_return_city_on_team_end() const;
+  void _internal_set_auto_return_city_on_team_end(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SetAfkPassSettingsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetAfkPassSettingsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool auto_return_city_on_team_end_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HostedRecapSummary final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:HostedRecapSummary) */ {
+ public:
+  inline HostedRecapSummary() : HostedRecapSummary(nullptr) {}
+  ~HostedRecapSummary() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HostedRecapSummary* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HostedRecapSummary));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr HostedRecapSummary(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline HostedRecapSummary(const HostedRecapSummary& from) : HostedRecapSummary(nullptr, from) {}
+  inline HostedRecapSummary(HostedRecapSummary&& from) noexcept : HostedRecapSummary(nullptr, ::std::move(from)) {}
+  inline HostedRecapSummary& operator=(const HostedRecapSummary& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostedRecapSummary& operator=(HostedRecapSummary&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const HostedRecapSummary& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HostedRecapSummary>(&HostedRecapSummary_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(HostedRecapSummary& a, HostedRecapSummary& b) { a.Swap(&b); }
+  inline void Swap(HostedRecapSummary* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostedRecapSummary* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] HostedRecapSummary* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HostedRecapSummary>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HostedRecapSummary& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HostedRecapSummary& from) { HostedRecapSummary::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HostedRecapSummary* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "HostedRecapSummary"; }
+
+  explicit HostedRecapSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HostedRecapSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HostedRecapSummary& from);
+  HostedRecapSummary(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HostedRecapSummary&& from) noexcept
+      : HostedRecapSummary(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStartedAtFieldNumber = 1,
+    kEndedAtFieldNumber = 2,
+    kBattleCountFieldNumber = 3,
+    kWinCountFieldNumber = 4,
+    kExpGainedFieldNumber = 5,
+    kSilverGainedFieldNumber = 6,
+    kItemCountFieldNumber = 7,
+    kPendingAckFieldNumber = 8,
+  };
+  // uint64 started_at = 1;
+  void clear_started_at() ;
+  [[nodiscard]] ::uint64_t started_at() const;
+  void set_started_at(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_started_at() const;
+  void _internal_set_started_at(::uint64_t value);
+
+  public:
+  // uint64 ended_at = 2;
+  void clear_ended_at() ;
+  [[nodiscard]] ::uint64_t ended_at() const;
+  void set_ended_at(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ended_at() const;
+  void _internal_set_ended_at(::uint64_t value);
+
+  public:
+  // uint32 battle_count = 3;
+  void clear_battle_count() ;
+  [[nodiscard]] ::uint32_t battle_count() const;
+  void set_battle_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_count() const;
+  void _internal_set_battle_count(::uint32_t value);
+
+  public:
+  // uint32 win_count = 4;
+  void clear_win_count() ;
+  [[nodiscard]] ::uint32_t win_count() const;
+  void set_win_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_win_count() const;
+  void _internal_set_win_count(::uint32_t value);
+
+  public:
+  // uint64 exp_gained = 5;
+  void clear_exp_gained() ;
+  [[nodiscard]] ::uint64_t exp_gained() const;
+  void set_exp_gained(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_exp_gained() const;
+  void _internal_set_exp_gained(::uint64_t value);
+
+  public:
+  // uint64 silver_gained = 6;
+  void clear_silver_gained() ;
+  [[nodiscard]] ::uint64_t silver_gained() const;
+  void set_silver_gained(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_silver_gained() const;
+  void _internal_set_silver_gained(::uint64_t value);
+
+  public:
+  // uint32 item_count = 7;
+  void clear_item_count() ;
+  [[nodiscard]] ::uint32_t item_count() const;
+  void set_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_count() const;
+  void _internal_set_item_count(::uint32_t value);
+
+  public:
+  // bool pending_ack = 8;
+  void clear_pending_ack() ;
+  [[nodiscard]] bool pending_ack() const;
+  void set_pending_ack(bool value);
+
+  private:
+  bool _internal_pending_ack() const;
+  void _internal_set_pending_ack(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:HostedRecapSummary)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HostedRecapSummary& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t started_at_;
+    ::uint64_t ended_at_;
+    ::uint32_t battle_count_;
+    ::uint32_t win_count_;
+    ::uint64_t exp_gained_;
+    ::uint64_t silver_gained_;
+    ::uint32_t item_count_;
+    bool pending_ack_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSetAfkPassRequest final : public ::google::protobuf::Message
@@ -180,7 +706,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSetAfkPassRequest final : public 
   [[nodiscard]] static const GmSetAfkPassRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmSetAfkPassRequest>(&GmSetAfkPassRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GmSetAfkPassRequest& a, GmSetAfkPassRequest& b) { a.Swap(&b); }
   inline void Swap(GmSetAfkPassRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -380,7 +906,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAfkPassRequest final : public ::
   [[nodiscard]] static const GetAfkPassRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetAfkPassRequest>(&GetAfkPassRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(GetAfkPassRequest& a, GetAfkPassRequest& b) { a.Swap(&b); }
   inline void Swap(GetAfkPassRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -519,7 +1045,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyAfkPassRequest final : public ::
   [[nodiscard]] static const BuyAfkPassRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BuyAfkPassRequest>(&BuyAfkPassRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(BuyAfkPassRequest& a, BuyAfkPassRequest& b) { a.Swap(&b); }
   inline void Swap(BuyAfkPassRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -688,6 +1214,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyAfkPassRequest final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckHostedRecapRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:AckHostedRecapRequest) */ {
+ public:
+  inline AckHostedRecapRequest() : AckHostedRecapRequest(nullptr) {}
+  ~AckHostedRecapRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AckHostedRecapRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AckHostedRecapRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AckHostedRecapRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AckHostedRecapRequest(const AckHostedRecapRequest& from) : AckHostedRecapRequest(nullptr, from) {}
+  inline AckHostedRecapRequest(AckHostedRecapRequest&& from) noexcept : AckHostedRecapRequest(nullptr, ::std::move(from)) {}
+  inline AckHostedRecapRequest& operator=(const AckHostedRecapRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AckHostedRecapRequest& operator=(AckHostedRecapRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AckHostedRecapRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckHostedRecapRequest>(&AckHostedRecapRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(AckHostedRecapRequest& a, AckHostedRecapRequest& b) { a.Swap(&b); }
+  inline void Swap(AckHostedRecapRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AckHostedRecapRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AckHostedRecapRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AckHostedRecapRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AckHostedRecapRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AckHostedRecapRequest& from) { AckHostedRecapRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AckHostedRecapRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AckHostedRecapRequest"; }
+
+  explicit AckHostedRecapRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AckHostedRecapRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AckHostedRecapRequest& from);
+  AckHostedRecapRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AckHostedRecapRequest&& from) noexcept
+      : AckHostedRecapRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStartedAtFieldNumber = 1,
+  };
+  // uint64 started_at = 1;
+  void clear_started_at() ;
+  [[nodiscard]] ::uint64_t started_at() const;
+  void set_started_at(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_started_at() const;
+  void _internal_set_started_at(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:AckHostedRecapRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AckHostedRecapRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t started_at_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:AfkPassInfo) */ {
  public:
@@ -744,7 +1471,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
   [[nodiscard]] static const AfkPassInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AfkPassInfo>(&AfkPassInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 0;
+  static constexpr int kIndexInFileMessages = 1;
   friend void swap(AfkPassInfo& a, AfkPassInfo& b) { a.Swap(&b); }
   inline void Swap(AfkPassInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -836,6 +1563,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
 
   // accessors -------------------------------------------------------
   enum : int {
+    kHostedRecapFieldNumber = 10,
     kExpiresAtFieldNumber = 1,
     kServerNowFieldNumber = 2,
     kPriceFieldNumber = 4,
@@ -844,7 +1572,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
     kMaxRemainingDaysFieldNumber = 6,
     kRemindBeforeHoursFieldNumber = 7,
     kBalanceFieldNumber = 8,
+    kAutoReturnCityOnTeamEndFieldNumber = 9,
   };
+  // .HostedRecapSummary hosted_recap = 10;
+  [[nodiscard]] bool has_hosted_recap()
+      const;
+  void clear_hosted_recap() ;
+  [[nodiscard]] const ::HostedRecapSummary& hosted_recap() const;
+  [[nodiscard]] ::HostedRecapSummary* PROTOBUF_NULLABLE release_hosted_recap();
+  ::HostedRecapSummary* PROTOBUF_NONNULL mutable_hosted_recap();
+  void set_allocated_hosted_recap(::HostedRecapSummary* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_hosted_recap(::HostedRecapSummary* PROTOBUF_NULLABLE value);
+  ::HostedRecapSummary* PROTOBUF_NULLABLE unsafe_arena_release_hosted_recap();
+
+  private:
+  const ::HostedRecapSummary& _internal_hosted_recap() const;
+  ::HostedRecapSummary* PROTOBUF_NONNULL _internal_mutable_hosted_recap();
+
+  public:
   // uint64 expires_at = 1;
   void clear_expires_at() ;
   [[nodiscard]] ::uint64_t expires_at() const;
@@ -925,12 +1670,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
   void _internal_set_balance(::uint64_t value);
 
   public:
+  // bool auto_return_city_on_team_end = 9;
+  void clear_auto_return_city_on_team_end() ;
+  [[nodiscard]] bool auto_return_city_on_team_end() const;
+  void set_auto_return_city_on_team_end(bool value);
+
+  private:
+  bool _internal_auto_return_city_on_team_end() const;
+  void _internal_set_auto_return_city_on_team_end(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AfkPassInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -958,6 +1713,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
         const AfkPassInfo& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::HostedRecapSummary* PROTOBUF_NULLABLE hosted_recap_;
     ::uint64_t expires_at_;
     ::uint64_t server_now_;
     ::uint64_t price_;
@@ -966,6 +1722,232 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
     ::uint32_t max_remaining_days_;
     ::uint32_t remind_before_hours_;
     ::uint64_t balance_;
+    bool auto_return_city_on_team_end_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetAfkPassSettingsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SetAfkPassSettingsResponse) */ {
+ public:
+  inline SetAfkPassSettingsResponse() : SetAfkPassSettingsResponse(nullptr) {}
+  ~SetAfkPassSettingsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetAfkPassSettingsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetAfkPassSettingsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetAfkPassSettingsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetAfkPassSettingsResponse(const SetAfkPassSettingsResponse& from) : SetAfkPassSettingsResponse(nullptr, from) {}
+  inline SetAfkPassSettingsResponse(SetAfkPassSettingsResponse&& from) noexcept : SetAfkPassSettingsResponse(nullptr, ::std::move(from)) {}
+  inline SetAfkPassSettingsResponse& operator=(const SetAfkPassSettingsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetAfkPassSettingsResponse& operator=(SetAfkPassSettingsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetAfkPassSettingsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetAfkPassSettingsResponse>(&SetAfkPassSettingsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(SetAfkPassSettingsResponse& a, SetAfkPassSettingsResponse& b) { a.Swap(&b); }
+  inline void Swap(SetAfkPassSettingsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetAfkPassSettingsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetAfkPassSettingsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetAfkPassSettingsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetAfkPassSettingsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetAfkPassSettingsResponse& from) { SetAfkPassSettingsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetAfkPassSettingsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SetAfkPassSettingsResponse"; }
+
+  explicit SetAfkPassSettingsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetAfkPassSettingsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetAfkPassSettingsResponse& from);
+  SetAfkPassSettingsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetAfkPassSettingsResponse&& from) noexcept
+      : SetAfkPassSettingsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kInfoFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .AfkPassInfo info = 2;
+  [[nodiscard]] bool has_info()
+      const;
+  void clear_info() ;
+  [[nodiscard]] const ::AfkPassInfo& info() const;
+  [[nodiscard]] ::AfkPassInfo* PROTOBUF_NULLABLE release_info();
+  ::AfkPassInfo* PROTOBUF_NONNULL mutable_info();
+  void set_allocated_info(::AfkPassInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_info(::AfkPassInfo* PROTOBUF_NULLABLE value);
+  ::AfkPassInfo* PROTOBUF_NULLABLE unsafe_arena_release_info();
+
+  private:
+  const ::AfkPassInfo& _internal_info() const;
+  ::AfkPassInfo* PROTOBUF_NONNULL _internal_mutable_info();
+
+  public:
+  // @@protoc_insertion_point(class_scope:SetAfkPassSettingsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetAfkPassSettingsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::AfkPassInfo* PROTOBUF_NULLABLE info_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1029,7 +2011,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSetAfkPassResponse final : public
   [[nodiscard]] static const GmSetAfkPassResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmSetAfkPassResponse>(&GmSetAfkPassResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(GmSetAfkPassResponse& a, GmSetAfkPassResponse& b) { a.Swap(&b); }
   inline void Swap(GmSetAfkPassResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1254,7 +2236,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAfkPassResponse final : public :
   [[nodiscard]] static const GetAfkPassResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetAfkPassResponse>(&GetAfkPassResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(GetAfkPassResponse& a, GetAfkPassResponse& b) { a.Swap(&b); }
   inline void Swap(GetAfkPassResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1479,7 +2461,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyAfkPassResponse final : public :
   [[nodiscard]] static const BuyAfkPassResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BuyAfkPassResponse>(&BuyAfkPassResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(BuyAfkPassResponse& a, BuyAfkPassResponse& b) { a.Swap(&b); }
   inline void Swap(BuyAfkPassResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1658,6 +2640,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyAfkPassResponse final : public :
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
 };
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckHostedRecapResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:AckHostedRecapResponse) */ {
+ public:
+  inline AckHostedRecapResponse() : AckHostedRecapResponse(nullptr) {}
+  ~AckHostedRecapResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AckHostedRecapResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AckHostedRecapResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AckHostedRecapResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AckHostedRecapResponse(const AckHostedRecapResponse& from) : AckHostedRecapResponse(nullptr, from) {}
+  inline AckHostedRecapResponse(AckHostedRecapResponse&& from) noexcept : AckHostedRecapResponse(nullptr, ::std::move(from)) {}
+  inline AckHostedRecapResponse& operator=(const AckHostedRecapResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AckHostedRecapResponse& operator=(AckHostedRecapResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AckHostedRecapResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckHostedRecapResponse>(&AckHostedRecapResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(AckHostedRecapResponse& a, AckHostedRecapResponse& b) { a.Swap(&b); }
+  inline void Swap(AckHostedRecapResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AckHostedRecapResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AckHostedRecapResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AckHostedRecapResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AckHostedRecapResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AckHostedRecapResponse& from) { AckHostedRecapResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AckHostedRecapResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AckHostedRecapResponse"; }
+
+  explicit AckHostedRecapResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AckHostedRecapResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AckHostedRecapResponse& from);
+  AckHostedRecapResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AckHostedRecapResponse&& from) noexcept
+      : AckHostedRecapResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kInfoFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .AfkPassInfo info = 2;
+  [[nodiscard]] bool has_info()
+      const;
+  void clear_info() ;
+  [[nodiscard]] const ::AfkPassInfo& info() const;
+  [[nodiscard]] ::AfkPassInfo* PROTOBUF_NULLABLE release_info();
+  ::AfkPassInfo* PROTOBUF_NONNULL mutable_info();
+  void set_allocated_info(::AfkPassInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_info(::AfkPassInfo* PROTOBUF_NULLABLE value);
+  ::AfkPassInfo* PROTOBUF_NULLABLE unsafe_arena_release_info();
+
+  private:
+  const ::AfkPassInfo& _internal_info() const;
+  ::AfkPassInfo* PROTOBUF_NONNULL _internal_mutable_info();
+
+  public:
+  // @@protoc_insertion_point(class_scope:AckHostedRecapResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AckHostedRecapResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::AfkPassInfo* PROTOBUF_NULLABLE info_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto;
+};
 
 // ===================================================================
 
@@ -1689,6 +2896,14 @@ class SceneAfkPassClientPlayer : public ::google::protobuf::Service {
   virtual void GmSetAfkPass(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::GmSetAfkPassRequest* PROTOBUF_NONNULL request,
                         ::GmSetAfkPassResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void SetAfkPassSettings(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SetAfkPassSettingsRequest* PROTOBUF_NONNULL request,
+                        ::SetAfkPassSettingsResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void AckHostedRecap(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::AckHostedRecapRequest* PROTOBUF_NONNULL request,
+                        ::AckHostedRecapResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
@@ -1734,6 +2949,14 @@ class SceneAfkPassClientPlayer_Stub final : public SceneAfkPassClientPlayer {
                         const ::GmSetAfkPassRequest* PROTOBUF_NONNULL request,
                         ::GmSetAfkPassResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void SetAfkPassSettings(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SetAfkPassSettingsRequest* PROTOBUF_NONNULL request,
+                        ::SetAfkPassSettingsResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void AckHostedRecap(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::AckHostedRecapRequest* PROTOBUF_NONNULL request,
+                        ::AckHostedRecapResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
   ::google::protobuf::RpcChannel* PROTOBUF_NULLABLE channel_;
@@ -1752,13 +2975,209 @@ class SceneAfkPassClientPlayer_Stub final : public SceneAfkPassClientPlayer {
 #endif  // __GNUC__
 // -------------------------------------------------------------------
 
+// HostedRecapSummary
+
+// uint64 started_at = 1;
+inline void HostedRecapSummary::clear_started_at() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t HostedRecapSummary::started_at() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.started_at)
+  return _internal_started_at();
+}
+inline void HostedRecapSummary::set_started_at(::uint64_t value) {
+  _internal_set_started_at(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.started_at)
+}
+inline ::uint64_t HostedRecapSummary::_internal_started_at() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.started_at_;
+}
+inline void HostedRecapSummary::_internal_set_started_at(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ = value;
+}
+
+// uint64 ended_at = 2;
+inline void HostedRecapSummary::clear_ended_at() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ended_at_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t HostedRecapSummary::ended_at() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.ended_at)
+  return _internal_ended_at();
+}
+inline void HostedRecapSummary::set_ended_at(::uint64_t value) {
+  _internal_set_ended_at(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.ended_at)
+}
+inline ::uint64_t HostedRecapSummary::_internal_ended_at() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ended_at_;
+}
+inline void HostedRecapSummary::_internal_set_ended_at(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ended_at_ = value;
+}
+
+// uint32 battle_count = 3;
+inline void HostedRecapSummary::clear_battle_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t HostedRecapSummary::battle_count() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.battle_count)
+  return _internal_battle_count();
+}
+inline void HostedRecapSummary::set_battle_count(::uint32_t value) {
+  _internal_set_battle_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.battle_count)
+}
+inline ::uint32_t HostedRecapSummary::_internal_battle_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_count_;
+}
+inline void HostedRecapSummary::_internal_set_battle_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_count_ = value;
+}
+
+// uint32 win_count = 4;
+inline void HostedRecapSummary::clear_win_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.win_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t HostedRecapSummary::win_count() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.win_count)
+  return _internal_win_count();
+}
+inline void HostedRecapSummary::set_win_count(::uint32_t value) {
+  _internal_set_win_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.win_count)
+}
+inline ::uint32_t HostedRecapSummary::_internal_win_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.win_count_;
+}
+inline void HostedRecapSummary::_internal_set_win_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.win_count_ = value;
+}
+
+// uint64 exp_gained = 5;
+inline void HostedRecapSummary::clear_exp_gained() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_gained_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t HostedRecapSummary::exp_gained() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.exp_gained)
+  return _internal_exp_gained();
+}
+inline void HostedRecapSummary::set_exp_gained(::uint64_t value) {
+  _internal_set_exp_gained(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.exp_gained)
+}
+inline ::uint64_t HostedRecapSummary::_internal_exp_gained() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exp_gained_;
+}
+inline void HostedRecapSummary::_internal_set_exp_gained(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_gained_ = value;
+}
+
+// uint64 silver_gained = 6;
+inline void HostedRecapSummary::clear_silver_gained() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_gained_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t HostedRecapSummary::silver_gained() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.silver_gained)
+  return _internal_silver_gained();
+}
+inline void HostedRecapSummary::set_silver_gained(::uint64_t value) {
+  _internal_set_silver_gained(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.silver_gained)
+}
+inline ::uint64_t HostedRecapSummary::_internal_silver_gained() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.silver_gained_;
+}
+inline void HostedRecapSummary::_internal_set_silver_gained(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_gained_ = value;
+}
+
+// uint32 item_count = 7;
+inline void HostedRecapSummary::clear_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t HostedRecapSummary::item_count() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.item_count)
+  return _internal_item_count();
+}
+inline void HostedRecapSummary::set_item_count(::uint32_t value) {
+  _internal_set_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.item_count)
+}
+inline ::uint32_t HostedRecapSummary::_internal_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_count_;
+}
+inline void HostedRecapSummary::_internal_set_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_ = value;
+}
+
+// bool pending_ack = 8;
+inline void HostedRecapSummary::clear_pending_ack() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_ack_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool HostedRecapSummary::pending_ack() const {
+  // @@protoc_insertion_point(field_get:HostedRecapSummary.pending_ack)
+  return _internal_pending_ack();
+}
+inline void HostedRecapSummary::set_pending_ack(bool value) {
+  _internal_set_pending_ack(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:HostedRecapSummary.pending_ack)
+}
+inline bool HostedRecapSummary::_internal_pending_ack() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_ack_;
+}
+inline void HostedRecapSummary::_internal_set_pending_ack(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_ack_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // AfkPassInfo
 
 // uint64 expires_at = 1;
 inline void AfkPassInfo::clear_expires_at() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expires_at_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t AfkPassInfo::expires_at() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.expires_at)
@@ -1766,7 +3185,7 @@ inline ::uint64_t AfkPassInfo::expires_at() const {
 }
 inline void AfkPassInfo::set_expires_at(::uint64_t value) {
   _internal_set_expires_at(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.expires_at)
 }
 inline ::uint64_t AfkPassInfo::_internal_expires_at() const {
@@ -1782,7 +3201,7 @@ inline void AfkPassInfo::_internal_set_expires_at(::uint64_t value) {
 inline void AfkPassInfo::clear_server_now() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.server_now_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t AfkPassInfo::server_now() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.server_now)
@@ -1790,7 +3209,7 @@ inline ::uint64_t AfkPassInfo::server_now() const {
 }
 inline void AfkPassInfo::set_server_now(::uint64_t value) {
   _internal_set_server_now(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.server_now)
 }
 inline ::uint64_t AfkPassInfo::_internal_server_now() const {
@@ -1806,7 +3225,7 @@ inline void AfkPassInfo::_internal_set_server_now(::uint64_t value) {
 inline void AfkPassInfo::clear_price_currency_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.price_currency_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t AfkPassInfo::price_currency_type() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.price_currency_type)
@@ -1814,7 +3233,7 @@ inline ::uint32_t AfkPassInfo::price_currency_type() const {
 }
 inline void AfkPassInfo::set_price_currency_type(::uint32_t value) {
   _internal_set_price_currency_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.price_currency_type)
 }
 inline ::uint32_t AfkPassInfo::_internal_price_currency_type() const {
@@ -1830,7 +3249,7 @@ inline void AfkPassInfo::_internal_set_price_currency_type(::uint32_t value) {
 inline void AfkPassInfo::clear_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.price_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t AfkPassInfo::price() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.price)
@@ -1838,7 +3257,7 @@ inline ::uint64_t AfkPassInfo::price() const {
 }
 inline void AfkPassInfo::set_price(::uint64_t value) {
   _internal_set_price(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.price)
 }
 inline ::uint64_t AfkPassInfo::_internal_price() const {
@@ -1854,7 +3273,7 @@ inline void AfkPassInfo::_internal_set_price(::uint64_t value) {
 inline void AfkPassInfo::clear_period_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.period_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t AfkPassInfo::period_days() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.period_days)
@@ -1862,7 +3281,7 @@ inline ::uint32_t AfkPassInfo::period_days() const {
 }
 inline void AfkPassInfo::set_period_days(::uint32_t value) {
   _internal_set_period_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.period_days)
 }
 inline ::uint32_t AfkPassInfo::_internal_period_days() const {
@@ -1878,7 +3297,7 @@ inline void AfkPassInfo::_internal_set_period_days(::uint32_t value) {
 inline void AfkPassInfo::clear_max_remaining_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_remaining_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t AfkPassInfo::max_remaining_days() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.max_remaining_days)
@@ -1886,7 +3305,7 @@ inline ::uint32_t AfkPassInfo::max_remaining_days() const {
 }
 inline void AfkPassInfo::set_max_remaining_days(::uint32_t value) {
   _internal_set_max_remaining_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.max_remaining_days)
 }
 inline ::uint32_t AfkPassInfo::_internal_max_remaining_days() const {
@@ -1902,7 +3321,7 @@ inline void AfkPassInfo::_internal_set_max_remaining_days(::uint32_t value) {
 inline void AfkPassInfo::clear_remind_before_hours() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remind_before_hours_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t AfkPassInfo::remind_before_hours() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.remind_before_hours)
@@ -1910,7 +3329,7 @@ inline ::uint32_t AfkPassInfo::remind_before_hours() const {
 }
 inline void AfkPassInfo::set_remind_before_hours(::uint32_t value) {
   _internal_set_remind_before_hours(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.remind_before_hours)
 }
 inline ::uint32_t AfkPassInfo::_internal_remind_before_hours() const {
@@ -1926,7 +3345,7 @@ inline void AfkPassInfo::_internal_set_remind_before_hours(::uint32_t value) {
 inline void AfkPassInfo::clear_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t AfkPassInfo::balance() const {
   // @@protoc_insertion_point(field_get:AfkPassInfo.balance)
@@ -1934,7 +3353,7 @@ inline ::uint64_t AfkPassInfo::balance() const {
 }
 inline void AfkPassInfo::set_balance(::uint64_t value) {
   _internal_set_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:AfkPassInfo.balance)
 }
 inline ::uint64_t AfkPassInfo::_internal_balance() const {
@@ -1944,6 +3363,128 @@ inline ::uint64_t AfkPassInfo::_internal_balance() const {
 inline void AfkPassInfo::_internal_set_balance(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.balance_ = value;
+}
+
+// bool auto_return_city_on_team_end = 9;
+inline void AfkPassInfo::clear_auto_return_city_on_team_end() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auto_return_city_on_team_end_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool AfkPassInfo::auto_return_city_on_team_end() const {
+  // @@protoc_insertion_point(field_get:AfkPassInfo.auto_return_city_on_team_end)
+  return _internal_auto_return_city_on_team_end();
+}
+inline void AfkPassInfo::set_auto_return_city_on_team_end(bool value) {
+  _internal_set_auto_return_city_on_team_end(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:AfkPassInfo.auto_return_city_on_team_end)
+}
+inline bool AfkPassInfo::_internal_auto_return_city_on_team_end() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auto_return_city_on_team_end_;
+}
+inline void AfkPassInfo::_internal_set_auto_return_city_on_team_end(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auto_return_city_on_team_end_ = value;
+}
+
+// .HostedRecapSummary hosted_recap = 10;
+inline bool AfkPassInfo::has_hosted_recap() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.hosted_recap_ != nullptr);
+  return value;
+}
+inline void AfkPassInfo::clear_hosted_recap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.hosted_recap_ != nullptr) _impl_.hosted_recap_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::HostedRecapSummary& AfkPassInfo::_internal_hosted_recap() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::HostedRecapSummary* p = _impl_.hosted_recap_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::HostedRecapSummary>(&::HostedRecapSummary_globals_);
+}
+inline const ::HostedRecapSummary& AfkPassInfo::hosted_recap() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AfkPassInfo.hosted_recap)
+  return _internal_hosted_recap();
+}
+inline void AfkPassInfo::unsafe_arena_set_allocated_hosted_recap(
+    ::HostedRecapSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.hosted_recap_);
+  }
+  _impl_.hosted_recap_ = reinterpret_cast<::HostedRecapSummary*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AfkPassInfo.hosted_recap)
+}
+inline ::HostedRecapSummary* PROTOBUF_NULLABLE AfkPassInfo::release_hosted_recap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::HostedRecapSummary* released = _impl_.hosted_recap_;
+  _impl_.hosted_recap_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::HostedRecapSummary* PROTOBUF_NULLABLE AfkPassInfo::unsafe_arena_release_hosted_recap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AfkPassInfo.hosted_recap)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::HostedRecapSummary* temp = _impl_.hosted_recap_;
+  _impl_.hosted_recap_ = nullptr;
+  return temp;
+}
+inline ::HostedRecapSummary* PROTOBUF_NONNULL AfkPassInfo::_internal_mutable_hosted_recap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.hosted_recap_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::HostedRecapSummary>(GetArena());
+    _impl_.hosted_recap_ = reinterpret_cast<::HostedRecapSummary*>(p);
+  }
+  return _impl_.hosted_recap_;
+}
+inline ::HostedRecapSummary* PROTOBUF_NONNULL AfkPassInfo::mutable_hosted_recap()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::HostedRecapSummary* _msg = _internal_mutable_hosted_recap();
+  // @@protoc_insertion_point(field_mutable:AfkPassInfo.hosted_recap)
+  return _msg;
+}
+inline void AfkPassInfo::set_allocated_hosted_recap(::HostedRecapSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.hosted_recap_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.hosted_recap_ = reinterpret_cast<::HostedRecapSummary*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AfkPassInfo.hosted_recap)
 }
 
 // -------------------------------------------------------------------
@@ -2661,6 +4202,452 @@ inline void GmSetAfkPassResponse::set_allocated_info(::AfkPassInfo* PROTOBUF_NUL
 
   _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(value);
   // @@protoc_insertion_point(field_set_allocated:GmSetAfkPassResponse.info)
+}
+
+// -------------------------------------------------------------------
+
+// SetAfkPassSettingsRequest
+
+// bool auto_return_city_on_team_end = 1;
+inline void SetAfkPassSettingsRequest::clear_auto_return_city_on_team_end() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auto_return_city_on_team_end_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool SetAfkPassSettingsRequest::auto_return_city_on_team_end() const {
+  // @@protoc_insertion_point(field_get:SetAfkPassSettingsRequest.auto_return_city_on_team_end)
+  return _internal_auto_return_city_on_team_end();
+}
+inline void SetAfkPassSettingsRequest::set_auto_return_city_on_team_end(bool value) {
+  _internal_set_auto_return_city_on_team_end(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SetAfkPassSettingsRequest.auto_return_city_on_team_end)
+}
+inline bool SetAfkPassSettingsRequest::_internal_auto_return_city_on_team_end() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auto_return_city_on_team_end_;
+}
+inline void SetAfkPassSettingsRequest::_internal_set_auto_return_city_on_team_end(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auto_return_city_on_team_end_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SetAfkPassSettingsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SetAfkPassSettingsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SetAfkPassSettingsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SetAfkPassSettingsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SetAfkPassSettingsResponse.error_message)
+  return _internal_error_message();
+}
+inline void SetAfkPassSettingsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SetAfkPassSettingsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SetAfkPassSettingsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SetAfkPassSettingsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SetAfkPassSettingsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SetAfkPassSettingsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SetAfkPassSettingsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:SetAfkPassSettingsResponse.error_message)
+  return _msg;
+}
+inline void SetAfkPassSettingsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SetAfkPassSettingsResponse.error_message)
+}
+
+// .AfkPassInfo info = 2;
+inline bool SetAfkPassSettingsResponse::has_info() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.info_ != nullptr);
+  return value;
+}
+inline void SetAfkPassSettingsResponse::clear_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.info_ != nullptr) _impl_.info_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::AfkPassInfo& SetAfkPassSettingsResponse::_internal_info() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::AfkPassInfo* p = _impl_.info_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::AfkPassInfo>(&::AfkPassInfo_globals_);
+}
+inline const ::AfkPassInfo& SetAfkPassSettingsResponse::info() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SetAfkPassSettingsResponse.info)
+  return _internal_info();
+}
+inline void SetAfkPassSettingsResponse::unsafe_arena_set_allocated_info(
+    ::AfkPassInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.info_);
+  }
+  _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SetAfkPassSettingsResponse.info)
+}
+inline ::AfkPassInfo* PROTOBUF_NULLABLE SetAfkPassSettingsResponse::release_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::AfkPassInfo* released = _impl_.info_;
+  _impl_.info_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::AfkPassInfo* PROTOBUF_NULLABLE SetAfkPassSettingsResponse::unsafe_arena_release_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SetAfkPassSettingsResponse.info)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::AfkPassInfo* temp = _impl_.info_;
+  _impl_.info_ = nullptr;
+  return temp;
+}
+inline ::AfkPassInfo* PROTOBUF_NONNULL SetAfkPassSettingsResponse::_internal_mutable_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.info_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::AfkPassInfo>(GetArena());
+    _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(p);
+  }
+  return _impl_.info_;
+}
+inline ::AfkPassInfo* PROTOBUF_NONNULL SetAfkPassSettingsResponse::mutable_info()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::AfkPassInfo* _msg = _internal_mutable_info();
+  // @@protoc_insertion_point(field_mutable:SetAfkPassSettingsResponse.info)
+  return _msg;
+}
+inline void SetAfkPassSettingsResponse::set_allocated_info(::AfkPassInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.info_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SetAfkPassSettingsResponse.info)
+}
+
+// -------------------------------------------------------------------
+
+// AckHostedRecapRequest
+
+// uint64 started_at = 1;
+inline void AckHostedRecapRequest::clear_started_at() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t AckHostedRecapRequest::started_at() const {
+  // @@protoc_insertion_point(field_get:AckHostedRecapRequest.started_at)
+  return _internal_started_at();
+}
+inline void AckHostedRecapRequest::set_started_at(::uint64_t value) {
+  _internal_set_started_at(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:AckHostedRecapRequest.started_at)
+}
+inline ::uint64_t AckHostedRecapRequest::_internal_started_at() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.started_at_;
+}
+inline void AckHostedRecapRequest::_internal_set_started_at(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// AckHostedRecapResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool AckHostedRecapResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& AckHostedRecapResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& AckHostedRecapResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AckHostedRecapResponse.error_message)
+  return _internal_error_message();
+}
+inline void AckHostedRecapResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AckHostedRecapResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE AckHostedRecapResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE AckHostedRecapResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AckHostedRecapResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL AckHostedRecapResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL AckHostedRecapResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:AckHostedRecapResponse.error_message)
+  return _msg;
+}
+inline void AckHostedRecapResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AckHostedRecapResponse.error_message)
+}
+
+// .AfkPassInfo info = 2;
+inline bool AckHostedRecapResponse::has_info() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.info_ != nullptr);
+  return value;
+}
+inline void AckHostedRecapResponse::clear_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.info_ != nullptr) _impl_.info_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::AfkPassInfo& AckHostedRecapResponse::_internal_info() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::AfkPassInfo* p = _impl_.info_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::AfkPassInfo>(&::AfkPassInfo_globals_);
+}
+inline const ::AfkPassInfo& AckHostedRecapResponse::info() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AckHostedRecapResponse.info)
+  return _internal_info();
+}
+inline void AckHostedRecapResponse::unsafe_arena_set_allocated_info(
+    ::AfkPassInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.info_);
+  }
+  _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AckHostedRecapResponse.info)
+}
+inline ::AfkPassInfo* PROTOBUF_NULLABLE AckHostedRecapResponse::release_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::AfkPassInfo* released = _impl_.info_;
+  _impl_.info_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::AfkPassInfo* PROTOBUF_NULLABLE AckHostedRecapResponse::unsafe_arena_release_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AckHostedRecapResponse.info)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::AfkPassInfo* temp = _impl_.info_;
+  _impl_.info_ = nullptr;
+  return temp;
+}
+inline ::AfkPassInfo* PROTOBUF_NONNULL AckHostedRecapResponse::_internal_mutable_info() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.info_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::AfkPassInfo>(GetArena());
+    _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(p);
+  }
+  return _impl_.info_;
+}
+inline ::AfkPassInfo* PROTOBUF_NONNULL AckHostedRecapResponse::mutable_info()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::AfkPassInfo* _msg = _internal_mutable_info();
+  // @@protoc_insertion_point(field_mutable:AckHostedRecapResponse.info)
+  return _msg;
+}
+inline void AckHostedRecapResponse::set_allocated_info(::AfkPassInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.info_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.info_ = reinterpret_cast<::AfkPassInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AckHostedRecapResponse.info)
 }
 
 #ifdef __GNUC__

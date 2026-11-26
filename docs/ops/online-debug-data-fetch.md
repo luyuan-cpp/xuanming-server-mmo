@@ -2,7 +2,7 @@
 
 2026-10-30 按 `player_store` 重写。工具在 `go/data_service/cmd/debug_fetch`(只读导出)和 `go/data_service/cmd/debug_import`(写进本地角色),包格式和判定在 `go/data_service/internal/playerbundle`。没有 ps1 包装器。
 
-未编译、未测试,待 Codex 验证。
+未编译、未测试,待 Gemini 验证。
 
 ## 1. 玩家数据在哪
 

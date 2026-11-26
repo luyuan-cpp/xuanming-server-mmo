@@ -31,6 +31,10 @@ func replayPolicyOfMode(mode matchpb.MatchMode) (record bool, decided bool) {
 		return true, true // 真人人数档 PVP
 	case matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
 		return true, true // 轮换娱乐物法易势 5V5:玩家间对战,允许复盘战报
+	case matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP:
+		return true, true // 帮会全天帮战真人对局:录回放供帮战大事记与原参战者复盘
+	case matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE:
+		return false, true // 帮会守旗阵踢馆(AI 托管):高频对局不录回放
 	case matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
 		return true, true // 全服赛季战队锦标赛:强制录制回放供复盘与争议核查
 	case matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:

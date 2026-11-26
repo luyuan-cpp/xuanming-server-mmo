@@ -93,7 +93,7 @@
   `ALTER TABLE zone_config ADD COLUMN role_capacity INT NOT NULL DEFAULT 0 AFTER create_role_closed;`（网关 `ddl-auto: validate`，缺列拒启）。
 - 角色上限的链路加了两个 RPC（login `LoginPreGate.GetZoneRoleCount`、data_service `CountZoneRoles`），都是新增方法。新网关配旧 login 时调用回 UNIMPLEMENTED，按「问不到」处理、不关；不设上限时根本不调。
 - login 删了 `Queue.ZoneCapacityOverride`，部署脚本不再渲染它。旧 ConfigMap 里残留这个键时 go-zero 忽略未知键，不影响启动。
-- 区服列表加字段、`recommended` 改为服务端计算，都是向后兼容的 JSON 变化。新 tip 码要 Codex 跑导表器（服务端与客户端生成物）。
+- 区服列表加字段、`recommended` 改为服务端计算，都是向后兼容的 JSON 变化。新 tip 码要 Gemini 跑导表器（服务端与客户端生成物）。
 - `/api/login` 的 `players[]` 加 `zone_id`（2026-11-12）同样只加字段：老客户端忽略它，新客户端连老网关时读到 0、不做预判。
 
 ## 9. 残余与后续

@@ -139,11 +139,27 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 			return fail("internal", 0)
 		}
 	}
+	var tournamentCtx *battlepb.TournamentBattleContext
+	if len(f.TournamentContext) > 0 {
+		tournamentCtx = &battlepb.TournamentBattleContext{}
+		if err := proto.Unmarshal(f.TournamentContext, tournamentCtx); err != nil {
+			logx.Errorf("[gather] Invalid frozen tournament context battle=%d: %v", battleId, err)
+			return fail("internal", 0)
+		}
+	}
+	var customDuelRules *battlepb.CustomDuelRules
+	if len(f.CustomDuelRules) > 0 {
+		customDuelRules = &battlepb.CustomDuelRules{}
+		if err := proto.Unmarshal(f.CustomDuelRules, customDuelRules); err != nil {
+			logx.Errorf("[gather] Invalid frozen custom duel rules battle=%d: %v", battleId, err)
+			return fail("internal", 0)
+		}
+	}
 
 	// 逐参与者冻结收快照。
 	var prepared []preparedMember
 	for i, playerId := range members {
-		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, activityContext, func(endpoint string) error {
+		endpoint, resp, err := preparePlayerFencedWithExtras(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, activityContext, f.IsWuxingTower, customDuelRules, func(endpoint string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			return svcCtx.Authority.Prepared(ctx, f, playerId, endpoint)
@@ -191,10 +207,41 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	for _, p := range prepared {
 		snapshots = append(snapshots, p.snapshot)
 	}
+	// 帮会守旗阵踢馆（GUILD_WAR_SIEGE）：从已提交的直接开局意图原件载入 AI 托管守擂快照，跳过 PrepareBattle。
+	if mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE && svcCtx.Authority != nil {
+		ctxAI, cancelAI := context.WithTimeout(context.Background(), 3*time.Second)
+		rawIntent, aiErr := svcCtx.Authority.DirectPayloadByBattle(ctxAI, 6, battleId)
+		cancelAI()
+		if aiErr != nil || len(rawIntent) == 0 {
+			logx.Errorf("[gather] Failed to load guild war AI defender intent battle=%d: %v", battleId, aiErr)
+			return fail("internal", 0)
+		}
+		var gwReq matchpb.StartGuildWarBattleRequest
+		if err := proto.Unmarshal(rawIntent, &gwReq); err != nil || len(gwReq.GetAiDefenderSnapshots()) == 0 {
+			logx.Errorf("[gather] Invalid guild war AI defender payload battle=%d: %v", battleId, err)
+			return fail("internal", 0)
+		}
+		for _, aiSnap := range gwReq.GetAiDefenderSnapshots() {
+			if aiSnap == nil || aiSnap.GetPlayerId() == 0 {
+				logx.Errorf("[gather] Empty guild war AI defender snapshot battle=%d", battleId)
+				return fail("internal", 0)
+			}
+			clone := proto.Clone(aiSnap).(*battlepb.BattlePlayerSnapshot)
+			clone.TeamIndex = 1
+			clone.AiControlled = true
+			clone.Routing = nil
+			clone.Items = nil
+			snapshots = append(snapshots, clone)
+		}
+	}
 	createdAtMs := createOriginalCreatedAtMs(nowMs(), f.CreatedMs)
 	var teamScripts []*battlepb.BattleTeamScript
 	if rankedCtx == nil || !rankedCtx.GetUseFreePreset() {
 		teamScripts = resolveTeamScripts(svcCtx, f, teams)
+	}
+	var trialCtx *battlepb.TrialBattleContext
+	if !f.IsWuxingTower {
+		trialCtx = svcCtx.ActiveCatalog().TrialContextFor(mode, f.ConfigId, activityContext, rankedCtx)
 	}
 	createReq := &battlepb.CreateBattleRequest{
 		BattleId:               battleId,
@@ -206,7 +253,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		DeadlineMs:             deadlineMs,
 		TableFingerprint:       tableFingerprint,
 		ActivityContext:        activityContext,
-		SpectateVisibility:     spectateVisibilityFor(mode, activityContext),
+		SpectateVisibility:     spectateVisibilityForBattle(mode, activityContext, customDuelRules),
 		RecordReplay:           recordReplayFor(svcCtx.Config.BattleReport.Enabled, mode),
 		RequiredPhysicalRegion: f.PhysicalRegion,
 		PlacementOperationId:   f.OperationId,
@@ -214,9 +261,11 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		AdmitBeforeMs:          prepareDeadlineMs,
 		OutcomeProtocolVersion: 1,
 		// 每一方的战斗剧本按值冻结进原件(battle-script.md §5.2);论剑排位自动战斗只用预设内技能,不带玩家自定义剧本。
-		TeamScripts:   teamScripts,
-		RankedContext: rankedCtx,
-		TrialContext:  svcCtx.ActiveCatalog().TrialContextFor(mode, f.ConfigId, activityContext, rankedCtx),
+		TeamScripts:       teamScripts,
+		RankedContext:     rankedCtx,
+		TrialContext:      trialCtx,
+		TournamentContext: tournamentCtx,
+		CustomDuelRules:   customDuelRules,
 	}
 	// 先证明原UUID支持SQL终局门禁；不支持的节点会忽略Create新字段，因此不能直接试发。
 	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -290,9 +339,17 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 
 	// 公开这场战斗:入活跃集合(best-effort;补签与按 battle_id 观战都读成局原件,不靠这一步)。
 	addSpectateActive(svcCtx, battleId, createdAtMs, createReq.GetSpectateVisibility())
-	if matchpb.MatchMode(f.Mode) == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT && svcCtx.MatchRedis != nil {
-		// 全服赛季战队锦标赛自动写入精选观战索引,优先置顶列表并触发 L2 广播(best-effort)。
-		_, _ = svcCtx.MatchRedis.Zadd(spectateFeaturedIndex.keyFor(battleId), int64(f.DeadlineMs), strconv.FormatUint(battleId, 10))
+	if matchpb.MatchMode(f.Mode) == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
+		if svcCtx.MatchRedis != nil && (tournamentCtx == nil || !tournamentCtx.GetIsWarmup()) {
+			// 全服赛季战队锦标赛正式局自动写入精选观战索引,优先置顶列表并触发 L2 广播(best-effort;排除热身局)。
+			_, _ = svcCtx.MatchRedis.Zadd(spectateFeaturedIndex.keyFor(battleId), int64(f.DeadlineMs), strconv.FormatUint(battleId, 10))
+		}
+		if tournamentCtx != nil && tournamentCtx.GetSeasonId() != 0 && svcCtx.Authority != nil {
+			// V3 真实外观自动回填:把场景权威快照中的角色名/门派/性别/appearance_id 最佳努力写回战队名册,供冠军殿堂与天墉城玉座永久展示获批立绘。
+			syncCtx, syncCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = svcCtx.Authority.SyncTournamentMemberProfiles(syncCtx, tournamentCtx.GetSeasonId(), snapshots)
+			syncCancel()
+		}
 	}
 	logx.Infof("[gather] Battle started successfully battle=%d mode=%s config=%d node=%d members=%v elapsed=%s",
 		battleId, modeName, f.ConfigId, battleNode.NodeId, members, time.Since(start))
@@ -318,10 +375,11 @@ func intentFailureOutcome(err error) string {
 	return "intent_failed"
 }
 
-// gatherTeamAssignment 给成局成员分队。PVP_TEAM 的分边在提交点已写进成局原件,不重新计算;其余模式按 teamAssignment。
+// gatherTeamAssignment 给成局成员分队。PVP_TEAM 与帮会帮战的分边在提交点已写进成局原件,不重新计算;其余模式按 teamAssignment。
 func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord, members []uint64) ([]uint32, error) {
 	mode := matchpb.MatchMode(f.Mode)
-	if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+	isGuildWar := mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP || mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE
+	if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && !isGuildWar {
 		return teamAssignment(s, mode, f.BattleId, members), nil
 	}
 	assignments := make(map[uint64]uint32, len(f.Members))
@@ -346,6 +404,18 @@ func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord
 		teams[i] = side
 		counts[side]++
 	}
+	if mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP {
+		if counts[0] == 0 || counts[1] == 0 || counts[0] > kMaxBattleTeamSize || counts[1] > kMaxBattleTeamSize {
+			return nil, fmt.Errorf("帮战真人对局双方人数均须为1到5人")
+		}
+		return teams, nil
+	}
+	if mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE {
+		if counts[0] == 0 || counts[0] > kMaxBattleTeamSize || counts[1] != 0 {
+			return nil, fmt.Errorf("帮战守旗踢馆进攻方须为1到5人且防守方为AI守旗阵")
+		}
+		return teams, nil
+	}
 	if counts[0] == 0 || counts[0] != counts[1] || counts[0] > kMaxBattleTeamSize {
 		return nil, fmt.Errorf("PVP双方人数须相同且各为1到5人")
 	}
@@ -357,6 +427,10 @@ func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord
 // 到对端(位置缺失/节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
 // before 在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
 func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, activityCtx *battlepb.BattleActivityContext, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
+	return preparePlayerFencedWithExtras(svcCtx, playerId, battleId, battleNodeId, deadlineMs, prepareDeadlineMs, battleConfigId, matchMode, rankedCtx, activityCtx, false, nil, before)
+}
+
+func preparePlayerFencedWithExtras(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, activityCtx *battlepb.BattleActivityContext, isWuxingTower bool, customDuelRules *battlepb.CustomDuelRules, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
 	// player:{id}:location 由 scene_manager 写(protobuf PlayerLocation),
 	// 是玩家 scene 定位的共享契约(设计文档 §5.4 / go/scene_manager changesceneutil.go);
 	// 带 zone_id,所以任意 zone 的玩家都能定位到自己 zone 的 scene 节点。
@@ -388,6 +462,8 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 		BattleConfigId:    battleConfigId,
 		MatchMode:         matchMode,
 		ActivityContext:   activityCtx,
+		IsWuxingTower:     isWuxingTower,
+		CustomDuelRules:   customDuelRules,
 	})
 	if err != nil {
 		return endpoint, nil, fmt.Errorf("PrepareBattle RPC 失败: %w", err)

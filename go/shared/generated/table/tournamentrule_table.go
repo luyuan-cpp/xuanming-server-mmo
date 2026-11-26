@@ -21,6 +21,7 @@ type tournamentruleSnapshot struct {
     data   []*pb.TournamentRuleTable
     kvData map[uint32]*pb.TournamentRuleTable
     idxBattleConfigId map[uint32][]*pb.TournamentRuleTable
+    idxSaluteItemId map[uint32][]*pb.TournamentRuleTable
 }
 
 type TournamentRuleTableManager struct {
@@ -42,6 +43,7 @@ func NewTournamentRuleTableManager() *TournamentRuleTableManager {
     m.snap.Store(&tournamentruleSnapshot{
         kvData: make(map[uint32]*pb.TournamentRuleTable),
         idxBattleConfigId: make(map[uint32][]*pb.TournamentRuleTable),
+        idxSaluteItemId: make(map[uint32][]*pb.TournamentRuleTable),
     })
     return m
 }
@@ -87,11 +89,13 @@ func (m *TournamentRuleTableManager) loadSnapshot(configDir string, useBinary bo
     snap := &tournamentruleSnapshot{
         kvData: make(map[uint32]*pb.TournamentRuleTable, len(container.Data)),
         idxBattleConfigId: make(map[uint32][]*pb.TournamentRuleTable),
+        idxSaluteItemId: make(map[uint32][]*pb.TournamentRuleTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
         snap.idxBattleConfigId[row.BattleConfigId] = append(snap.idxBattleConfigId[row.BattleConfigId], row)
+        snap.idxSaluteItemId[row.SaluteItemId] = append(snap.idxSaluteItemId[row.SaluteItemId], row)
     }
 
     snap.data = container.Data
@@ -113,6 +117,12 @@ func (m *TournamentRuleTableManager) FindById(id uint32) (*pb.TournamentRuleTabl
 func (m *TournamentRuleTableManager) GetByBattleConfigId(key uint32) []*pb.TournamentRuleTable {
     snap := m.snap.Load()
     return snap.idxBattleConfigId[key]
+}
+
+
+func (m *TournamentRuleTableManager) GetBySaluteItemId(key uint32) []*pb.TournamentRuleTable {
+    snap := m.snap.Load()
+    return snap.idxSaluteItemId[key]
 }
 
 
@@ -138,6 +148,12 @@ func (m *TournamentRuleTableManager) Count() int {
 func (m *TournamentRuleTableManager) CountByBattleConfigIdIndex(key uint32) int {
     snap := m.snap.Load()
     return len(snap.idxBattleConfigId[key])
+}
+
+
+func (m *TournamentRuleTableManager) CountBySaluteItemIdIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxSaluteItemId[key])
 }
 
 
@@ -190,6 +206,8 @@ func (m *TournamentRuleTableManager) First(pred func(*pb.TournamentRuleTable) bo
     return nil, false
 }
 // FK: battle_config_id → Dungeon.id
+
+// FK: salute_item_id → Item.id
 
 
 // ---- Composite Key ----

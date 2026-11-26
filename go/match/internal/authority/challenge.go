@@ -11,7 +11,7 @@ import (
 	pb "proto/match"
 )
 
-const challengeColumns = "challenge_id,challenger_player_id,target_player_id,config_id,challenger_account,challenger_revision,target_account,target_revision,created_ms,expires_ms,state,battle_id"
+const challengeColumns = "challenge_id,challenger_player_id,target_player_id,config_id,challenger_account,challenger_revision,target_account,target_revision,created_ms,expires_ms,state,battle_id,custom_rules_payload"
 
 const (
 	challengePending         uint32 = 1
@@ -27,7 +27,7 @@ var ErrChallengeNotTarget = errors.New("切磋邀请不属于原应战者")
 
 func scanChallenge(row scanner) (*pb.MatchChallengeInvitationRecord, error) {
 	invitation := &pb.MatchChallengeInvitationRecord{}
-	err := row.Scan(&invitation.ChallengeId, &invitation.ChallengerPlayerId, &invitation.TargetPlayerId, &invitation.ConfigId, &invitation.ChallengerAccount, &invitation.ChallengerRevision, &invitation.TargetAccount, &invitation.TargetRevision, &invitation.CreatedMs, &invitation.ExpiresMs, &invitation.State, &invitation.BattleId)
+	err := row.Scan(&invitation.ChallengeId, &invitation.ChallengerPlayerId, &invitation.TargetPlayerId, &invitation.ConfigId, &invitation.ChallengerAccount, &invitation.ChallengerRevision, &invitation.TargetAccount, &invitation.TargetRevision, &invitation.CreatedMs, &invitation.ExpiresMs, &invitation.State, &invitation.BattleId, &invitation.CustomRulesPayload)
 	return invitation, err
 }
 
@@ -39,19 +39,26 @@ func challengeOriginals(invitation *pb.MatchChallengeInvitationRecord) []*pb.Mat
 }
 
 func matchesChallengeOriginal(a, b *pb.MatchChallengeInvitationRecord) bool {
-	return a.ChallengeId == b.ChallengeId && a.ChallengerPlayerId == b.ChallengerPlayerId && a.TargetPlayerId == b.TargetPlayerId && a.ConfigId == b.ConfigId && a.ChallengerAccount == b.ChallengerAccount && a.ChallengerRevision == b.ChallengerRevision && a.TargetAccount == b.TargetAccount && a.TargetRevision == b.TargetRevision && a.CreatedMs == b.CreatedMs && a.ExpiresMs == b.ExpiresMs
+	return a.ChallengeId == b.ChallengeId && a.ChallengerPlayerId == b.ChallengerPlayerId && a.TargetPlayerId == b.TargetPlayerId && a.ConfigId == b.ConfigId && a.ChallengerAccount == b.ChallengerAccount && a.ChallengerRevision == b.ChallengerRevision && a.TargetAccount == b.TargetAccount && a.TargetRevision == b.TargetRevision && a.CreatedMs == b.CreatedMs && a.ExpiresMs == b.ExpiresMs && bytes.Equal(a.CustomRulesPayload, b.CustomRulesPayload)
 }
 
 // 新意图在双方P锁下捕获对端；已有同正文邀请只回放原编号/有效期，绝不刷新TTL或换主。
 func (s *Store) CreateChallenge(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64) (invitation *pb.MatchChallengeInvitationRecord, err error) {
+	return s.CreateChallengeWithRules(ctx, id, challenger, target, config, ttlMs, nil)
+}
+
+func (s *Store) CreateChallengeWithRules(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64, customRulesPayload []byte) (invitation *pb.MatchChallengeInvitationRecord, err error) {
 	err = s.Fenced(ctx, func() (e error) {
-		invitation, e = s.createChallengeOnce(ctx, id, challenger, target, config, ttlMs)
+		invitation, e = s.createChallengeOnce(ctx, id, challenger, target, config, ttlMs, customRulesPayload)
 		return e
 	})
 	return invitation, err
 }
 
-func (s *Store) createChallengeOnce(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64) (*pb.MatchChallengeInvitationRecord, error) {
+func (s *Store) createChallengeOnce(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64, customRulesPayload []byte) (*pb.MatchChallengeInvitationRecord, error) {
+	if customRulesPayload == nil {
+		customRulesPayload = []byte{}
+	}
 	if id == 0 || challenger == 0 || target == 0 || challenger == target || ttlMs == 0 {
 		return nil, errors.New("切磋邀请参数无效")
 	}
@@ -65,7 +72,7 @@ func (s *Store) createChallengeOnce(ctx context.Context, id, challenger, target 
 	observed, readErr := scanChallenge(tx.QueryRowContext(ctx, "SELECT "+challengeColumns+" FROM match_challenge_invitation WHERE target_player_id=? AND state=? AND expires_ms>CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) ORDER BY expires_ms,challenge_id LIMIT 1", target, challengePending))
 	if readErr == nil {
 		actor := originalPlayer(ctx, challenger)
-		if observed.ChallengerPlayerId != challenger || observed.ConfigId != config || observed.ChallengerAccount != actor.OwnerAccount || observed.ChallengerRevision != actor.OwnerRevision {
+		if observed.ChallengerPlayerId != challenger || observed.ConfigId != config || observed.ChallengerAccount != actor.OwnerAccount || observed.ChallengerRevision != actor.OwnerRevision || !bytes.Equal(observed.CustomRulesPayload, customRulesPayload) {
 			return nil, ErrChallengePending
 		}
 		if err = s.lockOriginalPlayers(ctx, tx, challengeOriginals(observed)); err != nil {
@@ -103,7 +110,7 @@ func (s *Store) createChallengeOnce(ctx context.Context, id, challenger, target 
 	}
 	old, err := scanChallenge(tx.QueryRowContext(ctx, "SELECT "+challengeColumns+" FROM match_challenge_invitation WHERE target_player_id=? AND state=? AND expires_ms>? ORDER BY expires_ms,challenge_id LIMIT 1 FOR UPDATE", target, challengePending, n))
 	if err == nil {
-		if old.ChallengerPlayerId != challenger || old.ConfigId != config || old.ChallengerAccount != actor.OwnerAccount || old.ChallengerRevision != actor.OwnerRevision || old.TargetAccount != peer.OwnerAccount || old.TargetRevision != peer.OwnerRevision {
+		if old.ChallengerPlayerId != challenger || old.ConfigId != config || old.ChallengerAccount != actor.OwnerAccount || old.ChallengerRevision != actor.OwnerRevision || old.TargetAccount != peer.OwnerAccount || old.TargetRevision != peer.OwnerRevision || !bytes.Equal(old.CustomRulesPayload, customRulesPayload) {
 			return nil, ErrChallengePending
 		}
 		if err = tx.Commit(); err != nil {
@@ -114,8 +121,8 @@ func (s *Store) createChallengeOnce(ctx context.Context, id, challenger, target 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	invitation := &pb.MatchChallengeInvitationRecord{ChallengeId: id, ChallengerPlayerId: challenger, TargetPlayerId: target, ConfigId: config, ChallengerAccount: actor.OwnerAccount, ChallengerRevision: actor.OwnerRevision, TargetAccount: peer.OwnerAccount, TargetRevision: peer.OwnerRevision, CreatedMs: n, ExpiresMs: n + ttlMs, State: challengePending}
-	_, err = tx.ExecContext(ctx, "INSERT INTO match_challenge_invitation("+challengeColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", invitation.ChallengeId, challenger, target, config, invitation.ChallengerAccount, invitation.ChallengerRevision, invitation.TargetAccount, invitation.TargetRevision, n, invitation.ExpiresMs, invitation.State, 0)
+	invitation := &pb.MatchChallengeInvitationRecord{ChallengeId: id, ChallengerPlayerId: challenger, TargetPlayerId: target, ConfigId: config, ChallengerAccount: actor.OwnerAccount, ChallengerRevision: actor.OwnerRevision, TargetAccount: peer.OwnerAccount, TargetRevision: peer.OwnerRevision, CreatedMs: n, ExpiresMs: n + ttlMs, State: challengePending, CustomRulesPayload: customRulesPayload}
+	_, err = tx.ExecContext(ctx, "INSERT INTO match_challenge_invitation("+challengeColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", invitation.ChallengeId, challenger, target, config, invitation.ChallengerAccount, invitation.ChallengerRevision, invitation.TargetAccount, invitation.TargetRevision, n, invitation.ExpiresMs, invitation.State, 0, invitation.CustomRulesPayload)
 	if err != nil {
 		return nil, err
 	}

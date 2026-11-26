@@ -43,6 +43,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerUint32Comp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerProfileComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerRenameOp
@@ -205,11 +207,11 @@ constexpr PlayerUint64Comp::ParseTableT_ PlayerUint64Comp::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -219,14 +221,55 @@ constexpr PlayerUint64Comp::ParseTableT_ PlayerUint64Comp::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::PlayerUint64Comp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 afk_pass_expires_at = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.afk_pass_expires_at_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.afk_pass_expires_at_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 registration_timestamp = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.registration_timestamp_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.registration_timestamp_)}},
+      // uint64 afk_pass_expires_at = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.afk_pass_expires_at_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.afk_pass_expires_at_)}},
+      // bool afk_auto_return_city_on_team_end = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerUint64Comp, _impl_.afk_auto_return_city_on_team_end_), 7>(),
+       {24, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.afk_auto_return_city_on_team_end_)}},
+      // uint64 hosted_recap_started_at = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_started_at_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_started_at_)}},
+      // uint64 hosted_recap_ended_at = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_ended_at_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_ended_at_)}},
+      // uint32 hosted_recap_battle_count = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_battle_count_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_battle_count_)}},
+      // uint32 hosted_recap_win_count = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_win_count_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_win_count_)}},
+      // uint64 hosted_recap_exp_gained = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_exp_gained_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_exp_gained_)}},
+      // uint64 hosted_recap_silver_gained = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_silver_gained_), 10>(),
+       {72, 10, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_silver_gained_)}},
+      // uint32 hosted_recap_item_count = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerUint64Comp, _impl_.hosted_recap_item_count_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_item_count_)}},
+      // bool hosted_recap_pending_ack = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerUint64Comp, _impl_.hosted_recap_pending_ack_), 8>(),
+       {88, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_pending_ack_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -234,6 +277,24 @@ constexpr PlayerUint64Comp::ParseTableT_ PlayerUint64Comp::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.registration_timestamp_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 afk_pass_expires_at = 2;
       {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.afk_pass_expires_at_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool afk_auto_return_city_on_team_end = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.afk_auto_return_city_on_team_end_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 hosted_recap_started_at = 4;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_started_at_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 hosted_recap_ended_at = 5;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_ended_at_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 hosted_recap_battle_count = 6;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_battle_count_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 hosted_recap_win_count = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_win_count_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 hosted_recap_exp_gained = 8;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_exp_gained_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 hosted_recap_silver_gained = 9;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_silver_gained_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 hosted_recap_item_count = 10;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_item_count_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool hosted_recap_pending_ack = 11;
+      {PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_pending_ack_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -247,7 +308,16 @@ inline constexpr PlayerUint64Comp::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         registration_timestamp_{::uint64_t{0u}},
-        afk_pass_expires_at_{::uint64_t{0u}} {}
+        afk_pass_expires_at_{::uint64_t{0u}},
+        hosted_recap_started_at_{::uint64_t{0u}},
+        hosted_recap_ended_at_{::uint64_t{0u}},
+        hosted_recap_battle_count_{0u},
+        hosted_recap_win_count_{0u},
+        hosted_recap_exp_gained_{::uint64_t{0u}},
+        afk_auto_return_city_on_team_end_{false},
+        hosted_recap_pending_ack_{false},
+        hosted_recap_item_count_{0u},
+        hosted_recap_silver_gained_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr PlayerUint64Comp::PlayerUint64Comp(::_pbi::ConstantInitialized,
@@ -581,7 +651,7 @@ constexpr auto PlayerStressTestProbe::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
@@ -764,7 +834,7 @@ constexpr auto PlayerRenameOp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
@@ -811,6 +881,139 @@ const ::_pbi::ClassData* PlayerRenameOp_get_class_data() {
   return PlayerRenameOp_globals_.GetClassData();
 #else
   return PlayerRenameOp_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::ParseTableT_ PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 value = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.value_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.value_)}},
+      // uint32 key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.key_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 key = 1;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 value = 2;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse(arena);
+}
+constexpr auto PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse), alignof(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse));
+}
+constexpr auto PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_.GetClassData();
+#else
+  return PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1345,12 +1548,12 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
-      1,  // num_aux_entries
+      14,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1369,20 +1572,20 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
        {18, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_id_)}},
       // uint32 gender = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfileComp, _impl_.gender_), 10>(),
-       {24, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfileComp, _impl_.gender_), 12>(),
+       {24, 12, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_)}},
       // uint64 rename_seq = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.rename_seq_), 6>(),
-       {32, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.rename_seq_), 8>(),
+       {32, 8, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_seq_)}},
       // uint64 renamed_ms = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.renamed_ms_), 7>(),
-       {40, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.renamed_ms_), 9>(),
+       {40, 9, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.renamed_ms_)}},
       // .PlayerRenameOp rename_op = 6;
       {::_pbi::TcParser::FastMtS1,
-       {50, 5, 0,
+       {50, 7, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_)}},
       // bytes appearance_trial_used_bits = 7;
       {::_pbi::TcParser::FastBS1,
@@ -1393,19 +1596,25 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
        {66, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_appearance_id_)}},
       // uint64 trial_expires_at = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.trial_expires_at_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.trial_expires_at_), 10>(),
+       {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_expires_at_)}},
       // uint64 appearance_switch_seq = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.appearance_switch_seq_), 9>(),
-       {80, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.appearance_switch_seq_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_switch_seq_)}},
       // bytes appearance_owned_bits = 11;
       {::_pbi::TcParser::FastBS1,
        {90, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_owned_bits_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bytes pet_cosmetic_owned_bits = 12;
+      {::_pbi::TcParser::FastBS1,
+       {98, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.pet_cosmetic_owned_bits_)}},
+      // bytes skill_vfx_owned_bits = 13;
+      {::_pbi::TcParser::FastBS1,
+       {106, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.skill_vfx_owned_bits_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -1416,23 +1625,29 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
       // string appearance_id = 2;
       {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 gender = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 rename_seq = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_seq_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_seq_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 renamed_ms = 5;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.renamed_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.renamed_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .PlayerRenameOp rename_op = 6;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bytes appearance_trial_used_bits = 7;
       {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_trial_used_bits_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // string trial_appearance_id = 8;
       {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_appearance_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 trial_expires_at = 9;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_expires_at_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_expires_at_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 appearance_switch_seq = 10;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_switch_seq_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_switch_seq_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bytes appearance_owned_bits = 11;
       {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_owned_bits_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // bytes pet_cosmetic_owned_bits = 12;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.pet_cosmetic_owned_bits_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // bytes skill_vfx_owned_bits = 13;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.skill_vfx_owned_bits_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // map<uint32, uint32> equipped_skill_vfx = 14;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.equipped_skill_vfx_), _Internal::kHasBitsOffset + 13, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1440,6 +1655,8 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PlayerRenameOp_globals_},
         #endif
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 13, 13, 0)},
     }},
     {{
       "\21\4\15\0\0\0\0\0\23\0\0\0\0\0\0\0"
@@ -1471,12 +1688,23 @@ inline constexpr PlayerProfileComp::Impl_::Impl_(
         appearance_owned_bits_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        pet_cosmetic_owned_bits_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        skill_vfx_owned_bits_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         rename_op_{nullptr},
         rename_seq_{::uint64_t{0u}},
         renamed_ms_{::uint64_t{0u}},
         trial_expires_at_{::uint64_t{0u}},
         appearance_switch_seq_{::uint64_t{0u}},
-        gender_{0u} {}
+        gender_{0u},
+        equipped_skill_vfx_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerProfileComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.equipped_skill_vfx_)>()
+         }
+     {}
 
 template <typename>
 constexpr PlayerProfileComp::PlayerProfileComp(::_pbi::ConstantInitialized,
@@ -1519,7 +1747,7 @@ constexpr auto PlayerProfileComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
@@ -1592,19 +1820,44 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_._has_bits_),
-        5, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.registration_timestamp_),
         PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.afk_pass_expires_at_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.afk_auto_return_city_on_team_end_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_started_at_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_ended_at_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_battle_count_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_win_count_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_exp_gained_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_silver_gained_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_item_count_),
+        PROTOBUF_FIELD_OFFSET(::PlayerUint64Comp, _impl_.hosted_recap_pending_ack_),
         0,
         1,
+        7,
+        2,
+        3,
+        4,
+        5,
+        6,
+        10,
+        9,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerUint32Comp, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerUint32Comp, _impl_.class__),
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_._has_bits_),
-        14, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.appearance_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.gender_),
@@ -1616,17 +1869,23 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.trial_expires_at_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.appearance_switch_seq_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.appearance_owned_bits_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.pet_cosmetic_owned_bits_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.skill_vfx_owned_bits_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.equipped_skill_vfx_),
         0,
         1,
-        10,
-        6,
-        7,
-        5,
-        2,
-        3,
+        12,
         8,
         9,
+        7,
+        2,
+        3,
+        10,
+        11,
         4,
+        5,
+        6,
+        13,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerRenameOp, _impl_._has_bits_),
         9, // hasbit index offset
@@ -1659,10 +1918,11 @@ static const ::_pbi::MigrationSchema
         {3, sizeof(::Account)},
         {8, sizeof(::UnregisterPlayer)},
         {13, sizeof(::PlayerUint64Comp)},
-        {20, sizeof(::PlayerUint32Comp)},
-        {25, sizeof(::PlayerProfileComp)},
-        {50, sizeof(::PlayerRenameOp)},
-        {65, sizeof(::PlayerStressTestProbe)},
+        {38, sizeof(::PlayerUint32Comp)},
+        {43, sizeof(::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse)},
+        {50, sizeof(::PlayerProfileComp)},
+        {81, sizeof(::PlayerRenameOp)},
+        {96, sizeof(::PlayerStressTestProbe)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1673,6 +1933,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::UnregisterPlayer_globals_,
         &::PlayerUint64Comp_globals_,
         &::PlayerUint32Comp_globals_,
+        &::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_,
         &::PlayerProfileComp_globals_,
         &::PlayerRenameOp_globals_,
         &::PlayerStressTestProbe_globals_,
@@ -1682,35 +1943,48 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcomp_
     "\n(proto/common/component/player_comp.pro"
     "to\"\r\n\013NormalLogin\"\014\n\nCoverLogin\"\010\n\006Playe"
     "r\"\032\n\007Account\022\017\n\007account\030\001 \001(\t\"/\n\020Unregis"
-    "terPlayer\022\033\n\023logout_initiated_ms\030\001 \001(\003\"O"
-    "\n\020PlayerUint64Comp\022\036\n\026registration_times"
-    "tamp\030\001 \001(\004\022\033\n\023afk_pass_expires_at\030\002 \001(\004\""
-    "!\n\020PlayerUint32Comp\022\r\n\005class\030\001 \001(\r\"\255\002\n\021P"
-    "layerProfileComp\022\014\n\004name\030\001 \001(\t\022\025\n\rappear"
-    "ance_id\030\002 \001(\t\022\016\n\006gender\030\003 \001(\r\022\022\n\nrename_"
-    "seq\030\004 \001(\004\022\022\n\nrenamed_ms\030\005 \001(\004\022\"\n\trename_"
-    "op\030\006 \001(\0132\017.PlayerRenameOp\022\"\n\032appearance_"
-    "trial_used_bits\030\007 \001(\014\022\033\n\023trial_appearanc"
-    "e_id\030\010 \001(\t\022\030\n\020trial_expires_at\030\t \001(\004\022\035\n\025"
-    "appearance_switch_seq\030\n \001(\004\022\035\n\025appearanc"
-    "e_owned_bits\030\013 \001(\014\"z\n\016PlayerRenameOp\022\013\n\003"
-    "seq\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\017\n\007hold_id\030\003 \001(\004"
-    "\022\024\n\014card_item_id\030\004 \001(\r\022\022\n\ncard_count\030\005 \001"
-    "(\r\022\022\n\nstarted_ms\030\006 \001(\004\";\n\025PlayerStressTe"
-    "stProbe\022\020\n\010test_seq\030\001 \001(\004\022\020\n\010test_sig\030\002 "
-    "\001(\014B\022Z\020common/componentb\006proto3"
+    "terPlayer\022\033\n\023logout_initiated_ms\030\001 \001(\003\"\204"
+    "\003\n\020PlayerUint64Comp\022\036\n\026registration_time"
+    "stamp\030\001 \001(\004\022\033\n\023afk_pass_expires_at\030\002 \001(\004"
+    "\022(\n afk_auto_return_city_on_team_end\030\003 \001"
+    "(\010\022\037\n\027hosted_recap_started_at\030\004 \001(\004\022\035\n\025h"
+    "osted_recap_ended_at\030\005 \001(\004\022!\n\031hosted_rec"
+    "ap_battle_count\030\006 \001(\r\022\036\n\026hosted_recap_wi"
+    "n_count\030\007 \001(\r\022\037\n\027hosted_recap_exp_gained"
+    "\030\010 \001(\004\022\"\n\032hosted_recap_silver_gained\030\t \001"
+    "(\004\022\037\n\027hosted_recap_item_count\030\n \001(\r\022 \n\030h"
+    "osted_recap_pending_ack\030\013 \001(\010\"!\n\020PlayerU"
+    "int32Comp\022\r\n\005class\030\001 \001(\r\"\353\003\n\021PlayerProfi"
+    "leComp\022\014\n\004name\030\001 \001(\t\022\025\n\rappearance_id\030\002 "
+    "\001(\t\022\016\n\006gender\030\003 \001(\r\022\022\n\nrename_seq\030\004 \001(\004\022"
+    "\022\n\nrenamed_ms\030\005 \001(\004\022\"\n\trename_op\030\006 \001(\0132\017"
+    ".PlayerRenameOp\022\"\n\032appearance_trial_used"
+    "_bits\030\007 \001(\014\022\033\n\023trial_appearance_id\030\010 \001(\t"
+    "\022\030\n\020trial_expires_at\030\t \001(\004\022\035\n\025appearance"
+    "_switch_seq\030\n \001(\004\022\035\n\025appearance_owned_bi"
+    "ts\030\013 \001(\014\022\037\n\027pet_cosmetic_owned_bits\030\014 \001("
+    "\014\022\034\n\024skill_vfx_owned_bits\030\r \001(\014\022D\n\022equip"
+    "ped_skill_vfx\030\016 \003(\0132(.PlayerProfileComp."
+    "EquippedSkillVfxEntry\0327\n\025EquippedSkillVf"
+    "xEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"z"
+    "\n\016PlayerRenameOp\022\013\n\003seq\030\001 \001(\004\022\014\n\004name\030\002 "
+    "\001(\t\022\017\n\007hold_id\030\003 \001(\004\022\024\n\014card_item_id\030\004 \001"
+    "(\r\022\022\n\ncard_count\030\005 \001(\r\022\022\n\nstarted_ms\030\006 \001"
+    "(\004\";\n\025PlayerStressTestProbe\022\020\n\010test_seq\030"
+    "\001 \001(\004\022\020\n\010test_sig\030\002 \001(\014B\022Z\020common/compon"
+    "entb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto = {
     false,
     false,
-    791,
+    1291,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
     "proto/common/component/player_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto_once,
     nullptr,
     0,
-    10,
+    11,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto::offsets,
@@ -2341,9 +2615,9 @@ inline void PlayerUint64Comp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, registration_timestamp_),
            0,
-           offsetof(Impl_, afk_pass_expires_at_) -
+           offsetof(Impl_, hosted_recap_silver_gained_) -
                offsetof(Impl_, registration_timestamp_) +
-               sizeof(Impl_::afk_pass_expires_at_));
+               sizeof(Impl_::hosted_recap_silver_gained_));
 }
 PlayerUint64Comp::~PlayerUint64Comp() {
   // @@protoc_insertion_point(destructor:PlayerUint64Comp)
@@ -2393,10 +2667,15 @@ PROTOBUF_NOINLINE void PlayerUint64Comp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.registration_timestamp_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.afk_pass_expires_at_) -
-        reinterpret_cast<char*>(&_impl_.registration_timestamp_)) + sizeof(_impl_.afk_pass_expires_at_));
+        reinterpret_cast<char*>(&_impl_.afk_auto_return_city_on_team_end_) -
+        reinterpret_cast<char*>(&_impl_.registration_timestamp_)) + sizeof(_impl_.afk_auto_return_city_on_team_end_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.hosted_recap_pending_ack_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.hosted_recap_silver_gained_) -
+        reinterpret_cast<char*>(&_impl_.hosted_recap_pending_ack_)) + sizeof(_impl_.hosted_recap_silver_gained_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2439,6 +2718,87 @@ PROTOBUF_NOINLINE void PlayerUint64Comp::Clear() {
     }
   }
 
+  // bool afk_auto_return_city_on_team_end = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_afk_auto_return_city_on_team_end() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_afk_auto_return_city_on_team_end(), target);
+    }
+  }
+
+  // uint64 hosted_recap_started_at = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_hosted_recap_started_at() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_hosted_recap_started_at(), target);
+    }
+  }
+
+  // uint64 hosted_recap_ended_at = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_hosted_recap_ended_at() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_hosted_recap_ended_at(), target);
+    }
+  }
+
+  // uint32 hosted_recap_battle_count = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_hosted_recap_battle_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_hosted_recap_battle_count(), target);
+    }
+  }
+
+  // uint32 hosted_recap_win_count = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_hosted_recap_win_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_hosted_recap_win_count(), target);
+    }
+  }
+
+  // uint64 hosted_recap_exp_gained = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_hosted_recap_exp_gained() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_hosted_recap_exp_gained(), target);
+    }
+  }
+
+  // uint64 hosted_recap_silver_gained = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_hosted_recap_silver_gained() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_hosted_recap_silver_gained(), target);
+    }
+  }
+
+  // uint32 hosted_recap_item_count = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_hosted_recap_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_hosted_recap_item_count(), target);
+    }
+  }
+
+  // bool hosted_recap_pending_ack = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_hosted_recap_pending_ack() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          11, this_._internal_hosted_recap_pending_ack(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2464,7 +2824,7 @@ PROTOBUF_NOINLINE void PlayerUint64Comp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // uint64 registration_timestamp = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_registration_timestamp() != 0) {
@@ -2477,6 +2837,69 @@ PROTOBUF_NOINLINE void PlayerUint64Comp::Clear() {
       if (this_._internal_afk_pass_expires_at() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_afk_pass_expires_at());
+      }
+    }
+    // uint64 hosted_recap_started_at = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_hosted_recap_started_at() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_hosted_recap_started_at());
+      }
+    }
+    // uint64 hosted_recap_ended_at = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_hosted_recap_ended_at() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_hosted_recap_ended_at());
+      }
+    }
+    // uint32 hosted_recap_battle_count = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_hosted_recap_battle_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_hosted_recap_battle_count());
+      }
+    }
+    // uint32 hosted_recap_win_count = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_hosted_recap_win_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_hosted_recap_win_count());
+      }
+    }
+    // uint64 hosted_recap_exp_gained = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_hosted_recap_exp_gained() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_hosted_recap_exp_gained());
+      }
+    }
+    // bool afk_auto_return_city_on_team_end = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_afk_auto_return_city_on_team_end() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // bool hosted_recap_pending_ack = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_hosted_recap_pending_ack() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 hosted_recap_item_count = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_hosted_recap_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_hosted_recap_item_count());
+      }
+    }
+    // uint64 hosted_recap_silver_gained = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_hosted_recap_silver_gained() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_hosted_recap_silver_gained());
       }
     }
   }
@@ -2497,7 +2920,7 @@ void PlayerUint64Comp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_registration_timestamp() != 0) {
         _this->_impl_.registration_timestamp_ = from._impl_.registration_timestamp_;
@@ -2506,6 +2929,53 @@ void PlayerUint64Comp::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_afk_pass_expires_at() != 0) {
         _this->_impl_.afk_pass_expires_at_ = from._impl_.afk_pass_expires_at_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_hosted_recap_started_at() != 0) {
+        _this->_impl_.hosted_recap_started_at_ = from._impl_.hosted_recap_started_at_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_hosted_recap_ended_at() != 0) {
+        _this->_impl_.hosted_recap_ended_at_ = from._impl_.hosted_recap_ended_at_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_hosted_recap_battle_count() != 0) {
+        _this->_impl_.hosted_recap_battle_count_ = from._impl_.hosted_recap_battle_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_hosted_recap_win_count() != 0) {
+        _this->_impl_.hosted_recap_win_count_ = from._impl_.hosted_recap_win_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_hosted_recap_exp_gained() != 0) {
+        _this->_impl_.hosted_recap_exp_gained_ = from._impl_.hosted_recap_exp_gained_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_afk_auto_return_city_on_team_end() != 0) {
+        _this->_impl_.afk_auto_return_city_on_team_end_ = from._impl_.afk_auto_return_city_on_team_end_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_hosted_recap_pending_ack() != 0) {
+        _this->_impl_.hosted_recap_pending_ack_ = from._impl_.hosted_recap_pending_ack_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_hosted_recap_item_count() != 0) {
+        _this->_impl_.hosted_recap_item_count_ = from._impl_.hosted_recap_item_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_hosted_recap_silver_gained() != 0) {
+        _this->_impl_.hosted_recap_silver_gained_ = from._impl_.hosted_recap_silver_gained_;
       }
     }
   }
@@ -2527,8 +2997,8 @@ void PlayerUint64Comp::InternalSwap(PlayerUint64Comp* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.afk_pass_expires_at_)
-      + sizeof(PlayerUint64Comp::_impl_.afk_pass_expires_at_)
+      PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.hosted_recap_silver_gained_)
+      + sizeof(PlayerUint64Comp::_impl_.hosted_recap_silver_gained_)
       - PROTOBUF_FIELD_OFFSET(PlayerUint64Comp, _impl_.registration_timestamp_)>(
           reinterpret_cast<char*>(&_impl_.registration_timestamp_),
           reinterpret_cast<char*>(&other->_impl_.registration_timestamp_));
@@ -2728,6 +3198,44 @@ void PlayerUint32Comp::InternalSwap(PlayerUint32Comp* PROTOBUF_RESTRICT PROTOBUF
 }
 // ===================================================================
 
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse() : SuperType(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_get_class_data()) {}
+PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse() : SuperType() {}
+PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_ =
+        PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::InternalGenerateClassData_(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_.tc_table);
+  return PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_));
+  return PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::ParseTableT_
+    PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::_table_ =
+        PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse::InternalGenerateParseTable_(PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
 PlayerProfileComp::PlayerProfileComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, PlayerProfileComp_get_class_data()) {
@@ -2747,7 +3255,16 @@ PROTOBUF_NDEBUG_INLINE PlayerProfileComp::Impl_::Impl_(
         appearance_id_(arena, from.appearance_id_),
         appearance_trial_used_bits_(arena, from.appearance_trial_used_bits_),
         trial_appearance_id_(arena, from.trial_appearance_id_),
-        appearance_owned_bits_(arena, from.appearance_owned_bits_) {}
+        appearance_owned_bits_(arena, from.appearance_owned_bits_),
+        pet_cosmetic_owned_bits_(arena, from.pet_cosmetic_owned_bits_),
+        skill_vfx_owned_bits_(arena, from.skill_vfx_owned_bits_),
+        equipped_skill_vfx_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PlayerProfileComp,
+              PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.equipped_skill_vfx_)>()
+          , from.equipped_skill_vfx_
+        }
+     {}
 
 PlayerProfileComp::PlayerProfileComp(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2764,7 +3281,7 @@ PlayerProfileComp::PlayerProfileComp(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.rename_op_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+  _impl_.rename_op_ = (CheckHasBit(cached_has_bits, 0x00000080U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.rename_op_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -2785,7 +3302,14 @@ PROTOBUF_NDEBUG_INLINE PlayerProfileComp::Impl_::Impl_(
         appearance_id_(arena),
         appearance_trial_used_bits_(arena),
         trial_appearance_id_(arena),
-        appearance_owned_bits_(arena) {}
+        appearance_owned_bits_(arena),
+        pet_cosmetic_owned_bits_(arena),
+        skill_vfx_owned_bits_(arena),
+        equipped_skill_vfx_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerProfileComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.equipped_skill_vfx_)>()
+         }
+     {}
 
 inline void PlayerProfileComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2812,6 +3336,8 @@ inline void PlayerProfileComp::SharedDtor(MessageLite& self) {
   this_._impl_.appearance_trial_used_bits_.Destroy();
   this_._impl_.trial_appearance_id_.Destroy();
   this_._impl_.appearance_owned_bits_.Destroy();
+  this_._impl_.pet_cosmetic_owned_bits_.Destroy();
+  this_._impl_.skill_vfx_owned_bits_.Destroy();
   delete this_._impl_.rename_op_;
   this_._impl_.~Impl_();
 }
@@ -2850,7 +3376,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
@@ -2867,19 +3393,23 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
       _impl_.appearance_owned_bits_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.pet_cosmetic_owned_bits_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.skill_vfx_owned_bits_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(_impl_.rename_op_ != nullptr);
       _impl_.rename_op_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     ::memset(&_impl_.rename_seq_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.renamed_ms_) -
-        reinterpret_cast<char*>(&_impl_.rename_seq_)) + sizeof(_impl_.renamed_ms_));
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    ::memset(&_impl_.trial_expires_at_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.gender_) -
-        reinterpret_cast<char*>(&_impl_.trial_expires_at_)) + sizeof(_impl_.gender_));
+        reinterpret_cast<char*>(&_impl_.rename_seq_)) + sizeof(_impl_.gender_));
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      _impl_.equipped_skill_vfx_.Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2925,7 +3455,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint32 gender = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_gender() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2934,7 +3464,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint64 rename_seq = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_rename_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2943,7 +3473,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint64 renamed_ms = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_renamed_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2952,7 +3482,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // .PlayerRenameOp rename_op = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         6, *this_._impl_.rename_op_, this_._impl_.rename_op_->GetCachedSize(), target,
         stream);
@@ -2977,7 +3507,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint64 trial_expires_at = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_trial_expires_at() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2986,7 +3516,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint64 appearance_switch_seq = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_appearance_switch_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2999,6 +3529,45 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
     if (!this_._internal_appearance_owned_bits().empty()) {
       const ::std::string& _s = this_._internal_appearance_owned_bits();
       target = stream->WriteBytesMaybeAliased(11, _s, target);
+    }
+  }
+
+  // bytes pet_cosmetic_owned_bits = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_pet_cosmetic_owned_bits().empty()) {
+      const ::std::string& _s = this_._internal_pet_cosmetic_owned_bits();
+      target = stream->WriteBytesMaybeAliased(12, _s, target);
+    }
+  }
+
+  // bytes skill_vfx_owned_bits = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_skill_vfx_owned_bits().empty()) {
+      const ::std::string& _s = this_._internal_skill_vfx_owned_bits();
+      target = stream->WriteBytesMaybeAliased(13, _s, target);
+    }
+  }
+
+  // map<uint32, uint32> equipped_skill_vfx = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (!this_._internal_equipped_skill_vfx().empty()) {
+      using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                     _pbi::WireFormatLite::TYPE_UINT32,
+                                     _pbi::WireFormatLite::TYPE_UINT32>;
+      const auto& field = this_._internal_equipped_skill_vfx();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              14, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              14, entry.first, entry.second, target, stream);
+        }
+      }
     }
   }
 
@@ -3063,46 +3632,70 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
                                         this_._internal_appearance_owned_bits());
       }
     }
-    // .PlayerRenameOp rename_op = 6;
+    // bytes pet_cosmetic_owned_bits = 12;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_pet_cosmetic_owned_bits().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_pet_cosmetic_owned_bits());
+      }
+    }
+    // bytes skill_vfx_owned_bits = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_skill_vfx_owned_bits().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_skill_vfx_owned_bits());
+      }
+    }
+    // .PlayerRenameOp rename_op = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.rename_op_);
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint64 rename_seq = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_rename_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_rename_seq());
       }
     }
     // uint64 renamed_ms = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_renamed_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_renamed_ms());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint64 trial_expires_at = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_trial_expires_at() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_trial_expires_at());
       }
     }
     // uint64 appearance_switch_seq = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_appearance_switch_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_appearance_switch_seq());
       }
     }
     // uint32 gender = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_gender() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_gender());
+      }
+    }
+    // map<uint32, uint32> equipped_skill_vfx = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_equipped_skill_vfx_size());
+      for (const auto& entry : this_._internal_equipped_skill_vfx()) {
+        total_size += _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                       _pbi::WireFormatLite::TYPE_UINT32,
+                                       _pbi::WireFormatLite::TYPE_UINT32>::ByteSizeLong(entry.first, entry.second);
       }
     }
   }
@@ -3171,6 +3764,24 @@ void PlayerProfileComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_pet_cosmetic_owned_bits().empty()) {
+        _this->_internal_set_pet_cosmetic_owned_bits(from._internal_pet_cosmetic_owned_bits());
+      } else {
+        if (_this->_impl_.pet_cosmetic_owned_bits_.IsDefault()) {
+          _this->_internal_set_pet_cosmetic_owned_bits("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_skill_vfx_owned_bits().empty()) {
+        _this->_internal_set_skill_vfx_owned_bits(from._internal_skill_vfx_owned_bits());
+      } else {
+        if (_this->_impl_.skill_vfx_owned_bits_.IsDefault()) {
+          _this->_internal_set_skill_vfx_owned_bits("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(from._impl_.rename_op_ != nullptr);
       if (_this->_impl_.rename_op_ == nullptr) {
         _this->_impl_.rename_op_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.rename_op_);
@@ -3178,32 +3789,35 @@ void PlayerProfileComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.rename_op_->MergeFrom(*from._impl_.rename_op_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_rename_seq() != 0) {
         _this->_impl_.rename_seq_ = from._impl_.rename_seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_renamed_ms() != 0) {
         _this->_impl_.renamed_ms_ = from._impl_.renamed_ms_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_trial_expires_at() != 0) {
         _this->_impl_.trial_expires_at_ = from._impl_.trial_expires_at_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_appearance_switch_seq() != 0) {
         _this->_impl_.appearance_switch_seq_ = from._impl_.appearance_switch_seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_gender() != 0) {
         _this->_impl_.gender_ = from._impl_.gender_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      _this->_impl_.equipped_skill_vfx_.MergeFrom(from._impl_.equipped_skill_vfx_);
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3230,12 +3844,15 @@ void PlayerProfileComp::InternalSwap(PlayerProfileComp* PROTOBUF_RESTRICT PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_trial_used_bits_, &other->_impl_.appearance_trial_used_bits_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.trial_appearance_id_, &other->_impl_.trial_appearance_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_owned_bits_, &other->_impl_.appearance_owned_bits_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.pet_cosmetic_owned_bits_, &other->_impl_.pet_cosmetic_owned_bits_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.skill_vfx_owned_bits_, &other->_impl_.skill_vfx_owned_bits_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_)
       + sizeof(PlayerProfileComp::_impl_.gender_)
       - PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_)>(
           reinterpret_cast<char*>(&_impl_.rename_op_),
           reinterpret_cast<char*>(&other->_impl_.rename_op_));
+  _impl_.equipped_skill_vfx_.InternalSwap(&other->_impl_.equipped_skill_vfx_);
 }
 
 ::google::protobuf::Metadata PlayerProfileComp::GetMetadata() const {

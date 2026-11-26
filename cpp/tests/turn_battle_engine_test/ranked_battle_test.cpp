@@ -901,7 +901,7 @@ TEST(RankedBattleTest, TacticalPrepFormalRankedSwapSealAndPetPrivacyAndLockIn) {
     EXPECT_TRUE(foundSwappedPet);
 
     // 亮牌后第 1 回合正常接收指令并结算。
-    EXPECT_EQ(engine.ValidateAction(101, Attack(201)), 0u);
+    EXPECT_EQ(engine.ValidateAction(101, Attack(201)), kSuccess);
     engine.SubmitAction(101, Attack(201));
     engine.SubmitAction(201, Defend());
     const auto turn1 = engine.ResolveCurrentRound();
@@ -929,6 +929,259 @@ TEST(RankedBattleTest, TacticalPrepSkippedForFreePresetAndZeroOptionMatches) {
     TurnBattleEngine noOptionEngine(data);
     ASSERT_TRUE(noOptionEngine.Initialize(req));
     EXPECT_FALSE(noOptionEngine.IsInPrepPhase());
+}
+
+TEST(RankedBattleTest, TacticalPingsMultiPlayerIsolationRateLimitAndRoundClear) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_time_limit(720);
+    dungeon.set_max_team_size(5);
+
+    // 1V1 不开放队内标点。
+    auto soloReq = MakeRanked1v1Request(401, 5);
+    TurnBattleEngine soloEngine(data);
+    ASSERT_TRUE(soloEngine.Initialize(soloReq));
+    EXPECT_EQ(soloEngine.SubmitBattlePing(101, 201, BATTLE_PING_FOCUS), kFeatureUnavailable);
+
+    // 2V2 校验阵营约束、单回合 2 次上限、同玩家覆写、队内脱敏隔离与回合推进清空。
+    CreateBattleRequest req;
+    req.set_battle_id(402);
+    req.set_battle_config_id(5);
+    req.set_match_mode(7);
+    req.set_seed(402);
+    req.mutable_ranked_context()->set_season_id(1);
+    req.mutable_ranked_context()->set_rule_version(2);
+    req.mutable_ranked_context()->set_team_size(2);
+    auto addP = [&](uint64_t id, uint32_t team) {
+        auto* p = req.add_players();
+        p->set_player_id(id);
+        p->set_team_index(team);
+        p->set_player_name("P" + std::to_string(id));
+        p->set_level(30);
+        p->set_max_health(4000);
+        p->set_max_mana(1000);
+        p->mutable_base_attributes()->set_health(4000);
+        p->mutable_base_attributes()->set_mana(1000);
+        p->mutable_base_attributes()->set_attack(300);
+        p->mutable_base_attributes()->set_speed(100);
+    };
+    addP(101, 0);
+    addP(102, 0);
+    addP(201, 1);
+    addP(202, 1);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+
+    // 阵营非法拒绝
+    EXPECT_EQ(engine.SubmitBattlePing(101, 102, BATTLE_PING_FOCUS), kInvalidParameter);
+    EXPECT_EQ(engine.SubmitBattlePing(101, 201, BATTLE_PING_PROTECT), kInvalidParameter);
+    EXPECT_EQ(engine.SubmitBattlePing(101, 999, BATTLE_PING_DISPEL), kInvalidParameter);
+
+    // 第 1、2 次合法，最新覆盖前一条，第 3 次触发限频
+    BattleTacticalPing out;
+    ASSERT_EQ(engine.SubmitBattlePing(101, 201, BATTLE_PING_FOCUS, &out), 0u);
+    EXPECT_EQ(out.sender_player_id(), 101u);
+    EXPECT_EQ(out.target_actor_id(), 201u);
+    EXPECT_EQ(out.kind(), BATTLE_PING_FOCUS);
+    EXPECT_EQ(out.round_index(), 1u);
+
+    ASSERT_EQ(engine.SubmitBattlePing(101, 102, BATTLE_PING_PROTECT, &out), 0u);
+    EXPECT_EQ(out.kind(), BATTLE_PING_PROTECT);
+    EXPECT_EQ(engine.SubmitBattlePing(101, 202, BATTLE_PING_DISPEL), kRateLimitExceeded);
+
+    // 队友 102 也可标敌方驱散；对手 201 标己方保核
+    ASSERT_EQ(engine.SubmitBattlePing(102, 202, BATTLE_PING_DISPEL), 0u);
+    ASSERT_EQ(engine.SubmitBattlePing(201, 202, BATTLE_PING_PROTECT), 0u);
+
+    // 视角隔离：A 队看 A 队 2 条（101 仅保留最新 1 条），B 队只看 B 队 1 条，观众为空
+    BattleStateS2C snapA;
+    engine.FillTeamPingsForViewer(snapA, 102);
+    ASSERT_EQ(snapA.team_pings_size(), 2);
+    EXPECT_EQ(snapA.team_pings(0).sender_player_id(), 101u);
+    EXPECT_EQ(snapA.team_pings(0).kind(), BATTLE_PING_PROTECT);
+    EXPECT_EQ(snapA.team_pings(1).sender_player_id(), 102u);
+    EXPECT_EQ(snapA.team_pings(1).kind(), BATTLE_PING_DISPEL);
+
+    BattleStateS2C snapB;
+    engine.FillTeamPingsForViewer(snapB, 202);
+    ASSERT_EQ(snapB.team_pings_size(), 1);
+    EXPECT_EQ(snapB.team_pings(0).sender_player_id(), 201u);
+
+    BattleStateS2C snapObs;
+    engine.FillTeamPingsForViewer(snapObs, 0);
+    EXPECT_EQ(snapObs.team_pings_size(), 0);
+
+    // 回合推进自动清空标点并重置限频配额
+    engine.SubmitAction(101, Defend());
+    engine.SubmitAction(102, Defend());
+    engine.SubmitAction(201, Defend());
+    engine.SubmitAction(202, Defend());
+    engine.ResolveCurrentRound();
+
+    engine.FillTeamPingsForViewer(snapA, 101);
+    EXPECT_EQ(snapA.team_pings_size(), 0);
+    ASSERT_EQ(engine.SubmitBattlePing(101, 201, BATTLE_PING_CONTROL, &out), 0u);
+    EXPECT_EQ(out.round_index(), 2u);
+}
+
+TEST(RankedBattleTest, CombatHighlightsAndStreakBreakerSettlement) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_time_limit(720);
+    dungeon.set_max_team_size(5);
+
+    auto req = MakeRanked1v1Request(403, 5);
+    req.set_match_mode(7);
+    (*req.mutable_ranked_context()->mutable_member_win_streaks())[101] = 2; // <3 不展示
+    (*req.mutable_ranked_context()->mutable_member_win_streaks())[201] = 5; // >=3 展示连胜势并触发破势终结
+    // 让 101 在 1 回合内压低血后反杀 201，验证绝境翻盘 + 破势终结 + 承伤统计
+    req.mutable_players(0)->set_max_health(1000);
+    req.mutable_players(0)->mutable_base_attributes()->set_health(1000);
+    req.mutable_players(0)->mutable_base_attributes()->set_attack(600);
+    req.mutable_players(0)->mutable_base_attributes()->set_speed(50);
+    req.mutable_players(1)->set_max_health(500);
+    req.mutable_players(1)->mutable_base_attributes()->set_health(500);
+    req.mutable_players(1)->mutable_base_attributes()->set_attack(850);
+    req.mutable_players(1)->mutable_base_attributes()->set_speed(150);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+
+    const auto startSnap = engine.BuildStateSnapshot();
+    uint32_t streak101 = 99;
+    uint32_t streak201 = 99;
+    for (const auto& a : startSnap.actors()) {
+        if (a.actor_id() == 101) streak101 = a.win_streak();
+        if (a.actor_id() == 201) streak201 = a.win_streak();
+    }
+    EXPECT_EQ(streak101, 0u);
+    EXPECT_EQ(streak201, 5u);
+
+    engine.SubmitAction(101, Attack(201));
+    engine.SubmitAction(201, Attack(101));
+    const auto r1 = engine.ResolveCurrentRound();
+    ASSERT_EQ(r1.state().outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+
+    const auto settleA = engine.BuildSettlement(101);
+    const auto settleB = engine.BuildSettlement(201);
+    EXPECT_GT(settleA.damage_taken(), 0u);
+    EXPECT_GT(settleA.total_damage_dealt(), 0u);
+    EXPECT_EQ(settleA.highlight_kind(), BATTLE_HIGHLIGHT_CLUTCH_COMEBACK);
+    EXPECT_EQ(settleA.ended_opponent_streak(), 5u);
+    EXPECT_EQ(settleB.ended_opponent_streak(), 0u);
+}
+
+TEST(GuildWarBattleTest, AiDefenderAutoActsAndRound12EscalationDrawsAtMaxRounds) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(1);
+    dungeon.set_id(1);
+    dungeon.set_round_limit(14);
+    dungeon.set_time_limit(600);
+    dungeon.set_max_team_size(5);
+
+    CreateBattleRequest req;
+    req.set_battle_id(99001);
+    req.set_battle_config_id(1);
+    req.set_match_mode(turnbattle::kMatchModeGuildWarSiege);
+    req.set_seed(778899);
+    auto* actx = req.mutable_activity_context();
+    actx->set_kind(BATTLE_ACTIVITY_KIND_GUILD_WAR);
+    auto* gw = actx->mutable_guild_war();
+    gw->set_war_battle_kind(2);
+    gw->set_leyline_id(2);
+    gw->set_attacker_guild_id(100);
+    gw->set_defender_guild_id(200);
+
+    auto* p1 = req.add_players();
+    p1->set_player_id(1001);
+    p1->set_team_index(0);
+    p1->set_player_name("Attacker");
+    p1->set_class_id(1);
+    p1->set_level(50);
+    p1->set_max_health(900000);
+    p1->set_max_mana(2000);
+    p1->mutable_base_attributes()->set_health(900000);
+    p1->mutable_base_attributes()->set_mana(2000);
+    p1->mutable_base_attributes()->set_speed(100);
+    p1->set_defense(500);
+    auto* item = p1->add_items();
+    item->set_item_table_id(1);
+    item->set_count(5);
+
+    auto* aiDef = req.add_players();
+    aiDef->set_player_id(2001);
+    aiDef->set_team_index(1);
+    aiDef->set_player_name("GarrisonAI");
+    aiDef->set_class_id(2);
+    aiDef->set_level(50);
+    aiDef->set_ai_controlled(true);
+    aiDef->set_max_health(900000);
+    aiDef->set_max_mana(2000);
+    aiDef->mutable_base_attributes()->set_health(900000);
+    aiDef->mutable_base_attributes()->set_mana(2000);
+    aiDef->mutable_base_attributes()->set_speed(90);
+    aiDef->set_defense(500);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    EXPECT_TRUE(engine.IsGuildWarBattle());
+    EXPECT_TRUE(engine.IsAiControlledPlayer(2001));
+    EXPECT_FALSE(engine.IsAiControlledPlayer(1001));
+    EXPECT_TRUE(engine.SelfItems(1001).empty());
+    EXPECT_EQ(engine.EscalationStartRound(), turnbattle::kGuildWarEscalationStartRound);
+    EXPECT_NE(engine.ValidateAction(2001, Defend()), kSuccess);
+    EXPECT_NE(engine.SetActorAuto(2001, false), 0u);
+
+    // 仅提交进攻方手动指令即可全员就绪（AI 守擂方不阻塞回合），第 12 回合起进入决胜煞气，打满 14 回合判平。
+    for (uint32_t round = 1; round <= 14; ++round) {
+        if (round == 11) {
+            EXPECT_EQ(engine.EscalationStacks(), 0u);
+            EXPECT_EQ(engine.EscalationDamagePct(), 100u);
+        } else if (round == 12) {
+            EXPECT_EQ(engine.EscalationStacks(), 1u);
+            EXPECT_EQ(engine.EscalationDamagePct(), 115u);
+            EXPECT_EQ(engine.EscalationSupportPct(), 85u);
+        } else if (round == 14) {
+            EXPECT_EQ(engine.EscalationStacks(), 3u);
+            EXPECT_EQ(engine.EscalationDamagePct(), 145u);
+            EXPECT_EQ(engine.EscalationSupportPct(), 55u);
+        }
+        EXPECT_TRUE(engine.SubmitAction(1001, Defend()));
+        engine.ResolveCurrentRound();
+    }
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_DRAW);
+}
+
+TEST(GuildWarBattleTest, RejectsMissingGuildWarActivityContext) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(1);
+    dungeon.set_id(1);
+    dungeon.set_round_limit(20);
+    dungeon.set_max_team_size(5);
+
+    CreateBattleRequest req;
+    req.set_battle_id(99002);
+    req.set_battle_config_id(1);
+    req.set_match_mode(turnbattle::kMatchModeGuildWarPvp);
+    req.set_seed(112233);
+    auto* p1 = req.add_players();
+    p1->set_player_id(101);
+    p1->set_team_index(0);
+    p1->set_max_health(1000);
+    p1->mutable_base_attributes()->set_health(1000);
+    auto* p2 = req.add_players();
+    p2->set_player_id(201);
+    p2->set_team_index(1);
+    p2->set_max_health(1000);
+    p2->mutable_base_attributes()->set_health(1000);
+
+    TurnBattleEngine engine(data);
+    EXPECT_FALSE(engine.Initialize(req));
 }
 
 }  // namespace

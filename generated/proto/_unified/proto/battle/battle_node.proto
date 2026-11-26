@@ -68,6 +68,12 @@ message CreateBattleRequest {
   RankedMatchContext ranked_context = 18;
   // 五行试炼志 V2 开局冻结上下文(非试炼志关联局留空)。
   TrialBattleContext trial_context = 19;
+  // 全服赛季战队锦标赛 V2 开局冻结上下文(BO3 局分与五行灵脉阵眼,非锦标赛留空)。
+  TournamentBattleContext tournament_context = 20;
+  // 道友切磋坊自定义规则切磋上下文（仅 MATCH_MODE_PVP_CHALLENGE 可携带，随建房原件冻结）。
+  CustomDuelRules custom_duel_rules = 21;
+  // 首领试炼周常五行词缀覆盖 ID（0=按建房 created_at_ms 对应 UTC+8 周一 05:00 周次自动冻结 1..5；1..5=显式指定；仅真实首领试炼生效）。
+  uint32 boss_weekly_affix_id = 22;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):

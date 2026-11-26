@@ -10,6 +10,8 @@
 
 #include "engine/core/utils/bit_index/bit_index_util.h"
 #include "table/code/bit_index/characterappearance_table_id_bit_index.h"
+#include "table/code/bit_index/petcosmetic_table_id_bit_index.h"
+#include "table/code/bit_index/skillvfxcosmetic_table_id_bit_index.h"
 
 namespace player_appearance
 {
@@ -207,5 +209,82 @@ namespace player_appearance
 			return 16'000;
 		}
 		return 30'000;
+	}
+
+	// ── 灵宠幻化与技能特效纯规则（纯表现零数值） ──
+
+	inline std::optional<uint32_t> PetCosmeticBitIndex(uint32_t configId)
+	{
+		return GetBitIndex(PetCosmeticBitMap, configId);
+	}
+
+	inline bool IsPetCosmeticOwned(std::string_view bits, uint32_t configId)
+	{
+		const auto idx = PetCosmeticBitIndex(configId);
+		return idx.has_value() && TestPackedBit(bits, *idx);
+	}
+
+	inline bool MarkPetCosmeticOwned(std::string &bits, uint32_t configId)
+	{
+		const auto idx = PetCosmeticBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		SetPackedBit(bits, *idx);
+		return true;
+	}
+
+	inline std::optional<uint32_t> SkillVfxBitIndex(uint32_t configId)
+	{
+		return GetBitIndex(SkillVfxCosmeticBitMap, configId);
+	}
+
+	inline bool IsSkillVfxOwned(std::string_view bits, uint32_t configId)
+	{
+		const auto idx = SkillVfxBitIndex(configId);
+		return idx.has_value() && TestPackedBit(bits, *idx);
+	}
+
+	inline bool MarkSkillVfxOwned(std::string &bits, uint32_t configId)
+	{
+		const auto idx = SkillVfxBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		SetPackedBit(bits, *idx);
+		return true;
+	}
+
+	// 灵宠幻化物种适配：targetPetTableId == 0 表示通用，所有灵宠均可幻化。
+	inline bool IsPetSpeciesCompatible(uint32_t targetPetTableId, uint32_t petTableId)
+	{
+		return targetPetTableId == 0 || targetPetTableId == petTableId;
+	}
+
+	// 特效色调配置：空串表示原色，非空必须为严格 #RRGGBB 十六进制。
+	inline bool IsValidTintHex(std::string_view value)
+	{
+		if (value.empty())
+		{
+			return true;
+		}
+		if (value.size() != 7 || value[0] != '#')
+		{
+			return false;
+		}
+		for (std::size_t i = 1; i < value.size(); ++i)
+		{
+			const char c = value[i];
+			const bool isDigit = (c >= '0' && c <= '9');
+			const bool isUpper = (c >= 'A' && c <= 'F');
+			const bool isLower = (c >= 'a' && c <= 'f');
+			if (!isDigit && !isUpper && !isLower)
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 } // namespace player_appearance

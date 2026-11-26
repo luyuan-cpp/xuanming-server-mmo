@@ -8,8 +8,10 @@
 
 #include "memory_battle_data_provider.h"
 #include "system/combat_damage_rules.h"
+#include "system/season_rules.h"
 #include "system/trial_journal_rules.h"
 #include "system/turn_battle_engine.h"
+#include "system/battle_replay_recorder.h"
 
 namespace {
 
@@ -1100,4 +1102,554 @@ TEST_F(SeasonBattleTest, BossTrialV2BarrierShatterAndVenomParryTriggerExposed) {
     engFull.SubmitAction(30002, Command(BATTLE_ACTION_DEFEND));
     const auto vrFull = engFull.ResolveCurrentRound();
     EXPECT_EQ(vrFull.state().boss_exposed_pct(), turnbattle::kBossExposedFullPct);
+}
+
+// ---- 五行阵法 × 人宠相生合击 × 五行幻境周常爬塔 × 道友切磋坊 × 战报配装摘要 ----
+
+TEST_F(SeasonBattleTest, WuxingFormationCounterAndHumanPetSynergy) {
+    // 1. 天覆阵(1, 速度+2% / 直伤+5%, 克地载阵+5%) vs 地载阵(2, 开局4%盾 / 减伤-6%)
+    Player(kHero).set_formation_id(1);
+    Player(kHero).set_class_id(1); // 金
+    auto* pet = Player(kHero).add_pets();
+    pet->set_pet_id(77001);
+    pet->set_owner_player_id(kHero);
+    pet->set_pet_table_id(3); // 水（金生水 → 触发每 3 回合相生合击）
+    pet->set_pet_name("碧水灵狐");
+    pet->set_level(60);
+    pet->set_max_health(5000);
+    pet->set_max_mana(1000);
+    pet->mutable_base_attributes()->set_health(5000);
+    pet->mutable_base_attributes()->set_mana(1000);
+    pet->mutable_base_attributes()->set_speed(90);
+    pet->set_physical_attack(400);
+    pet->set_defense(100);
+
+    Player(kEnemy).set_formation_id(2);
+    Player(kEnemy).set_class_id(4); // 火
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(request));
+    const auto initState = engine.BuildStateSnapshot();
+    EXPECT_EQ(initState.team_a_formation_id(), 1u);
+    EXPECT_EQ(initState.team_b_formation_id(), 2u);
+    // 地载阵开局 4% 最大气血护盾（10000 * 4% = 400）
+    EXPECT_EQ(engine.TournamentEarthShieldOf(kEnemy), 400u);
+    EXPECT_FALSE(initState.wuxing_synergy_active_this_round());
+
+    // Round 1 & Round 2 不触发相生合击
+    for (int r = 1; r <= 2; ++r) {
+        engine.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+        engine.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turn = engine.ResolveCurrentRound();
+        EXPECT_FALSE(turn.state().wuxing_synergy_active_this_round());
+    }
+    // Round 3 触发金生水「人宠五行相生合击」事件 (+10%)
+    engine.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+    engine.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+    const auto turn3 = engine.ResolveCurrentRound();
+    EXPECT_TRUE(turn3.state().wuxing_synergy_active_this_round());
+    bool sawSynergyEvent = false;
+    for (const auto& ev : turn3.events()) {
+        if (ev.event_type() == BATTLE_EVENT_WUXING_SYNERGY && ev.source_id() == kHero &&
+            ev.value() == turnbattle::wuxing::kSynergyBonusPct) {
+            sawSynergyEvent = true;
+        }
+    }
+    EXPECT_TRUE(sawSynergyEvent);
+}
+
+TEST_F(SeasonBattleTest, WuxingTowerFloorScalingSigilsAndSettlementEcho) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 101, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/1, /*roundLimit=*/15, 2000, 1000);
+    auto req = MakeBossTrialRequest(6001, 101, 1, 200);
+    auto* p = req.mutable_players(0);
+    p->set_physical_attack(6000);
+    auto* tc = p->mutable_tower_context();
+    tc->set_week_key(202648);
+    tc->set_run_id(7);
+    tc->set_floor(5); // 5 层怪物气血 127%（85 + 4*8 + 10），攻击 111%
+    tc->set_leyline_element(TOURNAMENT_LEYLINE_EARTH); // 土厚灵脉 +8% 护盾
+    tc->add_active_sigil_ids(101); // 金·破锋 +8% 伤
+    tc->add_active_sigil_ids(501); // 土·厚土 +12% 护盾（叠加土灵脉 8% = 20% → 4000）
+    tc->add_active_sigil_ids(502); // 土·镇岳 12% 反伤
+
+    TurnBattleEngine engine(mem);
+    ASSERT_TRUE(engine.Initialize(req));
+    // 玩家开局护盾 = 20000 * (8% + 12%) = 4000
+    EXPECT_EQ(engine.TournamentEarthShieldOf(30001), 4000u);
+    const auto state = engine.BuildStateSnapshot();
+    ASSERT_TRUE(state.has_tower_context());
+    EXPECT_EQ(state.tower_context().floor(), 5u);
+    // 怪物血量已按第 5 层 127% 缩放（首领 2000 -> 2540）
+    for (const auto& a : state.actors()) {
+        if (a.is_boss()) {
+            EXPECT_EQ(a.max_health(), 2540u);
+        }
+    }
+    // 自动战斗快速打穿验证结算回传
+    engine.SetActorAuto(30001, true);
+    for (int i = 0; i < 15 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++i) {
+        engine.ResolveCurrentRound();
+    }
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settle = engine.BuildSettlement(30001);
+    ASSERT_TRUE(settle.has_tower_settlement());
+    EXPECT_EQ(settle.tower_settlement().week_key(), 202648u);
+    EXPECT_EQ(settle.tower_settlement().run_id(), 7u);
+    EXPECT_EQ(settle.tower_settlement().floor(), 5u);
+    EXPECT_GT(settle.tower_settlement().total_rounds(), 0u);
+    EXPECT_EQ(settle.defeated_monsters_size(), 0) << "五行幻境不发放常规野怪击杀与掉落";
+}
+
+TEST_F(SeasonBattleTest, CustomDuelRulesPolarityBanControlAndRoundLimitDraw) {
+    // 非法回合上限 10 必须被 Initialize 拒绝
+    auto badReq = request;
+    badReq.mutable_custom_duel_rules()->set_round_limit_override(10);
+    TurnBattleEngine badEngine(data);
+    EXPECT_FALSE(badEngine.Initialize(badReq));
+
+    // 注册控制技能用于验证 ban_control_skills
+    auto& stunBuff = data->AddBuff(8901);
+    stunBuff.Clear();
+    stunBuff.set_id(8901);
+    stunBuff.set_buff_type(turnbattle::kBuffTypeStun);
+    stunBuff.set_duration(6.0);
+    auto& stunSkill = data->AddSkill(8901);
+    stunSkill.Clear();
+    stunSkill.set_id(8901);
+    stunSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    stunSkill.add_targeting_mode(1);
+    stunSkill.add_effect(8901);
+    Player(kHero).add_skill_table_ids(8901);
+
+    auto* rules = request.mutable_custom_duel_rules();
+    rules->set_enable_polarity_rotation(true);
+    rules->set_ban_control_skills(true);
+    rules->set_round_limit_override(8);
+    rules->set_allow_public_spectate(true);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(request));
+    const auto initState = engine.BuildStateSnapshot();
+    EXPECT_EQ(initState.round_limit(), 8u);
+    EXPECT_NE(initState.active_polarity(), 0u);
+    EXPECT_TRUE(initState.custom_duel_rules().ban_control_skills());
+    // 禁控模式下，提交控制技能必须被校验拒绝
+    EXPECT_NE(engine.ValidateAction(kHero, Command(BATTLE_ACTION_SKILL, kEnemy, 8901)), 0u);
+
+    // 双方防御打满 8 回合必判平局
+    for (int r = 0; r < 8 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++r) {
+        engine.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+        engine.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+    }
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_DRAW);
+}
+
+TEST_F(SeasonBattleTest, BattleReplayHeaderCarriesSanitizedActorBuilds) {
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(request));
+    ::BattleActorBuildSummary build;
+    build.set_player_id(kHero);
+    build.set_name("Hero");
+    build.set_formation_id(3);
+    build.set_wuxing_element(2);
+    build.set_season_seal_id(101);
+    build.add_skill_table_ids(15001);
+
+    turnbattle::BattleReplayHeader header;
+    header.battleId = request.battle_id();
+    header.matchMode = request.match_mode();
+    header.battleConfigId = request.battle_config_id();
+    header.startedAtMs = 1764000000000ULL;
+    header.actorBuilds.push_back(build);
+
+    turnbattle::BattleReplayRecorder recorder(header, engine.BuildStateSnapshot());
+    const auto env = recorder.Freeze(BATTLE_OUTCOME_DRAW, 1, 1764000060000ULL);
+    ASSERT_TRUE(env.has_value());
+    const auto raw = turnbattle::GzipDecompress(env->payload(), turnbattle::kMaxBattleReplayRawBytes);
+    ASSERT_TRUE(raw.has_value());
+    ::BattleReplay decoded;
+    ASSERT_TRUE(decoded.ParseFromString(*raw));
+    ASSERT_EQ(decoded.actor_builds_size(), 1);
+    EXPECT_EQ(decoded.actor_builds(0).player_id(), kHero);
+    EXPECT_EQ(decoded.actor_builds(0).formation_id(), 3u);
+    EXPECT_EQ(decoded.actor_builds(0).season_seal_id(), 101u);
+}
+
+TEST_F(SeasonBattleTest, SymmetricWeeklyAffixesApplyCleanlyAndFailClosedOnMismatch) {
+    // 1. 双方词缀不一致时 fail-closed 退回 0
+    Player(kHero).set_season_weekly_affix_id(seasonrules::kWeeklyAffixSpiritRecovery);
+    Player(kEnemy).set_season_weekly_affix_id(seasonrules::kWeeklyAffixOpeningGuard);
+    TurnBattleEngine mismatchEngine(data);
+    ASSERT_TRUE(mismatchEngine.Initialize(request));
+    EXPECT_EQ(mismatchEngine.BuildStateSnapshot().season_weekly_affix_id(), 0u);
+
+    // 2. 灵息充盈周 (2)：双方防御额外回复 3% 最大法力（10000 -> +300）
+    Player(kHero).set_season_weekly_affix_id(seasonrules::kWeeklyAffixSpiritRecovery);
+    Player(kEnemy).set_season_weekly_affix_id(seasonrules::kWeeklyAffixSpiritRecovery);
+    Player(kHero).mutable_base_attributes()->set_mana(5000);
+    Player(kEnemy).mutable_base_attributes()->set_mana(5000);
+    TurnBattleEngine manaEngine(data);
+    ASSERT_TRUE(manaEngine.Initialize(request));
+    EXPECT_EQ(manaEngine.BuildStateSnapshot().season_weekly_affix_id(),
+              seasonrules::kWeeklyAffixSpiritRecovery);
+    manaEngine.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+    manaEngine.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+    manaEngine.ResolveCurrentRound();
+    const auto manaState = manaEngine.BuildStateSnapshot();
+    EXPECT_EQ(ActorOf(manaState, kHero).attributes().mana(), 5300u);
+    EXPECT_EQ(ActorOf(manaState, kEnemy).attributes().mana(), 5300u);
+
+    // 3. 锦标赛五行灵脉存在时压制周词缀，防多层环境叠加
+    request.mutable_tournament_context()->set_match_id(99);
+    request.mutable_tournament_context()->set_leyline_element(TOURNAMENT_LEYLINE_WATER);
+    TurnBattleEngine leylineEngine(data);
+    ASSERT_TRUE(leylineEngine.Initialize(request));
+    EXPECT_EQ(leylineEngine.BuildStateSnapshot().season_weekly_affix_id(), 0u);
+    request.clear_tournament_context();
+
+    // 4. 先机守势周 (3) 降低前 2 回合直伤 vs 锋芒竞速周 (4) 对无盾目标增伤 5%
+    auto measureRound1AttackDamage = [&](uint32_t affixId) -> uint64_t {
+        Player(kHero).set_season_weekly_affix_id(affixId);
+        Player(kEnemy).set_season_weekly_affix_id(affixId);
+        Player(kEnemy).mutable_base_attributes()->set_health(10000);
+        TurnBattleEngine eng(data);
+        EXPECT_TRUE(eng.Initialize(request));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_ATTACK, kEnemy));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_ATTACK, kHero));
+        eng.ResolveCurrentRound();
+        return 10000u - ActorOf(eng.BuildStateSnapshot(), kEnemy).attributes().health();
+    };
+    const uint64_t baseDmg = measureRound1AttackDamage(seasonrules::kWeeklyAffixNone);
+    const uint64_t guardDmg = measureRound1AttackDamage(seasonrules::kWeeklyAffixOpeningGuard);
+    const uint64_t sharpDmg = measureRound1AttackDamage(seasonrules::kWeeklyAffixSharpTempo);
+    EXPECT_LT(guardDmg, baseDmg) << "先机守势周第 1 回合直伤应降低 8%";
+    EXPECT_GT(sharpDmg, baseDmg) << "锋芒竞速周攻击无盾目标直伤应提升 5%";
+
+    // 5. 护盾过载周 (1)：双方技能护盾 +15%
+    auto& shieldSkill = data->AddSkill(15999);
+    shieldSkill.Clear();
+    shieldSkill.set_id(15999);
+    shieldSkill.set_battle_model(1);
+    shieldSkill.set_ability_kind(1);
+    shieldSkill.set_caster_mask(1);
+    shieldSkill.set_target_team(2);
+    shieldSkill.set_max_targets(1);
+    shieldSkill.set_pet_max_targets(1);
+    shieldSkill.add_skill_type(1);
+    shieldSkill.set_unlock_level(1);
+    shieldSkill.set_max_rank(10);
+    shieldSkill.add_effect(159990);
+    auto& shieldBuff = data->AddBuff(159990);
+    shieldBuff.Clear();
+    shieldBuff.set_id(159990);
+    shieldBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Shield));
+    shieldBuff.set_duration_rounds(2);
+    shieldBuff.set_max_layer(1);
+    shieldBuff.set_refresh_policy(2);
+    shieldBuff.set_effect_priority(20);
+    shieldBuff.set_flat_value(1000.0);
+    Player(kHero).add_skill_table_ids(15999);
+    (*Player(kHero).mutable_skill_ranks())[15999] = 1;
+
+    auto measureShield = [&](uint32_t affixId) -> uint64_t {
+        Player(kHero).set_season_weekly_affix_id(affixId);
+        Player(kEnemy).set_season_weekly_affix_id(affixId);
+        TurnBattleEngine eng(data);
+        EXPECT_TRUE(eng.Initialize(request));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, 15999));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        eng.ResolveCurrentRound();
+        return ShieldCapacity(eng.BuildStateSnapshot(), kHero, 159990);
+    };
+    const uint64_t normalShield = measureShield(seasonrules::kWeeklyAffixNone);
+    const uint64_t overloadShield = measureShield(seasonrules::kWeeklyAffixShieldOverload);
+    EXPECT_GT(normalShield, 0u);
+    EXPECT_GT(overloadShield, normalShield) << "护盾过载周护盾量应提升 15%";
+}
+
+TEST_F(SeasonBattleTest, BossTrialWeeklyAffixRotationIsolationAndInvalidOverride) {
+    // 1. 确定性 5 周轮换（UTC+8 周一 05:00 基准，零漂移）
+    EXPECT_EQ(turnbattle::bossaffix::AffixIdForTimestamp(0ULL), turnbattle::bossaffix::kAffixNone);
+    for (uint64_t w = 0; w < 6; ++w) {
+        const uint64_t ts = turnbattle::bossaffix::kFirstMonday05Utc8Ms + w * turnbattle::bossaffix::kWeekMs + 12345ULL;
+        EXPECT_EQ(turnbattle::bossaffix::AffixIdForTimestamp(ts), static_cast<uint32_t>((w % 5ULL) + 1ULL));
+    }
+
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 101, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/1, /*roundLimit=*/12, 10000, 4000);
+
+    // 2. 真实首领试炼自动按 created_at_ms 冻结词缀并回显到 BattleStateS2C
+    auto reqAuto = MakeBossTrialRequest(5901, 101, 1, 500);
+    reqAuto.set_created_at_ms(turnbattle::bossaffix::kFirstMonday05Utc8Ms + 2ULL * turnbattle::bossaffix::kWeekMs + 1000ULL);
+    TurnBattleEngine engAuto(mem);
+    ASSERT_TRUE(engAuto.Initialize(reqAuto));
+    EXPECT_EQ(engAuto.BossWeeklyAffixId(), turnbattle::bossaffix::kAffixWater);
+    EXPECT_EQ(engAuto.BuildStateSnapshot().boss_weekly_affix_id(), turnbattle::bossaffix::kAffixWater);
+
+    // 3. 五行幻境爬塔复用首领试炼副本时强制隔离（恒为 0）
+    auto reqTower = MakeBossTrialRequest(5902, 101, 1, 500);
+    reqTower.set_created_at_ms(reqAuto.created_at_ms());
+    reqTower.mutable_players(0)->mutable_tower_context()->set_floor(1);
+    reqTower.mutable_players(0)->mutable_tower_context()->set_run_id(77);
+    TurnBattleEngine engTower(mem);
+    ASSERT_TRUE(engTower.Initialize(reqTower));
+    EXPECT_EQ(engTower.BossWeeklyAffixId(), turnbattle::bossaffix::kAffixNone);
+    EXPECT_EQ(engTower.BuildStateSnapshot().boss_weekly_affix_id(), 0u);
+
+    // 4. 非法覆盖 ID (> 5) 建房 fail-closed 拒绝
+    auto reqBad = MakeBossTrialRequest(5903, 101, 1, 500);
+    reqBad.set_boss_weekly_affix_id(6u);
+    TurnBattleEngine engBad(mem);
+    EXPECT_FALSE(engBad.Initialize(reqBad));
+
+    // 5. 非首领试炼（护卫救援 109）强制隔离（恒为 0）
+    SetupBossTrialData(*mem, 109, turnbattle::kBossTrialKindGuardianRescue, /*difficulty=*/1, /*roundLimit=*/8, 10000, 1000);
+    auto reqRescue = MakeBossTrialRequest(5904, 109, 1, 500);
+    reqRescue.set_created_at_ms(reqAuto.created_at_ms());
+    TurnBattleEngine engRescue(mem);
+    ASSERT_TRUE(engRescue.Initialize(reqRescue));
+    EXPECT_EQ(engRescue.BossWeeklyAffixId(), turnbattle::bossaffix::kAffixNone);
+}
+
+TEST_F(SeasonBattleTest, BossTrialWeeklyAffixMetalWoodAndWaterEffects) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 103, turnbattle::kBossTrialKindBreakStance, /*difficulty=*/1, /*roundLimit=*/12, 10000, 4000);
+
+    // 驱散技能（8951）与蓄力爆发技能（8952 -> PrepareCast 89520 -> Damage 89521）
+    auto& dispelSkill = mem->AddSkill(8951);
+    dispelSkill.Clear();
+    dispelSkill.set_id(8951);
+    dispelSkill.set_battle_model(1);
+    dispelSkill.set_caster_mask(1);
+    dispelSkill.set_ability_kind(1);
+    dispelSkill.set_unlock_level(1);
+    dispelSkill.set_max_rank(10);
+    dispelSkill.set_target_team(1);
+    dispelSkill.set_max_targets(1);
+    dispelSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    dispelSkill.set_mana_percent(0.10);
+    dispelSkill.add_effect(89510);
+    auto& dispelBuff = mem->AddBuff(89510);
+    dispelBuff.Clear();
+    dispelBuff.set_id(89510);
+    dispelBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::DispelBuff));
+    dispelBuff.set_effect_count(1);
+
+    auto& chargeSkill = mem->AddSkill(8952);
+    chargeSkill.Clear();
+    chargeSkill.set_id(8952);
+    chargeSkill.set_battle_model(1);
+    chargeSkill.set_caster_mask(1);
+    chargeSkill.set_ability_kind(1);
+    chargeSkill.set_unlock_level(1);
+    chargeSkill.set_max_rank(10);
+    chargeSkill.set_target_team(1);
+    chargeSkill.set_max_targets(1);
+    chargeSkill.set_damage_type(combatdamage::kMagicDamage);
+    chargeSkill.set_attack_multiplier(1.5);
+    chargeSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    chargeSkill.set_mana_percent(0.20);
+    chargeSkill.add_effect(89520);
+    mem->SetSkillDamage(8952, 300);
+    auto& prepareBuff = mem->AddBuff(89520);
+    prepareBuff.Clear();
+    prepareBuff.set_id(89520);
+    prepareBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::PrepareCast));
+    prepareBuff.set_duration(2);
+    prepareBuff.add_sub_buff(89521);
+    auto& chargeDmg = mem->AddBuff(89521);
+    chargeDmg.Clear();
+    chargeDmg.set_id(89521);
+    chargeDmg.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Damage));
+    chargeDmg.set_value_basis(2);
+    chargeDmg.set_ratio(1.5);
+
+    auto makeReq = [&](uint64_t bid, uint32_t affixId) {
+        auto req = MakeBossTrialRequest(bid, 103, 1, 1000);
+        req.set_boss_weekly_affix_id(affixId);
+        auto* p = req.mutable_players(0);
+        p->mutable_base_attributes()->set_mana(500);
+        p->set_max_mana(1000);
+        p->mutable_base_attributes()->set_critchance(0);
+        p->add_skill_table_ids(8951);
+        p->add_skill_table_ids(8952);
+        (*p->mutable_skill_ranks())[8951] = 1;
+        (*p->mutable_skill_ranks())[8952] = 1;
+        return req;
+    };
+
+    // 1. 金周（1）：敌方全体开局获 8% 金甲护盾（10000 * 8% = 800）
+    {
+        TurnBattleEngine eng(mem);
+        ASSERT_TRUE(eng.Initialize(makeReq(5911, turnbattle::bossaffix::kAffixMetal)));
+        uint64_t bossId = 0;
+        for (const auto& a : eng.BuildStateSnapshot().actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) bossId = a.actor_id();
+        }
+        ASSERT_NE(bossId, 0u);
+        EXPECT_EQ(eng.TournamentEarthShieldOf(bossId), 800u) << "金周首领开局应有 8% 金甲护盾";
+    }
+
+    // 2. 木周（2）：驱散护势触发 12% 回蓝（120）与机制播报，且 R2 末首领若缺血会触发 4% 生机反哺回血
+    {
+        TurnBattleEngine eng(mem);
+        ASSERT_TRUE(eng.Initialize(makeReq(5912, turnbattle::bossaffix::kAffixWood)));
+        uint64_t bossId = 0, guardId = 0;
+        for (const auto& a : eng.BuildStateSnapshot().actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+                if (a.is_boss()) bossId = a.actor_id();
+                else guardId = a.actor_id();
+            }
+        }
+        // R1 先打首领一下让首领缺血，同时护势卫立起物防阵
+        eng.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+        const auto r1 = eng.ResolveCurrentRound();
+        EXPECT_EQ(r1.state().boss_stance_type(), turnbattle::kBossStancePhysical);
+        // R2 驱散护势卫：扣蓝 100（10%）后木周返还 120（12%），净增 +20 -> 520；同时 R2 末首领回 4% 血（400）
+        eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, guardId, 8951));
+        const auto r2 = eng.ResolveCurrentRound();
+        uint64_t playerManaAfter = 0;
+        for (const auto& a : r2.state().actors()) {
+            if (a.actor_id() == 30001) playerManaAfter = a.attributes().mana();
+        }
+        EXPECT_EQ(playerManaAfter, 520u) << "木周驱散应立即返还 12% 最大法力";
+        bool sawManaAffix = false, sawBossRegen = false;
+        for (const auto& ev : r2.events()) {
+            if (ev.event_type() == BATTLE_EVENT_BOSS_MECHANIC &&
+                ev.mechanic_kind() == turnbattle::kBossMechanicWeeklyAffixTrigger) {
+                if (ev.source_id() == 30001) sawManaAffix = true;
+                if (ev.source_id() == bossId) sawBossRegen = true;
+            }
+        }
+        EXPECT_TRUE(sawManaAffix);
+        EXPECT_TRUE(sawBossRegen) << "木周 R2 末未受控首领应触发 4% 生机反哺";
+    }
+
+    // 3. 水周（3）：蓄力技耗蓝 -20%（200 -> 160）、兑现伤害 +20%，且偶数回合 R2 末首领额外 +1 层蓄势
+    {
+        auto runCharge = [&](uint64_t bid, uint32_t affixId, uint64_t& outManaSpent, uint64_t& outDamage,
+                             uint32_t& outR2Momentum) {
+            TurnBattleEngine eng(mem);
+            ASSERT_TRUE(eng.Initialize(makeReq(bid, affixId)));
+            uint64_t bossId = 0;
+            for (const auto& a : eng.BuildStateSnapshot().actors()) {
+                if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) bossId = a.actor_id();
+            }
+            eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8952));
+            const auto r1 = eng.ResolveCurrentRound();
+            uint64_t manaAfterR1 = 0;
+            for (const auto& a : r1.state().actors()) {
+                if (a.actor_id() == 30001) manaAfterR1 = a.attributes().mana();
+            }
+            outManaSpent = 500u - manaAfterR1;
+            const auto r2 = eng.ResolveCurrentRound();
+            outDamage = 0;
+            for (const auto& ev : r2.events()) {
+                if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 30001 && ev.target_id() == bossId) {
+                    outDamage += ev.value();
+                }
+            }
+            outR2Momentum = r2.state().boss_momentum_stacks();
+        };
+        uint64_t baseMana = 0, waterMana = 0, baseDmg = 0, waterDmg = 0;
+        uint32_t baseMom = 0, waterMom = 0;
+        runCharge(5913, turnbattle::bossaffix::kAffixNone, baseMana, baseDmg, baseMom);
+        runCharge(5914, turnbattle::bossaffix::kAffixWater, waterMana, waterDmg, waterMom);
+        EXPECT_EQ(baseMana, 200u);
+        EXPECT_EQ(waterMana, 160u) << "水周蓄力技耗蓝应减免 20%";
+        EXPECT_GT(waterDmg, baseDmg) << "水周蓄力技兑现伤害应 +20%";
+        EXPECT_GT(waterMom, baseMom) << "水周偶数回合 R2 末未受控首领应额外获得 +1 层蓄势";
+    }
+}
+
+TEST_F(SeasonBattleTest, BossTrialWeeklyAffixFireAndEarthEffects) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 101, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/1, /*roundLimit=*/12, 10000, 10000);
+
+    // 1. 火周（4）：首领血量降到 55%（>50% 但 <=60%）即在 R1 末提前切二阶段，且灵宠直攻伤害 +18%
+    {
+        auto makeFireReq = [&](uint64_t bid, uint32_t affixId, uint64_t playerStrength) {
+            auto req = MakeBossTrialRequest(bid, 101, 1, 1000);
+            req.set_boss_weekly_affix_id(affixId);
+            auto* p = req.mutable_players(0);
+            p->mutable_base_attributes()->set_strength(playerStrength);
+            p->mutable_base_attributes()->set_critchance(0);
+            auto* pet = p->add_pets();
+            pet->set_pet_id(7001);
+            pet->set_level(50);
+            pet->set_max_health(5000);
+            pet->set_max_mana(500);
+            pet->mutable_base_attributes()->set_health(5000);
+            pet->mutable_base_attributes()->set_mana(500);
+            pet->mutable_base_attributes()->set_strength(400);
+            pet->mutable_base_attributes()->set_speed(900);
+            return req;
+        };
+        auto runPetAndPhase = [&](uint64_t bid, uint32_t affixId, uint64_t& outPetDmg, uint32_t& outPhase) {
+            TurnBattleEngine eng(mem);
+            ASSERT_TRUE(eng.Initialize(makeFireReq(bid, affixId, 3800)));
+            uint64_t bossId = 0, petActorId = 0;
+            for (const auto& a : eng.BuildStateSnapshot().actors()) {
+                if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) bossId = a.actor_id();
+                if (a.actor_type() == BATTLE_ACTOR_TYPE_PET) petActorId = a.actor_id();
+            }
+            ASSERT_NE(bossId, 0u);
+            ASSERT_NE(petActorId, 0u);
+            eng.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+            eng.SubmitActorAction(30001, petActorId, Command(BATTLE_ACTION_ATTACK, bossId));
+            const auto r1 = eng.ResolveCurrentRound();
+            outPetDmg = 0;
+            for (const auto& ev : r1.events()) {
+                if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == petActorId && ev.target_id() == bossId) {
+                    outPetDmg += ev.value();
+                }
+            }
+            outPhase = r1.state().boss_phase();
+        };
+        uint64_t basePetDmg = 0, firePetDmg = 0;
+        uint32_t basePhase = 0, firePhase = 0;
+        runPetAndPhase(5921, turnbattle::bossaffix::kAffixNone, basePetDmg, basePhase);
+        runPetAndPhase(5922, turnbattle::bossaffix::kAffixFire, firePetDmg, firePhase);
+        EXPECT_GT(firePetDmg, basePetDmg) << "火周灵宠直攻伤害应提升 18%";
+        // 确认测试刚好压在 50%..60% 区间时火周提前二阶段
+        if (basePhase == 1u) {
+            EXPECT_EQ(firePhase, 2u) << "火周首领气血 <=60% 应提前进入二阶段决战姿态";
+        }
+    }
+
+    // 2. 土周（5）：化劲化解首领 R2 慢重劈后，全队立即获 8% 厚土护盾 + R3 全伤害 +12%
+    {
+        auto runEarth = [&](uint64_t bid, uint32_t affixId, uint64_t& outR2Shield, uint64_t& outR3Dmg) {
+            auto req = MakeBossTrialRequest(bid, 101, 1, 1000);
+            req.set_boss_weekly_affix_id(affixId);
+            req.mutable_players(0)->mutable_base_attributes()->set_critchance(0);
+            TurnBattleEngine eng(mem);
+            ASSERT_TRUE(eng.Initialize(req));
+            uint64_t bossId = 0;
+            for (const auto& a : eng.BuildStateSnapshot().actors()) {
+                if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) bossId = a.actor_id();
+            }
+            eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+            (void)eng.ResolveCurrentRound(); // R1 预告 R2 慢重劈
+            eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+            (void)eng.ResolveCurrentRound(); // R2 化劲防御成功
+            outR2Shield = eng.TournamentEarthShieldOf(30001);
+            eng.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+            const auto r3 = eng.ResolveCurrentRound();
+            outR3Dmg = 0;
+            for (const auto& ev : r3.events()) {
+                if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 30001 && ev.target_id() == bossId) {
+                    outR3Dmg += ev.value();
+                }
+            }
+        };
+        uint64_t baseShield = 0, earthShield = 0, baseR3Dmg = 0, earthR3Dmg = 0;
+        runEarth(5923, turnbattle::bossaffix::kAffixNone, baseShield, baseR3Dmg);
+        runEarth(5924, turnbattle::bossaffix::kAffixEarth, earthShield, earthR3Dmg);
+        EXPECT_EQ(baseShield, 0u);
+        EXPECT_GT(earthShield, 0u) << "土周化劲破绽应立刻赐予我方 8% 最大气血厚土护盾";
+        EXPECT_GT(earthR3Dmg, baseR3Dmg) << "土周化劲后下一回合我方全伤害应额外 +12%";
+    }
 }

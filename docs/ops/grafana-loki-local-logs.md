@@ -639,7 +639,7 @@ DaemonSet 与 zone 数无关,只跟节点数走,单节点的 kind 上就一个�
 
 ### 6.11 容器日志 DaemonSet(Go / Java 的日志与 C++ 容器的 stdout / stderr)
 
-> 2026-11-12 落码,**没有运行过**:配置校验、契约测试与 kind 上的端到端核对都待 Codex(`docs/PROGRESS.md` 同日条目)。
+> 2026-11-12 落码,**没有运行过**:配置校验、契约测试与 kind 上的端到端核对都待 Gemini(`docs/PROGRESS.md` 同日条目)。
 
 - **组成:** 清单是 `deploy/k8s/manifests/infra/pod-log-collector.yaml`(ServiceAccount、ClusterRole `mmorpg-pod-log-reader`、
   ClusterRoleBinding `mmorpg-pod-log-reader-<infra 命名空间>`、ConfigMap 与 DaemonSet 都叫 `pod-log-collector`),
@@ -756,7 +756,7 @@ Loki 静默丢弃 —— 默认查询窗口里查不到,sidecar 自己的日志�
   (原生 sidecar 形态 + config-hash 注解、裸 `-` 的 label 值、battle 无 zone 标签 / zone 有引号、
   `-NoCppLogSidecar` 产物洁净、日志清理循环 + sizeLimit),另更新了**三条** `args` 断言
   (battle、gate / scene 的循环、Agones Fleet);Agones 那条的 DryRun 已经提成文件头的共享基线,
-  Fleet 与 Deployment 两套模板的断言都挂在同一次运行上。按 `AGENTS.md` §10.1 由 Codex 跑。
+  Fleet 与 Deployment 两套模板的断言都挂在同一次运行上。按 `AGENTS.md` §10.1 由 Gemini 跑。
 - **6.3 那条查看路径里"在本机 Grafana 里加第二个数据源"那一半本轮没走过**(复测是直接打 Loki 的 HTTP API 验的),
   也没在真实集群上走过。
 

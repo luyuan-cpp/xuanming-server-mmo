@@ -300,9 +300,10 @@ func (s *Store) BattleReport(ctx context.Context, playerID, battleID uint64) (*b
 	var listed int
 	err := s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_player_battle_report WHERE player_id=? AND battle_id=? LIMIT 1", playerID, battleID).Scan(&listed)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrBattleReportNotFound
-	}
-	if err != nil {
+		if !s.isPublicKnockoutReplayAllowed(ctx, battleID) {
+			return nil, ErrBattleReportNotFound
+		}
+	} else if err != nil {
 		return nil, err
 	}
 	var body []byte

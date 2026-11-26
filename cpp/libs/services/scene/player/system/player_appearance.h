@@ -22,6 +22,12 @@
 
 class ActorAppearanceChangedS2C;
 class AppearanceStateNotify;
+class BattlePlayerSnapshot;
+class EquipPetCosmeticRequest;
+class EquipPetCosmeticResponse;
+class EquipSkillVfxRequest;
+class EquipSkillVfxResponse;
+class PetInstance;
 class PlayerAllData;
 class PlayerAppearanceInfo;
 class StartAppearanceTrialRequest;
@@ -75,6 +81,39 @@ public:
 
 	// 手动提前取消当前试用,立即还原永久形象。
 	static uint32_t CancelTrial(entt::entity player, uint64_t nowUnixSec, PlayerAppearanceInfo &info);
+
+	// 为指定灵宠实例穿戴或清除幻化外观(cosmetic_id=0 表示恢复原形;纯外观零数值,重复提交幂等收敛)。
+	static uint32_t EquipPetCosmetic(entt::entity player,
+									 const EquipPetCosmeticRequest &request,
+									 uint64_t nowUnixSec,
+									 EquipPetCosmeticResponse &response);
+
+	// 为指定技能启用或清除技能特效外观(cosmetic_id=0 表示恢复默认;纯画面零数值,重复提交幂等收敛)。
+	static uint32_t EquipSkillVfx(entt::entity player,
+								  const EquipSkillVfxRequest &request,
+								  uint64_t nowUnixSec,
+								  EquipSkillVfxResponse &response);
+
+	// 服务端内部权威授予灵宠幻化权益(不自动穿戴,幂等置位并推送状态通知)。
+	static uint32_t GrantPetCosmetic(entt::entity player,
+									 uint32_t cosmeticId,
+									 uint64_t nowUnixSec,
+									 bool *alreadyOwned = nullptr);
+
+	// 服务端内部权威授予技能特效权益(不自动启用,幂等置位并推送状态通知)。
+	static uint32_t GrantSkillVfx(entt::entity player,
+								  uint32_t cosmeticId,
+								  uint64_t nowUnixSec,
+								  bool *alreadyOwned = nullptr);
+
+	// 解析灵宠实例当前有效的幻化外观(必须已拥有、已启用且物种适配;失效时自动回退 0 与空串)。
+	static void ResolvePetCosmeticVisual(entt::entity player,
+										 const PetInstance &pet,
+										 uint32_t &outCosmeticId,
+										 std::string &outArtKey);
+
+	// 向玩家战斗快照写入已校验有效的技能特效覆盖映射(纯战斗画面表现零数值)。
+	static void FillBattleSkillVfx(entt::entity player, BattlePlayerSnapshot &snapshot);
 
 	// 生命周期钩子
 	static void OnPlayerLoaded(entt::entity player, uint64_t nowUnixSec);

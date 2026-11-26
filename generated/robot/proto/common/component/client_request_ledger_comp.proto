@@ -52,6 +52,7 @@ message ClientRequestRecord {
   uint32 crafted_skill_table_id = 27;        // 技能制书：首次产出的技能表 ID。
   uint64 scroll_craft_revision = 28;         // 技能制书/拆页：首次成功后的水位。
   uint32 scroll_bonus_fragments = 29;        // 技能制书/拆页：首次额外返还或拆解得到的残页数。
+  uint32 travel_pass_claimed_count = 30;     // 游历手记领奖：首次实际领取的档位轨数。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。

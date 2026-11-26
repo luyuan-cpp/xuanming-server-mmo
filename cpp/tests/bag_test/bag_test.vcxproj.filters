@@ -52,6 +52,12 @@
     <ClCompile Include="afk_pass_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="player_spirit_shop_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="player_travel_pass_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="player_appearance_test.cpp">
       <Filter>source</Filter>
     </ClCompile>

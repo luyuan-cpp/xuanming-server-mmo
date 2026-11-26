@@ -718,6 +718,36 @@ protected:
         pending->set_requested_at_ms(1795651300000);
         pending->set_admitted_at_ms(1795651301000);
 
+        // 官方灵石百宝阁限购组件（spirit-shop-and-starter-packs-v1.md）：覆盖全部子消息。
+        auto &spiritShop = *db.mutable_spirit_shop();
+        spiritShop.set_shop_revision(2);
+        auto *goodsRec = spiritShop.add_goods_records();
+        goodsRec->set_goods_id(101);
+        goodsRec->set_lifetime_bought(1);
+        goodsRec->set_week_starts_at_ms(1795035600000ULL);
+        goodsRec->set_weekly_bought(1);
+        auto *groupRec = spiritShop.add_group_records();
+        groupRec->set_group_id(1);
+        groupRec->set_lifetime_used(60);
+        groupRec->set_week_starts_at_ms(1795035600000ULL);
+        groupRec->set_weekly_used(60);
+
+        // 游历手记双轨进度与典藏状态（activity-travel-pass-and-showcase-v1.md）：覆盖全部子消息。
+        auto &travelPass = *db.mutable_travel_pass();
+        travelPass.set_pass_revision(3);
+        travelPass.set_equipped_frame_key("frame_travel_qingyun_s1");
+        travelPass.set_equipped_title_key("title_travel_qingyun_s1");
+        auto *passSeason = travelPass.add_seasons();
+        passSeason->set_pass_id(1);
+        passSeason->set_progress_points(150);
+        passSeason->set_premium_unlocked(true);
+        passSeason->set_premium_unlocked_at_ms(1795521600000ULL);
+        passSeason->set_free_claimed_mask(0x03ULL);
+        passSeason->set_premium_claimed_mask(0x01ULL);
+        passSeason->add_unlocked_cosmetic_keys("frame_travel_qingyun_s1");
+        passSeason->add_unlocked_cosmetic_keys("title_travel_qingyun_s1");
+        passSeason->set_last_updated_at_ms(1795521700000ULL);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

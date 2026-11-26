@@ -27,11 +27,11 @@
 #include "proto/rank/rank.pb.h"
 #include "proto/rank/rank_admin.pb.h"
 #include "proto/scene/client_player_common.pb.h"
+#include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_activity.pb.h"
 #include "proto/scene/player_afk_pass.pb.h"
 #include "proto/scene/player_appearance.pb.h"
 #include "proto/scene/player_attribute.pb.h"
-#include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_lifecycle.pb.h"
@@ -42,6 +42,7 @@
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
+#include "proto/scene/player_spirit_shop.pb.h"
 #include "proto/scene/player_state_attribute_sync.pb.h"
 #include "proto/scene/player_trial_journal.pb.h"
 #include "proto/scene/s2s_player_scene.pb.h"
@@ -79,11 +80,11 @@
 #include "rpc/service_metadata/rank_service_metadata.h"
 #include "rpc/service_metadata/rank_admin_service_metadata.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
+#include "rpc/service_metadata/player_bag_service_metadata.h"
 #include "rpc/service_metadata/player_activity_service_metadata.h"
 #include "rpc/service_metadata/player_afk_pass_service_metadata.h"
 #include "rpc/service_metadata/player_appearance_service_metadata.h"
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
-#include "rpc/service_metadata/player_bag_service_metadata.h"
 #include "rpc/service_metadata/player_battle_result_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
@@ -94,6 +95,7 @@
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "rpc/service_metadata/player_season_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
+#include "rpc/service_metadata/player_spirit_shop_service_metadata.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
 #include "rpc/service_metadata/player_trial_journal_service_metadata.h"
 #include "rpc/service_metadata/s2s_player_scene_service_metadata.h"
@@ -130,6 +132,8 @@ void SendBattleClientPlayerSurrenderBattleErased(entt::registry& , entt::entity 
 void SendBattleClientPlayerNotifySurrenderVoteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleClientPlayerUpdateBattlePrepErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleClientPlayerNotifyBattlePrepUpdateErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleClientPlayerSendBattlePingErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleClientPlayerNotifyBattlePingErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeQueryObserverErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeQueryBattleCreationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeCreateBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
@@ -333,6 +337,15 @@ namespace match{void SendMatchServiceListTournamentStandingsErased(entt::registr
 namespace match{void SendMatchServiceStartTournamentMatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCheerTournamentSquadErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceClaimTournamentRewardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSaluteTournamentChampionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSendTournamentSpectateCheerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTournamentSpectateCheerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceUpdateTournamentSquadEmblemErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceStartTournamentWarmupErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServicePredictTournamentMatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTournamentPredictionBoardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceBanTournamentLeylineErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTournamentHighlightsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -395,6 +408,8 @@ namespace teampb{void SendClientPlayerTeamNotifyTeamSnapshotErased(entt::registr
 namespace teampb{void SendClientPlayerTeamNotifyTeamInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamNotifyTeamEventErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamConfirmRankedPresetErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace teampb{void SendClientPlayerTeamSetTeamFormationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace teampb{void SendClientPlayerTeamRecallTeamMembersErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendTeamAuthorityReadMembershipErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiBrowseListingsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiGetListingDetailErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -444,7 +459,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 506,
+static_assert(kMaxRpcMethodCount == 536,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -531,6 +546,16 @@ void InitMessageInfo()
         std::make_unique<::BattlePrepUpdateS2C>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifyBattlePrepUpdateErased, "/BattleClientPlayer/NotifyBattlePrepUpdate"};
+    gRpcMethodRegistry[BattleClientPlayerSendBattlePingMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "SendBattlePing",
+        std::make_unique<::SendBattlePingRequest>(),
+        std::make_unique<::SendBattlePingResponse>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerSendBattlePingErased, "/BattleClientPlayer/SendBattlePing"};
+    gRpcMethodRegistry[BattleClientPlayerNotifyBattlePingMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "NotifyBattlePing",
+        std::make_unique<::BattlePingS2C>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifyBattlePingErased, "/BattleClientPlayer/NotifyBattlePing"};
 
     // --- BattleNode ---
     gRpcMethodRegistry[BattleNodeQueryObserverMessageId] = RpcMethodMeta{
@@ -1636,6 +1661,51 @@ void InitMessageInfo()
         std::make_unique<::match::ClaimTournamentRewardRequest>(),
         std::make_unique<::match::ClaimTournamentRewardResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceClaimTournamentRewardErased, "/match.MatchService/ClaimTournamentReward"};
+    gRpcMethodRegistry[MatchServiceSaluteTournamentChampionMessageId] = RpcMethodMeta{
+        "MatchService", "SaluteTournamentChampion",
+        std::make_unique<::match::SaluteTournamentChampionRequest>(),
+        std::make_unique<::match::SaluteTournamentChampionResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSaluteTournamentChampionErased, "/match.MatchService/SaluteTournamentChampion"};
+    gRpcMethodRegistry[MatchServiceSendTournamentSpectateCheerMessageId] = RpcMethodMeta{
+        "MatchService", "SendTournamentSpectateCheer",
+        std::make_unique<::match::SendTournamentSpectateCheerRequest>(),
+        std::make_unique<::match::SendTournamentSpectateCheerResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSendTournamentSpectateCheerErased, "/match.MatchService/SendTournamentSpectateCheer"};
+    gRpcMethodRegistry[MatchServiceGetTournamentSpectateCheerMessageId] = RpcMethodMeta{
+        "MatchService", "GetTournamentSpectateCheer",
+        std::make_unique<::match::GetTournamentSpectateCheerRequest>(),
+        std::make_unique<::match::GetTournamentSpectateCheerResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTournamentSpectateCheerErased, "/match.MatchService/GetTournamentSpectateCheer"};
+    gRpcMethodRegistry[MatchServiceUpdateTournamentSquadEmblemMessageId] = RpcMethodMeta{
+        "MatchService", "UpdateTournamentSquadEmblem",
+        std::make_unique<::match::UpdateTournamentSquadEmblemRequest>(),
+        std::make_unique<::match::UpdateTournamentSquadEmblemResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceUpdateTournamentSquadEmblemErased, "/match.MatchService/UpdateTournamentSquadEmblem"};
+    gRpcMethodRegistry[MatchServiceStartTournamentWarmupMessageId] = RpcMethodMeta{
+        "MatchService", "StartTournamentWarmup",
+        std::make_unique<::match::StartTournamentWarmupRequest>(),
+        std::make_unique<::match::StartTournamentWarmupResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceStartTournamentWarmupErased, "/match.MatchService/StartTournamentWarmup"};
+    gRpcMethodRegistry[MatchServicePredictTournamentMatchMessageId] = RpcMethodMeta{
+        "MatchService", "PredictTournamentMatch",
+        std::make_unique<::match::PredictTournamentMatchRequest>(),
+        std::make_unique<::match::PredictTournamentMatchResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServicePredictTournamentMatchErased, "/match.MatchService/PredictTournamentMatch"};
+    gRpcMethodRegistry[MatchServiceGetTournamentPredictionBoardMessageId] = RpcMethodMeta{
+        "MatchService", "GetTournamentPredictionBoard",
+        std::make_unique<::match::GetTournamentPredictionBoardRequest>(),
+        std::make_unique<::match::GetTournamentPredictionBoardResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTournamentPredictionBoardErased, "/match.MatchService/GetTournamentPredictionBoard"};
+    gRpcMethodRegistry[MatchServiceBanTournamentLeylineMessageId] = RpcMethodMeta{
+        "MatchService", "BanTournamentLeyline",
+        std::make_unique<::match::BanTournamentLeylineRequest>(),
+        std::make_unique<::match::BanTournamentLeylineResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceBanTournamentLeylineErased, "/match.MatchService/BanTournamentLeyline"};
+    gRpcMethodRegistry[MatchServiceGetTournamentHighlightsMessageId] = RpcMethodMeta{
+        "MatchService", "GetTournamentHighlights",
+        std::make_unique<::match::GetTournamentHighlightsRequest>(),
+        std::make_unique<::match::GetTournamentHighlightsResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTournamentHighlightsErased, "/match.MatchService/GetTournamentHighlights"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -1838,129 +1908,6 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
 
-    // --- SceneActivityClientPlayer ---
-    gRpcMethodRegistry[SceneActivityClientPlayerGetActivityListMessageId] = RpcMethodMeta{
-        "SceneActivityClientPlayer", "GetActivityList",
-        std::make_unique<::GetActivityListRequest>(),
-        std::make_unique<::GetActivityListResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneActivityClientPlayerClaimActivityVitalityRewardMessageId] = RpcMethodMeta{
-        "SceneActivityClientPlayer", "ClaimActivityVitalityReward",
-        std::make_unique<::ClaimActivityVitalityRewardRequest>(),
-        std::make_unique<::ClaimActivityVitalityRewardResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneActivityClientPlayerGetFestivalBeastDetailMessageId] = RpcMethodMeta{
-        "SceneActivityClientPlayer", "GetFestivalBeastDetail",
-        std::make_unique<::GetFestivalBeastDetailRequest>(),
-        std::make_unique<::GetFestivalBeastDetailResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneActivityClientPlayerStartFestivalBeastChallengeMessageId] = RpcMethodMeta{
-        "SceneActivityClientPlayer", "StartFestivalBeastChallenge",
-        std::make_unique<::StartFestivalBeastChallengeRequest>(),
-        std::make_unique<::StartFestivalBeastChallengeResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneActivityClientPlayerClaimFestivalBeastRewardMessageId] = RpcMethodMeta{
-        "SceneActivityClientPlayer", "ClaimFestivalBeastReward",
-        std::make_unique<::ClaimFestivalBeastRewardRequest>(),
-        std::make_unique<::ClaimFestivalBeastRewardResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-
-    // --- SceneAfkPassClientPlayer ---
-    gRpcMethodRegistry[SceneAfkPassClientPlayerGetAfkPassMessageId] = RpcMethodMeta{
-        "SceneAfkPassClientPlayer", "GetAfkPass",
-        std::make_unique<::GetAfkPassRequest>(),
-        std::make_unique<::GetAfkPassResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAfkPassClientPlayerBuyAfkPassMessageId] = RpcMethodMeta{
-        "SceneAfkPassClientPlayer", "BuyAfkPass",
-        std::make_unique<::BuyAfkPassRequest>(),
-        std::make_unique<::BuyAfkPassResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAfkPassClientPlayerGmSetAfkPassMessageId] = RpcMethodMeta{
-        "SceneAfkPassClientPlayer", "GmSetAfkPass",
-        std::make_unique<::GmSetAfkPassRequest>(),
-        std::make_unique<::GmSetAfkPassResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-
-    // --- SceneAppearanceClientPlayer ---
-    gRpcMethodRegistry[SceneAppearanceClientPlayerGetAppearanceInfoMessageId] = RpcMethodMeta{
-        "SceneAppearanceClientPlayer", "GetAppearanceInfo",
-        std::make_unique<::GetAppearanceInfoRequest>(),
-        std::make_unique<::GetAppearanceInfoResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAppearanceClientPlayerSwitchAppearanceMessageId] = RpcMethodMeta{
-        "SceneAppearanceClientPlayer", "SwitchAppearance",
-        std::make_unique<::SwitchAppearanceRequest>(),
-        std::make_unique<::SwitchAppearanceResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAppearanceClientPlayerStartAppearanceTrialMessageId] = RpcMethodMeta{
-        "SceneAppearanceClientPlayer", "StartAppearanceTrial",
-        std::make_unique<::StartAppearanceTrialRequest>(),
-        std::make_unique<::StartAppearanceTrialResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAppearanceClientPlayerCancelAppearanceTrialMessageId] = RpcMethodMeta{
-        "SceneAppearanceClientPlayer", "CancelAppearanceTrial",
-        std::make_unique<::CancelAppearanceTrialRequest>(),
-        std::make_unique<::CancelAppearanceTrialResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyActorAppearanceChangedMessageId] = RpcMethodMeta{
-        "SceneAppearanceClientPlayer", "NotifyActorAppearanceChanged",
-        std::make_unique<::ActorAppearanceChangedS2C>(),
-        std::make_unique<::Empty>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyAppearanceStateMessageId] = RpcMethodMeta{
-        "SceneAppearanceClientPlayer", "NotifyAppearanceState",
-        std::make_unique<::AppearanceStateNotify>(),
-        std::make_unique<::Empty>(),
-        0, common::base::eNodeType::SceneNodeService};
-
-    // --- SceneAttributeClientPlayer ---
-    gRpcMethodRegistry[SceneAttributeClientPlayerGetAttributePanelMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "GetAttributePanel",
-        std::make_unique<::GetAttributePanelRequest>(),
-        std::make_unique<::GetAttributePanelResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerAllocateAttributePointsMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "AllocateAttributePoints",
-        std::make_unique<::AllocateAttributePointsRequest>(),
-        std::make_unique<::AllocateAttributePointsResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerResetAttributePointsMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "ResetAttributePoints",
-        std::make_unique<::ResetAttributePointsRequest>(),
-        std::make_unique<::ResetAttributePointsResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "AutoAllocateAttributePoints",
-        std::make_unique<::AutoAllocateAttributePointsRequest>(),
-        std::make_unique<::AutoAllocateAttributePointsResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerCreateAttributeSchemeMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "CreateAttributeScheme",
-        std::make_unique<::CreateAttributeSchemeRequest>(),
-        std::make_unique<::CreateAttributeSchemeResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerSwitchAttributeSchemeMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "SwitchAttributeScheme",
-        std::make_unique<::SwitchAttributeSchemeRequest>(),
-        std::make_unique<::SwitchAttributeSchemeResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerRenameAttributeSchemeMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "RenameAttributeScheme",
-        std::make_unique<::RenameAttributeSchemeRequest>(),
-        std::make_unique<::RenameAttributeSchemeResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "NotifyAttributePanelChanged",
-        std::make_unique<::AttributePanelChangedS2C>(),
-        std::make_unique<::Empty>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneAttributeClientPlayerGmSetPlayerLevelMessageId] = RpcMethodMeta{
-        "SceneAttributeClientPlayer", "GmSetPlayerLevel",
-        std::make_unique<::GmSetPlayerLevelRequest>(),
-        std::make_unique<::GmSetPlayerLevelResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-
     // --- SceneBagClientPlayer ---
     gRpcMethodRegistry[SceneBagClientPlayerGetBagMessageId] = RpcMethodMeta{
         "SceneBagClientPlayer", "GetBag",
@@ -2031,6 +1978,169 @@ void InitMessageInfo()
         "SceneBagClientPlayer", "ClaimEquipmentMaterialReward",
         std::make_unique<::ClaimEquipmentMaterialRewardRequest>(),
         std::make_unique<::ClaimEquipmentMaterialRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneActivityClientPlayer ---
+    gRpcMethodRegistry[SceneActivityClientPlayerGetActivityListMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "GetActivityList",
+        std::make_unique<::GetActivityListRequest>(),
+        std::make_unique<::GetActivityListResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerClaimActivityVitalityRewardMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "ClaimActivityVitalityReward",
+        std::make_unique<::ClaimActivityVitalityRewardRequest>(),
+        std::make_unique<::ClaimActivityVitalityRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerGetFestivalBeastDetailMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "GetFestivalBeastDetail",
+        std::make_unique<::GetFestivalBeastDetailRequest>(),
+        std::make_unique<::GetFestivalBeastDetailResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerStartFestivalBeastChallengeMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "StartFestivalBeastChallenge",
+        std::make_unique<::StartFestivalBeastChallengeRequest>(),
+        std::make_unique<::StartFestivalBeastChallengeResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerClaimFestivalBeastRewardMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "ClaimFestivalBeastReward",
+        std::make_unique<::ClaimFestivalBeastRewardRequest>(),
+        std::make_unique<::ClaimFestivalBeastRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerGetTravelPassStateMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "GetTravelPassState",
+        std::make_unique<::GetTravelPassStateRequest>(),
+        std::make_unique<::GetTravelPassStateResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerUnlockTravelPassPremiumMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "UnlockTravelPassPremium",
+        std::make_unique<::UnlockTravelPassPremiumRequest>(),
+        std::make_unique<::UnlockTravelPassPremiumResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerClaimTravelPassRewardMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "ClaimTravelPassReward",
+        std::make_unique<::ClaimTravelPassRewardRequest>(),
+        std::make_unique<::ClaimTravelPassRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerEquipTravelPassCosmeticMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "EquipTravelPassCosmetic",
+        std::make_unique<::EquipTravelPassCosmeticRequest>(),
+        std::make_unique<::EquipTravelPassCosmeticResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneAfkPassClientPlayer ---
+    gRpcMethodRegistry[SceneAfkPassClientPlayerGetAfkPassMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "GetAfkPass",
+        std::make_unique<::GetAfkPassRequest>(),
+        std::make_unique<::GetAfkPassResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAfkPassClientPlayerBuyAfkPassMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "BuyAfkPass",
+        std::make_unique<::BuyAfkPassRequest>(),
+        std::make_unique<::BuyAfkPassResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAfkPassClientPlayerGmSetAfkPassMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "GmSetAfkPass",
+        std::make_unique<::GmSetAfkPassRequest>(),
+        std::make_unique<::GmSetAfkPassResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAfkPassClientPlayerSetAfkPassSettingsMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "SetAfkPassSettings",
+        std::make_unique<::SetAfkPassSettingsRequest>(),
+        std::make_unique<::SetAfkPassSettingsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAfkPassClientPlayerAckHostedRecapMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "AckHostedRecap",
+        std::make_unique<::AckHostedRecapRequest>(),
+        std::make_unique<::AckHostedRecapResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneAppearanceClientPlayer ---
+    gRpcMethodRegistry[SceneAppearanceClientPlayerGetAppearanceInfoMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "GetAppearanceInfo",
+        std::make_unique<::GetAppearanceInfoRequest>(),
+        std::make_unique<::GetAppearanceInfoResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerSwitchAppearanceMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "SwitchAppearance",
+        std::make_unique<::SwitchAppearanceRequest>(),
+        std::make_unique<::SwitchAppearanceResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerStartAppearanceTrialMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "StartAppearanceTrial",
+        std::make_unique<::StartAppearanceTrialRequest>(),
+        std::make_unique<::StartAppearanceTrialResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerCancelAppearanceTrialMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "CancelAppearanceTrial",
+        std::make_unique<::CancelAppearanceTrialRequest>(),
+        std::make_unique<::CancelAppearanceTrialResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyActorAppearanceChangedMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "NotifyActorAppearanceChanged",
+        std::make_unique<::ActorAppearanceChangedS2C>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyAppearanceStateMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "NotifyAppearanceState",
+        std::make_unique<::AppearanceStateNotify>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerEquipPetCosmeticMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "EquipPetCosmetic",
+        std::make_unique<::EquipPetCosmeticRequest>(),
+        std::make_unique<::EquipPetCosmeticResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerEquipSkillVfxMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "EquipSkillVfx",
+        std::make_unique<::EquipSkillVfxRequest>(),
+        std::make_unique<::EquipSkillVfxResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneAttributeClientPlayer ---
+    gRpcMethodRegistry[SceneAttributeClientPlayerGetAttributePanelMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "GetAttributePanel",
+        std::make_unique<::GetAttributePanelRequest>(),
+        std::make_unique<::GetAttributePanelResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerAllocateAttributePointsMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "AllocateAttributePoints",
+        std::make_unique<::AllocateAttributePointsRequest>(),
+        std::make_unique<::AllocateAttributePointsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerResetAttributePointsMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "ResetAttributePoints",
+        std::make_unique<::ResetAttributePointsRequest>(),
+        std::make_unique<::ResetAttributePointsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "AutoAllocateAttributePoints",
+        std::make_unique<::AutoAllocateAttributePointsRequest>(),
+        std::make_unique<::AutoAllocateAttributePointsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerCreateAttributeSchemeMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "CreateAttributeScheme",
+        std::make_unique<::CreateAttributeSchemeRequest>(),
+        std::make_unique<::CreateAttributeSchemeResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerSwitchAttributeSchemeMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "SwitchAttributeScheme",
+        std::make_unique<::SwitchAttributeSchemeRequest>(),
+        std::make_unique<::SwitchAttributeSchemeResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerRenameAttributeSchemeMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "RenameAttributeScheme",
+        std::make_unique<::RenameAttributeSchemeRequest>(),
+        std::make_unique<::RenameAttributeSchemeResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "NotifyAttributePanelChanged",
+        std::make_unique<::AttributePanelChangedS2C>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerGmSetPlayerLevelMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "GmSetPlayerLevel",
+        std::make_unique<::GmSetPlayerLevelRequest>(),
+        std::make_unique<::GmSetPlayerLevelResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneBattleResultClientPlayer ---
@@ -2325,6 +2435,41 @@ void InitMessageInfo()
         std::make_unique<::CatchupSeasonSealRequest>(),
         std::make_unique<::CatchupSeasonSealResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerEquipWuxingFormationMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "EquipWuxingFormation",
+        std::make_unique<::EquipWuxingFormationRequest>(),
+        std::make_unique<::EquipWuxingFormationResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerGetWuxingTowerStateMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "GetWuxingTowerState",
+        std::make_unique<::GetWuxingTowerStateRequest>(),
+        std::make_unique<::GetWuxingTowerStateResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerStartWuxingTowerRunMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "StartWuxingTowerRun",
+        std::make_unique<::StartWuxingTowerRunRequest>(),
+        std::make_unique<::StartWuxingTowerRunResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerPickWuxingTowerSigilMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "PickWuxingTowerSigil",
+        std::make_unique<::PickWuxingTowerSigilRequest>(),
+        std::make_unique<::PickWuxingTowerSigilResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerAbandonWuxingTowerRunMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "AbandonWuxingTowerRun",
+        std::make_unique<::AbandonWuxingTowerRunRequest>(),
+        std::make_unique<::AbandonWuxingTowerRunResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "SaveBattleBuildBookmark",
+        std::make_unique<::SaveBattleBuildBookmarkRequest>(),
+        std::make_unique<::SaveBattleBuildBookmarkResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "DeleteBattleBuildBookmark",
+        std::make_unique<::DeleteBattleBuildBookmarkRequest>(),
+        std::make_unique<::DeleteBattleBuildBookmarkResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSkillClientPlayer ---
     gRpcMethodRegistry[SceneSkillClientPlayerReleaseSkillMessageId] = RpcMethodMeta{
@@ -2391,6 +2536,18 @@ void InitMessageInfo()
         "SceneSkillClientPlayer", "SwitchSkillLoadout",
         std::make_unique<::SwitchSkillLoadoutRequest>(),
         std::make_unique<::SwitchSkillLoadoutResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneSpiritShopClientPlayer ---
+    gRpcMethodRegistry[SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId] = RpcMethodMeta{
+        "SceneSpiritShopClientPlayer", "GetSpiritShopInfo",
+        std::make_unique<::GetSpiritShopInfoRequest>(),
+        std::make_unique<::GetSpiritShopInfoResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSpiritShopClientPlayerBuySpiritShopGoodsMessageId] = RpcMethodMeta{
+        "SceneSpiritShopClientPlayer", "BuySpiritShopGoods",
+        std::make_unique<::BuySpiritShopGoodsRequest>(),
+        std::make_unique<::BuySpiritShopGoodsResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- ScenePlayerSync ---
@@ -2678,6 +2835,16 @@ void InitMessageInfo()
         std::make_unique<::teampb::ConfirmRankedPresetRequest>(),
         std::make_unique<::teampb::TeamResponse>(),
         1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamConfirmRankedPresetErased, "/teampb.ClientPlayerTeam/ConfirmRankedPreset"};
+    gRpcMethodRegistry[ClientPlayerTeamSetTeamFormationMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "SetTeamFormation",
+        std::make_unique<::teampb::SetTeamFormationRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamSetTeamFormationErased, "/teampb.ClientPlayerTeam/SetTeamFormation"};
+    gRpcMethodRegistry[ClientPlayerTeamRecallTeamMembersMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "RecallTeamMembers",
+        std::make_unique<::teampb::RecallTeamMembersRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamRecallTeamMembersErased, "/teampb.ClientPlayerTeam/RecallTeamMembers"};
 
     // --- TeamAuthority ---
     gRpcMethodRegistry[TeamAuthorityReadMembershipMessageId] = RpcMethodMeta{
@@ -2920,6 +3087,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerSetAutoBattleMessageId:
 	case BattleClientPlayerSurrenderBattleMessageId:
 	case BattleClientPlayerUpdateBattlePrepMessageId:
+	case BattleClientPlayerSendBattlePingMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
 	case ClientPlayerChatReportChatMessageId:
@@ -3013,6 +3181,15 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceStartTournamentMatchMessageId:
 	case MatchServiceCheerTournamentSquadMessageId:
 	case MatchServiceClaimTournamentRewardMessageId:
+	case MatchServiceSaluteTournamentChampionMessageId:
+	case MatchServiceSendTournamentSpectateCheerMessageId:
+	case MatchServiceGetTournamentSpectateCheerMessageId:
+	case MatchServiceUpdateTournamentSquadEmblemMessageId:
+	case MatchServiceStartTournamentWarmupMessageId:
+	case MatchServicePredictTournamentMatchMessageId:
+	case MatchServiceGetTournamentPredictionBoardMessageId:
+	case MatchServiceBanTournamentLeylineMessageId:
+	case MatchServiceGetTournamentHighlightsMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -3020,26 +3197,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerRankGetRankPageMessageId:
 	case ClientPlayerRankGetRankAroundMessageId:
 	case SceneClientPlayerCommonRenamePlayerMessageId:
-	case SceneActivityClientPlayerGetActivityListMessageId:
-	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
-	case SceneActivityClientPlayerGetFestivalBeastDetailMessageId:
-	case SceneActivityClientPlayerStartFestivalBeastChallengeMessageId:
-	case SceneActivityClientPlayerClaimFestivalBeastRewardMessageId:
-	case SceneAfkPassClientPlayerGetAfkPassMessageId:
-	case SceneAfkPassClientPlayerBuyAfkPassMessageId:
-	case SceneAfkPassClientPlayerGmSetAfkPassMessageId:
-	case SceneAppearanceClientPlayerGetAppearanceInfoMessageId:
-	case SceneAppearanceClientPlayerSwitchAppearanceMessageId:
-	case SceneAppearanceClientPlayerStartAppearanceTrialMessageId:
-	case SceneAppearanceClientPlayerCancelAppearanceTrialMessageId:
-	case SceneAttributeClientPlayerGetAttributePanelMessageId:
-	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
-	case SceneAttributeClientPlayerResetAttributePointsMessageId:
-	case SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId:
-	case SceneAttributeClientPlayerCreateAttributeSchemeMessageId:
-	case SceneAttributeClientPlayerSwitchAttributeSchemeMessageId:
-	case SceneAttributeClientPlayerRenameAttributeSchemeMessageId:
-	case SceneAttributeClientPlayerGmSetPlayerLevelMessageId:
 	case SceneBagClientPlayerGetBagMessageId:
 	case SceneBagClientPlayerSortBagMessageId:
 	case SceneBagClientPlayerEquipItemMessageId:
@@ -3054,6 +3211,34 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerCommitEquipmentCraftMessageId:
 	case SceneBagClientPlayerGetEquipmentMaterialRewardMessageId:
 	case SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId:
+	case SceneActivityClientPlayerGetActivityListMessageId:
+	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
+	case SceneActivityClientPlayerGetFestivalBeastDetailMessageId:
+	case SceneActivityClientPlayerStartFestivalBeastChallengeMessageId:
+	case SceneActivityClientPlayerClaimFestivalBeastRewardMessageId:
+	case SceneActivityClientPlayerGetTravelPassStateMessageId:
+	case SceneActivityClientPlayerUnlockTravelPassPremiumMessageId:
+	case SceneActivityClientPlayerClaimTravelPassRewardMessageId:
+	case SceneActivityClientPlayerEquipTravelPassCosmeticMessageId:
+	case SceneAfkPassClientPlayerGetAfkPassMessageId:
+	case SceneAfkPassClientPlayerBuyAfkPassMessageId:
+	case SceneAfkPassClientPlayerGmSetAfkPassMessageId:
+	case SceneAfkPassClientPlayerSetAfkPassSettingsMessageId:
+	case SceneAfkPassClientPlayerAckHostedRecapMessageId:
+	case SceneAppearanceClientPlayerGetAppearanceInfoMessageId:
+	case SceneAppearanceClientPlayerSwitchAppearanceMessageId:
+	case SceneAppearanceClientPlayerStartAppearanceTrialMessageId:
+	case SceneAppearanceClientPlayerCancelAppearanceTrialMessageId:
+	case SceneAppearanceClientPlayerEquipPetCosmeticMessageId:
+	case SceneAppearanceClientPlayerEquipSkillVfxMessageId:
+	case SceneAttributeClientPlayerGetAttributePanelMessageId:
+	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
+	case SceneAttributeClientPlayerResetAttributePointsMessageId:
+	case SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId:
+	case SceneAttributeClientPlayerCreateAttributeSchemeMessageId:
+	case SceneAttributeClientPlayerSwitchAttributeSchemeMessageId:
+	case SceneAttributeClientPlayerRenameAttributeSchemeMessageId:
+	case SceneAttributeClientPlayerGmSetPlayerLevelMessageId:
 	case SceneBattleResultClientPlayerGetRecentBattleResultsMessageId:
 	case SceneBattleResultClientPlayerAckBattleResultsMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:
@@ -3093,6 +3278,13 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSeasonClientPlayerGetSeasonStateMessageId:
 	case SceneSeasonClientPlayerEquipSeasonSealMessageId:
 	case SceneSeasonClientPlayerCatchupSeasonSealMessageId:
+	case SceneSeasonClientPlayerEquipWuxingFormationMessageId:
+	case SceneSeasonClientPlayerGetWuxingTowerStateMessageId:
+	case SceneSeasonClientPlayerStartWuxingTowerRunMessageId:
+	case SceneSeasonClientPlayerPickWuxingTowerSigilMessageId:
+	case SceneSeasonClientPlayerAbandonWuxingTowerRunMessageId:
+	case SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId:
+	case SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:
@@ -3104,6 +3296,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerListCraftProxyStallsMessageId:
 	case SceneSkillClientPlayerSaveSkillLoadoutMessageId:
 	case SceneSkillClientPlayerSwitchSkillLoadoutMessageId:
+	case SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId:
+	case SceneSpiritShopClientPlayerBuySpiritShopGoodsMessageId:
 	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:
 	case SceneTrialJournalClientPlayerClaimTrialJournalMilestoneMessageId:
 	case SceneTrialJournalClientPlayerRedeemBoundArtifactVoucherMessageId:
@@ -3120,6 +3314,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerTeamDisbandTeamMessageId:
 	case ClientPlayerTeamStartTeamMatchMessageId:
 	case ClientPlayerTeamConfirmRankedPresetMessageId:
+	case ClientPlayerTeamSetTeamFormationMessageId:
+	case ClientPlayerTeamRecallTeamMembersMessageId:
 	case ClientPlayerJubaozhaiBrowseListingsMessageId:
 	case ClientPlayerJubaozhaiGetListingDetailMessageId:
 	case ClientPlayerJubaozhaiSetFavoriteMessageId:

@@ -368,6 +368,12 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
     default: resist += 100.0 * combat.resist_forget(); break;
     }
     if (kind == 4 || kind == 5) resist += 10000 * ConfiguredModifier(target, BattleModifier::ControlResist);
+    if (ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WATER) {
+        resist += 800.0;
+    }
+    if (const uint32_t wuxingCtrlResist = WuxingControlResistPct(target); wuxingCtrlResist > 0) {
+        resist += 100.0 * wuxingCtrlResist;
+    }
     bool consumedEcho = false;
     if (primary) for (const auto& source : caster.equipment_effects().artifacts()) {
         auto* state = ArtifactState(caster, source.item_id());

@@ -130,6 +130,10 @@ message PrepareBattleRequest
   uint32 match_mode = 8;
   // 活动对局冻结上下文（瑞兽迎春等，用于 scene 在 PrepareBattle 复核锁定出战宝宝与隔离快照）。
   BattleActivityContext activity_context = 9;
+  // true = 五行幻境周常爬塔开战：scene 权威校验并注入当前层数与本轮已选符印。
+  bool is_wuxing_tower = 10;
+  // 道友切磋坊自定义规则（仅切磋局透传，供 scene 决定满血蓝隔离等准备策略）。
+  CustomDuelRules custom_duel_rules = 11;
 }
 
 message PrepareBattleResponse

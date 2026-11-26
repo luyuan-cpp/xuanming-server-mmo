@@ -43,6 +43,8 @@
     <ClInclude Include="code\bit_index\mission_table_id_bit_index.h" />
     <ClInclude Include="code\bit_index\reward_table_id_bit_index.h" />
     <ClInclude Include="code\bit_index\characterappearance_table_id_bit_index.h" />
+    <ClInclude Include="code\bit_index\petcosmetic_table_id_bit_index.h" />
+    <ClInclude Include="code\bit_index\skillvfxcosmetic_table_id_bit_index.h" />
     <ClInclude Include="code\bit_index\trialjournalseal_table_id_bit_index.h" />
     <ClInclude Include="code\bit_index\trialjournalmilestone_table_id_bit_index.h" />
     <ClInclude Include="code\buff_table.h" />
@@ -150,6 +152,11 @@
     <ClInclude Include="code\characterappearance_table.h" />
     <ClInclude Include="code\characterappearance_table_comp.h" />
     <ClInclude Include="code\characterappearance_table_fk.h" />
+    <ClInclude Include="code\petcosmetic_table.h" />
+    <ClInclude Include="code\petcosmetic_table_comp.h" />
+    <ClInclude Include="code\skillvfxcosmetic_table.h" />
+    <ClInclude Include="code\skillvfxcosmetic_table_comp.h" />
+    <ClInclude Include="code\skillvfxcosmetic_table_fk.h" />
     <ClInclude Include="code\seasonrule_table.h" />
     <ClInclude Include="code\seasonrule_table_comp.h" />
     <ClInclude Include="code\seasonseal_table.h" />
@@ -246,6 +253,8 @@
     <ClInclude Include="proto\appearancerule_table.pb.h" />
     <ClInclude Include="proto\appearanceseries_table.pb.h" />
     <ClInclude Include="proto\characterappearance_table.pb.h" />
+    <ClInclude Include="proto\petcosmetic_table.pb.h" />
+    <ClInclude Include="proto\skillvfxcosmetic_table.pb.h" />
     <ClInclude Include="proto\seasonrule_table.pb.h" />
     <ClInclude Include="proto\seasonseal_table.pb.h" />
     <ClInclude Include="proto\trialjournalentry_table.pb.h" />
@@ -259,6 +268,8 @@
     <ClInclude Include="proto\tip\season_error_tip.pb.h" />
     <ClInclude Include="proto\tip\trial_journal_error_tip.pb.h" />
     <ClInclude Include="proto\tip\festival_beast_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\spirit_shop_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\travel_pass_error_tip.pb.h" />
     <ClInclude Include="proto\tip\chat_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
@@ -350,6 +361,9 @@
     <ClCompile Include="code\appearanceseries_table.cpp" />
     <ClCompile Include="code\characterappearance_table.cpp" />
     <ClCompile Include="code\characterappearance_table_fk.cpp" />
+    <ClCompile Include="code\petcosmetic_table.cpp" />
+    <ClCompile Include="code\skillvfxcosmetic_table.cpp" />
+    <ClCompile Include="code\skillvfxcosmetic_table_fk.cpp" />
     <ClCompile Include="code\seasonrule_table.cpp" />
     <ClCompile Include="code\seasonseal_table.cpp" />
     <ClCompile Include="code\seasonseal_table_fk.cpp" />
@@ -432,6 +446,8 @@
     <ClCompile Include="proto\appearancerule_table.pb.cc" />
     <ClCompile Include="proto\appearanceseries_table.pb.cc" />
     <ClCompile Include="proto\characterappearance_table.pb.cc" />
+    <ClCompile Include="proto\petcosmetic_table.pb.cc" />
+    <ClCompile Include="proto\skillvfxcosmetic_table.pb.cc" />
     <ClCompile Include="proto\seasonrule_table.pb.cc" />
     <ClCompile Include="proto\seasonseal_table.pb.cc" />
     <ClCompile Include="proto\trialjournalentry_table.pb.cc" />
@@ -445,6 +461,8 @@
     <ClCompile Include="proto\tip\season_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\trial_journal_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\festival_beast_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\spirit_shop_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\travel_pass_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
@@ -682,5 +700,29 @@
     <ClInclude Include="code\tournamentreward_table_fk.h" />
     <ClCompile Include="proto\tournamentreward_table.pb.cc" />
     <ClInclude Include="proto\tournamentreward_table.pb.h" />
+    <ClCompile Include="code\spiritshopgoods_table.cpp" />
+    <ClInclude Include="code\spiritshopgoods_table.h" />
+    <ClInclude Include="code\spiritshopgoods_table_comp.h" />
+    <ClCompile Include="code\spiritshopgoods_table_fk.cpp" />
+    <ClInclude Include="code\spiritshopgoods_table_fk.h" />
+    <ClCompile Include="proto\spiritshopgoods_table.pb.cc" />
+    <ClInclude Include="proto\spiritshopgoods_table.pb.h" />
+    <ClCompile Include="code\spiritshoplimitgroup_table.cpp" />
+    <ClInclude Include="code\spiritshoplimitgroup_table.h" />
+    <ClInclude Include="code\spiritshoplimitgroup_table_comp.h" />
+    <ClCompile Include="proto\spiritshoplimitgroup_table.pb.cc" />
+    <ClInclude Include="proto\spiritshoplimitgroup_table.pb.h" />
+    <ClCompile Include="code\travelpassseason_table.cpp" />
+    <ClInclude Include="code\travelpassseason_table.h" />
+    <ClInclude Include="code\travelpassseason_table_comp.h" />
+    <ClCompile Include="proto\travelpassseason_table.pb.cc" />
+    <ClInclude Include="proto\travelpassseason_table.pb.h" />
+    <ClCompile Include="code\travelpasstier_table.cpp" />
+    <ClInclude Include="code\travelpasstier_table.h" />
+    <ClInclude Include="code\travelpasstier_table_comp.h" />
+    <ClCompile Include="code\travelpasstier_table_fk.cpp" />
+    <ClInclude Include="code\travelpasstier_table_fk.h" />
+    <ClCompile Include="proto\travelpasstier_table.pb.cc" />
+    <ClInclude Include="proto\travelpasstier_table.pb.h" />
   </ItemGroup>
 </Project>

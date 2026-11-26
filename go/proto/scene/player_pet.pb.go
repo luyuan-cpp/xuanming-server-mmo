@@ -381,8 +381,10 @@ type PetInfo struct {
 	CultivationTierName string                 `protobuf:"bytes,18,opt,name=cultivation_tier_name,json=cultivationTierName,proto3" json:"cultivation_tier_name,omitempty"`
 	CultivationArtKey   string                 `protobuf:"bytes,19,opt,name=cultivation_art_key,json=cultivationArtKey,proto3" json:"cultivation_art_key,omitempty"`
 	Entries             *PetEntriesInfo        `protobuf:"bytes,20,opt,name=entries,proto3" json:"entries,omitempty"`
-	NextTier            *PetTierAscensionInfo  `protobuf:"bytes,21,opt,name=next_tier,json=nextTier,proto3" json:"next_tier,omitempty"` // 下一灵阶突破预览（已满阶时 next_tier == 0）
-	Desc                string                 `protobuf:"bytes,16,opt,name=desc,proto3" json:"desc,omitempty"`                         // 种类说明(PetTable.desc),客户端 tooltip 用
+	NextTier            *PetTierAscensionInfo  `protobuf:"bytes,21,opt,name=next_tier,json=nextTier,proto3" json:"next_tier,omitempty"`                     // 下一灵阶突破预览（已满阶时 next_tier == 0）
+	Desc                string                 `protobuf:"bytes,16,opt,name=desc,proto3" json:"desc,omitempty"`                                             // 种类说明(PetTable.desc),客户端 tooltip 用
+	CosmeticId          uint32                 `protobuf:"varint,22,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`              // 当前生效的灵宠幻化 ID（PetCosmetic.id；0 = 原形）
+	CosmeticArtKey      string                 `protobuf:"bytes,23,opt,name=cosmetic_art_key,json=cosmeticArtKey,proto3" json:"cosmetic_art_key,omitempty"` // 当前生效的灵宠幻化客户端资源键（空串 = 原形；缺图回退原形）
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -560,6 +562,20 @@ func (x *PetInfo) GetNextTier() *PetTierAscensionInfo {
 func (x *PetInfo) GetDesc() string {
 	if x != nil {
 		return x.Desc
+	}
+	return ""
+}
+
+func (x *PetInfo) GetCosmeticId() uint32 {
+	if x != nil {
+		return x.CosmeticId
+	}
+	return 0
+}
+
+func (x *PetInfo) GetCosmeticArtKey() string {
+	if x != nil {
+		return x.CosmeticArtKey
 	}
 	return ""
 }
@@ -2835,7 +2851,7 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"can_ascend\x18\n" +
 	" \x01(\bR\tcanAscend\x12 \n" +
 	"\fblock_tip_id\x18\v \x01(\rR\n" +
-	"blockTipId\"\xed\x05\n" +
+	"blockTipId\"\xb8\x06\n" +
 	"\aPetInfo\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -2861,7 +2877,10 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\x13cultivation_art_key\x18\x13 \x01(\tR\x11cultivationArtKey\x12)\n" +
 	"\aentries\x18\x14 \x01(\v2\x0f.PetEntriesInfoR\aentries\x122\n" +
 	"\tnext_tier\x18\x15 \x01(\v2\x15.PetTierAscensionInfoR\bnextTier\x12\x12\n" +
-	"\x04desc\x18\x10 \x01(\tR\x04desc\"\x94\x01\n" +
+	"\x04desc\x18\x10 \x01(\tR\x04desc\x12\x1f\n" +
+	"\vcosmetic_id\x18\x16 \x01(\rR\n" +
+	"cosmeticId\x12(\n" +
+	"\x10cosmetic_art_key\x18\x17 \x01(\tR\x0ecosmeticArtKey\"\x94\x01\n" +
 	"\vPetListInfo\x12\x1c\n" +
 	"\x04pets\x18\x01 \x03(\v2\b.PetInfoR\x04pets\x12\"\n" +
 	"\ractive_pet_id\x18\x02 \x01(\x04R\vactivePetId\x12\x19\n" +

@@ -128,7 +128,7 @@ jq -nc '{zone_id:1,account:"robot_linux_smoke",password:env.LOGIN_DEV_PASSWORD_S
 
 `tools/scripts/stress-linux-tier.sh` 是 2026-05 的历史辅助脚本:它从旧模板生成配置,只删部分 Redis 键,不完成当前 AGENTS.md §6 的 MySQL / etcd 清理、上一轮基线、三阶段 snapshot 与总结流程。模板认证口径也不能直接当成上文开发共享口令配置。它暂不能作为当前版本可直接执行的标准压测入口。
 
-开始当前阶梯前,先按根 [AGENTS.md §6](../../AGENTS.md) 确定每档配置、认证方式、清理对象、采样计划与对比基线,再由 Codex / 运维执行。robot 配置使用 `gateway_addr / zone_id / robot_count / account_fmt / auth_type / use_http_login` 等真实小写键;口令若需写入临时配置,只能放受控的 Git 外文件并在结束后清理。不要把历史脚本生成的 CSV 当成已满足当前验收门禁。
+开始当前阶梯前,先按根 [AGENTS.md §6](../../AGENTS.md) 确定每档配置、认证方式、清理对象、采样计划与对比基线,再由 Gemini / 运维执行。robot 配置使用 `gateway_addr / zone_id / robot_count / account_fmt / auth_type / use_http_login` 等真实小写键;口令若需写入临时配置,只能放受控的 Git 外文件并在结束后清理。不要把历史脚本生成的 CSV 当成已满足当前验收门禁。
 
 历史脚本的输出格式是 `run/logs/stress/results-linux-<TS>.csv`,每行一档:
 ```

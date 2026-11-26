@@ -43,6 +43,17 @@ type TournamentRuleTable struct {
 	QualifierLossPoints         uint32                 `protobuf:"varint,18,opt,name=qualifier_loss_points,json=qualifierLossPoints,proto3" json:"qualifier_loss_points,omitempty"`
 	InviteTtlSeconds            uint32                 `protobuf:"varint,19,opt,name=invite_ttl_seconds,json=inviteTtlSeconds,proto3" json:"invite_ttl_seconds,omitempty"`
 	Desc                        string                 `protobuf:"bytes,20,opt,name=desc,proto3" json:"desc,omitempty"`
+	Bo3Top4Enabled              bool                   `protobuf:"varint,21,opt,name=bo3_top4_enabled,json=bo3Top4Enabled,proto3" json:"bo3_top4_enabled,omitempty"`
+	IntermissionSeconds         uint32                 `protobuf:"varint,22,opt,name=intermission_seconds,json=intermissionSeconds,proto3" json:"intermission_seconds,omitempty"`
+	PublicKnockoutReplay        bool                   `protobuf:"varint,23,opt,name=public_knockout_replay,json=publicKnockoutReplay,proto3" json:"public_knockout_replay,omitempty"`
+	SaluteGoldAmount            uint32                 `protobuf:"varint,24,opt,name=salute_gold_amount,json=saluteGoldAmount,proto3" json:"salute_gold_amount,omitempty"`
+	SaluteItemId                uint32                 `protobuf:"varint,25,opt,name=salute_item_id,json=saluteItemId,proto3" json:"salute_item_id,omitempty"`
+	SaluteItemCount             uint32                 `protobuf:"varint,26,opt,name=salute_item_count,json=saluteItemCount,proto3" json:"salute_item_count,omitempty"`
+	WarmupSparEnabled           bool                   `protobuf:"varint,27,opt,name=warmup_spar_enabled,json=warmupSparEnabled,proto3" json:"warmup_spar_enabled,omitempty"`
+	PredictionEnabled           bool                   `protobuf:"varint,28,opt,name=prediction_enabled,json=predictionEnabled,proto3" json:"prediction_enabled,omitempty"`
+	PredictionRewardMinHits     uint32                 `protobuf:"varint,29,opt,name=prediction_reward_min_hits,json=predictionRewardMinHits,proto3" json:"prediction_reward_min_hits,omitempty"`
+	ThirdPlaceMatchEnabled      bool                   `protobuf:"varint,30,opt,name=third_place_match_enabled,json=thirdPlaceMatchEnabled,proto3" json:"third_place_match_enabled,omitempty"`
+	LeylineBanEnabled           bool                   `protobuf:"varint,31,opt,name=leyline_ban_enabled,json=leylineBanEnabled,proto3" json:"leyline_ban_enabled,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -217,6 +228,83 @@ func (x *TournamentRuleTable) GetDesc() string {
 	return ""
 }
 
+func (x *TournamentRuleTable) GetBo3Top4Enabled() bool {
+	if x != nil {
+		return x.Bo3Top4Enabled
+	}
+	return false
+}
+
+func (x *TournamentRuleTable) GetIntermissionSeconds() uint32 {
+	if x != nil {
+		return x.IntermissionSeconds
+	}
+	return 0
+}
+
+func (x *TournamentRuleTable) GetPublicKnockoutReplay() bool {
+	if x != nil {
+		return x.PublicKnockoutReplay
+	}
+	return false
+}
+
+func (x *TournamentRuleTable) GetSaluteGoldAmount() uint32 {
+	if x != nil {
+		return x.SaluteGoldAmount
+	}
+	return 0
+}
+
+func (x *TournamentRuleTable) GetSaluteItemId() uint32 {
+	if x != nil {
+		return x.SaluteItemId
+	}
+	return 0
+}
+
+func (x *TournamentRuleTable) GetSaluteItemCount() uint32 {
+	if x != nil {
+		return x.SaluteItemCount
+	}
+	return 0
+}
+
+func (x *TournamentRuleTable) GetWarmupSparEnabled() bool {
+	if x != nil {
+		return x.WarmupSparEnabled
+	}
+	return false
+}
+
+func (x *TournamentRuleTable) GetPredictionEnabled() bool {
+	if x != nil {
+		return x.PredictionEnabled
+	}
+	return false
+}
+
+func (x *TournamentRuleTable) GetPredictionRewardMinHits() uint32 {
+	if x != nil {
+		return x.PredictionRewardMinHits
+	}
+	return 0
+}
+
+func (x *TournamentRuleTable) GetThirdPlaceMatchEnabled() bool {
+	if x != nil {
+		return x.ThirdPlaceMatchEnabled
+	}
+	return false
+}
+
+func (x *TournamentRuleTable) GetLeylineBanEnabled() bool {
+	if x != nil {
+		return x.LeylineBanEnabled
+	}
+	return false
+}
+
 type TournamentRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*TournamentRuleTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -265,7 +353,8 @@ var File_tournamentrule_table_proto protoreflect.FileDescriptor
 
 const file_tournamentrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1atournamentrule_table.proto\"\xe3\x06\n" +
+	"\x1atournamentrule_table.proto\"\xfd\n" +
+	"\n" +
 	"\x13TournamentRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12!\n" +
 	"\frule_version\x18\x02 \x01(\rR\vruleVersion\x12\x18\n" +
@@ -287,7 +376,18 @@ const file_tournamentrule_table_proto_rawDesc = "" +
 	"\x15qualifier_draw_points\x18\x11 \x01(\rR\x13qualifierDrawPoints\x122\n" +
 	"\x15qualifier_loss_points\x18\x12 \x01(\rR\x13qualifierLossPoints\x12,\n" +
 	"\x12invite_ttl_seconds\x18\x13 \x01(\rR\x10inviteTtlSeconds\x12\x12\n" +
-	"\x04desc\x18\x14 \x01(\tR\x04desc\"C\n" +
+	"\x04desc\x18\x14 \x01(\tR\x04desc\x12(\n" +
+	"\x10bo3_top4_enabled\x18\x15 \x01(\bR\x0ebo3Top4Enabled\x121\n" +
+	"\x14intermission_seconds\x18\x16 \x01(\rR\x13intermissionSeconds\x124\n" +
+	"\x16public_knockout_replay\x18\x17 \x01(\bR\x14publicKnockoutReplay\x12,\n" +
+	"\x12salute_gold_amount\x18\x18 \x01(\rR\x10saluteGoldAmount\x12$\n" +
+	"\x0esalute_item_id\x18\x19 \x01(\rR\fsaluteItemId\x12*\n" +
+	"\x11salute_item_count\x18\x1a \x01(\rR\x0fsaluteItemCount\x12.\n" +
+	"\x13warmup_spar_enabled\x18\x1b \x01(\bR\x11warmupSparEnabled\x12-\n" +
+	"\x12prediction_enabled\x18\x1c \x01(\bR\x11predictionEnabled\x12;\n" +
+	"\x1aprediction_reward_min_hits\x18\x1d \x01(\rR\x17predictionRewardMinHits\x129\n" +
+	"\x19third_place_match_enabled\x18\x1e \x01(\bR\x16thirdPlaceMatchEnabled\x12.\n" +
+	"\x13leyline_ban_enabled\x18\x1f \x01(\bR\x11leylineBanEnabled\"C\n" +
 	"\x17TournamentRuleTableData\x12(\n" +
 	"\x04data\x18\x01 \x03(\v2\x14.TournamentRuleTableR\x04dataBE\n" +
 	"\x0ecom.game.tableB\x1dTournamentRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"
@@ -330,14 +430,4 @@ func file_tournamentrule_table_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tournamentrule_table_proto_rawDesc), len(file_tournamentrule_table_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
-			NumExtensions: 0,
-			NumServices:   0,
-		},
-		GoTypes:           file_tournamentrule_table_proto_goTypes,
-		DependencyIndexes: file_tournamentrule_table_proto_depIdxs,
-		MessageInfos:      file_tournamentrule_table_proto_msgTypes,
-	}.Build()
-	File_tournamentrule_table_proto = out.File
-	file_tournamentrule_table_proto_goTypes = nil
-	file_tournamentrule_table_proto_depIdxs = nil
-}
+			NumExtensions

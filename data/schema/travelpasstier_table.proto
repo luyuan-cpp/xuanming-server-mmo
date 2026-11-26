@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+// TravelPassTier 表的权威 schema。源表 data/TravelPassTier.xlsx。
+//
+// 游历手记档位奖励表（docs/design/activity-travel-pass-and-showcase-v1.md）：
+// 每期内部按 tier_index (1..64) 用紧凑 uint64 位图记录免费轨与典藏轨领取状态，
+// 全部发放物品均强制 bound = true（仅自用），零可交易货源、零战力上限突破。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TravelPassTierTable {
+  option (cfg_sheet)       = "TravelPassTier";
+  option (cfg_source_file) = "TravelPassTier.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 档位全局稳定 ID（如 101..110，上线后不复用）
+  uint32 id = 1;
+  // 所属期次 ID：FK -> TravelPassSeason.id
+  uint32 pass_id = 2 [(cfg_fk) = "TravelPassSeason"];
+  // 期次内档位序号（1..64，映射至 free/premium 64 位领奖掩码，同 pass_id 内唯一）
+  uint32 tier_index = 3;
+  // 解锁该档位所需累计游历印点数（>0 且按 tier_index 严格递增）
+  uint32 required_points = 4;
+  // 免费轨物品 ID（0 = 无物品；非 0 须存在于 Item 表，入包强制 bound=true）
+  uint32 free_item_id = 5;
+  // 免费轨物品数量（free_item_id > 0 时须 >= 1）
+  uint32 free_item_count = 6;
+  // 免费轨银两奖励（kCurrencyGold）
+  uint64 free_gold = 7;
+  // 免费轨纪念称谓/头像框键（可空，前缀 frame_ 为头像框，title_ 为称谓）
+  string free_cosmetic_key = 8;
+  // 免费轨纪念展示名（free_cosmetic_key 非空时必填）
+  string free_cosmetic_name = 9;
+  // 典藏轨物品 ID（0 = 无物品；非 0 须存在于 Item 表，入包强制 bound=true）
+  uint32 premium_item_id = 10;
+  // 典藏轨物品数量（premium_item_id > 0 时须 >= 1）
+  uint32 premium_item_count = 11;
+  // 典藏轨银两奖励（kCurrencyGold）
+  uint64 premium_gold = 12;
+  // 典藏轨纪念头像框/称谓键（可空，前缀 frame_ 为头像框，title_ 为称谓）
+  string premium_cosmetic_key = 13;
+  // 典藏轨纪念展示名（premium_cosmetic_key 非空时必填）
+  string premium_cosmetic_name = 14;
+}

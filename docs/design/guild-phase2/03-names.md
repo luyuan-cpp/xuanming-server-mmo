@@ -5,7 +5,7 @@
 
 # §3 成员名字 / 最小昵称(批次 B3a、B3b)— 第 1 部分:总览与 data_service 名字注册表
 
-> 状态:设计稿(2026-09-16 按对抗评审修订,逐条处理见 `s3_names_review.md`),未落码、未编译。Claude 不跑构建;验证由 Codex 按第 6、8 部分命令执行。
+> 状态:设计稿(2026-09-16 按对抗评审修订,逐条处理见 `s3_names_review.md`),未落码、未编译。Claude 不跑构建;验证由 Gemini 按第 6、8 部分命令执行。
 > 契约名以 `00_contract.md` §3.4 / §4 为准;偏离处集中列在第 9 部分 §3.25。行号是 2026-09-15/16 工作区快照,落码前再核(多处文件有他人未提交改动)。
 > 分部:1 总览、proto、表、建表(3.0–3.3);2 Store / 缓存 / Logic / 配置 / 崩溃窗口(3.4–3.7);3 规则包、RoleNameRule 配表、login proto、登记客户端、Tip(3.8–3.10、3.13);4 login 建角、入场补齐、角色列表(3.11–3.12);5 Java、scene、zone 库加列、合服 / 回档、机器人(3.14–3.17);6 B3a 清单 / 测试 / 验证(3.18–3.20);7 guild 与客户端规则 / 管线(3.21–3.22);8 客户端界面 / 测试、B3b 清单 / 验证(3.22 续–3.24);9 契约偏差、未决(3.25–3.26)。
 
@@ -179,7 +179,7 @@ affected=0 → SELECT created_ms, bound_ms FROM player_name WHERE player_id=? AN
 Deleted、Absent 之后按名字删 owner 行;Bound、OutsideWindow 两边都不动。
 **BatchGet**:按玩家分片读 `player_name_owner`(分片之后的口径见 horizontal-scale-logical-db.md §5.5),入参由 logic 去重、去 0、≤500。
 
-## 3.4a 名字行「预留 → 绑定」状态机(2026-11-06,未编译,待 Codex 验证)
+## 3.4a 名字行「预留 → 绑定」状态机(2026-11-06,未编译,待 Gemini 验证)
 
 **缺口**(数据一致性保证图 §6.2 第 10 条):原来 `ReleasePlayerName` 不带 token 时只靠「登记不满 10 分钟」这一道时间窗,不核调用方;名字行也不和建角提交绑定。login 一旦判错建角结局(比如提交之后又走了回滚),或者内网别的进程调了它,就能释放一个已被建成的角色用着的名字,别的账号随即能登记同名:一名两角,v1 没有改名,没有事后修复。
 
@@ -377,7 +377,7 @@ var DefaultSensitive SensitiveChecker = builtinSensitive{} // 占位词表,来�
 
 `IsAllowedRune` **显式区间表**(不用 `unicode.Han`):`'0'–'9'`、`'A'–'Z'`、`'a'–'z'`、`U+3007 〇`、`U+3400–U+4DBF`(扩展 A)、`U+4E00–U+9FFF`(基本区)。理由:`unicode.Han` 还含部首补充 U+2E80–2EF3(除 U+2E9F、U+2EF3 外 NFKC 不折叠)、`々` U+3005、杭州码 U+3021–3029、`〻` U+303B,挡不住形近冒名(U+3038–303A 会被 NFKC 折叠成 十卄卅,折叠后与正字同 norm,无害);扩展 B 及以后(U+20000+)v1 不开放,客户端字体覆盖未核。未被 NFKC 折叠的兼容汉字(如 U+FA0E)不在区间内,两端一致拒绝。
 
-共享测试向量(新文件)`go/shared/playername/testdata/charset_vectors.json`,客户端测试放逐字节相同的副本(第 8 部分),Codex 比对哈希:
+共享测试向量(新文件)`go/shared/playername/testdata/charset_vectors.json`,客户端测试放逐字节相同的副本(第 8 部分),Gemini 比对哈希:
 
 ```json
 {
@@ -389,7 +389,7 @@ var DefaultSensitive SensitiveChecker = builtinSensitive{} // 占位词表,来�
 
 内置占位词表:汉字词子串匹配 `管理员`、`客服`、`官方`、`系统`、`运营`;ASCII 只做前缀 `gm`(子串会误伤 `sigma`)。`Generate`:字母表 `abcdefghijklmnopqrstuvwxyz0123456789`,逐字节读、`b < 252` 才取 `b % 36`(拒绝采样去偏)。
 
-依赖:`golang.org/x/text v0.32.0` 在 go/shared、login、data_service、guild 的 go.sum 均已有;go/shared/go.mod 去掉 `// indirect` 由 Codex `go mod tidy` 完成。
+依赖:`golang.org/x/text v0.32.0` 在 go/shared、login、data_service、guild 的 go.sum 均已有;go/shared/go.mod 去掉 `// indirect` 由 Gemini `go mod tidy` 完成。
 
 单测 `playername_test.go`(表驱动,rules={2,12}):
 - `"  云中君 "` → OK,display=`云中君`;`"ＡＢ１２"` → display=`AB12`、norm=`ab12`;`"Ab12"` 与 `"aB12"` norm 相同。
@@ -692,11 +692,11 @@ go run ./cmd/migrate -f ..\..\run\etc\go_services\z2_db.yaml -command up
 
 - `robot/login.go`、`robot/main.go` 继续发 `CreatePlayerRequest{}`(服务端生成名),压测与冒烟不改请求。
 - `robot/login.go` 三处建角成功分支后加 Debug 日志打印新角色 `GetName()`,不断言。
-- robot 带 vendor 拷贝(`robot/vendor/proto`、`robot/vendor/shared`),proto-gen 后 Codex **必须** `go mod vendor` 再 `go build ./...`。
+- robot 带 vendor 拷贝(`robot/vendor/proto`、`robot/vendor/shared`),proto-gen 后 Gemini **必须** `go mod vendor` 再 `go build ./...`。
 
 <!-- s3_names_part6.md -->
 
-# §3 成员名字 — 第 6 部分:B3a 文件清单、测试、Codex 验证
+# §3 成员名字 — 第 6 部分:B3a 文件清单、测试、Gemini 验证
 
 ## 3.18 B3a 文件清单(手改;生成物、vendor、go.mod/go.sum tidy、纯注释改动、文档不计)
 
@@ -756,7 +756,7 @@ B3a 不新增客户端可达消息,**不改** MessageLimiter.xlsx、gate 路由�
 
 C++:3.15 两个用例。Java:3.14。
 
-## 3.20 B3a Codex 验证(按序串行)
+## 3.20 B3a Gemini 验证(按序串行)
 
 > **2026-09-20**:B3a-2 的现行验证序列在 [`92-handoff.md`](./92-handoff.md) §8.3(14 步,含 B3a-1 补验证、§3.15a 加列、gofmt 存量基线与失败归因)。
 > 下面的原始块保留供对照,三处已过时:路径 `E:\work\xuanming-server-mmo` 是另一台机器(本机 `D:\luyuan\wuxingqitan\mmorpg`);
@@ -928,7 +928,7 @@ while (true)
   if (font != null && !font.HasCharacters(n, out List<char> missing, true, true)) { _previewHint.text = "角色名包含无法显示的字"; return; }
   _result.Name = n; _result.RejectHint = null;
   ```
-  (字体缺字检查只在客户端:同一字体资产下别人也显示不了;`TMP_FontAsset.HasCharacters(string, out List<char>, bool searchFallbacks, bool tryAddCharacter)`,若该重载在工程 TMP 版本不存在,Codex 编译体检会报错,改用 `HasCharacters(string, out List<char>)`。)
+  (字体缺字检查只在客户端:同一字体资产下别人也显示不了;`TMP_FontAsset.HasCharacters(string, out List<char>, bool searchFallbacks, bool tryAddCharacter)`,若该重载在工程 TMP 版本不存在,Gemini 编译体检会报错,改用 `HasCharacters(string, out List<char>)`。)
 - 角色卡(:227-229):名字行改 `DisplayName(player)`;新增 `public static string DisplayName(AccountSimplePlayer p) => string.IsNullOrWhiteSpace(p.Name) ? CharacterName(p.ClassId, p.Gender) : p.Name;`。
 - `RefreshPreview`(:278)加参数 `string roleName`:`_previewTitle.text = string.IsNullOrWhiteSpace(roleName) ? CharacterName(classId, gender) : roleName;`;`PreviewPlayer` 传 `player.Name`,`RefreshCreateHighlights` 传 null。
 
@@ -983,7 +983,7 @@ while (true)
 服务端 7:`proto/guild/guild.proto`(B2 已加字段则不计)、`go/guild/guild.go`、`go/guild/internal/logic/guild_logic.go`、`go/guild/internal/logic/player_name_resolver.go`(新)、`go/guild/internal/logic/player_name_resolver_test.go`(新)、`go/guild/internal/logic/guild_logic_names_test.go`(新)、`robot/guild_smoke_scenario.go`。
 客户端 12:`tools/gen_proto.ps1`、`Assets/Scripts/Game/Role/RoleNameRules.cs`(新)、`Assets/Scripts/Game/GameClient.cs`、`Assets/Scripts/UI/Ugui/Role/RoleFlowUi.cs`、`Assets/Scripts/UI/AppBootstrap.cs`、`Assets/Scripts/UI/SessionModel.cs`、`Assets/Scripts/UI/Ugui/Guild/GuildWindow.cs`、`Assets/Tests/EditMode/Role/MmorpgClient.Tests.EditMode.Role.asmdef`(新)、`Assets/Tests/EditMode/Role/RoleNameCharsetVectors.json`(新)、`Assets/Tests/EditMode/Role/RoleNameRulesTests.cs`(新)、`Assets/Tests/EditMode/Guild/GuildUiTests.cs`;`.meta` 由编辑器生成,不计。(若 `RoleFlowUi.cs` 所在 asmdef 对测试不可见,在测试 asmdef 的 references 里加它,同文件计数内。)
 
-## 3.24 B3b Codex 验证
+## 3.24 B3b Gemini 验证
 ```powershell
 cd E:\work\xuanming-server-mmo; git status --short proto/guild go/guild robot
 cd go; .\build.bat; cd guild; go vet ./...; go test ./internal/logic/... -count=1

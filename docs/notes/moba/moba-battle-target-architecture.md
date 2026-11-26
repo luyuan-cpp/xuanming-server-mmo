@@ -4,7 +4,7 @@
 **状态:** 目标形态基准 + 本仓现状映射。**2026-09-05:第 7 步「客户端直连 + 票据入场」已落码、已过静态评审与编译/单测(C++ Debug 0 error、gtest 18+22 全绿、Go/robot 全绿),整栈冒烟待本机基础设施**
 (见 [turn-based-battle-server.md §18](../../design/turn-based-battle-server.md#18-客户端直连-battle-节点票据入场战斗流量零字节经-gate2026-09-05已落码待验证));
 写本文时 battle 节点尚不存在,现状映射一节按 2026-09-05 的仓库状态重写。
-**2026-09-29 状态更新:** 直连收缩(turn-based-battle-server.md §22 D65–D75:gate 两种路由模式都不中继战斗、直连是战斗唯一通路、D26 改 fail-closed、K8s 默认路由模式)与集群外客户端入口(D76–D93,[k8s-client-entry.md](../../design/k8s-client-entry.md):battle 进程自报客户端可达地址、Agones Fleet `portPolicy: Dynamic`)**已落码,但未编译、未测试、未上集群,待 Codex / 用户验证**;§七验收判据仍零打勾。§六 的现状表与缺口 1 / 2 已按此更新。
+**2026-09-29 状态更新:** 直连收缩(turn-based-battle-server.md §22 D65–D75:gate 两种路由模式都不中继战斗、直连是战斗唯一通路、D26 改 fail-closed、K8s 默认路由模式)与集群外客户端入口(D76–D93,[k8s-client-entry.md](../../design/k8s-client-entry.md):battle 进程自报客户端可达地址、Agones Fleet `portPolicy: Dynamic`)**已落码,但未编译、未测试、未上集群,待 Gemini / 用户验证**;§七验收判据仍零打勾。§六 的现状表与缺口 1 / 2 已按此更新。
 **来源:** 架构讨论。通用骨架部分为业界标准形态(LoL / Dota2 / 王者 / 绝地求生这类"会话制对局"的通用做法),现状映射部分已逐项对照本仓代码核实。
 **关联:** [moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md)(DS 内部设计细则)、[moba-non-ds-server-interview-qa.md](./moba-non-ds-server-interview-qa.md)(外围系统)、[ARCH.md](../../design/ARCH.md)(现有 MMO 拓扑)、[player_login_flow.md](../../design/player_login_flow.md)(票据入场的现有实现)、[session-extractability-mmo-slg.md](../../design/session-extractability-mmo-slg.md)(本文这套判据能/不能套到 MMO、SLG 的哪些层)
 
@@ -175,10 +175,10 @@ Battle ──result──▶ 结算服
 ### 仍是缺口
 
 1. **收缩阶段**(2026-09-16 更正):Unity 客户端已接直连(客户端仓 `b5cf6ef`,2026-09-06);本机一键启动已默认路由模式,gate 不再中继战斗;剩余 = K8s `-GateRouterMode` 默认翻转 + 删 gate 中继代码,门禁与顺序见 [turn-based-battle-server.md §19](../../design/turn-based-battle-server.md#19-收缩阶段决策--换会话重绑修复2026-09-16) D36 / D37("直连失败率数据"前提已作废:项目未上线、无老客户端);
-   **(2026-09-29)已落码,未验证**:用户豁免 D36 / D37 的「K8s 路由模式 battle-smoke 先跑通」前提(turn-based §22 D65,事后补验),一次做完——gate 两种模式都不中继战斗(D66)、删 Kafka Bind/Unbind 契约(D67)、下行两个显式出口(D68)、观众握手快照(D69)、D26 fail-closed(D70)、scene 换会话只推重连提示(D72)、robot 与 Unity 直连是唯一通路(D73 / D74)、K8s `-GateRouterMode` 默认 `"1"`、C++ 默认值不改(D75,[xuanming-port-decisions-20260910.md](../../design/xuanming-port-decisions-20260910.md) D-12 修订)。**未编译、未测试、未上集群,待 Codex 验证**;
+   **(2026-09-29)已落码,未验证**:用户豁免 D36 / D37 的「K8s 路由模式 battle-smoke 先跑通」前提(turn-based §22 D65,事后补验),一次做完——gate 两种模式都不中继战斗(D66)、删 Kafka Bind/Unbind 契约(D67)、下行两个显式出口(D68)、观众握手快照(D69)、D26 fail-closed(D70)、scene 换会话只推重连提示(D72)、robot 与 Unity 直连是唯一通路(D73 / D74)、K8s `-GateRouterMode` 默认 `"1"`、C++ 默认值不改(D75,[xuanming-port-decisions-20260910.md](../../design/xuanming-port-decisions-20260910.md) D-12 修订)。**未编译、未测试、未上集群,待 Gemini 验证**;
    仍未做:停机路径 `DisconnectAll` 立即强关房间直连、独立的 `battle_id → 落点` 路由键(补签目前依赖观战索引 `spectate:battle:{id}`)、D40 回合号幂等;
 2. **部署形态**(2026-09-16 更正):battle 的 Deployment / ConfigMap / 密钥注入已由 `k8s_deploy.ps1`(`Apply-BattlePool`)生成,但只开 containerPort,`NodeInfo.endpoint` 通告 POD_IP,集群外客户端不可达——与 gate 是同一个未解问题(脚本 `Show-ExposureProfileWarning` 明写"翻译要在 login 侧做");并行会话正在做"完整 K8s Battle 验收"(microservice-zone-contract §17),对外入口形态(hostPort / NodePort / 外部 L4)随其拍板;
-   **(2026-09-29)已落码,未验证**:入口形态已由集群外入口 D76–D93 拍板并落码([k8s-client-entry.md](../../design/k8s-client-entry.md))——进程自报 `client_endpoint`、login / scene_manager / battle 三出口同一选择规则;battle 生产推荐 `external + agones`(Agones Fleet `portPolicy: Dynamic`,分配许可 + 排空标签),`external + deployment`(hostPort)只用于验证 / 回退;gate 为 StatefulSet + 每序号 Service。上面「NodeInfo.endpoint 通告 POD_IP、集群外不可达」只在默认 `-ClientEntryMode podip` 下仍成立(podip 专供集群内 robot 与压测)。**未编译、未上集群;kind 端到端验证待 Codex / 用户执行**;
+   **(2026-09-29)已落码,未验证**:入口形态已由集群外入口 D76–D93 拍板并落码([k8s-client-entry.md](../../design/k8s-client-entry.md))——进程自报 `client_endpoint`、login / scene_manager / battle 三出口同一选择规则;battle 生产推荐 `external + agones`(Agones Fleet `portPolicy: Dynamic`,分配许可 + 排空标签),`external + deployment`(hostPort)只用于验证 / 回退;gate 为 StatefulSet + 每序号 Service。上面「NodeInfo.endpoint 通告 POD_IP、集群外不可达」只在默认 `-ClientEntryMode podip` 下仍成立(podip 专供集群内 robot 与压测)。**未编译、未上集群;kind 端到端验证待 Gemini / 用户执行**;
 3. 落点粒度已由事实拍板为 **一进程 N 房**(单 battle 进程多房间,§8),隔离(单房异常不掀翻进程)只有 timer 回调按 battle_id 重查这一层,无 try/catch 熔断 —— 待补;
 4. 票据吊销 / 每消息 HMAC / 观众连接上限单独配置(§18.7)。
 

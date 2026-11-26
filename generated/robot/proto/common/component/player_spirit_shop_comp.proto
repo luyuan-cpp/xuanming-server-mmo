@@ -1,0 +1,30 @@
+syntax = "proto3";
+option go_package = "robot/proto/common/component";
+
+// 官方灵石百宝阁的个人与共享组限购记录(scene 侧玩家实体持久组件,**落库**)。
+// 设计文档:docs/design/spirit-shop-and-starter-packs-v1.md §2.4。
+//
+// 归属 WALLET(7) 存盘组,与 currency / client_request_ledger 同行,与 BAG(8) 同一次 TiDB 存盘事务提交(不变量 I3):
+// 「扣灵石、发绑定物、记限购、记幂等」全成或全回档,不增加额外写盘行。
+
+message SpiritShopGoodsPurchaseRecord {
+  uint32 goods_id = 1;         // SpiritShopGoods 表 id
+  uint32 lifetime_bought = 2;  // 终身累计已购份数
+  uint64 week_starts_at_ms = 3; // 每周限购统计对应的游戏周起点(UTC+8 周一 05:00,抗时钟回拨)
+  uint32 weekly_bought = 4;    // 当前游戏周已购份数
+}
+
+message SpiritShopGroupQuotaRecord {
+  uint32 group_id = 1;         // SpiritShopLimitGroup 表 id
+  uint32 lifetime_used = 2;    // 终身累计已用权重(如首套提速包累计已购份数,上限 300)
+  uint64 week_starts_at_ms = 3; // 每周共享组统计对应的游戏周起点(UTC+8 周一 05:00)
+  uint32 weekly_used = 4;      // 当前游戏周已用权重
+}
+
+message PlayerSpiritShopComp {
+  // 条目之间无序,按 goods_id / group_id 查找(AGENTS.md §11.6:下标不承载业务语义)。
+  repeated SpiritShopGoodsPurchaseRecord goods_records = 1;
+  repeated SpiritShopGroupQuotaRecord group_records = 2;
+  // 每次百宝阁成交递增 1,便于客户端追踪状态版本。
+  uint64 shop_revision = 3;
+}

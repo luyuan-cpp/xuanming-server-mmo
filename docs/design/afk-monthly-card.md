@@ -1,6 +1,8 @@
 # 挂机月卡:获得、开通与权益落库
 
-> 2026-11-19 定稿;同日负责人确认「按稿开工」,当天落码。**协议未生成、xlsx 未产出、未编译、未测试**,交 Codex 的命令在
+> **[2026-11-25 权威口径对齐]** 本稿记录的是已落码的 300 灵石 / 30 天月卡存储与开通基座（`PlayerUint64Comp.afk_pass_expires_at` + `BuyAfkPass`，当前已生效权益为断线跟队托管）。按 [project-vision.md](../planning/project-vision.md)、[core-gameplay-loop.md](../planning/core-gameplay-loop.md)、[equipment-economy-charter.md](../planning/equipment-economy-charter.md) 与 [spirit-shop-and-starter-packs-v1.md](../planning/spirit-shop-and-starter-packs-v1.md) 最新规划，后续 P1 将直接复用此 `afk_pass_expires_at` 基座升级为「**仙途轻享卡**」（扩展纯便利权益如配装/技能预设槽、摆摊便利及经济总纲定义的持续可交易产出防多开门槛，**严禁改为月卡材料掉落翻倍或每日登录领灵石打卡**）。
+
+> 2026-11-19 定稿;同日负责人确认「按稿开工」,当天落码。**协议未生成、xlsx 未产出、未编译、未测试**,交 Gemini 的命令在
 > `docs/PROGRESS.md` 2026-11-19「挂机月卡开通入口」。实际改动见 §10(比定稿时估的 38 个多,多出来的是工程登记、单测与客户端 `.meta`)。
 > 起因:离线托管(断线后角色常驻、跟着队长换场景,[断线保留](player-connection-lost-hold.md) §4.1~§4.5)只认
 > 玩家域 Redis 键 `player:afk_pass:{<player_id>}`,而仓库里没有任何写入方,真实玩家走不到,也写不了自动冒烟
@@ -128,7 +130,7 @@ scene 单线程同步处理,顺序固定:
 | `remind_before_hours` | 72 | 0..720 | 客户端快到期提醒(经应答下发,客户端不读表) |
 
 取值不合法时 scene 打 ERROR,开通回 `kAfkPassUnavailable`,`AfkPassInfo.price` 回 0(客户端显示「暂不出售」);GM 与托管不受影响。
-xlsx 与 Tip 码由脚本 `tools/scripts/afk_pass_xlsx_patch.py` 生成(同 `mystery_merchant_xlsx_patch.py`:只写空格、写后逐格核对、幂等),交 Codex 执行。
+xlsx 与 Tip 码由脚本 `tools/scripts/afk_pass_xlsx_patch.py` 生成(同 `mystery_merchant_xlsx_patch.py`:只写空格、写后逐格核对、幂等),交 Gemini 执行。
 
 ### 4.5 Tip 码(新段 `//afk_pass_error base=32000 width=1000`)
 
@@ -234,7 +236,7 @@ Java 版要同批对齐(§11)。
   持有灵石、叠加上限说明和「开通 / 续费」按钮。灵石不足时提示去聚宝斋充值。价格为 0 显示「暂不出售」、按钮置灰。
 - **快到期提醒**:登录进场后查一次;剩余在 (0, `remind_before_hours`] 内弹一次提示(每次登录一次);在线期间到期时弹一次「已到期」。
 - **视觉**:没有效果图,按客户端 `AGENTS.md`「UI 原图还原验收」只做功能版,视觉验收列为未解决项,不宣称与原图一致。
-- EditMode 单测:剩余时长计算、提醒判定、重发规则。生成协议由 Codex 用默认(含 Unity)配置跑。
+- EditMode 单测:剩余时长计算、提醒判定、重发规则。生成协议由 Gemini 用默认(含 Unity)配置跑。
 
 ## 8. robot 冒烟:`afk-pass-follow-smoke`
 

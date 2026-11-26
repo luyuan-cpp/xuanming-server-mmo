@@ -474,7 +474,7 @@ message GetRankPageResponse {
 | 批 | 前置 | 内容(逐文件) | 手写文件 | 验收判据 |
 |---|---|---|---|---|
 | **R0**(本批) | — | 本设计文档 | 1 | **§9.1 每一项在 §6 对应行都有用户确认的结论,并去掉"待拍板"标记**;否则 R1p 不能开工。**✅ 已完成(2026-09-20)** |
-| **R1p 契约批** | R0 | ① `proto/contracts/kafka/match_event.proto`(新 message `PlayerRatingSnapshotEvent`,字段见 §2.4);② `proto/rank/rank.proto`(§4.2);③ `proto_gen.yaml` 的 `domain_meta` 加 `rank` 块 | 3 | Codex 跑**唯一一次** proto-gen(与 friend 的 11 个待生成桩同一次,§9.1#6);确认 `go/generated` 里有 `PlayerRatingSnapshotEvent` 与 `rankpb` 两个类型,friend 的待生成桩一起出来;路由表出现 `RankNodeService` 条目 |
+| **R1p 契约批** | R0 | ① `proto/contracts/kafka/match_event.proto`(新 message `PlayerRatingSnapshotEvent`,字段见 §2.4);② `proto/rank/rank.proto`(§4.2);③ `proto_gen.yaml` 的 `domain_meta` 加 `rank` 块 | 3 | Gemini 跑**唯一一次** proto-gen(与 friend 的 11 个待生成桩同一次,§9.1#6);确认 `go/generated` 里有 `PlayerRatingSnapshotEvent` 与 `rankpb` 两个类型,friend 的待生成桩一起出来;路由表出现 `RankNodeService` 条目 |
 | **R1 match 出口** | R1p 生成完成;**match 组队代码先编译通过一次**(`friend-handoff §4.2`) | ① `go/match/internal/logic/rating.go`(Lua 返回 5 元素 + `HSETNX rating_gen` + 续写分支 `tonumber` + `applyRatingDelta` 新签名与双类型解析 + `ratingSnapshotPublishFn` 接缝 + 发布点);② `go/match/internal/kafka/rating_snapshot.go`(构造器,不 import svc/logic);③ `go/match/internal/logic/rating_snapshot_test.go`(新,miniredis + 替身);④ `go/match/internal/kafka/rating_snapshot_test.go`(构造器 / key = player_id);⑤ `go/match/internal/metrics/metrics.go`(`match_rating_snapshot_publish_total`);⑥ `go/match/internal/config/config.go`(topic、分区、保留期、开关、Validate);⑦ `go/match/internal/config/config_test.go`(新建;该目录今天无测试);⑧ `go/match/etc/match_service.yaml`;⑨ `go/match/match_service.go`(EnsureTopics,显式保留期);⑩ `tools/scripts/k8s_deploy.ps1`(match case + `-MatchRatingSnapshotPublish` 参数);⑪ `deploy/k8s/README.md`(保留期现状表一行) | ~11 | 开关 `false` 时行为与旧版逐字一致(已有 rating 测试全绿,且接缝替身调用计数为 0);开关 `true` 时:正常局发出 N 条、各字段与 Lua 返回一致;模拟发布失败 → 返回 error 且标记仍 applying;重放同一局 → 续写路径仍发布当前快照(T10);rating_centi 精确(T4b);rating_gen 行为(T13);**发布类用例只用 miniredis + 替身函数、不连 Kafka,SKIP 数必须为 0**;`go vet` 无 import 环 |
 | **R2a-读 rank 服务骨架 + 读路径** | R1p 生成完成 | `go/rank/`:① `go.mod` ② `go.sum` ③ `rank.go`(装配 + `buildUnaryInterceptors`)④ `rank_test.go`(三个守链测试)⑤ `etc/rank.yaml` ⑥ `internal/config/config.go` ⑦ `internal/config/config_test.go` ⑧ `internal/constants/constants.go` ⑨ `internal/constants/constants_test.go`(`TestNoHandWrittenTipCodes`)⑩ `internal/svc/servicecontext.go`(RankRedis 句柄 + 回落 WARN、DataServiceRpc)⑪ `internal/session/session.go` ⑫ `internal/session/session_test.go` ⑬ `internal/lifecycle/lifecycle.go` ⑭ `lifecycle_unix.go` ⑮ `lifecycle_windows.go` ⑯ `internal/data/keys.go`(根前缀常量 + 键构造函数)⑰ `internal/data/keys_test.go`(T9)⑱ `internal/data/read.go`(只读 Lua)⑲ `internal/data/read_test.go` ⑳ `internal/logic/get_rank_page.go` ㉑ `internal/logic/name_resolver.go` ㉒ `internal/logic/get_rank_page_test.go` ㉓ `internal/metrics/metrics.go` ㉔ `internal/server/rank_server.go`(照 friend 的 `internal/server`) | ~24 | T3(读侧)、T5、T6、T7、T7b、T8、T9、T11 通过;三个守链测试;`config.Validate` 拒绝 Timeout 0 / >4000 与非空 Etcd.Key |
 | **R2a-写 消费者 + 写路径** | R2a-读 | ① `go/rank/internal/kafka/consumer.go`(消费组 `rank-rating`,EnsureTopics `RetentionMs: -1`)② `internal/kafka/consumer_test.go` ③ `internal/data/write.go`(写 Lua,§3.2)④ `internal/data/write_test.go` ⑤ `rank.go`(接消费者,追改)⑥ `internal/config/config.go`(topic / 分区 / 组,追改)⑦ `internal/metrics/metrics.go`(写侧指标,追改) | ~7(其中 3 个是追改) | T1、T2、T3、T3′、T4、T10(消费端部分)、T12 通过 |
@@ -487,7 +487,7 @@ message GetRankPageResponse {
 
 ## 8. 验证清单
 
-Claude 不跑任何构建 / 测试(`AGENTS.md §10.1`),以下由 Codex 执行。每条写清"怎么算过";⚠ 标的是**结构性不可能失败的假绿陷阱**。
+Claude 不跑任何构建 / 测试(`AGENTS.md §10.1`),以下由 Gemini 执行。每条写清"怎么算过";⚠ 标的是**结构性不可能失败的假绿陷阱**。
 
 ### 8.1 单元 / 集成(R1、R2a)
 
@@ -506,7 +506,7 @@ Claude 不跑任何构建 / 测试(`AGENTS.md §10.1`),以下由 Codex 执行。
 | T8 | 名字补全失败 | entries 照返回、name 为空、指标 +1 | ⚠ 若 mock 从不返回错误,恒绿;必须注入失败 |
 | T9 | 键前缀 | 表驱动枚举 data 包**全部**键构造函数(另有一条断言"表长 == 构造函数个数",加新构造函数不进表就红),对每个结果断言 `HasPrefix(k, "lb:")`、`!HasPrefix(k, "guild_rank")`、`!HasPrefix(k, "match:")`、含 `{rating}` hash tag。**Codex 额外做一次变异验证**:临时把根前缀改成 `guild_rank:x` 跑一次,必须变红,再改回 | ⚠ 不做变异验证,无法证明断言真的在查前缀。**不要**尝试在 go/rank 里跑 guild `RebuildRanks`:`go/guild` 是独立 module 且在 `internal/` 下不可导入,它的数据层测试无 `GUILD_TEST_MYSQL_DSN` 一律 SKIP,而它只 SCAN `guild_rank:zone:*`,提供不了前缀断言之外的信息 |
 | T10 | match 发布失败 + 续写重发 | 替身第一次返回 error → `ApplyBattleResult` 返回 error、标记仍 `applying`;替身改为成功后重试 → 每人收到快照,且:**games > 0 且等于 `HGET match:rating:{pid} games`**;**updated_at_ms 等于首次写入时的 `HGET updated_at_ms`**(不是重试时刻);rating_gen 等于 `HGET rating_gen` | ⚠ 只测"写成功就发布"时,`written=0` 路径的 games 字符串 → 0、时间戳取 now 两个 bug 都测不出;替身时钟必须让重试时刻与首次写入时刻不同 |
-| T11 | Redis 集成测试 | 实际执行且 PASS | ⚠ **SKIP 不等于 PASS**:无 Redis 时集成测试会 SKIP,Codex 报告必须列出 SKIP 数且为 0 才算过 |
+| T11 | Redis 集成测试 | 实际执行且 PASS | ⚠ **SKIP 不等于 PASS**:无 Redis 时集成测试会 SKIP,Gemini 报告必须列出 SKIP 数且为 0 才算过 |
 | T12 | 代际重置(rank 侧) | 先写 (gen=G1, games=50, 分 X);再写 (gen=G2>G1, games=1, 分 Y≠X) → 返回 gen_reset、ZSET 分数为 Y、`gen_reset` +1;再来一条 (gen=G1, games=51) → stale | ⚠ 若 G2 事件的 games 也 >50,没有代际也会写进,测不出;新代际的 games 必须**小于**旧值 |
 | T13 | rating_gen 建立(match 侧) | 首次写入后 `HGET rating_gen` 非空;第二局不变;`DEL` 该键后再写一局,新 rating_gen **大于**旧值(替身时钟推进);存量无 rating_gen 的 hash 写一局后补上 | — |
 
@@ -683,7 +683,7 @@ Go使用mail、rank实际仓储和服务的独立gRPC测试进程，由match的�
 
 **Java 版**:`game-rank` 的 `RankRewardWorker` 仍按 `created + 30 天` 发、任何未投到的结果 2 秒后重投,没有终态和次数上限,也没有最短可领时长(过期前最后一投同样会生成领不到的邮件,2026-11-06 只读核对),待做;Java 邮件有效期写死 30 天,过期联动的问题在 Java 不存在。
 
-**验证**(交 Codex):与本文末「2026-11-05 名次读写走索引」节同一次 `proto-gen-run`,然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`;真库设 `MAIL_RANK_TEST_TIDB` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`。
+**验证**(交 Gemini):与本文末「2026-11-05 名次读写走索引」节同一次 `proto-gen-run`,然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`;真库设 `MAIL_RANK_TEST_TIDB` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`。
 
 > 以下 R2b 记录保留旧 Redis/Kafka 榜的运维设计与验证历史；现役运行时为上面的 SQL 权威榜、封榜及邮件奖励链，不重新启用第二个评分写者。
 
@@ -873,7 +873,7 @@ go/match、go/rank、robot 的 build / vet / test 全过;CI 收回 go/rank)之�
 
 **Java 版**:`game-rank` 的 `RankStore` 有同样问题,已在 Java 仓 `PARITY.md` 登记待做(2026-11-05「排行榜读写按名次索引走」)。
 
-**验证**(交 Codex,仓库根):先 `proto-gen-build`(生成器有变化或没有工具时)、再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`;然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`,真库回归设 `MAIL_RANK_TEST_TIDB=127.0.0.1:<端口>` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`(新用例 `TestTiDBRankReadsMatchBruteForceOrder` 与原有 6 条都要绿)。
+**验证**(交 Gemini,仓库根):先 `proto-gen-build`(生成器有变化或没有工具时)、再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`;然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`,真库回归设 `MAIL_RANK_TEST_TIDB=127.0.0.1:<端口>` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`(新用例 `TestTiDBRankReadsMatchBruteForceOrder` 与原有 6 条都要绿)。
 
 
 ## 2026-11-11 同榜写入按来源片并行(服务器缺口清单第 17 条;已落码,未编译,需先重新生成协议)
@@ -924,7 +924,7 @@ go/match、go/rank、robot 的 build / vet / test 全过;CI 收回 go/rank)之�
 
 **Java 版**:`game-rank` 同样是榜行锁串行,已在 Java 仓 `PARITY.md` 登记待做。
 
-**验证**(交 Codex,仓库根,PowerShell 7,`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
+**验证**(交 Gemini,仓库根,PowerShell 7,`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
 
 1. 重新生成协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
    通过标准:`go/proto/rank/rank_table.pb.go` 的 `RankBoardRecord` 不再有 `CommittedCursor`、`Entries`,新增 `RankBoardShardRecord`。
@@ -972,7 +972,7 @@ go/match、go/rank、robot 的 build / vet / test 全过;CI 收回 go/rank)之�
 
 **Java 版**:`game-rank` 与 Java 侧客户端分发同样要改,已在 Java 仓 `PARITY.md` 登记待做。在 Java 版改好之前,两版回包的形状不一致。
 
-**验证**(交 Codex;仓库根,PowerShell 7,`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
+**验证**(交 Gemini;仓库根,PowerShell 7,`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
 
 1. 重新生成协议。客户端任务已授权,用**默认配置**(会写同级客户端仓):`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。
    通过标准:Go 的 `rank.pb.go`(含 robot 的 vendor 副本)、C++、客户端 `Assets/Scripts/Proto/Generated/Rank.cs` 都有 `BeyondRankLimit`、`RankLimit`。

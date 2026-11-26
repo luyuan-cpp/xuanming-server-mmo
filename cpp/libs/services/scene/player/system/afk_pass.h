@@ -47,7 +47,10 @@ public:
 	// 本实体内存里的到期时刻(事实源的那一份,加载后只由本类改);缺 PlayerUint64Comp 或实体无效返回 0。只读。
 	static uint64_t ExpiresAt(entt::entity player);
 
-	// 填当前状态:到期、服务器时间、售价与余额。规则表不可用时售价、天数、上限、提醒、余额都填 0(客户端显示暂不出售)。
+	// 只读:离线托管期间离队 / 解散时是否自动回默认主城安全区。缺 PlayerUint64Comp 或实体无效返回 false。
+	static bool AutoReturnCityOnTeamEnd(entt::entity player);
+
+	// 填当前状态:到期、服务器时间、售价与余额、托管偏好设置与待确认收获简报。规则表不可用时售价、天数、上限、提醒、余额都填 0(客户端显示暂不出售)。
 	static void FillInfo(entt::entity player, uint64_t nowUnixSec, AfkPassInfo &info);
 
 	// 开通 / 续费(设计 §4.1)。成功(含重放)返回 kSuccess,response.info 是开通之后的状态;失败返回 tip 码,
@@ -57,6 +60,23 @@ public:
 	// GM 设定剩余时长(设计 §4.3):到期 = now + remainingSeconds,0 = 清除;超过 366 天回 kInvalidParameter。
 	// 调用方负责 GM 闸(scene_gm_guard::RejectGmClientRpc);与 Buy 共用 player_mutability 写围栏。成功返回 kSuccess 并填 info。
 	static uint32_t GmSet(entt::entity player, uint32_t remainingSeconds, uint64_t nowUnixSec, AfkPassInfo &info);
+
+	// 修改离线托管偏好设置(例如离队 / 解散自动回默认主城安全区)。受 player_mutability 写围栏保护;成功返回 kSuccess 并填 info。
+	static uint32_t SetSettings(entt::entity player, bool autoReturnCityOnTeamEnd, uint64_t nowUnixSec, AfkPassInfo &info);
+
+	// 确认已阅离线托管收获简报:仅当存在待确认简报且 startedAt == 0 或与当前简报 started_at 一致时清零,幂等返回 kSuccess 并填 info。
+	static uint32_t AckHostedRecap(entt::entity player, uint64_t startedAt, uint64_t nowUnixSec, AfkPassInfo &info);
+
+	// ── 离线托管收获简报生命周期(只汇总真实结算收益,不额外发放任何产出)──
+	// 托管开始(ApplyProbeResult 首次置位 hostingStarted):若当前没有进行中的简报则开新会话;
+	// 跨节点托管落点重建保留时(started_at != 0 && ended_at == 0)沿用原会话,不丢历史累计。
+	static void OnHostingStarted(entt::entity player, uint64_t nowUnixSec);
+	// 战斗结算同帧累加(ApplySettlementToEntity):仅当实体正处于离线托管(PlayerConnectionLostComp.hostingStarted)时累加,
+	// 随同一次存盘事务落库(满足 I3 原子性)。
+	static void RecordHostedBattleSettlement(entt::entity player, bool won, uint64_t expGained, uint64_t silverGained,
+											 uint32_t itemCount, uint64_t nowUnixSec);
+	// 托管结束(玩家重连接回 ResumeConnectionLostHold 或月卡到期退出 ExpireConnectionLostHolds):盖章 ended_at 并置 pending_ack=true。
+	static void OnHostingEnded(entt::entity player, uint64_t nowUnixSec, bool requestSave);
 
 	// ── 投影(设计 §5.2)──
 	static void OnPlayerLoaded(entt::entity player, uint64_t nowUnixSec);

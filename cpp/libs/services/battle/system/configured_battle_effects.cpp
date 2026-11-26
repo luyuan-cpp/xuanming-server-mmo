@@ -1,6 +1,7 @@
 #include "system/turn_battle_engine.h"
 #include "system/combat_damage_rules.h"
 #include "system/equipment_battle_rules.h"
+#include "system/season_rules.h"
 #include "system/support_effect_rules.h"
 #include "system/pet_cultivation_rules.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -427,6 +428,18 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     if (op == BattleEffectOp::Shield && (row.hit_limit() == 0 || caster.actor_type() == BATTLE_ACTOR_TYPE_PET)) {
         value = EquipmentShield(caster, receiver, value, context, shieldArtifacts);
     }
+    if (op == BattleEffectOp::Shield && ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WOOD) {
+        value *= 110.0 / 100.0;
+    }
+    if (op == BattleEffectOp::Shield) {
+        if (const uint32_t seasonShieldPct = seasonrules::ShieldOverloadBonusPct(activeSeasonWeeklyAffixId);
+            seasonShieldPct > 0u) {
+            value *= (100.0 + seasonShieldPct) / 100.0;
+        }
+        if (const uint32_t wuxingShieldPct = WuxingHealShieldBonusPct(caster); wuxingShieldPct > 0) {
+            value *= (100.0 + wuxingShieldPct) / 100.0;
+        }
+    }
     if (op == BattleEffectOp::Shield && EscalationStacks() > 0) {
         value *= static_cast<double>(EscalationSupportPct()) / 100.0;
     }
@@ -503,9 +516,11 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
                 }
                 RemoveConfiguredBuff(receiver, ids[i], result);
             }
+            bool clearedSunder = false;
             if (op == BattleEffectOp::DispelDebuff) {
                 if (sunderUntilRound.erase(receiver.actor_id()) > 0) {
                     RecordEffectiveContribution(caster);
+                    clearedSunder = true;
                 }
             }
             if (op == BattleEffectOp::DispelBuff && caster.team_index() != receiver.team_index()) {
@@ -513,6 +528,11 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
             }
             if (limit > 0) {
                 RecordEffectiveContribution(caster);
+            }
+            if (limit > 0 || clearedSunder) {
+                RecordDispelLanded(caster.actor_id(),
+                                   static_cast<uint32_t>(limit) + (clearedSunder ? 1u : 0u));
+                OnBossWeeklyAffixDispelTriggered(caster.actor_id(), result);
             }
             if (op == BattleEffectOp::DispelDebuff && limit > 0 &&
                 caster.team_index() == receiver.team_index() &&
@@ -614,6 +634,11 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     }
     // 覆盖拒绝与免疫均不进入概率阶段，不生成回响、不消耗清心。
     if (hostile && op == BattleEffectOp::Control && row.state_kind() >= 1 && row.state_kind() <= 6) {
+        if (IsControlBannedByCustomDuel()) {
+            auto* resisted = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), receiver.actor_id());
+            resisted->set_buff_table_id(buffId);
+            return;
+        }
         if (TryConsumeControlImmunity(caster, receiver, row, result)) return;
     }
     if (hostile && row.state_kind() >= 1 && row.state_kind() <= 7 &&
@@ -681,6 +706,9 @@ uint64_t TurnBattleEngine::ResolveConfiguredHeal(BattleActorState& source, Battl
             if (after > before) contributions.emplace_back(index, after - before);
         }
     }
+    if (const uint32_t wuxingHealPct = WuxingHealShieldBonusPct(source); wuxingHealPct > 0) {
+        amount *= (100.0 + wuxingHealPct) / 100.0;
+    }
     const uint64_t healed = ApplyHeal(target, supportrules::ApplyBonus(amount, bonus) * received);
     RecordTrialMonsterHeal(source, target, healed);
     if (healed > 0) RecordEffectiveContribution(source);
@@ -746,7 +774,9 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     bool splashReduced = false;
     remaining = ApplyEncounterDamageModifiers(source, target, remaining, damageType,
         direct && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER,
-        result, context.isMultiTargetSkill, isPrimaryTarget, &splashReduced);
+        result, context.isMultiTargetSkill, isPrimaryTarget, &splashReduced,
+        context.isPreparedCast || context.origin == BattleDamageOrigin::Periodic,
+        context.origin == BattleDamageOrigin::Pursuit);
     uint64_t absorbed = 0;
     std::vector<std::pair<uint32_t, uint64_t>> defenses;
     if (direct) for (const auto& entry : target.buffs()) {
@@ -811,6 +841,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     }
     }
     remaining = EquipmentReduceDamage(source, target, remaining, context, result);
+    absorbed = AddSafe(absorbed, AbsorbTournamentEarthShield(target.actor_id(), remaining));
     const uint64_t dealt = std::min(target.attributes().health(), remaining);
     target.mutable_attributes()->set_health(target.attributes().health() - dealt);
     if (context.origin == BattleDamageOrigin::Direct) {
@@ -846,6 +877,9 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     }
     EquipmentBreakShields(source, target, shieldDamage, damageType, context, originalShields, result);
     EffectContext triggered = context; triggered.actualDamage = dealt;
+    if (dealt > 0 && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER) {
+        ApplyWuxingPostDirectHitEffects(source, target, dealt, context.critical, result);
+    }
     if (dealt > 0 && context.origin == BattleDamageOrigin::Direct && IsActorActive(target))
         TriggerConfiguredBuffs(target, source, BattleTrigger::AfterTake, damageType, triggered, result);
     if (dealt > 0 && context.origin == BattleDamageOrigin::Periodic && IsActorActive(source))
@@ -1153,7 +1187,7 @@ double TurnBattleEngine::EffectiveMitigationScore(const BattleActorState& actor,
     const uint64_t resistBonus = isMagic ? actor.combat().magic_resist() : actor.combat().physical_resist();
     const uint32_t equipResist = isMagic ? actor.equipment_effects().magic_resist_bps()
                                          : actor.equipment_effects().physical_resist_bps();
-    const uint64_t legacyResist = SaturatingAdd(actor.attributes().resistance(), resistBonus);
+    const uint64_t legacyResist = AddSafe(actor.attributes().resistance(), resistBonus);
     const double received = equipbattle::ReceivedRatio(
         actor.attributes().armor(), EffectiveDefense(actor),
         static_cast<double>(legacyResist) * 100.0 + equipResist, actor.level());
@@ -1287,6 +1321,7 @@ bool TurnBattleEngine::ExecutePreparedCastIfReady(BattleActorState& actor, TurnR
     context.rank = std::max(1u, ConfiguredRank(actor, *skillRow));
     context.origin = BattleDamageOrigin::Direct;
     context.primaryTargetId = targets.front();
+    context.isPreparedCast = true;
     const uint32_t subjectMaxTargets = actor.actor_type() == BATTLE_ACTOR_TYPE_PET
         ? (skillRow->pet_max_targets() > 0 ? skillRow->pet_max_targets() : skillRow->max_targets())
         : skillRow->max_targets();

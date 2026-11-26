@@ -4,7 +4,7 @@
 > Authoritative design: `docs/design/k8s-client-entry.md` (D87–D90 and its "运维手册" section); deploy flags: `deploy/k8s/README.md`,
 > Optional Flags, "集群外客户端入口". The Chinese versions (`k8s_gate_exposure_guidance.md` / `_zh.md`) are authoritative.
 > The four original bullets are kept verbatim at the end, each annotated. Nothing here has run on a cluster yet;
-> it is pending the kind end-to-end check (Codex / the user).
+> it is pending the kind end-to-end check (Gemini / the user).
 
 ## 1. Rule: every gate instance needs its own entry
 

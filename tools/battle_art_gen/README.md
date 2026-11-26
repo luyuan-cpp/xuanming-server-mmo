@@ -2,8 +2,8 @@
 
 把回合制战斗表现所需的一批 PNG **算出来**(不依赖生图模型),直接写进客户端
 `mmorpg-client/Assets/Resources/Battle/`。规格以
-[`docs/design/battle-art-prompts.md`](../../docs/design/battle-art-prompts.md) §3/§4 与
-[`docs/design/turn-battle-presentation.md`](../../docs/design/turn-battle-presentation.md) §5 为准。
+[`docs/planning/ui-handoff/battle-art-prompts.md`](../../docs/planning/ui-handoff/battle-art-prompts.md) §3/§4 与
+[`docs/planning/turn-battle-presentation.md`](../../docs/planning/turn-battle-presentation.md) §5 为准。
 
 风格目标:问道 / 梦幻 Q 版手游感 —— 饱和明快、厚描边、柔和发光、**真实 alpha 透明背景**。
 

@@ -57,6 +57,22 @@ struct TableStruct_proto_2fscene_2fplayer_5fseason_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fseason_2eproto;
 }  // extern "C"
+class AbandonWuxingTowerRunRequest;
+struct AbandonWuxingTowerRunRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AbandonWuxingTowerRunRequestGlobalsTypeInternal AbandonWuxingTowerRunRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AbandonWuxingTowerRunRequest_class_data_;
+#else
+extern const AbandonWuxingTowerRunRequestGlobalsTypeInternal AbandonWuxingTowerRunRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class AbandonWuxingTowerRunResponse;
+struct AbandonWuxingTowerRunResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AbandonWuxingTowerRunResponseGlobalsTypeInternal AbandonWuxingTowerRunResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AbandonWuxingTowerRunResponse_class_data_;
+#else
+extern const AbandonWuxingTowerRunResponseGlobalsTypeInternal AbandonWuxingTowerRunResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class CatchupSeasonSealRequest;
 struct CatchupSeasonSealRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -72,6 +88,22 @@ extern CatchupSeasonSealResponseGlobalsTypeInternal CatchupSeasonSealResponse_gl
 extern const ::google::protobuf::internal::ClassDataFull CatchupSeasonSealResponse_class_data_;
 #else
 extern const CatchupSeasonSealResponseGlobalsTypeInternal CatchupSeasonSealResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class DeleteBattleBuildBookmarkRequest;
+struct DeleteBattleBuildBookmarkRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DeleteBattleBuildBookmarkRequestGlobalsTypeInternal DeleteBattleBuildBookmarkRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteBattleBuildBookmarkRequest_class_data_;
+#else
+extern const DeleteBattleBuildBookmarkRequestGlobalsTypeInternal DeleteBattleBuildBookmarkRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class DeleteBattleBuildBookmarkResponse;
+struct DeleteBattleBuildBookmarkResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DeleteBattleBuildBookmarkResponseGlobalsTypeInternal DeleteBattleBuildBookmarkResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteBattleBuildBookmarkResponse_class_data_;
+#else
+extern const DeleteBattleBuildBookmarkResponseGlobalsTypeInternal DeleteBattleBuildBookmarkResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class EquipSeasonSealRequest;
 struct EquipSeasonSealRequestGlobalsTypeInternal;
@@ -89,6 +121,22 @@ extern const ::google::protobuf::internal::ClassDataFull EquipSeasonSealResponse
 #else
 extern const EquipSeasonSealResponseGlobalsTypeInternal EquipSeasonSealResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class EquipWuxingFormationRequest;
+struct EquipWuxingFormationRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EquipWuxingFormationRequestGlobalsTypeInternal EquipWuxingFormationRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EquipWuxingFormationRequest_class_data_;
+#else
+extern const EquipWuxingFormationRequestGlobalsTypeInternal EquipWuxingFormationRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EquipWuxingFormationResponse;
+struct EquipWuxingFormationResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EquipWuxingFormationResponseGlobalsTypeInternal EquipWuxingFormationResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EquipWuxingFormationResponse_class_data_;
+#else
+extern const EquipWuxingFormationResponseGlobalsTypeInternal EquipWuxingFormationResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetSeasonStateRequest;
 struct GetSeasonStateRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -104,6 +152,70 @@ extern GetSeasonStateResponseGlobalsTypeInternal GetSeasonStateResponse_globals_
 extern const ::google::protobuf::internal::ClassDataFull GetSeasonStateResponse_class_data_;
 #else
 extern const GetSeasonStateResponseGlobalsTypeInternal GetSeasonStateResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetWuxingTowerStateRequest;
+struct GetWuxingTowerStateRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetWuxingTowerStateRequestGlobalsTypeInternal GetWuxingTowerStateRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetWuxingTowerStateRequest_class_data_;
+#else
+extern const GetWuxingTowerStateRequestGlobalsTypeInternal GetWuxingTowerStateRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetWuxingTowerStateResponse;
+struct GetWuxingTowerStateResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetWuxingTowerStateResponseGlobalsTypeInternal GetWuxingTowerStateResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetWuxingTowerStateResponse_class_data_;
+#else
+extern const GetWuxingTowerStateResponseGlobalsTypeInternal GetWuxingTowerStateResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PickWuxingTowerSigilRequest;
+struct PickWuxingTowerSigilRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PickWuxingTowerSigilRequestGlobalsTypeInternal PickWuxingTowerSigilRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PickWuxingTowerSigilRequest_class_data_;
+#else
+extern const PickWuxingTowerSigilRequestGlobalsTypeInternal PickWuxingTowerSigilRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PickWuxingTowerSigilResponse;
+struct PickWuxingTowerSigilResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PickWuxingTowerSigilResponseGlobalsTypeInternal PickWuxingTowerSigilResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PickWuxingTowerSigilResponse_class_data_;
+#else
+extern const PickWuxingTowerSigilResponseGlobalsTypeInternal PickWuxingTowerSigilResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SaveBattleBuildBookmarkRequest;
+struct SaveBattleBuildBookmarkRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SaveBattleBuildBookmarkRequestGlobalsTypeInternal SaveBattleBuildBookmarkRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SaveBattleBuildBookmarkRequest_class_data_;
+#else
+extern const SaveBattleBuildBookmarkRequestGlobalsTypeInternal SaveBattleBuildBookmarkRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SaveBattleBuildBookmarkResponse;
+struct SaveBattleBuildBookmarkResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SaveBattleBuildBookmarkResponseGlobalsTypeInternal SaveBattleBuildBookmarkResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SaveBattleBuildBookmarkResponse_class_data_;
+#else
+extern const SaveBattleBuildBookmarkResponseGlobalsTypeInternal SaveBattleBuildBookmarkResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SavedBattleBuildBookmarkView;
+struct SavedBattleBuildBookmarkViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SavedBattleBuildBookmarkViewGlobalsTypeInternal SavedBattleBuildBookmarkView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SavedBattleBuildBookmarkView_class_data_;
+#else
+extern const SavedBattleBuildBookmarkViewGlobalsTypeInternal SavedBattleBuildBookmarkView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SeasonHonorView;
+struct SeasonHonorViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SeasonHonorViewGlobalsTypeInternal SeasonHonorView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SeasonHonorView_class_data_;
+#else
+extern const SeasonHonorViewGlobalsTypeInternal SeasonHonorView_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SeasonSealOption;
 struct SeasonSealOptionGlobalsTypeInternal;
@@ -129,6 +241,46 @@ extern const ::google::protobuf::internal::ClassDataFull SeasonStateSnapshot_cla
 #else
 extern const SeasonStateSnapshotGlobalsTypeInternal SeasonStateSnapshot_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SeasonWeeklyAffixView;
+struct SeasonWeeklyAffixViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SeasonWeeklyAffixViewGlobalsTypeInternal SeasonWeeklyAffixView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SeasonWeeklyAffixView_class_data_;
+#else
+extern const SeasonWeeklyAffixViewGlobalsTypeInternal SeasonWeeklyAffixView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartWuxingTowerRunRequest;
+struct StartWuxingTowerRunRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartWuxingTowerRunRequestGlobalsTypeInternal StartWuxingTowerRunRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartWuxingTowerRunRequest_class_data_;
+#else
+extern const StartWuxingTowerRunRequestGlobalsTypeInternal StartWuxingTowerRunRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartWuxingTowerRunResponse;
+struct StartWuxingTowerRunResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartWuxingTowerRunResponseGlobalsTypeInternal StartWuxingTowerRunResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartWuxingTowerRunResponse_class_data_;
+#else
+extern const StartWuxingTowerRunResponseGlobalsTypeInternal StartWuxingTowerRunResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class WuxingTowerLeaderboardEntry;
+struct WuxingTowerLeaderboardEntryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WuxingTowerLeaderboardEntryGlobalsTypeInternal WuxingTowerLeaderboardEntry_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WuxingTowerLeaderboardEntry_class_data_;
+#else
+extern const WuxingTowerLeaderboardEntryGlobalsTypeInternal WuxingTowerLeaderboardEntry_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class WuxingTowerStateSnapshot;
+struct WuxingTowerStateSnapshotGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WuxingTowerStateSnapshotGlobalsTypeInternal WuxingTowerStateSnapshot_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WuxingTowerStateSnapshot_class_data_;
+#else
+extern const WuxingTowerStateSnapshotGlobalsTypeInternal WuxingTowerStateSnapshot_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -138,6 +290,720 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerLeaderboardEntry final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:WuxingTowerLeaderboardEntry) */ {
+ public:
+  inline WuxingTowerLeaderboardEntry() : WuxingTowerLeaderboardEntry(nullptr) {}
+  ~WuxingTowerLeaderboardEntry() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WuxingTowerLeaderboardEntry));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WuxingTowerLeaderboardEntry(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WuxingTowerLeaderboardEntry(const WuxingTowerLeaderboardEntry& from) : WuxingTowerLeaderboardEntry(nullptr, from) {}
+  inline WuxingTowerLeaderboardEntry(WuxingTowerLeaderboardEntry&& from) noexcept : WuxingTowerLeaderboardEntry(nullptr, ::std::move(from)) {}
+  inline WuxingTowerLeaderboardEntry& operator=(const WuxingTowerLeaderboardEntry& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WuxingTowerLeaderboardEntry& operator=(WuxingTowerLeaderboardEntry&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WuxingTowerLeaderboardEntry& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WuxingTowerLeaderboardEntry>(&WuxingTowerLeaderboardEntry_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(WuxingTowerLeaderboardEntry& a, WuxingTowerLeaderboardEntry& b) { a.Swap(&b); }
+  inline void Swap(WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WuxingTowerLeaderboardEntry>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WuxingTowerLeaderboardEntry& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WuxingTowerLeaderboardEntry& from) { WuxingTowerLeaderboardEntry::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "WuxingTowerLeaderboardEntry"; }
+
+  explicit WuxingTowerLeaderboardEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WuxingTowerLeaderboardEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WuxingTowerLeaderboardEntry& from);
+  WuxingTowerLeaderboardEntry(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WuxingTowerLeaderboardEntry&& from) noexcept
+      : WuxingTowerLeaderboardEntry(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSigilIdsFieldNumber = 7,
+    kPlayerNameFieldNumber = 3,
+    kPlayerIdFieldNumber = 2,
+    kRankFieldNumber = 1,
+    kBestFloorFieldNumber = 4,
+    kBestRoundsFieldNumber = 5,
+    kFormationIdFieldNumber = 6,
+  };
+  // repeated uint32 sigil_ids = 7;
+  [[nodiscard]] int sigil_ids_size()
+      const;
+  private:
+  int _internal_sigil_ids_size() const;
+
+  public:
+  void clear_sigil_ids() ;
+  [[nodiscard]] ::uint32_t sigil_ids(int index) const;
+  void set_sigil_ids(int index, ::uint32_t value);
+  void add_sigil_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& sigil_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_sigil_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_sigil_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_sigil_ids();
+
+  public:
+  // string player_name = 3;
+  void clear_player_name() ;
+  [[nodiscard]] const ::std::string& player_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_player_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_player_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_player_name();
+  void set_allocated_player_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_player_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_player_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_player_name();
+
+  public:
+  // uint64 player_id = 2;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 rank = 1;
+  void clear_rank() ;
+  [[nodiscard]] ::uint32_t rank() const;
+  void set_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rank() const;
+  void _internal_set_rank(::uint32_t value);
+
+  public:
+  // uint32 best_floor = 4;
+  void clear_best_floor() ;
+  [[nodiscard]] ::uint32_t best_floor() const;
+  void set_best_floor(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_floor() const;
+  void _internal_set_best_floor(::uint32_t value);
+
+  public:
+  // uint32 best_rounds = 5;
+  void clear_best_rounds() ;
+  [[nodiscard]] ::uint32_t best_rounds() const;
+  void set_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_rounds() const;
+  void _internal_set_best_rounds(::uint32_t value);
+
+  public:
+  // uint32 formation_id = 6;
+  void clear_formation_id() ;
+  [[nodiscard]] ::uint32_t formation_id() const;
+  void set_formation_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_formation_id() const;
+  void _internal_set_formation_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:WuxingTowerLeaderboardEntry)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 47,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WuxingTowerLeaderboardEntry& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> sigil_ids_;
+    ::google::protobuf::internal::CachedSize _sigil_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr player_name_;
+    ::uint64_t player_id_;
+    ::uint32_t rank_;
+    ::uint32_t best_floor_;
+    ::uint32_t best_rounds_;
+    ::uint32_t formation_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:StartWuxingTowerRunRequest) */ {
+ public:
+  inline StartWuxingTowerRunRequest() : StartWuxingTowerRunRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartWuxingTowerRunRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartWuxingTowerRunRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartWuxingTowerRunRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartWuxingTowerRunRequest(const StartWuxingTowerRunRequest& from) : StartWuxingTowerRunRequest(nullptr, from) {}
+  inline StartWuxingTowerRunRequest(StartWuxingTowerRunRequest&& from) noexcept : StartWuxingTowerRunRequest(nullptr, ::std::move(from)) {}
+  inline StartWuxingTowerRunRequest& operator=(const StartWuxingTowerRunRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartWuxingTowerRunRequest& operator=(StartWuxingTowerRunRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartWuxingTowerRunRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartWuxingTowerRunRequest>(&StartWuxingTowerRunRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(StartWuxingTowerRunRequest& a, StartWuxingTowerRunRequest& b) { a.Swap(&b); }
+  inline void Swap(StartWuxingTowerRunRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartWuxingTowerRunRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartWuxingTowerRunRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<StartWuxingTowerRunRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const StartWuxingTowerRunRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const StartWuxingTowerRunRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "StartWuxingTowerRunRequest"; }
+
+  explicit StartWuxingTowerRunRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartWuxingTowerRunRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartWuxingTowerRunRequest& from);
+  StartWuxingTowerRunRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartWuxingTowerRunRequest&& from) noexcept
+      : StartWuxingTowerRunRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:StartWuxingTowerRunRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonWeeklyAffixView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SeasonWeeklyAffixView) */ {
+ public:
+  inline SeasonWeeklyAffixView() : SeasonWeeklyAffixView(nullptr) {}
+  ~SeasonWeeklyAffixView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SeasonWeeklyAffixView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SeasonWeeklyAffixView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SeasonWeeklyAffixView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SeasonWeeklyAffixView(const SeasonWeeklyAffixView& from) : SeasonWeeklyAffixView(nullptr, from) {}
+  inline SeasonWeeklyAffixView(SeasonWeeklyAffixView&& from) noexcept : SeasonWeeklyAffixView(nullptr, ::std::move(from)) {}
+  inline SeasonWeeklyAffixView& operator=(const SeasonWeeklyAffixView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SeasonWeeklyAffixView& operator=(SeasonWeeklyAffixView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SeasonWeeklyAffixView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SeasonWeeklyAffixView>(&SeasonWeeklyAffixView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(SeasonWeeklyAffixView& a, SeasonWeeklyAffixView& b) { a.Swap(&b); }
+  inline void Swap(SeasonWeeklyAffixView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SeasonWeeklyAffixView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SeasonWeeklyAffixView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SeasonWeeklyAffixView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SeasonWeeklyAffixView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SeasonWeeklyAffixView& from) { SeasonWeeklyAffixView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SeasonWeeklyAffixView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SeasonWeeklyAffixView"; }
+
+  explicit SeasonWeeklyAffixView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SeasonWeeklyAffixView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SeasonWeeklyAffixView& from);
+  SeasonWeeklyAffixView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SeasonWeeklyAffixView&& from) noexcept
+      : SeasonWeeklyAffixView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRecommendedSealIdsFieldNumber = 6,
+    kNameFieldNumber = 3,
+    kDescriptionFieldNumber = 4,
+    kStrategyTipFieldNumber = 5,
+    kWeekIndexFieldNumber = 1,
+    kAffixIdFieldNumber = 2,
+  };
+  // repeated uint32 recommended_seal_ids = 6;
+  [[nodiscard]] int recommended_seal_ids_size()
+      const;
+  private:
+  int _internal_recommended_seal_ids_size() const;
+
+  public:
+  void clear_recommended_seal_ids() ;
+  [[nodiscard]] ::uint32_t recommended_seal_ids(int index) const;
+  void set_recommended_seal_ids(int index, ::uint32_t value);
+  void add_recommended_seal_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& recommended_seal_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_recommended_seal_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_recommended_seal_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_recommended_seal_ids();
+
+  public:
+  // string name = 3;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string description = 4;
+  void clear_description() ;
+  [[nodiscard]] const ::std::string& description() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_description(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_description();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_description();
+  void set_allocated_description(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_description() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_description(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_description();
+
+  public:
+  // string strategy_tip = 5;
+  void clear_strategy_tip() ;
+  [[nodiscard]] const ::std::string& strategy_tip() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_strategy_tip(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_strategy_tip();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_strategy_tip();
+  void set_allocated_strategy_tip(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_strategy_tip() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_strategy_tip(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_strategy_tip();
+
+  public:
+  // uint32 week_index = 1;
+  void clear_week_index() ;
+  [[nodiscard]] ::uint32_t week_index() const;
+  void set_week_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_week_index() const;
+  void _internal_set_week_index(::uint32_t value);
+
+  public:
+  // uint32 affix_id = 2;
+  void clear_affix_id() ;
+  [[nodiscard]] ::uint32_t affix_id() const;
+  void set_affix_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_affix_id() const;
+  void _internal_set_affix_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SeasonWeeklyAffixView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 57,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SeasonWeeklyAffixView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> recommended_seal_ids_;
+    ::google::protobuf::internal::CachedSize _recommended_seal_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr description_;
+    ::google::protobuf::internal::ArenaStringPtr strategy_tip_;
+    ::uint32_t week_index_;
+    ::uint32_t affix_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSkillSummary final : public ::google::protobuf::Message
@@ -889,6 +1755,1039 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonHonorView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SeasonHonorView) */ {
+ public:
+  inline SeasonHonorView() : SeasonHonorView(nullptr) {}
+  ~SeasonHonorView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SeasonHonorView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SeasonHonorView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SeasonHonorView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SeasonHonorView(const SeasonHonorView& from) : SeasonHonorView(nullptr, from) {}
+  inline SeasonHonorView(SeasonHonorView&& from) noexcept : SeasonHonorView(nullptr, ::std::move(from)) {}
+  inline SeasonHonorView& operator=(const SeasonHonorView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SeasonHonorView& operator=(SeasonHonorView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SeasonHonorView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SeasonHonorView>(&SeasonHonorView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(SeasonHonorView& a, SeasonHonorView& b) { a.Swap(&b); }
+  inline void Swap(SeasonHonorView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SeasonHonorView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SeasonHonorView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SeasonHonorView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SeasonHonorView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SeasonHonorView& from) { SeasonHonorView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SeasonHonorView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SeasonHonorView"; }
+
+  explicit SeasonHonorView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SeasonHonorView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SeasonHonorView& from);
+  SeasonHonorView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SeasonHonorView&& from) noexcept
+      : SeasonHonorView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeasonNameFieldNumber = 2,
+    kHonorTitleNameFieldNumber = 3,
+    kHonorBadgeIconKeyFieldNumber = 4,
+    kSeasonIdFieldNumber = 1,
+    kProgressPointsFieldNumber = 5,
+    kMaxPointsFieldNumber = 6,
+    kUnlockedFieldNumber = 7,
+    kIsCurrentSeasonFieldNumber = 8,
+  };
+  // string season_name = 2;
+  void clear_season_name() ;
+  [[nodiscard]] const ::std::string& season_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_season_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_season_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_season_name();
+  void set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_season_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_season_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_season_name();
+
+  public:
+  // string honor_title_name = 3;
+  void clear_honor_title_name() ;
+  [[nodiscard]] const ::std::string& honor_title_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_honor_title_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_honor_title_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_honor_title_name();
+  void set_allocated_honor_title_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_honor_title_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_honor_title_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_honor_title_name();
+
+  public:
+  // string honor_badge_icon_key = 4;
+  void clear_honor_badge_icon_key() ;
+  [[nodiscard]] const ::std::string& honor_badge_icon_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_honor_badge_icon_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_honor_badge_icon_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_honor_badge_icon_key();
+  void set_allocated_honor_badge_icon_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_honor_badge_icon_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_honor_badge_icon_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_honor_badge_icon_key();
+
+  public:
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 progress_points = 5;
+  void clear_progress_points() ;
+  [[nodiscard]] ::uint32_t progress_points() const;
+  void set_progress_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_progress_points() const;
+  void _internal_set_progress_points(::uint32_t value);
+
+  public:
+  // uint32 max_points = 6;
+  void clear_max_points() ;
+  [[nodiscard]] ::uint32_t max_points() const;
+  void set_max_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_points() const;
+  void _internal_set_max_points(::uint32_t value);
+
+  public:
+  // bool unlocked = 7;
+  void clear_unlocked() ;
+  [[nodiscard]] bool unlocked() const;
+  void set_unlocked(bool value);
+
+  private:
+  bool _internal_unlocked() const;
+  void _internal_set_unlocked(bool value);
+
+  public:
+  // bool is_current_season = 8;
+  void clear_is_current_season() ;
+  [[nodiscard]] bool is_current_season() const;
+  void set_is_current_season(bool value);
+
+  private:
+  bool _internal_is_current_season() const;
+  void _internal_set_is_current_season(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SeasonHonorView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 79,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SeasonHonorView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr season_name_;
+    ::google::protobuf::internal::ArenaStringPtr honor_title_name_;
+    ::google::protobuf::internal::ArenaStringPtr honor_badge_icon_key_;
+    ::uint32_t season_id_;
+    ::uint32_t progress_points_;
+    ::uint32_t max_points_;
+    bool unlocked_;
+    bool is_current_season_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmarkView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SavedBattleBuildBookmarkView) */ {
+ public:
+  inline SavedBattleBuildBookmarkView() : SavedBattleBuildBookmarkView(nullptr) {}
+  ~SavedBattleBuildBookmarkView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SavedBattleBuildBookmarkView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SavedBattleBuildBookmarkView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SavedBattleBuildBookmarkView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SavedBattleBuildBookmarkView(const SavedBattleBuildBookmarkView& from) : SavedBattleBuildBookmarkView(nullptr, from) {}
+  inline SavedBattleBuildBookmarkView(SavedBattleBuildBookmarkView&& from) noexcept : SavedBattleBuildBookmarkView(nullptr, ::std::move(from)) {}
+  inline SavedBattleBuildBookmarkView& operator=(const SavedBattleBuildBookmarkView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SavedBattleBuildBookmarkView& operator=(SavedBattleBuildBookmarkView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SavedBattleBuildBookmarkView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SavedBattleBuildBookmarkView>(&SavedBattleBuildBookmarkView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(SavedBattleBuildBookmarkView& a, SavedBattleBuildBookmarkView& b) { a.Swap(&b); }
+  inline void Swap(SavedBattleBuildBookmarkView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SavedBattleBuildBookmarkView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SavedBattleBuildBookmarkView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SavedBattleBuildBookmarkView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SavedBattleBuildBookmarkView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SavedBattleBuildBookmarkView& from) { SavedBattleBuildBookmarkView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SavedBattleBuildBookmarkView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SavedBattleBuildBookmarkView"; }
+
+  explicit SavedBattleBuildBookmarkView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SavedBattleBuildBookmarkView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SavedBattleBuildBookmarkView& from);
+  SavedBattleBuildBookmarkView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SavedBattleBuildBookmarkView&& from) noexcept
+      : SavedBattleBuildBookmarkView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSkillTableIdsFieldNumber = 11,
+    kWuxingSigilIdsFieldNumber = 12,
+    kTitleFieldNumber = 2,
+    kSourcePlayerNameFieldNumber = 5,
+    kActivePetNameFieldNumber = 10,
+    kBookmarkIdFieldNumber = 1,
+    kSourceBattleIdFieldNumber = 3,
+    kSourcePlayerIdFieldNumber = 4,
+    kClassIdFieldNumber = 6,
+    kFormationIdFieldNumber = 7,
+    kSeasonSealIdFieldNumber = 8,
+    kActivePetTableIdFieldNumber = 9,
+    kSavedAtMsFieldNumber = 13,
+  };
+  // repeated uint32 skill_table_ids = 11;
+  [[nodiscard]] int skill_table_ids_size()
+      const;
+  private:
+  int _internal_skill_table_ids_size() const;
+
+  public:
+  void clear_skill_table_ids() ;
+  [[nodiscard]] ::uint32_t skill_table_ids(int index) const;
+  void set_skill_table_ids(int index, ::uint32_t value);
+  void add_skill_table_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& skill_table_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_skill_table_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
+
+  public:
+  // repeated uint32 wuxing_sigil_ids = 12;
+  [[nodiscard]] int wuxing_sigil_ids_size()
+      const;
+  private:
+  int _internal_wuxing_sigil_ids_size() const;
+
+  public:
+  void clear_wuxing_sigil_ids() ;
+  [[nodiscard]] ::uint32_t wuxing_sigil_ids(int index) const;
+  void set_wuxing_sigil_ids(int index, ::uint32_t value);
+  void add_wuxing_sigil_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& wuxing_sigil_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_wuxing_sigil_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_wuxing_sigil_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_wuxing_sigil_ids();
+
+  public:
+  // string title = 2;
+  void clear_title() ;
+  [[nodiscard]] const ::std::string& title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_title();
+  void set_allocated_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_title();
+
+  public:
+  // string source_player_name = 5;
+  void clear_source_player_name() ;
+  [[nodiscard]] const ::std::string& source_player_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_player_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_player_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_player_name();
+  void set_allocated_source_player_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_player_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_player_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_player_name();
+
+  public:
+  // string active_pet_name = 10;
+  void clear_active_pet_name() ;
+  [[nodiscard]] const ::std::string& active_pet_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_active_pet_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_active_pet_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_active_pet_name();
+  void set_allocated_active_pet_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_active_pet_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_active_pet_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_active_pet_name();
+
+  public:
+  // uint64 bookmark_id = 1;
+  void clear_bookmark_id() ;
+  [[nodiscard]] ::uint64_t bookmark_id() const;
+  void set_bookmark_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_bookmark_id() const;
+  void _internal_set_bookmark_id(::uint64_t value);
+
+  public:
+  // uint64 source_battle_id = 3;
+  void clear_source_battle_id() ;
+  [[nodiscard]] ::uint64_t source_battle_id() const;
+  void set_source_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_battle_id() const;
+  void _internal_set_source_battle_id(::uint64_t value);
+
+  public:
+  // uint64 source_player_id = 4;
+  void clear_source_player_id() ;
+  [[nodiscard]] ::uint64_t source_player_id() const;
+  void set_source_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_player_id() const;
+  void _internal_set_source_player_id(::uint64_t value);
+
+  public:
+  // uint32 class_id = 6;
+  void clear_class_id() ;
+  [[nodiscard]] ::uint32_t class_id() const;
+  void set_class_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_class_id() const;
+  void _internal_set_class_id(::uint32_t value);
+
+  public:
+  // uint32 formation_id = 7;
+  void clear_formation_id() ;
+  [[nodiscard]] ::uint32_t formation_id() const;
+  void set_formation_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_formation_id() const;
+  void _internal_set_formation_id(::uint32_t value);
+
+  public:
+  // uint32 season_seal_id = 8;
+  void clear_season_seal_id() ;
+  [[nodiscard]] ::uint32_t season_seal_id() const;
+  void set_season_seal_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_id() const;
+  void _internal_set_season_seal_id(::uint32_t value);
+
+  public:
+  // uint32 active_pet_table_id = 9;
+  void clear_active_pet_table_id() ;
+  [[nodiscard]] ::uint32_t active_pet_table_id() const;
+  void set_active_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_pet_table_id() const;
+  void _internal_set_active_pet_table_id(::uint32_t value);
+
+  public:
+  // uint64 saved_at_ms = 13;
+  void clear_saved_at_ms() ;
+  [[nodiscard]] ::uint64_t saved_at_ms() const;
+  void set_saved_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_saved_at_ms() const;
+  void _internal_set_saved_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SavedBattleBuildBookmarkView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 13,
+                          0, 83,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SavedBattleBuildBookmarkView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
+    ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> wuxing_sigil_ids_;
+    ::google::protobuf::internal::CachedSize _wuxing_sigil_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr title_;
+    ::google::protobuf::internal::ArenaStringPtr source_player_name_;
+    ::google::protobuf::internal::ArenaStringPtr active_pet_name_;
+    ::uint64_t bookmark_id_;
+    ::uint64_t source_battle_id_;
+    ::uint64_t source_player_id_;
+    ::uint32_t class_id_;
+    ::uint32_t formation_id_;
+    ::uint32_t season_seal_id_;
+    ::uint32_t active_pet_table_id_;
+    ::uint64_t saved_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PickWuxingTowerSigilRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PickWuxingTowerSigilRequest) */ {
+ public:
+  inline PickWuxingTowerSigilRequest() : PickWuxingTowerSigilRequest(nullptr) {}
+  ~PickWuxingTowerSigilRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PickWuxingTowerSigilRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PickWuxingTowerSigilRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PickWuxingTowerSigilRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PickWuxingTowerSigilRequest(const PickWuxingTowerSigilRequest& from) : PickWuxingTowerSigilRequest(nullptr, from) {}
+  inline PickWuxingTowerSigilRequest(PickWuxingTowerSigilRequest&& from) noexcept : PickWuxingTowerSigilRequest(nullptr, ::std::move(from)) {}
+  inline PickWuxingTowerSigilRequest& operator=(const PickWuxingTowerSigilRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PickWuxingTowerSigilRequest& operator=(PickWuxingTowerSigilRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PickWuxingTowerSigilRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PickWuxingTowerSigilRequest>(&PickWuxingTowerSigilRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(PickWuxingTowerSigilRequest& a, PickWuxingTowerSigilRequest& b) { a.Swap(&b); }
+  inline void Swap(PickWuxingTowerSigilRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PickWuxingTowerSigilRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PickWuxingTowerSigilRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PickWuxingTowerSigilRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PickWuxingTowerSigilRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PickWuxingTowerSigilRequest& from) { PickWuxingTowerSigilRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PickWuxingTowerSigilRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PickWuxingTowerSigilRequest"; }
+
+  explicit PickWuxingTowerSigilRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PickWuxingTowerSigilRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PickWuxingTowerSigilRequest& from);
+  PickWuxingTowerSigilRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PickWuxingTowerSigilRequest&& from) noexcept
+      : PickWuxingTowerSigilRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kExpectedRunIdFieldNumber = 1,
+    kSigilIdFieldNumber = 2,
+  };
+  // uint64 expected_run_id = 1;
+  void clear_expected_run_id() ;
+  [[nodiscard]] ::uint64_t expected_run_id() const;
+  void set_expected_run_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_run_id() const;
+  void _internal_set_expected_run_id(::uint64_t value);
+
+  public:
+  // uint32 sigil_id = 2;
+  void clear_sigil_id() ;
+  [[nodiscard]] ::uint32_t sigil_id() const;
+  void set_sigil_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_sigil_id() const;
+  void _internal_set_sigil_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:PickWuxingTowerSigilRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PickWuxingTowerSigilRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t expected_run_id_;
+    ::uint32_t sigil_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetWuxingTowerStateRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:GetWuxingTowerStateRequest) */ {
+ public:
+  inline GetWuxingTowerStateRequest() : GetWuxingTowerStateRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetWuxingTowerStateRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetWuxingTowerStateRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetWuxingTowerStateRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetWuxingTowerStateRequest(const GetWuxingTowerStateRequest& from) : GetWuxingTowerStateRequest(nullptr, from) {}
+  inline GetWuxingTowerStateRequest(GetWuxingTowerStateRequest&& from) noexcept : GetWuxingTowerStateRequest(nullptr, ::std::move(from)) {}
+  inline GetWuxingTowerStateRequest& operator=(const GetWuxingTowerStateRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetWuxingTowerStateRequest& operator=(GetWuxingTowerStateRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetWuxingTowerStateRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetWuxingTowerStateRequest>(&GetWuxingTowerStateRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(GetWuxingTowerStateRequest& a, GetWuxingTowerStateRequest& b) { a.Swap(&b); }
+  inline void Swap(GetWuxingTowerStateRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetWuxingTowerStateRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetWuxingTowerStateRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetWuxingTowerStateRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetWuxingTowerStateRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetWuxingTowerStateRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetWuxingTowerStateRequest"; }
+
+  explicit GetWuxingTowerStateRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetWuxingTowerStateRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetWuxingTowerStateRequest& from);
+  GetWuxingTowerStateRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetWuxingTowerStateRequest&& from) noexcept
+      : GetWuxingTowerStateRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:GetWuxingTowerStateRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:GetSeasonStateRequest) */ {
  public:
@@ -944,7 +2843,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateRequest final : publi
   [[nodiscard]] static const GetSeasonStateRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSeasonStateRequest>(&GetSeasonStateRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(GetSeasonStateRequest& a, GetSeasonStateRequest& b) { a.Swap(&b); }
   inline void Swap(GetSeasonStateRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1027,6 +2926,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateRequest final : publi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipWuxingFormationRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:EquipWuxingFormationRequest) */ {
+ public:
+  inline EquipWuxingFormationRequest() : EquipWuxingFormationRequest(nullptr) {}
+  ~EquipWuxingFormationRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EquipWuxingFormationRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EquipWuxingFormationRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EquipWuxingFormationRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EquipWuxingFormationRequest(const EquipWuxingFormationRequest& from) : EquipWuxingFormationRequest(nullptr, from) {}
+  inline EquipWuxingFormationRequest(EquipWuxingFormationRequest&& from) noexcept : EquipWuxingFormationRequest(nullptr, ::std::move(from)) {}
+  inline EquipWuxingFormationRequest& operator=(const EquipWuxingFormationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EquipWuxingFormationRequest& operator=(EquipWuxingFormationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EquipWuxingFormationRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipWuxingFormationRequest>(&EquipWuxingFormationRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(EquipWuxingFormationRequest& a, EquipWuxingFormationRequest& b) { a.Swap(&b); }
+  inline void Swap(EquipWuxingFormationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EquipWuxingFormationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EquipWuxingFormationRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EquipWuxingFormationRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EquipWuxingFormationRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EquipWuxingFormationRequest& from) { EquipWuxingFormationRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EquipWuxingFormationRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "EquipWuxingFormationRequest"; }
+
+  explicit EquipWuxingFormationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EquipWuxingFormationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipWuxingFormationRequest& from);
+  EquipWuxingFormationRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EquipWuxingFormationRequest&& from) noexcept
+      : EquipWuxingFormationRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kFormationIdFieldNumber = 1,
+  };
+  // uint32 formation_id = 1;
+  void clear_formation_id() ;
+  [[nodiscard]] ::uint32_t formation_id() const;
+  void set_formation_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_formation_id() const;
+  void _internal_set_formation_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:EquipWuxingFormationRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EquipWuxingFormationRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t formation_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:EquipSeasonSealRequest) */ {
  public:
@@ -1083,7 +3183,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealRequest final : publ
   [[nodiscard]] static const EquipSeasonSealRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipSeasonSealRequest>(&EquipSeasonSealRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(EquipSeasonSealRequest& a, EquipSeasonSealRequest& b) { a.Swap(&b); }
   inline void Swap(EquipSeasonSealRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1240,6 +3340,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealRequest final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleBuildBookmarkRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:DeleteBattleBuildBookmarkRequest) */ {
+ public:
+  inline DeleteBattleBuildBookmarkRequest() : DeleteBattleBuildBookmarkRequest(nullptr) {}
+  ~DeleteBattleBuildBookmarkRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteBattleBuildBookmarkRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DeleteBattleBuildBookmarkRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DeleteBattleBuildBookmarkRequest(const DeleteBattleBuildBookmarkRequest& from) : DeleteBattleBuildBookmarkRequest(nullptr, from) {}
+  inline DeleteBattleBuildBookmarkRequest(DeleteBattleBuildBookmarkRequest&& from) noexcept : DeleteBattleBuildBookmarkRequest(nullptr, ::std::move(from)) {}
+  inline DeleteBattleBuildBookmarkRequest& operator=(const DeleteBattleBuildBookmarkRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteBattleBuildBookmarkRequest& operator=(DeleteBattleBuildBookmarkRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DeleteBattleBuildBookmarkRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBattleBuildBookmarkRequest>(&DeleteBattleBuildBookmarkRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(DeleteBattleBuildBookmarkRequest& a, DeleteBattleBuildBookmarkRequest& b) { a.Swap(&b); }
+  inline void Swap(DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteBattleBuildBookmarkRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteBattleBuildBookmarkRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteBattleBuildBookmarkRequest& from) { DeleteBattleBuildBookmarkRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "DeleteBattleBuildBookmarkRequest"; }
+
+  explicit DeleteBattleBuildBookmarkRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteBattleBuildBookmarkRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteBattleBuildBookmarkRequest& from);
+  DeleteBattleBuildBookmarkRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteBattleBuildBookmarkRequest&& from) noexcept
+      : DeleteBattleBuildBookmarkRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBookmarkIdFieldNumber = 1,
+  };
+  // uint64 bookmark_id = 1;
+  void clear_bookmark_id() ;
+  [[nodiscard]] ::uint64_t bookmark_id() const;
+  void set_bookmark_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_bookmark_id() const;
+  void _internal_set_bookmark_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:DeleteBattleBuildBookmarkRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteBattleBuildBookmarkRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t bookmark_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:CatchupSeasonSealRequest) */ {
  public:
@@ -1296,7 +3597,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealRequest final : pu
   [[nodiscard]] static const CatchupSeasonSealRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CatchupSeasonSealRequest>(&CatchupSeasonSealRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(CatchupSeasonSealRequest& a, CatchupSeasonSealRequest& b) { a.Swap(&b); }
   inline void Swap(CatchupSeasonSealRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1489,6 +3790,609 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealRequest final : pu
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AbandonWuxingTowerRunRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:AbandonWuxingTowerRunRequest) */ {
+ public:
+  inline AbandonWuxingTowerRunRequest() : AbandonWuxingTowerRunRequest(nullptr) {}
+  ~AbandonWuxingTowerRunRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AbandonWuxingTowerRunRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AbandonWuxingTowerRunRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AbandonWuxingTowerRunRequest(const AbandonWuxingTowerRunRequest& from) : AbandonWuxingTowerRunRequest(nullptr, from) {}
+  inline AbandonWuxingTowerRunRequest(AbandonWuxingTowerRunRequest&& from) noexcept : AbandonWuxingTowerRunRequest(nullptr, ::std::move(from)) {}
+  inline AbandonWuxingTowerRunRequest& operator=(const AbandonWuxingTowerRunRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AbandonWuxingTowerRunRequest& operator=(AbandonWuxingTowerRunRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AbandonWuxingTowerRunRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AbandonWuxingTowerRunRequest>(&AbandonWuxingTowerRunRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(AbandonWuxingTowerRunRequest& a, AbandonWuxingTowerRunRequest& b) { a.Swap(&b); }
+  inline void Swap(AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AbandonWuxingTowerRunRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AbandonWuxingTowerRunRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AbandonWuxingTowerRunRequest& from) { AbandonWuxingTowerRunRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AbandonWuxingTowerRunRequest"; }
+
+  explicit AbandonWuxingTowerRunRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AbandonWuxingTowerRunRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AbandonWuxingTowerRunRequest& from);
+  AbandonWuxingTowerRunRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AbandonWuxingTowerRunRequest&& from) noexcept
+      : AbandonWuxingTowerRunRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kExpectedRunIdFieldNumber = 1,
+  };
+  // uint64 expected_run_id = 1;
+  void clear_expected_run_id() ;
+  [[nodiscard]] ::uint64_t expected_run_id() const;
+  void set_expected_run_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_run_id() const;
+  void _internal_set_expected_run_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:AbandonWuxingTowerRunRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AbandonWuxingTowerRunRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t expected_run_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:WuxingTowerStateSnapshot) */ {
+ public:
+  inline WuxingTowerStateSnapshot() : WuxingTowerStateSnapshot(nullptr) {}
+  ~WuxingTowerStateSnapshot() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WuxingTowerStateSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WuxingTowerStateSnapshot));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WuxingTowerStateSnapshot(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WuxingTowerStateSnapshot(const WuxingTowerStateSnapshot& from) : WuxingTowerStateSnapshot(nullptr, from) {}
+  inline WuxingTowerStateSnapshot(WuxingTowerStateSnapshot&& from) noexcept : WuxingTowerStateSnapshot(nullptr, ::std::move(from)) {}
+  inline WuxingTowerStateSnapshot& operator=(const WuxingTowerStateSnapshot& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WuxingTowerStateSnapshot& operator=(WuxingTowerStateSnapshot&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WuxingTowerStateSnapshot& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WuxingTowerStateSnapshot>(&WuxingTowerStateSnapshot_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(WuxingTowerStateSnapshot& a, WuxingTowerStateSnapshot& b) { a.Swap(&b); }
+  inline void Swap(WuxingTowerStateSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WuxingTowerStateSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WuxingTowerStateSnapshot* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WuxingTowerStateSnapshot>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WuxingTowerStateSnapshot& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WuxingTowerStateSnapshot& from) { WuxingTowerStateSnapshot::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WuxingTowerStateSnapshot* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "WuxingTowerStateSnapshot"; }
+
+  explicit WuxingTowerStateSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WuxingTowerStateSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WuxingTowerStateSnapshot& from);
+  WuxingTowerStateSnapshot(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WuxingTowerStateSnapshot&& from) noexcept
+      : WuxingTowerStateSnapshot(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kActiveSigilIdsFieldNumber = 9,
+    kPendingOfferSigilIdsFieldNumber = 10,
+    kWeeklyLeaderboardFieldNumber = 15,
+    kWeekKeyFieldNumber = 1,
+    kRunActiveFieldNumber = 2,
+    kRunIdFieldNumber = 3,
+    kCurrentFloorFieldNumber = 4,
+    kMaxFloorsFieldNumber = 5,
+    kCurrentFloorDungeonIdFieldNumber = 6,
+    kCurrentFloorLeylineElementFieldNumber = 7,
+    kRunTotalRoundsFieldNumber = 8,
+    kWeeklyClearedMaskFieldNumber = 11,
+    kWeeklyBestFloorFieldNumber = 12,
+    kWeeklyBestRoundsFieldNumber = 13,
+    kRevisionFieldNumber = 14,
+  };
+  // repeated uint32 active_sigil_ids = 9;
+  [[nodiscard]] int active_sigil_ids_size()
+      const;
+  private:
+  int _internal_active_sigil_ids_size() const;
+
+  public:
+  void clear_active_sigil_ids() ;
+  [[nodiscard]] ::uint32_t active_sigil_ids(int index) const;
+  void set_active_sigil_ids(int index, ::uint32_t value);
+  void add_active_sigil_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& active_sigil_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_active_sigil_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_active_sigil_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_active_sigil_ids();
+
+  public:
+  // repeated uint32 pending_offer_sigil_ids = 10;
+  [[nodiscard]] int pending_offer_sigil_ids_size()
+      const;
+  private:
+  int _internal_pending_offer_sigil_ids_size() const;
+
+  public:
+  void clear_pending_offer_sigil_ids() ;
+  [[nodiscard]] ::uint32_t pending_offer_sigil_ids(int index) const;
+  void set_pending_offer_sigil_ids(int index, ::uint32_t value);
+  void add_pending_offer_sigil_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& pending_offer_sigil_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_pending_offer_sigil_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_pending_offer_sigil_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_pending_offer_sigil_ids();
+
+  public:
+  // repeated .WuxingTowerLeaderboardEntry weekly_leaderboard = 15;
+  [[nodiscard]] int weekly_leaderboard_size()
+      const;
+  private:
+  int _internal_weekly_leaderboard_size() const;
+
+  public:
+  void clear_weekly_leaderboard() ;
+  [[nodiscard]] const ::WuxingTowerLeaderboardEntry& weekly_leaderboard(int index) const;
+  [[nodiscard]] ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL mutable_weekly_leaderboard(int index);
+  ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL add_weekly_leaderboard();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>&
+  weekly_leaderboard() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL
+  mutable_weekly_leaderboard();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>& _internal_weekly_leaderboard() const;
+  ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL _internal_mutable_weekly_leaderboard();
+
+  public:
+  // uint32 week_key = 1;
+  void clear_week_key() ;
+  [[nodiscard]] ::uint32_t week_key() const;
+  void set_week_key(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_week_key() const;
+  void _internal_set_week_key(::uint32_t value);
+
+  public:
+  // bool run_active = 2;
+  void clear_run_active() ;
+  [[nodiscard]] bool run_active() const;
+  void set_run_active(bool value);
+
+  private:
+  bool _internal_run_active() const;
+  void _internal_set_run_active(bool value);
+
+  public:
+  // uint64 run_id = 3;
+  void clear_run_id() ;
+  [[nodiscard]] ::uint64_t run_id() const;
+  void set_run_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_run_id() const;
+  void _internal_set_run_id(::uint64_t value);
+
+  public:
+  // uint32 current_floor = 4;
+  void clear_current_floor() ;
+  [[nodiscard]] ::uint32_t current_floor() const;
+  void set_current_floor(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_floor() const;
+  void _internal_set_current_floor(::uint32_t value);
+
+  public:
+  // uint32 max_floors = 5;
+  void clear_max_floors() ;
+  [[nodiscard]] ::uint32_t max_floors() const;
+  void set_max_floors(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_floors() const;
+  void _internal_set_max_floors(::uint32_t value);
+
+  public:
+  // uint32 current_floor_dungeon_id = 6;
+  void clear_current_floor_dungeon_id() ;
+  [[nodiscard]] ::uint32_t current_floor_dungeon_id() const;
+  void set_current_floor_dungeon_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_floor_dungeon_id() const;
+  void _internal_set_current_floor_dungeon_id(::uint32_t value);
+
+  public:
+  // uint32 current_floor_leyline_element = 7;
+  void clear_current_floor_leyline_element() ;
+  [[nodiscard]] ::uint32_t current_floor_leyline_element() const;
+  void set_current_floor_leyline_element(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_floor_leyline_element() const;
+  void _internal_set_current_floor_leyline_element(::uint32_t value);
+
+  public:
+  // uint32 run_total_rounds = 8;
+  void clear_run_total_rounds() ;
+  [[nodiscard]] ::uint32_t run_total_rounds() const;
+  void set_run_total_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_run_total_rounds() const;
+  void _internal_set_run_total_rounds(::uint32_t value);
+
+  public:
+  // uint32 weekly_cleared_mask = 11;
+  void clear_weekly_cleared_mask() ;
+  [[nodiscard]] ::uint32_t weekly_cleared_mask() const;
+  void set_weekly_cleared_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_cleared_mask() const;
+  void _internal_set_weekly_cleared_mask(::uint32_t value);
+
+  public:
+  // uint32 weekly_best_floor = 12;
+  void clear_weekly_best_floor() ;
+  [[nodiscard]] ::uint32_t weekly_best_floor() const;
+  void set_weekly_best_floor(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_best_floor() const;
+  void _internal_set_weekly_best_floor(::uint32_t value);
+
+  public:
+  // uint32 weekly_best_rounds = 13;
+  void clear_weekly_best_rounds() ;
+  [[nodiscard]] ::uint32_t weekly_best_rounds() const;
+  void set_weekly_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_best_rounds() const;
+  void _internal_set_weekly_best_rounds(::uint32_t value);
+
+  public:
+  // uint64 revision = 14;
+  void clear_revision() ;
+  [[nodiscard]] ::uint64_t revision() const;
+  void set_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_revision() const;
+  void _internal_set_revision(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:WuxingTowerStateSnapshot)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WuxingTowerStateSnapshot& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> active_sigil_ids_;
+    ::google::protobuf::internal::CachedSize _active_sigil_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> pending_offer_sigil_ids_;
+    ::google::protobuf::internal::CachedSize _pending_offer_sigil_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedPtrField< ::WuxingTowerLeaderboardEntry > weekly_leaderboard_;
+    ::uint32_t week_key_;
+    bool run_active_;
+    ::uint64_t run_id_;
+    ::uint32_t current_floor_;
+    ::uint32_t max_floors_;
+    ::uint32_t current_floor_dungeon_id_;
+    ::uint32_t current_floor_leyline_element_;
+    ::uint32_t run_total_rounds_;
+    ::uint32_t weekly_cleared_mask_;
+    ::uint32_t weekly_best_floor_;
+    ::uint32_t weekly_best_rounds_;
+    ::uint64_t revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:SeasonStateSnapshot) */ {
  public:
@@ -1545,7 +4449,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   [[nodiscard]] static const SeasonStateSnapshot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SeasonStateSnapshot>(&SeasonStateSnapshot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(SeasonStateSnapshot& a, SeasonStateSnapshot& b) { a.Swap(&b); }
   inline void Swap(SeasonStateSnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1643,6 +4547,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     kSeasonNameFieldNumber = 4,
     kSeasonDescFieldNumber = 5,
     kActionUnavailableReasonFieldNumber = 27,
+    kWeeklyAffixFieldNumber = 34,
     kStartsAtMsFieldNumber = 6,
     kSeasonIdFieldNumber = 3,
     kEquippedSealIdFieldNumber = 9,
@@ -1665,8 +4570,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     kCatchupPricePerPointFieldNumber = 22,
     kCatchupRemainingTotalPriceFieldNumber = 23,
     kCurrencyBalanceFieldNumber = 24,
-    kRevisionFieldNumber = 28,
     kCatchupCurrencyTypeFieldNumber = 21,
+    kEquippedFormationIdFieldNumber = 31,
+    kRevisionFieldNumber = 28,
+    kSavedBuildsFieldNumber = 32,
+    kHonorsFieldNumber = 33,
   };
   // repeated .SeasonSealOption seals = 29;
   [[nodiscard]] int seals_size()
@@ -1768,6 +4676,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   const ::std::string& _internal_action_unavailable_reason() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_action_unavailable_reason(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_action_unavailable_reason();
+
+  public:
+  // .SeasonWeeklyAffixView weekly_affix = 34;
+  [[nodiscard]] bool has_weekly_affix()
+      const;
+  void clear_weekly_affix() ;
+  [[nodiscard]] const ::SeasonWeeklyAffixView& weekly_affix() const;
+  [[nodiscard]] ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE release_weekly_affix();
+  ::SeasonWeeklyAffixView* PROTOBUF_NONNULL mutable_weekly_affix();
+  void set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value);
+  ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE unsafe_arena_release_weekly_affix();
+
+  private:
+  const ::SeasonWeeklyAffixView& _internal_weekly_affix() const;
+  ::SeasonWeeklyAffixView* PROTOBUF_NONNULL _internal_mutable_weekly_affix();
 
   public:
   // uint64 starts_at_ms = 6;
@@ -1990,16 +4914,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   void _internal_set_currency_balance(::uint64_t value);
 
   public:
-  // uint64 revision = 28;
-  void clear_revision() ;
-  [[nodiscard]] ::uint64_t revision() const;
-  void set_revision(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_revision() const;
-  void _internal_set_revision(::uint64_t value);
-
-  public:
   // uint32 catchup_currency_type = 21;
   void clear_catchup_currency_type() ;
   [[nodiscard]] ::uint32_t catchup_currency_type() const;
@@ -2010,13 +4924,75 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   void _internal_set_catchup_currency_type(::uint32_t value);
 
   public:
+  // uint32 equipped_formation_id = 31;
+  void clear_equipped_formation_id() ;
+  [[nodiscard]] ::uint32_t equipped_formation_id() const;
+  void set_equipped_formation_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equipped_formation_id() const;
+  void _internal_set_equipped_formation_id(::uint32_t value);
+
+  public:
+  // uint64 revision = 28;
+  void clear_revision() ;
+  [[nodiscard]] ::uint64_t revision() const;
+  void set_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_revision() const;
+  void _internal_set_revision(::uint64_t value);
+
+  public:
+  // repeated .SavedBattleBuildBookmarkView saved_builds = 32;
+  [[nodiscard]] int saved_builds_size()
+      const;
+  private:
+  int _internal_saved_builds_size() const;
+
+  public:
+  void clear_saved_builds() ;
+  [[nodiscard]] const ::SavedBattleBuildBookmarkView& saved_builds(int index) const;
+  [[nodiscard]] ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL mutable_saved_builds(int index);
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL add_saved_builds();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>&
+  saved_builds() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+  mutable_saved_builds();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>& _internal_saved_builds() const;
+  ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL _internal_mutable_saved_builds();
+
+  public:
+  // repeated .SeasonHonorView honors = 33;
+  [[nodiscard]] int honors_size()
+      const;
+  private:
+  int _internal_honors_size() const;
+
+  public:
+  void clear_honors() ;
+  [[nodiscard]] const ::SeasonHonorView& honors(int index) const;
+  [[nodiscard]] ::SeasonHonorView* PROTOBUF_NONNULL mutable_honors(int index);
+  ::SeasonHonorView* PROTOBUF_NONNULL add_honors();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SeasonHonorView>&
+  honors() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SeasonHonorView>* PROTOBUF_NONNULL
+  mutable_honors();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SeasonHonorView>& _internal_honors() const;
+  ::google::protobuf::RepeatedPtrField<::SeasonHonorView>* PROTOBUF_NONNULL _internal_mutable_honors();
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonStateSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 30,
-                          2, 117,
-                          2>;
+      ::google::protobuf::internal::TcParseTable<5, 34,
+                          5, 125,
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -2041,7 +5017,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const SeasonStateSnapshot& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::SeasonSealOption > seals_;
     ::google::protobuf::RepeatedPtrField< ::SeasonSkillSummary > season_skills_;
@@ -2049,6 +5025,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     ::google::protobuf::internal::ArenaStringPtr season_name_;
     ::google::protobuf::internal::ArenaStringPtr season_desc_;
     ::google::protobuf::internal::ArenaStringPtr action_unavailable_reason_;
+    ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE weekly_affix_;
     ::uint64_t starts_at_ms_;
     ::uint32_t season_id_;
     ::uint32_t equipped_seal_id_;
@@ -2071,8 +5048,1371 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     ::uint64_t catchup_price_per_point_;
     ::uint64_t catchup_remaining_total_price_;
     ::uint64_t currency_balance_;
-    ::uint64_t revision_;
     ::uint32_t catchup_currency_type_;
+    ::uint32_t equipped_formation_id_;
+    ::uint64_t revision_;
+    ::google::protobuf::RepeatedPtrField< ::SavedBattleBuildBookmarkView > saved_builds_;
+    ::google::protobuf::RepeatedPtrField< ::SeasonHonorView > honors_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveBattleBuildBookmarkResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SaveBattleBuildBookmarkResponse) */ {
+ public:
+  inline SaveBattleBuildBookmarkResponse() : SaveBattleBuildBookmarkResponse(nullptr) {}
+  ~SaveBattleBuildBookmarkResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SaveBattleBuildBookmarkResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SaveBattleBuildBookmarkResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SaveBattleBuildBookmarkResponse(const SaveBattleBuildBookmarkResponse& from) : SaveBattleBuildBookmarkResponse(nullptr, from) {}
+  inline SaveBattleBuildBookmarkResponse(SaveBattleBuildBookmarkResponse&& from) noexcept : SaveBattleBuildBookmarkResponse(nullptr, ::std::move(from)) {}
+  inline SaveBattleBuildBookmarkResponse& operator=(const SaveBattleBuildBookmarkResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SaveBattleBuildBookmarkResponse& operator=(SaveBattleBuildBookmarkResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SaveBattleBuildBookmarkResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveBattleBuildBookmarkResponse>(&SaveBattleBuildBookmarkResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(SaveBattleBuildBookmarkResponse& a, SaveBattleBuildBookmarkResponse& b) { a.Swap(&b); }
+  inline void Swap(SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SaveBattleBuildBookmarkResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SaveBattleBuildBookmarkResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SaveBattleBuildBookmarkResponse& from) { SaveBattleBuildBookmarkResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SaveBattleBuildBookmarkResponse"; }
+
+  explicit SaveBattleBuildBookmarkResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SaveBattleBuildBookmarkResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SaveBattleBuildBookmarkResponse& from);
+  SaveBattleBuildBookmarkResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SaveBattleBuildBookmarkResponse&& from) noexcept
+      : SaveBattleBuildBookmarkResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAllBookmarksFieldNumber = 3,
+    kErrorMessageFieldNumber = 1,
+    kSavedFieldNumber = 2,
+  };
+  // repeated .SavedBattleBuildBookmarkView all_bookmarks = 3;
+  [[nodiscard]] int all_bookmarks_size()
+      const;
+  private:
+  int _internal_all_bookmarks_size() const;
+
+  public:
+  void clear_all_bookmarks() ;
+  [[nodiscard]] const ::SavedBattleBuildBookmarkView& all_bookmarks(int index) const;
+  [[nodiscard]] ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL mutable_all_bookmarks(int index);
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL add_all_bookmarks();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>&
+  all_bookmarks() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+  mutable_all_bookmarks();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>& _internal_all_bookmarks() const;
+  ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL _internal_mutable_all_bookmarks();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SavedBattleBuildBookmarkView saved = 2;
+  [[nodiscard]] bool has_saved()
+      const;
+  void clear_saved() ;
+  [[nodiscard]] const ::SavedBattleBuildBookmarkView& saved() const;
+  [[nodiscard]] ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE release_saved();
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL mutable_saved();
+  void set_allocated_saved(::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_saved(::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value);
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE unsafe_arena_release_saved();
+
+  private:
+  const ::SavedBattleBuildBookmarkView& _internal_saved() const;
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL _internal_mutable_saved();
+
+  public:
+  // @@protoc_insertion_point(class_scope:SaveBattleBuildBookmarkResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SaveBattleBuildBookmarkResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::SavedBattleBuildBookmarkView > all_bookmarks_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE saved_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveBattleBuildBookmarkRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SaveBattleBuildBookmarkRequest) */ {
+ public:
+  inline SaveBattleBuildBookmarkRequest() : SaveBattleBuildBookmarkRequest(nullptr) {}
+  ~SaveBattleBuildBookmarkRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SaveBattleBuildBookmarkRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SaveBattleBuildBookmarkRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SaveBattleBuildBookmarkRequest(const SaveBattleBuildBookmarkRequest& from) : SaveBattleBuildBookmarkRequest(nullptr, from) {}
+  inline SaveBattleBuildBookmarkRequest(SaveBattleBuildBookmarkRequest&& from) noexcept : SaveBattleBuildBookmarkRequest(nullptr, ::std::move(from)) {}
+  inline SaveBattleBuildBookmarkRequest& operator=(const SaveBattleBuildBookmarkRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SaveBattleBuildBookmarkRequest& operator=(SaveBattleBuildBookmarkRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SaveBattleBuildBookmarkRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveBattleBuildBookmarkRequest>(&SaveBattleBuildBookmarkRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(SaveBattleBuildBookmarkRequest& a, SaveBattleBuildBookmarkRequest& b) { a.Swap(&b); }
+  inline void Swap(SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SaveBattleBuildBookmarkRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SaveBattleBuildBookmarkRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SaveBattleBuildBookmarkRequest& from) { SaveBattleBuildBookmarkRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SaveBattleBuildBookmarkRequest"; }
+
+  explicit SaveBattleBuildBookmarkRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SaveBattleBuildBookmarkRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SaveBattleBuildBookmarkRequest& from);
+  SaveBattleBuildBookmarkRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SaveBattleBuildBookmarkRequest&& from) noexcept
+      : SaveBattleBuildBookmarkRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBookmarkFieldNumber = 1,
+  };
+  // .SavedBattleBuildBookmarkView bookmark = 1;
+  [[nodiscard]] bool has_bookmark()
+      const;
+  void clear_bookmark() ;
+  [[nodiscard]] const ::SavedBattleBuildBookmarkView& bookmark() const;
+  [[nodiscard]] ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE release_bookmark();
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL mutable_bookmark();
+  void set_allocated_bookmark(::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_bookmark(::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value);
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE unsafe_arena_release_bookmark();
+
+  private:
+  const ::SavedBattleBuildBookmarkView& _internal_bookmark() const;
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL _internal_mutable_bookmark();
+
+  public:
+  // @@protoc_insertion_point(class_scope:SaveBattleBuildBookmarkRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SaveBattleBuildBookmarkRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE bookmark_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleBuildBookmarkResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:DeleteBattleBuildBookmarkResponse) */ {
+ public:
+  inline DeleteBattleBuildBookmarkResponse() : DeleteBattleBuildBookmarkResponse(nullptr) {}
+  ~DeleteBattleBuildBookmarkResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteBattleBuildBookmarkResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DeleteBattleBuildBookmarkResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DeleteBattleBuildBookmarkResponse(const DeleteBattleBuildBookmarkResponse& from) : DeleteBattleBuildBookmarkResponse(nullptr, from) {}
+  inline DeleteBattleBuildBookmarkResponse(DeleteBattleBuildBookmarkResponse&& from) noexcept : DeleteBattleBuildBookmarkResponse(nullptr, ::std::move(from)) {}
+  inline DeleteBattleBuildBookmarkResponse& operator=(const DeleteBattleBuildBookmarkResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteBattleBuildBookmarkResponse& operator=(DeleteBattleBuildBookmarkResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DeleteBattleBuildBookmarkResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBattleBuildBookmarkResponse>(&DeleteBattleBuildBookmarkResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(DeleteBattleBuildBookmarkResponse& a, DeleteBattleBuildBookmarkResponse& b) { a.Swap(&b); }
+  inline void Swap(DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteBattleBuildBookmarkResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteBattleBuildBookmarkResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteBattleBuildBookmarkResponse& from) { DeleteBattleBuildBookmarkResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "DeleteBattleBuildBookmarkResponse"; }
+
+  explicit DeleteBattleBuildBookmarkResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteBattleBuildBookmarkResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteBattleBuildBookmarkResponse& from);
+  DeleteBattleBuildBookmarkResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteBattleBuildBookmarkResponse&& from) noexcept
+      : DeleteBattleBuildBookmarkResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAllBookmarksFieldNumber = 2,
+    kErrorMessageFieldNumber = 1,
+  };
+  // repeated .SavedBattleBuildBookmarkView all_bookmarks = 2;
+  [[nodiscard]] int all_bookmarks_size()
+      const;
+  private:
+  int _internal_all_bookmarks_size() const;
+
+  public:
+  void clear_all_bookmarks() ;
+  [[nodiscard]] const ::SavedBattleBuildBookmarkView& all_bookmarks(int index) const;
+  [[nodiscard]] ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL mutable_all_bookmarks(int index);
+  ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL add_all_bookmarks();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>&
+  all_bookmarks() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+  mutable_all_bookmarks();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>& _internal_all_bookmarks() const;
+  ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL _internal_mutable_all_bookmarks();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // @@protoc_insertion_point(class_scope:DeleteBattleBuildBookmarkResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteBattleBuildBookmarkResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::SavedBattleBuildBookmarkView > all_bookmarks_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:StartWuxingTowerRunResponse) */ {
+ public:
+  inline StartWuxingTowerRunResponse() : StartWuxingTowerRunResponse(nullptr) {}
+  ~StartWuxingTowerRunResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartWuxingTowerRunResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartWuxingTowerRunResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartWuxingTowerRunResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartWuxingTowerRunResponse(const StartWuxingTowerRunResponse& from) : StartWuxingTowerRunResponse(nullptr, from) {}
+  inline StartWuxingTowerRunResponse(StartWuxingTowerRunResponse&& from) noexcept : StartWuxingTowerRunResponse(nullptr, ::std::move(from)) {}
+  inline StartWuxingTowerRunResponse& operator=(const StartWuxingTowerRunResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartWuxingTowerRunResponse& operator=(StartWuxingTowerRunResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartWuxingTowerRunResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartWuxingTowerRunResponse>(&StartWuxingTowerRunResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(StartWuxingTowerRunResponse& a, StartWuxingTowerRunResponse& b) { a.Swap(&b); }
+  inline void Swap(StartWuxingTowerRunResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartWuxingTowerRunResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartWuxingTowerRunResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartWuxingTowerRunResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartWuxingTowerRunResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartWuxingTowerRunResponse& from) { StartWuxingTowerRunResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartWuxingTowerRunResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "StartWuxingTowerRunResponse"; }
+
+  explicit StartWuxingTowerRunResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartWuxingTowerRunResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartWuxingTowerRunResponse& from);
+  StartWuxingTowerRunResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartWuxingTowerRunResponse&& from) noexcept
+      : StartWuxingTowerRunResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .WuxingTowerStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::WuxingTowerStateSnapshot& state() const;
+  [[nodiscard]] ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::WuxingTowerStateSnapshot& _internal_state() const;
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:StartWuxingTowerRunResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartWuxingTowerRunResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PickWuxingTowerSigilResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PickWuxingTowerSigilResponse) */ {
+ public:
+  inline PickWuxingTowerSigilResponse() : PickWuxingTowerSigilResponse(nullptr) {}
+  ~PickWuxingTowerSigilResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PickWuxingTowerSigilResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PickWuxingTowerSigilResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PickWuxingTowerSigilResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PickWuxingTowerSigilResponse(const PickWuxingTowerSigilResponse& from) : PickWuxingTowerSigilResponse(nullptr, from) {}
+  inline PickWuxingTowerSigilResponse(PickWuxingTowerSigilResponse&& from) noexcept : PickWuxingTowerSigilResponse(nullptr, ::std::move(from)) {}
+  inline PickWuxingTowerSigilResponse& operator=(const PickWuxingTowerSigilResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PickWuxingTowerSigilResponse& operator=(PickWuxingTowerSigilResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PickWuxingTowerSigilResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PickWuxingTowerSigilResponse>(&PickWuxingTowerSigilResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(PickWuxingTowerSigilResponse& a, PickWuxingTowerSigilResponse& b) { a.Swap(&b); }
+  inline void Swap(PickWuxingTowerSigilResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PickWuxingTowerSigilResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PickWuxingTowerSigilResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PickWuxingTowerSigilResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PickWuxingTowerSigilResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PickWuxingTowerSigilResponse& from) { PickWuxingTowerSigilResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PickWuxingTowerSigilResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PickWuxingTowerSigilResponse"; }
+
+  explicit PickWuxingTowerSigilResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PickWuxingTowerSigilResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PickWuxingTowerSigilResponse& from);
+  PickWuxingTowerSigilResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PickWuxingTowerSigilResponse&& from) noexcept
+      : PickWuxingTowerSigilResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .WuxingTowerStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::WuxingTowerStateSnapshot& state() const;
+  [[nodiscard]] ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::WuxingTowerStateSnapshot& _internal_state() const;
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:PickWuxingTowerSigilResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PickWuxingTowerSigilResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetWuxingTowerStateResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetWuxingTowerStateResponse) */ {
+ public:
+  inline GetWuxingTowerStateResponse() : GetWuxingTowerStateResponse(nullptr) {}
+  ~GetWuxingTowerStateResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetWuxingTowerStateResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetWuxingTowerStateResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetWuxingTowerStateResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetWuxingTowerStateResponse(const GetWuxingTowerStateResponse& from) : GetWuxingTowerStateResponse(nullptr, from) {}
+  inline GetWuxingTowerStateResponse(GetWuxingTowerStateResponse&& from) noexcept : GetWuxingTowerStateResponse(nullptr, ::std::move(from)) {}
+  inline GetWuxingTowerStateResponse& operator=(const GetWuxingTowerStateResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetWuxingTowerStateResponse& operator=(GetWuxingTowerStateResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetWuxingTowerStateResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetWuxingTowerStateResponse>(&GetWuxingTowerStateResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(GetWuxingTowerStateResponse& a, GetWuxingTowerStateResponse& b) { a.Swap(&b); }
+  inline void Swap(GetWuxingTowerStateResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetWuxingTowerStateResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetWuxingTowerStateResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetWuxingTowerStateResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetWuxingTowerStateResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetWuxingTowerStateResponse& from) { GetWuxingTowerStateResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetWuxingTowerStateResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetWuxingTowerStateResponse"; }
+
+  explicit GetWuxingTowerStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetWuxingTowerStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetWuxingTowerStateResponse& from);
+  GetWuxingTowerStateResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetWuxingTowerStateResponse&& from) noexcept
+      : GetWuxingTowerStateResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .WuxingTowerStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::WuxingTowerStateSnapshot& state() const;
+  [[nodiscard]] ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::WuxingTowerStateSnapshot& _internal_state() const;
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetWuxingTowerStateResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetWuxingTowerStateResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2136,7 +6476,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateResponse final : publ
   [[nodiscard]] static const GetSeasonStateResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSeasonStateResponse>(&GetSeasonStateResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(GetSeasonStateResponse& a, GetSeasonStateResponse& b) { a.Swap(&b); }
   inline void Swap(GetSeasonStateResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2305,6 +6645,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateResponse final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipWuxingFormationResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:EquipWuxingFormationResponse) */ {
+ public:
+  inline EquipWuxingFormationResponse() : EquipWuxingFormationResponse(nullptr) {}
+  ~EquipWuxingFormationResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EquipWuxingFormationResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EquipWuxingFormationResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EquipWuxingFormationResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EquipWuxingFormationResponse(const EquipWuxingFormationResponse& from) : EquipWuxingFormationResponse(nullptr, from) {}
+  inline EquipWuxingFormationResponse(EquipWuxingFormationResponse&& from) noexcept : EquipWuxingFormationResponse(nullptr, ::std::move(from)) {}
+  inline EquipWuxingFormationResponse& operator=(const EquipWuxingFormationResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EquipWuxingFormationResponse& operator=(EquipWuxingFormationResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EquipWuxingFormationResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipWuxingFormationResponse>(&EquipWuxingFormationResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(EquipWuxingFormationResponse& a, EquipWuxingFormationResponse& b) { a.Swap(&b); }
+  inline void Swap(EquipWuxingFormationResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EquipWuxingFormationResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EquipWuxingFormationResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EquipWuxingFormationResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EquipWuxingFormationResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EquipWuxingFormationResponse& from) { EquipWuxingFormationResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EquipWuxingFormationResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "EquipWuxingFormationResponse"; }
+
+  explicit EquipWuxingFormationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EquipWuxingFormationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipWuxingFormationResponse& from);
+  EquipWuxingFormationResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EquipWuxingFormationResponse&& from) noexcept
+      : EquipWuxingFormationResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 3,
+    kEquippedFormationIdFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SeasonStateSnapshot state = 3;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SeasonStateSnapshot& state() const;
+  [[nodiscard]] ::SeasonStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SeasonStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SeasonStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SeasonStateSnapshot& _internal_state() const;
+  ::SeasonStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint32 equipped_formation_id = 2;
+  void clear_equipped_formation_id() ;
+  [[nodiscard]] ::uint32_t equipped_formation_id() const;
+  void set_equipped_formation_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equipped_formation_id() const;
+  void _internal_set_equipped_formation_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:EquipWuxingFormationResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EquipWuxingFormationResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SeasonStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint32_t equipped_formation_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:EquipSeasonSealResponse) */ {
  public:
@@ -2361,7 +6938,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealResponse final : pub
   [[nodiscard]] static const EquipSeasonSealResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipSeasonSealResponse>(&EquipSeasonSealResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(EquipSeasonSealResponse& a, EquipSeasonSealResponse& b) { a.Swap(&b); }
   inline void Swap(EquipSeasonSealResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2586,7 +7163,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealResponse final : p
   [[nodiscard]] static const CatchupSeasonSealResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CatchupSeasonSealResponse>(&CatchupSeasonSealResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(CatchupSeasonSealResponse& a, CatchupSeasonSealResponse& b) { a.Swap(&b); }
   inline void Swap(CatchupSeasonSealResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2789,6 +7366,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealResponse final : p
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
 };
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AbandonWuxingTowerRunResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:AbandonWuxingTowerRunResponse) */ {
+ public:
+  inline AbandonWuxingTowerRunResponse() : AbandonWuxingTowerRunResponse(nullptr) {}
+  ~AbandonWuxingTowerRunResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AbandonWuxingTowerRunResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AbandonWuxingTowerRunResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AbandonWuxingTowerRunResponse(const AbandonWuxingTowerRunResponse& from) : AbandonWuxingTowerRunResponse(nullptr, from) {}
+  inline AbandonWuxingTowerRunResponse(AbandonWuxingTowerRunResponse&& from) noexcept : AbandonWuxingTowerRunResponse(nullptr, ::std::move(from)) {}
+  inline AbandonWuxingTowerRunResponse& operator=(const AbandonWuxingTowerRunResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AbandonWuxingTowerRunResponse& operator=(AbandonWuxingTowerRunResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AbandonWuxingTowerRunResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AbandonWuxingTowerRunResponse>(&AbandonWuxingTowerRunResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(AbandonWuxingTowerRunResponse& a, AbandonWuxingTowerRunResponse& b) { a.Swap(&b); }
+  inline void Swap(AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AbandonWuxingTowerRunResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AbandonWuxingTowerRunResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AbandonWuxingTowerRunResponse& from) { AbandonWuxingTowerRunResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AbandonWuxingTowerRunResponse"; }
+
+  explicit AbandonWuxingTowerRunResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AbandonWuxingTowerRunResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AbandonWuxingTowerRunResponse& from);
+  AbandonWuxingTowerRunResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AbandonWuxingTowerRunResponse&& from) noexcept
+      : AbandonWuxingTowerRunResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .WuxingTowerStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::WuxingTowerStateSnapshot& state() const;
+  [[nodiscard]] ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::WuxingTowerStateSnapshot& _internal_state() const;
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:AbandonWuxingTowerRunResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AbandonWuxingTowerRunResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
 
 // ===================================================================
 
@@ -2820,6 +7622,34 @@ class SceneSeasonClientPlayer : public ::google::protobuf::Service {
   virtual void CatchupSeasonSeal(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::CatchupSeasonSealRequest* PROTOBUF_NONNULL request,
                         ::CatchupSeasonSealResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void EquipWuxingFormation(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::EquipWuxingFormationRequest* PROTOBUF_NONNULL request,
+                        ::EquipWuxingFormationResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void GetWuxingTowerState(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetWuxingTowerStateRequest* PROTOBUF_NONNULL request,
+                        ::GetWuxingTowerStateResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void StartWuxingTowerRun(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::StartWuxingTowerRunRequest* PROTOBUF_NONNULL request,
+                        ::StartWuxingTowerRunResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void PickWuxingTowerSigil(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::PickWuxingTowerSigilRequest* PROTOBUF_NONNULL request,
+                        ::PickWuxingTowerSigilResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void AbandonWuxingTowerRun(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL request,
+                        ::AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void SaveBattleBuildBookmark(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL request,
+                        ::SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void DeleteBattleBuildBookmark(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL request,
+                        ::DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
@@ -2864,6 +7694,34 @@ class SceneSeasonClientPlayer_Stub final : public SceneSeasonClientPlayer {
   void CatchupSeasonSeal(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::CatchupSeasonSealRequest* PROTOBUF_NONNULL request,
                         ::CatchupSeasonSealResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void EquipWuxingFormation(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::EquipWuxingFormationRequest* PROTOBUF_NONNULL request,
+                        ::EquipWuxingFormationResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void GetWuxingTowerState(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetWuxingTowerStateRequest* PROTOBUF_NONNULL request,
+                        ::GetWuxingTowerStateResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void StartWuxingTowerRun(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::StartWuxingTowerRunRequest* PROTOBUF_NONNULL request,
+                        ::StartWuxingTowerRunResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void PickWuxingTowerSigil(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::PickWuxingTowerSigilRequest* PROTOBUF_NONNULL request,
+                        ::PickWuxingTowerSigilResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void AbandonWuxingTowerRun(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::AbandonWuxingTowerRunRequest* PROTOBUF_NONNULL request,
+                        ::AbandonWuxingTowerRunResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void SaveBattleBuildBookmark(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL request,
+                        ::SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void DeleteBattleBuildBookmark(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL request,
+                        ::DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -3843,13 +8701,624 @@ inline void SeasonSkillSummary::_internal_set_action_tags(::uint32_t value) {
 
 // -------------------------------------------------------------------
 
+// SeasonHonorView
+
+// uint32 season_id = 1;
+inline void SeasonHonorView::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t SeasonHonorView::season_id() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.season_id)
+  return _internal_season_id();
+}
+inline void SeasonHonorView::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.season_id)
+}
+inline ::uint32_t SeasonHonorView::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void SeasonHonorView::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// string season_name = 2;
+inline void SeasonHonorView::clear_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SeasonHonorView::season_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.season_name)
+  return _internal_season_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonHonorView::set_season_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.season_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonHonorView.season_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonHonorView::mutable_season_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_season_name();
+  // @@protoc_insertion_point(field_mutable:SeasonHonorView.season_name)
+  return _s;
+}
+inline const ::std::string& SeasonHonorView::_internal_season_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_name_.Get();
+}
+inline void SeasonHonorView::_internal_set_season_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonHonorView::_internal_mutable_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.season_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonHonorView::release_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonHonorView.season_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.season_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.season_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonHonorView::set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.season_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_name_.IsDefault()) {
+    _impl_.season_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonHonorView.season_name)
+}
+
+// string honor_title_name = 3;
+inline void SeasonHonorView::clear_honor_title_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_title_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SeasonHonorView::honor_title_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.honor_title_name)
+  return _internal_honor_title_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonHonorView::set_honor_title_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.honor_title_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonHonorView.honor_title_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonHonorView::mutable_honor_title_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_honor_title_name();
+  // @@protoc_insertion_point(field_mutable:SeasonHonorView.honor_title_name)
+  return _s;
+}
+inline const ::std::string& SeasonHonorView::_internal_honor_title_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_title_name_.Get();
+}
+inline void SeasonHonorView::_internal_set_honor_title_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_title_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonHonorView::_internal_mutable_honor_title_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.honor_title_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonHonorView::release_honor_title_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonHonorView.honor_title_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.honor_title_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.honor_title_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonHonorView::set_allocated_honor_title_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.honor_title_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.honor_title_name_.IsDefault()) {
+    _impl_.honor_title_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonHonorView.honor_title_name)
+}
+
+// string honor_badge_icon_key = 4;
+inline void SeasonHonorView::clear_honor_badge_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_badge_icon_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SeasonHonorView::honor_badge_icon_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.honor_badge_icon_key)
+  return _internal_honor_badge_icon_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonHonorView::set_honor_badge_icon_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.honor_badge_icon_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonHonorView.honor_badge_icon_key)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonHonorView::mutable_honor_badge_icon_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_honor_badge_icon_key();
+  // @@protoc_insertion_point(field_mutable:SeasonHonorView.honor_badge_icon_key)
+  return _s;
+}
+inline const ::std::string& SeasonHonorView::_internal_honor_badge_icon_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_badge_icon_key_.Get();
+}
+inline void SeasonHonorView::_internal_set_honor_badge_icon_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_badge_icon_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonHonorView::_internal_mutable_honor_badge_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.honor_badge_icon_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonHonorView::release_honor_badge_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonHonorView.honor_badge_icon_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.honor_badge_icon_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.honor_badge_icon_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonHonorView::set_allocated_honor_badge_icon_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.honor_badge_icon_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.honor_badge_icon_key_.IsDefault()) {
+    _impl_.honor_badge_icon_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonHonorView.honor_badge_icon_key)
+}
+
+// uint32 progress_points = 5;
+inline void SeasonHonorView::clear_progress_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.progress_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SeasonHonorView::progress_points() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.progress_points)
+  return _internal_progress_points();
+}
+inline void SeasonHonorView::set_progress_points(::uint32_t value) {
+  _internal_set_progress_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.progress_points)
+}
+inline ::uint32_t SeasonHonorView::_internal_progress_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.progress_points_;
+}
+inline void SeasonHonorView::_internal_set_progress_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.progress_points_ = value;
+}
+
+// uint32 max_points = 6;
+inline void SeasonHonorView::clear_max_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t SeasonHonorView::max_points() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.max_points)
+  return _internal_max_points();
+}
+inline void SeasonHonorView::set_max_points(::uint32_t value) {
+  _internal_set_max_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.max_points)
+}
+inline ::uint32_t SeasonHonorView::_internal_max_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_points_;
+}
+inline void SeasonHonorView::_internal_set_max_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_points_ = value;
+}
+
+// bool unlocked = 7;
+inline void SeasonHonorView::clear_unlocked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool SeasonHonorView::unlocked() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.unlocked)
+  return _internal_unlocked();
+}
+inline void SeasonHonorView::set_unlocked(bool value) {
+  _internal_set_unlocked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.unlocked)
+}
+inline bool SeasonHonorView::_internal_unlocked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_;
+}
+inline void SeasonHonorView::_internal_set_unlocked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_ = value;
+}
+
+// bool is_current_season = 8;
+inline void SeasonHonorView::clear_is_current_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_current_season_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool SeasonHonorView::is_current_season() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.is_current_season)
+  return _internal_is_current_season();
+}
+inline void SeasonHonorView::set_is_current_season(bool value) {
+  _internal_set_is_current_season(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.is_current_season)
+}
+inline bool SeasonHonorView::_internal_is_current_season() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_current_season_;
+}
+inline void SeasonHonorView::_internal_set_is_current_season(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_current_season_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SeasonWeeklyAffixView
+
+// uint32 week_index = 1;
+inline void SeasonWeeklyAffixView::clear_week_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SeasonWeeklyAffixView::week_index() const {
+  // @@protoc_insertion_point(field_get:SeasonWeeklyAffixView.week_index)
+  return _internal_week_index();
+}
+inline void SeasonWeeklyAffixView::set_week_index(::uint32_t value) {
+  _internal_set_week_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SeasonWeeklyAffixView.week_index)
+}
+inline ::uint32_t SeasonWeeklyAffixView::_internal_week_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.week_index_;
+}
+inline void SeasonWeeklyAffixView::_internal_set_week_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_index_ = value;
+}
+
+// uint32 affix_id = 2;
+inline void SeasonWeeklyAffixView::clear_affix_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.affix_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t SeasonWeeklyAffixView::affix_id() const {
+  // @@protoc_insertion_point(field_get:SeasonWeeklyAffixView.affix_id)
+  return _internal_affix_id();
+}
+inline void SeasonWeeklyAffixView::set_affix_id(::uint32_t value) {
+  _internal_set_affix_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SeasonWeeklyAffixView.affix_id)
+}
+inline ::uint32_t SeasonWeeklyAffixView::_internal_affix_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.affix_id_;
+}
+inline void SeasonWeeklyAffixView::_internal_set_affix_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.affix_id_ = value;
+}
+
+// string name = 3;
+inline void SeasonWeeklyAffixView::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SeasonWeeklyAffixView::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonWeeklyAffixView.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonWeeklyAffixView::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonWeeklyAffixView.name)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonWeeklyAffixView::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:SeasonWeeklyAffixView.name)
+  return _s;
+}
+inline const ::std::string& SeasonWeeklyAffixView::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void SeasonWeeklyAffixView::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonWeeklyAffixView::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonWeeklyAffixView::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonWeeklyAffixView.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonWeeklyAffixView::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonWeeklyAffixView.name)
+}
+
+// string description = 4;
+inline void SeasonWeeklyAffixView::clear_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.description_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SeasonWeeklyAffixView::description() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonWeeklyAffixView.description)
+  return _internal_description();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonWeeklyAffixView::set_description(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.description_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonWeeklyAffixView.description)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonWeeklyAffixView::mutable_description()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_description();
+  // @@protoc_insertion_point(field_mutable:SeasonWeeklyAffixView.description)
+  return _s;
+}
+inline const ::std::string& SeasonWeeklyAffixView::_internal_description() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.description_.Get();
+}
+inline void SeasonWeeklyAffixView::_internal_set_description(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.description_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonWeeklyAffixView::_internal_mutable_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.description_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonWeeklyAffixView::release_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonWeeklyAffixView.description)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.description_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.description_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonWeeklyAffixView::set_allocated_description(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.description_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.description_.IsDefault()) {
+    _impl_.description_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonWeeklyAffixView.description)
+}
+
+// string strategy_tip = 5;
+inline void SeasonWeeklyAffixView::clear_strategy_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.strategy_tip_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& SeasonWeeklyAffixView::strategy_tip() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonWeeklyAffixView.strategy_tip)
+  return _internal_strategy_tip();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonWeeklyAffixView::set_strategy_tip(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.strategy_tip_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonWeeklyAffixView.strategy_tip)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonWeeklyAffixView::mutable_strategy_tip()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_strategy_tip();
+  // @@protoc_insertion_point(field_mutable:SeasonWeeklyAffixView.strategy_tip)
+  return _s;
+}
+inline const ::std::string& SeasonWeeklyAffixView::_internal_strategy_tip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.strategy_tip_.Get();
+}
+inline void SeasonWeeklyAffixView::_internal_set_strategy_tip(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.strategy_tip_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonWeeklyAffixView::_internal_mutable_strategy_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.strategy_tip_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonWeeklyAffixView::release_strategy_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonWeeklyAffixView.strategy_tip)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.strategy_tip_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.strategy_tip_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonWeeklyAffixView::set_allocated_strategy_tip(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.strategy_tip_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.strategy_tip_.IsDefault()) {
+    _impl_.strategy_tip_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonWeeklyAffixView.strategy_tip)
+}
+
+// repeated uint32 recommended_seal_ids = 6;
+inline int SeasonWeeklyAffixView::_internal_recommended_seal_ids_size() const {
+  return _internal_recommended_seal_ids().size();
+}
+inline int SeasonWeeklyAffixView::recommended_seal_ids_size() const {
+  return _internal_recommended_seal_ids_size();
+}
+inline void SeasonWeeklyAffixView::clear_recommended_seal_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_seal_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t SeasonWeeklyAffixView::recommended_seal_ids(int index) const {
+  // @@protoc_insertion_point(field_get:SeasonWeeklyAffixView.recommended_seal_ids)
+  return _internal_recommended_seal_ids().Get(index);
+}
+inline void SeasonWeeklyAffixView::set_recommended_seal_ids(int index, ::uint32_t value) {
+  _internal_mutable_recommended_seal_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:SeasonWeeklyAffixView.recommended_seal_ids)
+}
+inline void SeasonWeeklyAffixView::add_recommended_seal_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_recommended_seal_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:SeasonWeeklyAffixView.recommended_seal_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& SeasonWeeklyAffixView::recommended_seal_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SeasonWeeklyAffixView.recommended_seal_ids)
+  return _internal_recommended_seal_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL SeasonWeeklyAffixView::mutable_recommended_seal_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:SeasonWeeklyAffixView.recommended_seal_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_recommended_seal_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+SeasonWeeklyAffixView::_internal_recommended_seal_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recommended_seal_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+SeasonWeeklyAffixView::_internal_mutable_recommended_seal_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.recommended_seal_ids_;
+}
+
+// -------------------------------------------------------------------
+
 // SeasonStateSnapshot
 
 // bool available = 1;
 inline void SeasonStateSnapshot::clear_available() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.available_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline bool SeasonStateSnapshot::available() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.available)
@@ -3857,7 +9326,7 @@ inline bool SeasonStateSnapshot::available() const {
 }
 inline void SeasonStateSnapshot::set_available(bool value) {
   _internal_set_available(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.available)
 }
 inline bool SeasonStateSnapshot::_internal_available() const {
@@ -3937,7 +9406,7 @@ inline void SeasonStateSnapshot::set_allocated_unavailable_reason(::std::string*
 inline void SeasonStateSnapshot::clear_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SeasonStateSnapshot::season_id() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.season_id)
@@ -3945,7 +9414,7 @@ inline ::uint32_t SeasonStateSnapshot::season_id() const {
 }
 inline void SeasonStateSnapshot::set_season_id(::uint32_t value) {
   _internal_set_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.season_id)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_season_id() const {
@@ -4089,7 +9558,7 @@ inline void SeasonStateSnapshot::set_allocated_season_desc(::std::string* PROTOB
 inline void SeasonStateSnapshot::clear_starts_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.starts_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t SeasonStateSnapshot::starts_at_ms() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.starts_at_ms)
@@ -4097,7 +9566,7 @@ inline ::uint64_t SeasonStateSnapshot::starts_at_ms() const {
 }
 inline void SeasonStateSnapshot::set_starts_at_ms(::uint64_t value) {
   _internal_set_starts_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.starts_at_ms)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_starts_at_ms() const {
@@ -4113,7 +9582,7 @@ inline void SeasonStateSnapshot::_internal_set_starts_at_ms(::uint64_t value) {
 inline void SeasonStateSnapshot::clear_ends_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ends_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t SeasonStateSnapshot::ends_at_ms() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.ends_at_ms)
@@ -4121,7 +9590,7 @@ inline ::uint64_t SeasonStateSnapshot::ends_at_ms() const {
 }
 inline void SeasonStateSnapshot::set_ends_at_ms(::uint64_t value) {
   _internal_set_ends_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.ends_at_ms)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_ends_at_ms() const {
@@ -4137,7 +9606,7 @@ inline void SeasonStateSnapshot::_internal_set_ends_at_ms(::uint64_t value) {
 inline void SeasonStateSnapshot::clear_server_now_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.server_now_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t SeasonStateSnapshot::server_now_ms() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.server_now_ms)
@@ -4145,7 +9614,7 @@ inline ::uint64_t SeasonStateSnapshot::server_now_ms() const {
 }
 inline void SeasonStateSnapshot::set_server_now_ms(::uint64_t value) {
   _internal_set_server_now_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.server_now_ms)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_server_now_ms() const {
@@ -4161,7 +9630,7 @@ inline void SeasonStateSnapshot::_internal_set_server_now_ms(::uint64_t value) {
 inline void SeasonStateSnapshot::clear_equipped_seal_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_seal_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SeasonStateSnapshot::equipped_seal_id() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.equipped_seal_id)
@@ -4169,7 +9638,7 @@ inline ::uint32_t SeasonStateSnapshot::equipped_seal_id() const {
 }
 inline void SeasonStateSnapshot::set_equipped_seal_id(::uint32_t value) {
   _internal_set_equipped_seal_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.equipped_seal_id)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_equipped_seal_id() const {
@@ -4185,7 +9654,7 @@ inline void SeasonStateSnapshot::_internal_set_equipped_seal_id(::uint32_t value
 inline void SeasonStateSnapshot::clear_progress_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.progress_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t SeasonStateSnapshot::progress_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.progress_points)
@@ -4193,7 +9662,7 @@ inline ::uint32_t SeasonStateSnapshot::progress_points() const {
 }
 inline void SeasonStateSnapshot::set_progress_points(::uint32_t value) {
   _internal_set_progress_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.progress_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_progress_points() const {
@@ -4209,7 +9678,7 @@ inline void SeasonStateSnapshot::_internal_set_progress_points(::uint32_t value)
 inline void SeasonStateSnapshot::clear_max_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t SeasonStateSnapshot::max_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.max_points)
@@ -4217,7 +9686,7 @@ inline ::uint32_t SeasonStateSnapshot::max_points() const {
 }
 inline void SeasonStateSnapshot::set_max_points(::uint32_t value) {
   _internal_set_max_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.max_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_max_points() const {
@@ -4233,7 +9702,7 @@ inline void SeasonStateSnapshot::_internal_set_max_points(::uint32_t value) {
 inline void SeasonStateSnapshot::clear_battle_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t SeasonStateSnapshot::battle_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.battle_points)
@@ -4241,7 +9710,7 @@ inline ::uint32_t SeasonStateSnapshot::battle_points() const {
 }
 inline void SeasonStateSnapshot::set_battle_points(::uint32_t value) {
   _internal_set_battle_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.battle_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_battle_points() const {
@@ -4257,7 +9726,7 @@ inline void SeasonStateSnapshot::_internal_set_battle_points(::uint32_t value) {
 inline void SeasonStateSnapshot::clear_catchup_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t SeasonStateSnapshot::catchup_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_points)
@@ -4265,7 +9734,7 @@ inline ::uint32_t SeasonStateSnapshot::catchup_points() const {
 }
 inline void SeasonStateSnapshot::set_catchup_points(::uint32_t value) {
   _internal_set_catchup_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_catchup_points() const {
@@ -4281,7 +9750,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_points(::uint32_t value) 
 inline void SeasonStateSnapshot::clear_current_max_health_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_max_health_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t SeasonStateSnapshot::current_max_health_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.current_max_health_bps)
@@ -4289,7 +9758,7 @@ inline ::uint32_t SeasonStateSnapshot::current_max_health_bps() const {
 }
 inline void SeasonStateSnapshot::set_current_max_health_bps(::uint32_t value) {
   _internal_set_current_max_health_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.current_max_health_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_current_max_health_bps() const {
@@ -4305,7 +9774,7 @@ inline void SeasonStateSnapshot::_internal_set_current_max_health_bps(::uint32_t
 inline void SeasonStateSnapshot::clear_cap_max_health_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cap_max_health_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t SeasonStateSnapshot::cap_max_health_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.cap_max_health_bps)
@@ -4313,7 +9782,7 @@ inline ::uint32_t SeasonStateSnapshot::cap_max_health_bps() const {
 }
 inline void SeasonStateSnapshot::set_cap_max_health_bps(::uint32_t value) {
   _internal_set_cap_max_health_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.cap_max_health_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_cap_max_health_bps() const {
@@ -4329,7 +9798,7 @@ inline void SeasonStateSnapshot::_internal_set_cap_max_health_bps(::uint32_t val
 inline void SeasonStateSnapshot::clear_current_defense_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_defense_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t SeasonStateSnapshot::current_defense_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.current_defense_bps)
@@ -4337,7 +9806,7 @@ inline ::uint32_t SeasonStateSnapshot::current_defense_bps() const {
 }
 inline void SeasonStateSnapshot::set_current_defense_bps(::uint32_t value) {
   _internal_set_current_defense_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.current_defense_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_current_defense_bps() const {
@@ -4353,7 +9822,7 @@ inline void SeasonStateSnapshot::_internal_set_current_defense_bps(::uint32_t va
 inline void SeasonStateSnapshot::clear_cap_defense_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cap_defense_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t SeasonStateSnapshot::cap_defense_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.cap_defense_bps)
@@ -4361,7 +9830,7 @@ inline ::uint32_t SeasonStateSnapshot::cap_defense_bps() const {
 }
 inline void SeasonStateSnapshot::set_cap_defense_bps(::uint32_t value) {
   _internal_set_cap_defense_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.cap_defense_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_cap_defense_bps() const {
@@ -4377,7 +9846,7 @@ inline void SeasonStateSnapshot::_internal_set_cap_defense_bps(::uint32_t value)
 inline void SeasonStateSnapshot::clear_pve_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pve_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t SeasonStateSnapshot::pve_win_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.pve_win_points)
@@ -4385,7 +9854,7 @@ inline ::uint32_t SeasonStateSnapshot::pve_win_points() const {
 }
 inline void SeasonStateSnapshot::set_pve_win_points(::uint32_t value) {
   _internal_set_pve_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.pve_win_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_pve_win_points() const {
@@ -4401,7 +9870,7 @@ inline void SeasonStateSnapshot::_internal_set_pve_win_points(::uint32_t value) 
 inline void SeasonStateSnapshot::clear_pvp_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t SeasonStateSnapshot::pvp_win_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.pvp_win_points)
@@ -4409,7 +9878,7 @@ inline ::uint32_t SeasonStateSnapshot::pvp_win_points() const {
 }
 inline void SeasonStateSnapshot::set_pvp_win_points(::uint32_t value) {
   _internal_set_pvp_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.pvp_win_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_pvp_win_points() const {
@@ -4425,7 +9894,7 @@ inline void SeasonStateSnapshot::_internal_set_pvp_win_points(::uint32_t value) 
 inline void SeasonStateSnapshot::clear_pvp_other_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_other_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint32_t SeasonStateSnapshot::pvp_other_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.pvp_other_points)
@@ -4433,7 +9902,7 @@ inline ::uint32_t SeasonStateSnapshot::pvp_other_points() const {
 }
 inline void SeasonStateSnapshot::set_pvp_other_points(::uint32_t value) {
   _internal_set_pvp_other_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.pvp_other_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_pvp_other_points() const {
@@ -4473,7 +9942,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_currency_type(::uint32_t 
 inline void SeasonStateSnapshot::clear_catchup_price_per_point() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_price_per_point_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::catchup_price_per_point() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_price_per_point)
@@ -4481,7 +9950,7 @@ inline ::uint64_t SeasonStateSnapshot::catchup_price_per_point() const {
 }
 inline void SeasonStateSnapshot::set_catchup_price_per_point(::uint64_t value) {
   _internal_set_catchup_price_per_point(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_price_per_point)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_catchup_price_per_point() const {
@@ -4497,7 +9966,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_price_per_point(::uint64_
 inline void SeasonStateSnapshot::clear_catchup_remaining_total_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_remaining_total_price_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::catchup_remaining_total_price() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_remaining_total_price)
@@ -4505,7 +9974,7 @@ inline ::uint64_t SeasonStateSnapshot::catchup_remaining_total_price() const {
 }
 inline void SeasonStateSnapshot::set_catchup_remaining_total_price(::uint64_t value) {
   _internal_set_catchup_remaining_total_price(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_remaining_total_price)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_catchup_remaining_total_price() const {
@@ -4521,7 +9990,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_remaining_total_price(::u
 inline void SeasonStateSnapshot::clear_currency_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.currency_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::currency_balance() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.currency_balance)
@@ -4529,7 +9998,7 @@ inline ::uint64_t SeasonStateSnapshot::currency_balance() const {
 }
 inline void SeasonStateSnapshot::set_currency_balance(::uint64_t value) {
   _internal_set_currency_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.currency_balance)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_currency_balance() const {
@@ -4545,7 +10014,7 @@ inline void SeasonStateSnapshot::_internal_set_currency_balance(::uint64_t value
 inline void SeasonStateSnapshot::clear_can_switch_seal() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.can_switch_seal_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool SeasonStateSnapshot::can_switch_seal() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.can_switch_seal)
@@ -4553,7 +10022,7 @@ inline bool SeasonStateSnapshot::can_switch_seal() const {
 }
 inline void SeasonStateSnapshot::set_can_switch_seal(bool value) {
   _internal_set_can_switch_seal(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.can_switch_seal)
 }
 inline bool SeasonStateSnapshot::_internal_can_switch_seal() const {
@@ -4569,7 +10038,7 @@ inline void SeasonStateSnapshot::_internal_set_can_switch_seal(bool value) {
 inline void SeasonStateSnapshot::clear_can_catchup() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.can_catchup_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline bool SeasonStateSnapshot::can_catchup() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.can_catchup)
@@ -4577,7 +10046,7 @@ inline bool SeasonStateSnapshot::can_catchup() const {
 }
 inline void SeasonStateSnapshot::set_can_catchup(bool value) {
   _internal_set_can_catchup(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.can_catchup)
 }
 inline bool SeasonStateSnapshot::_internal_can_catchup() const {
@@ -4657,7 +10126,7 @@ inline void SeasonStateSnapshot::set_allocated_action_unavailable_reason(::std::
 inline void SeasonStateSnapshot::clear_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::revision() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.revision)
@@ -4665,7 +10134,7 @@ inline ::uint64_t SeasonStateSnapshot::revision() const {
 }
 inline void SeasonStateSnapshot::set_revision(::uint64_t value) {
   _internal_set_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.revision)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_revision() const {
@@ -4785,6 +10254,3063 @@ inline ::google::protobuf::RepeatedPtrField<::SeasonSkillSummary>* PROTOBUF_NONN
 SeasonStateSnapshot::_internal_mutable_season_skills() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.season_skills_;
+}
+
+// uint32 equipped_formation_id = 31;
+inline void SeasonStateSnapshot::clear_equipped_formation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipped_formation_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::uint32_t SeasonStateSnapshot::equipped_formation_id() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.equipped_formation_id)
+  return _internal_equipped_formation_id();
+}
+inline void SeasonStateSnapshot::set_equipped_formation_id(::uint32_t value) {
+  _internal_set_equipped_formation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.equipped_formation_id)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_equipped_formation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipped_formation_id_;
+}
+inline void SeasonStateSnapshot::_internal_set_equipped_formation_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipped_formation_id_ = value;
+}
+
+// repeated .SavedBattleBuildBookmarkView saved_builds = 32;
+inline int SeasonStateSnapshot::_internal_saved_builds_size() const {
+  return _internal_saved_builds().size();
+}
+inline int SeasonStateSnapshot::saved_builds_size() const {
+  return _internal_saved_builds_size();
+}
+inline void SeasonStateSnapshot::clear_saved_builds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.saved_builds_.Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+}
+inline const ::SavedBattleBuildBookmarkView& SeasonStateSnapshot::saved_builds(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.saved_builds)
+  return _internal_saved_builds().Get(index);
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SeasonStateSnapshot::mutable_saved_builds(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:SeasonStateSnapshot.saved_builds)
+  return _internal_mutable_saved_builds()->Mutable(index);
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SeasonStateSnapshot::add_saved_builds()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SavedBattleBuildBookmarkView* _add =
+      _internal_mutable_saved_builds()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  // @@protoc_insertion_point(field_add:SeasonStateSnapshot.saved_builds)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>& SeasonStateSnapshot::saved_builds() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SeasonStateSnapshot.saved_builds)
+  return _internal_saved_builds();
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+SeasonStateSnapshot::mutable_saved_builds() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:SeasonStateSnapshot.saved_builds)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_saved_builds();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>&
+SeasonStateSnapshot::_internal_saved_builds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.saved_builds_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+SeasonStateSnapshot::_internal_mutable_saved_builds() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.saved_builds_;
+}
+
+// repeated .SeasonHonorView honors = 33;
+inline int SeasonStateSnapshot::_internal_honors_size() const {
+  return _internal_honors().size();
+}
+inline int SeasonStateSnapshot::honors_size() const {
+  return _internal_honors_size();
+}
+inline void SeasonStateSnapshot::clear_honors() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honors_.Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline const ::SeasonHonorView& SeasonStateSnapshot::honors(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.honors)
+  return _internal_honors().Get(index);
+}
+inline ::SeasonHonorView* PROTOBUF_NONNULL SeasonStateSnapshot::mutable_honors(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:SeasonStateSnapshot.honors)
+  return _internal_mutable_honors()->Mutable(index);
+}
+inline ::SeasonHonorView* PROTOBUF_NONNULL SeasonStateSnapshot::add_honors()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SeasonHonorView* _add =
+      _internal_mutable_honors()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_add:SeasonStateSnapshot.honors)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SeasonHonorView>& SeasonStateSnapshot::honors() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SeasonStateSnapshot.honors)
+  return _internal_honors();
+}
+inline ::google::protobuf::RepeatedPtrField<::SeasonHonorView>* PROTOBUF_NONNULL
+SeasonStateSnapshot::mutable_honors() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:SeasonStateSnapshot.honors)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_honors();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SeasonHonorView>&
+SeasonStateSnapshot::_internal_honors() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honors_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SeasonHonorView>* PROTOBUF_NONNULL
+SeasonStateSnapshot::_internal_mutable_honors() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.honors_;
+}
+
+// .SeasonWeeklyAffixView weekly_affix = 34;
+inline bool SeasonStateSnapshot::has_weekly_affix() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  PROTOBUF_ASSUME(!value || _impl_.weekly_affix_ != nullptr);
+  return value;
+}
+inline void SeasonStateSnapshot::clear_weekly_affix() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.weekly_affix_ != nullptr) _impl_.weekly_affix_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::SeasonWeeklyAffixView& SeasonStateSnapshot::_internal_weekly_affix() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SeasonWeeklyAffixView* p = _impl_.weekly_affix_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SeasonWeeklyAffixView>(&::SeasonWeeklyAffixView_globals_);
+}
+inline const ::SeasonWeeklyAffixView& SeasonStateSnapshot::weekly_affix() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.weekly_affix)
+  return _internal_weekly_affix();
+}
+inline void SeasonStateSnapshot::unsafe_arena_set_allocated_weekly_affix(
+    ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.weekly_affix_);
+  }
+  _impl_.weekly_affix_ = reinterpret_cast<::SeasonWeeklyAffixView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SeasonStateSnapshot.weekly_affix)
+}
+inline ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE SeasonStateSnapshot::release_weekly_affix() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::SeasonWeeklyAffixView* released = _impl_.weekly_affix_;
+  _impl_.weekly_affix_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE SeasonStateSnapshot::unsafe_arena_release_weekly_affix() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonStateSnapshot.weekly_affix)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::SeasonWeeklyAffixView* temp = _impl_.weekly_affix_;
+  _impl_.weekly_affix_ = nullptr;
+  return temp;
+}
+inline ::SeasonWeeklyAffixView* PROTOBUF_NONNULL SeasonStateSnapshot::_internal_mutable_weekly_affix() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.weekly_affix_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SeasonWeeklyAffixView>(GetArena());
+    _impl_.weekly_affix_ = reinterpret_cast<::SeasonWeeklyAffixView*>(p);
+  }
+  return _impl_.weekly_affix_;
+}
+inline ::SeasonWeeklyAffixView* PROTOBUF_NONNULL SeasonStateSnapshot::mutable_weekly_affix()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::SeasonWeeklyAffixView* _msg = _internal_mutable_weekly_affix();
+  // @@protoc_insertion_point(field_mutable:SeasonStateSnapshot.weekly_affix)
+  return _msg;
+}
+inline void SeasonStateSnapshot::set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.weekly_affix_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+
+  _impl_.weekly_affix_ = reinterpret_cast<::SeasonWeeklyAffixView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SeasonStateSnapshot.weekly_affix)
+}
+
+// -------------------------------------------------------------------
+
+// SavedBattleBuildBookmarkView
+
+// uint64 bookmark_id = 1;
+inline void SavedBattleBuildBookmarkView::clear_bookmark_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bookmark_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::bookmark_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.bookmark_id)
+  return _internal_bookmark_id();
+}
+inline void SavedBattleBuildBookmarkView::set_bookmark_id(::uint64_t value) {
+  _internal_set_bookmark_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.bookmark_id)
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::_internal_bookmark_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bookmark_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_bookmark_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bookmark_id_ = value;
+}
+
+// string title = 2;
+inline void SavedBattleBuildBookmarkView::clear_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SavedBattleBuildBookmarkView::title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.title)
+  return _internal_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SavedBattleBuildBookmarkView::set_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.title)
+}
+inline ::std::string* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::mutable_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_title();
+  // @@protoc_insertion_point(field_mutable:SavedBattleBuildBookmarkView.title)
+  return _s;
+}
+inline const ::std::string& SavedBattleBuildBookmarkView::_internal_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_.Get();
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::_internal_mutable_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SavedBattleBuildBookmarkView::release_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavedBattleBuildBookmarkView.title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SavedBattleBuildBookmarkView::set_allocated_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_.IsDefault()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SavedBattleBuildBookmarkView.title)
+}
+
+// uint64 source_battle_id = 3;
+inline void SavedBattleBuildBookmarkView::clear_source_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::source_battle_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.source_battle_id)
+  return _internal_source_battle_id();
+}
+inline void SavedBattleBuildBookmarkView::set_source_battle_id(::uint64_t value) {
+  _internal_set_source_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.source_battle_id)
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::_internal_source_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_battle_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_source_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_battle_id_ = value;
+}
+
+// uint64 source_player_id = 4;
+inline void SavedBattleBuildBookmarkView::clear_source_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::source_player_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.source_player_id)
+  return _internal_source_player_id();
+}
+inline void SavedBattleBuildBookmarkView::set_source_player_id(::uint64_t value) {
+  _internal_set_source_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.source_player_id)
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::_internal_source_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_player_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_source_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_id_ = value;
+}
+
+// string source_player_name = 5;
+inline void SavedBattleBuildBookmarkView::clear_source_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& SavedBattleBuildBookmarkView::source_player_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.source_player_name)
+  return _internal_source_player_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SavedBattleBuildBookmarkView::set_source_player_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.source_player_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.source_player_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::mutable_source_player_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_source_player_name();
+  // @@protoc_insertion_point(field_mutable:SavedBattleBuildBookmarkView.source_player_name)
+  return _s;
+}
+inline const ::std::string& SavedBattleBuildBookmarkView::_internal_source_player_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_player_name_.Get();
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_source_player_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_player_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::_internal_mutable_source_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_player_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SavedBattleBuildBookmarkView::release_source_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavedBattleBuildBookmarkView.source_player_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.source_player_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_player_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SavedBattleBuildBookmarkView::set_allocated_source_player_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.source_player_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_player_name_.IsDefault()) {
+    _impl_.source_player_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SavedBattleBuildBookmarkView.source_player_name)
+}
+
+// uint32 class_id = 6;
+inline void SavedBattleBuildBookmarkView::clear_class_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::class_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.class_id)
+  return _internal_class_id();
+}
+inline void SavedBattleBuildBookmarkView::set_class_id(::uint32_t value) {
+  _internal_set_class_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.class_id)
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::_internal_class_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.class_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_class_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_id_ = value;
+}
+
+// uint32 formation_id = 7;
+inline void SavedBattleBuildBookmarkView::clear_formation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::formation_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.formation_id)
+  return _internal_formation_id();
+}
+inline void SavedBattleBuildBookmarkView::set_formation_id(::uint32_t value) {
+  _internal_set_formation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.formation_id)
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::_internal_formation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.formation_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_formation_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_id_ = value;
+}
+
+// uint32 season_seal_id = 8;
+inline void SavedBattleBuildBookmarkView::clear_season_seal_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::season_seal_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.season_seal_id)
+  return _internal_season_seal_id();
+}
+inline void SavedBattleBuildBookmarkView::set_season_seal_id(::uint32_t value) {
+  _internal_set_season_seal_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.season_seal_id)
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::_internal_season_seal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_seal_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_season_seal_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_id_ = value;
+}
+
+// uint32 active_pet_table_id = 9;
+inline void SavedBattleBuildBookmarkView::clear_active_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::active_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.active_pet_table_id)
+  return _internal_active_pet_table_id();
+}
+inline void SavedBattleBuildBookmarkView::set_active_pet_table_id(::uint32_t value) {
+  _internal_set_active_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.active_pet_table_id)
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::_internal_active_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_pet_table_id_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_active_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pet_table_id_ = value;
+}
+
+// string active_pet_name = 10;
+inline void SavedBattleBuildBookmarkView::clear_active_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pet_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& SavedBattleBuildBookmarkView::active_pet_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.active_pet_name)
+  return _internal_active_pet_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SavedBattleBuildBookmarkView::set_active_pet_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.active_pet_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.active_pet_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::mutable_active_pet_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_active_pet_name();
+  // @@protoc_insertion_point(field_mutable:SavedBattleBuildBookmarkView.active_pet_name)
+  return _s;
+}
+inline const ::std::string& SavedBattleBuildBookmarkView::_internal_active_pet_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_pet_name_.Get();
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_active_pet_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pet_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::_internal_mutable_active_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.active_pet_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SavedBattleBuildBookmarkView::release_active_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavedBattleBuildBookmarkView.active_pet_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.active_pet_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.active_pet_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SavedBattleBuildBookmarkView::set_allocated_active_pet_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.active_pet_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.active_pet_name_.IsDefault()) {
+    _impl_.active_pet_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SavedBattleBuildBookmarkView.active_pet_name)
+}
+
+// repeated uint32 skill_table_ids = 11;
+inline int SavedBattleBuildBookmarkView::_internal_skill_table_ids_size() const {
+  return _internal_skill_table_ids().size();
+}
+inline int SavedBattleBuildBookmarkView::skill_table_ids_size() const {
+  return _internal_skill_table_ids_size();
+}
+inline void SavedBattleBuildBookmarkView::clear_skill_table_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::skill_table_ids(int index) const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.skill_table_ids)
+  return _internal_skill_table_ids().Get(index);
+}
+inline void SavedBattleBuildBookmarkView::set_skill_table_ids(int index, ::uint32_t value) {
+  _internal_mutable_skill_table_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.skill_table_ids)
+}
+inline void SavedBattleBuildBookmarkView::add_skill_table_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_skill_table_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:SavedBattleBuildBookmarkView.skill_table_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& SavedBattleBuildBookmarkView::skill_table_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SavedBattleBuildBookmarkView.skill_table_ids)
+  return _internal_skill_table_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::mutable_skill_table_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:SavedBattleBuildBookmarkView.skill_table_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_skill_table_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+SavedBattleBuildBookmarkView::_internal_skill_table_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_table_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+SavedBattleBuildBookmarkView::_internal_mutable_skill_table_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.skill_table_ids_;
+}
+
+// repeated uint32 wuxing_sigil_ids = 12;
+inline int SavedBattleBuildBookmarkView::_internal_wuxing_sigil_ids_size() const {
+  return _internal_wuxing_sigil_ids().size();
+}
+inline int SavedBattleBuildBookmarkView::wuxing_sigil_ids_size() const {
+  return _internal_wuxing_sigil_ids_size();
+}
+inline void SavedBattleBuildBookmarkView::clear_wuxing_sigil_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wuxing_sigil_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SavedBattleBuildBookmarkView::wuxing_sigil_ids(int index) const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.wuxing_sigil_ids)
+  return _internal_wuxing_sigil_ids().Get(index);
+}
+inline void SavedBattleBuildBookmarkView::set_wuxing_sigil_ids(int index, ::uint32_t value) {
+  _internal_mutable_wuxing_sigil_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.wuxing_sigil_ids)
+}
+inline void SavedBattleBuildBookmarkView::add_wuxing_sigil_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_wuxing_sigil_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:SavedBattleBuildBookmarkView.wuxing_sigil_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& SavedBattleBuildBookmarkView::wuxing_sigil_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SavedBattleBuildBookmarkView.wuxing_sigil_ids)
+  return _internal_wuxing_sigil_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL SavedBattleBuildBookmarkView::mutable_wuxing_sigil_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:SavedBattleBuildBookmarkView.wuxing_sigil_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_wuxing_sigil_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+SavedBattleBuildBookmarkView::_internal_wuxing_sigil_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.wuxing_sigil_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+SavedBattleBuildBookmarkView::_internal_mutable_wuxing_sigil_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.wuxing_sigil_ids_;
+}
+
+// uint64 saved_at_ms = 13;
+inline void SavedBattleBuildBookmarkView::clear_saved_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.saved_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::saved_at_ms() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.saved_at_ms)
+  return _internal_saved_at_ms();
+}
+inline void SavedBattleBuildBookmarkView::set_saved_at_ms(::uint64_t value) {
+  _internal_set_saved_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.saved_at_ms)
+}
+inline ::uint64_t SavedBattleBuildBookmarkView::_internal_saved_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.saved_at_ms_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_saved_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.saved_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EquipWuxingFormationRequest
+
+// uint32 formation_id = 1;
+inline void EquipWuxingFormationRequest::clear_formation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t EquipWuxingFormationRequest::formation_id() const {
+  // @@protoc_insertion_point(field_get:EquipWuxingFormationRequest.formation_id)
+  return _internal_formation_id();
+}
+inline void EquipWuxingFormationRequest::set_formation_id(::uint32_t value) {
+  _internal_set_formation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:EquipWuxingFormationRequest.formation_id)
+}
+inline ::uint32_t EquipWuxingFormationRequest::_internal_formation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.formation_id_;
+}
+inline void EquipWuxingFormationRequest::_internal_set_formation_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EquipWuxingFormationResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool EquipWuxingFormationResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& EquipWuxingFormationResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& EquipWuxingFormationResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipWuxingFormationResponse.error_message)
+  return _internal_error_message();
+}
+inline void EquipWuxingFormationResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:EquipWuxingFormationResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE EquipWuxingFormationResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE EquipWuxingFormationResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipWuxingFormationResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL EquipWuxingFormationResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL EquipWuxingFormationResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:EquipWuxingFormationResponse.error_message)
+  return _msg;
+}
+inline void EquipWuxingFormationResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:EquipWuxingFormationResponse.error_message)
+}
+
+// uint32 equipped_formation_id = 2;
+inline void EquipWuxingFormationResponse::clear_equipped_formation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipped_formation_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t EquipWuxingFormationResponse::equipped_formation_id() const {
+  // @@protoc_insertion_point(field_get:EquipWuxingFormationResponse.equipped_formation_id)
+  return _internal_equipped_formation_id();
+}
+inline void EquipWuxingFormationResponse::set_equipped_formation_id(::uint32_t value) {
+  _internal_set_equipped_formation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:EquipWuxingFormationResponse.equipped_formation_id)
+}
+inline ::uint32_t EquipWuxingFormationResponse::_internal_equipped_formation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipped_formation_id_;
+}
+inline void EquipWuxingFormationResponse::_internal_set_equipped_formation_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipped_formation_id_ = value;
+}
+
+// .SeasonStateSnapshot state = 3;
+inline bool EquipWuxingFormationResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void EquipWuxingFormationResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::SeasonStateSnapshot& EquipWuxingFormationResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SeasonStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SeasonStateSnapshot>(&::SeasonStateSnapshot_globals_);
+}
+inline const ::SeasonStateSnapshot& EquipWuxingFormationResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipWuxingFormationResponse.state)
+  return _internal_state();
+}
+inline void EquipWuxingFormationResponse::unsafe_arena_set_allocated_state(
+    ::SeasonStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:EquipWuxingFormationResponse.state)
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NULLABLE EquipWuxingFormationResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NULLABLE EquipWuxingFormationResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipWuxingFormationResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NONNULL EquipWuxingFormationResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SeasonStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NONNULL EquipWuxingFormationResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:EquipWuxingFormationResponse.state)
+  return _msg;
+}
+inline void EquipWuxingFormationResponse::set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:EquipWuxingFormationResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// WuxingTowerLeaderboardEntry
+
+// uint32 rank = 1;
+inline void WuxingTowerLeaderboardEntry::clear_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::rank() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.rank)
+  return _internal_rank();
+}
+inline void WuxingTowerLeaderboardEntry::set_rank(::uint32_t value) {
+  _internal_set_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.rank)
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::_internal_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rank_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_ = value;
+}
+
+// uint64 player_id = 2;
+inline void WuxingTowerLeaderboardEntry::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t WuxingTowerLeaderboardEntry::player_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.player_id)
+  return _internal_player_id();
+}
+inline void WuxingTowerLeaderboardEntry::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.player_id)
+}
+inline ::uint64_t WuxingTowerLeaderboardEntry::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string player_name = 3;
+inline void WuxingTowerLeaderboardEntry::clear_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& WuxingTowerLeaderboardEntry::player_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.player_name)
+  return _internal_player_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void WuxingTowerLeaderboardEntry::set_player_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.player_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.player_name)
+}
+inline ::std::string* PROTOBUF_NONNULL WuxingTowerLeaderboardEntry::mutable_player_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_player_name();
+  // @@protoc_insertion_point(field_mutable:WuxingTowerLeaderboardEntry.player_name)
+  return _s;
+}
+inline const ::std::string& WuxingTowerLeaderboardEntry::_internal_player_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_name_.Get();
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_player_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL WuxingTowerLeaderboardEntry::_internal_mutable_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.player_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE WuxingTowerLeaderboardEntry::release_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:WuxingTowerLeaderboardEntry.player_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.player_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.player_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void WuxingTowerLeaderboardEntry::set_allocated_player_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.player_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.player_name_.IsDefault()) {
+    _impl_.player_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:WuxingTowerLeaderboardEntry.player_name)
+}
+
+// uint32 best_floor = 4;
+inline void WuxingTowerLeaderboardEntry::clear_best_floor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_floor_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::best_floor() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.best_floor)
+  return _internal_best_floor();
+}
+inline void WuxingTowerLeaderboardEntry::set_best_floor(::uint32_t value) {
+  _internal_set_best_floor(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.best_floor)
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::_internal_best_floor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_floor_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_best_floor(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_floor_ = value;
+}
+
+// uint32 best_rounds = 5;
+inline void WuxingTowerLeaderboardEntry::clear_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::best_rounds() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.best_rounds)
+  return _internal_best_rounds();
+}
+inline void WuxingTowerLeaderboardEntry::set_best_rounds(::uint32_t value) {
+  _internal_set_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.best_rounds)
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::_internal_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_rounds_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_ = value;
+}
+
+// uint32 formation_id = 6;
+inline void WuxingTowerLeaderboardEntry::clear_formation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::formation_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.formation_id)
+  return _internal_formation_id();
+}
+inline void WuxingTowerLeaderboardEntry::set_formation_id(::uint32_t value) {
+  _internal_set_formation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.formation_id)
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::_internal_formation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.formation_id_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_formation_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_id_ = value;
+}
+
+// repeated uint32 sigil_ids = 7;
+inline int WuxingTowerLeaderboardEntry::_internal_sigil_ids_size() const {
+  return _internal_sigil_ids().size();
+}
+inline int WuxingTowerLeaderboardEntry::sigil_ids_size() const {
+  return _internal_sigil_ids_size();
+}
+inline void WuxingTowerLeaderboardEntry::clear_sigil_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sigil_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::sigil_ids(int index) const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.sigil_ids)
+  return _internal_sigil_ids().Get(index);
+}
+inline void WuxingTowerLeaderboardEntry::set_sigil_ids(int index, ::uint32_t value) {
+  _internal_mutable_sigil_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.sigil_ids)
+}
+inline void WuxingTowerLeaderboardEntry::add_sigil_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_sigil_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:WuxingTowerLeaderboardEntry.sigil_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& WuxingTowerLeaderboardEntry::sigil_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:WuxingTowerLeaderboardEntry.sigil_ids)
+  return _internal_sigil_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL WuxingTowerLeaderboardEntry::mutable_sigil_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:WuxingTowerLeaderboardEntry.sigil_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_sigil_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+WuxingTowerLeaderboardEntry::_internal_sigil_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sigil_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+WuxingTowerLeaderboardEntry::_internal_mutable_sigil_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.sigil_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// WuxingTowerStateSnapshot
+
+// uint32 week_key = 1;
+inline void WuxingTowerStateSnapshot::clear_week_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_key_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::week_key() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.week_key)
+  return _internal_week_key();
+}
+inline void WuxingTowerStateSnapshot::set_week_key(::uint32_t value) {
+  _internal_set_week_key(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.week_key)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_week_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.week_key_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_week_key(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_key_ = value;
+}
+
+// bool run_active = 2;
+inline void WuxingTowerStateSnapshot::clear_run_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_active_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool WuxingTowerStateSnapshot::run_active() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.run_active)
+  return _internal_run_active();
+}
+inline void WuxingTowerStateSnapshot::set_run_active(bool value) {
+  _internal_set_run_active(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.run_active)
+}
+inline bool WuxingTowerStateSnapshot::_internal_run_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.run_active_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_run_active(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_active_ = value;
+}
+
+// uint64 run_id = 3;
+inline void WuxingTowerStateSnapshot::clear_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t WuxingTowerStateSnapshot::run_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.run_id)
+  return _internal_run_id();
+}
+inline void WuxingTowerStateSnapshot::set_run_id(::uint64_t value) {
+  _internal_set_run_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.run_id)
+}
+inline ::uint64_t WuxingTowerStateSnapshot::_internal_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.run_id_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_run_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_id_ = value;
+}
+
+// uint32 current_floor = 4;
+inline void WuxingTowerStateSnapshot::clear_current_floor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_floor_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::current_floor() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.current_floor)
+  return _internal_current_floor();
+}
+inline void WuxingTowerStateSnapshot::set_current_floor(::uint32_t value) {
+  _internal_set_current_floor(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.current_floor)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_current_floor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_floor_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_current_floor(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_floor_ = value;
+}
+
+// uint32 max_floors = 5;
+inline void WuxingTowerStateSnapshot::clear_max_floors() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_floors_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::max_floors() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.max_floors)
+  return _internal_max_floors();
+}
+inline void WuxingTowerStateSnapshot::set_max_floors(::uint32_t value) {
+  _internal_set_max_floors(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.max_floors)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_max_floors() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_floors_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_max_floors(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_floors_ = value;
+}
+
+// uint32 current_floor_dungeon_id = 6;
+inline void WuxingTowerStateSnapshot::clear_current_floor_dungeon_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_floor_dungeon_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::current_floor_dungeon_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.current_floor_dungeon_id)
+  return _internal_current_floor_dungeon_id();
+}
+inline void WuxingTowerStateSnapshot::set_current_floor_dungeon_id(::uint32_t value) {
+  _internal_set_current_floor_dungeon_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.current_floor_dungeon_id)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_current_floor_dungeon_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_floor_dungeon_id_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_current_floor_dungeon_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_floor_dungeon_id_ = value;
+}
+
+// uint32 current_floor_leyline_element = 7;
+inline void WuxingTowerStateSnapshot::clear_current_floor_leyline_element() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_floor_leyline_element_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::current_floor_leyline_element() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.current_floor_leyline_element)
+  return _internal_current_floor_leyline_element();
+}
+inline void WuxingTowerStateSnapshot::set_current_floor_leyline_element(::uint32_t value) {
+  _internal_set_current_floor_leyline_element(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.current_floor_leyline_element)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_current_floor_leyline_element() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_floor_leyline_element_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_current_floor_leyline_element(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_floor_leyline_element_ = value;
+}
+
+// uint32 run_total_rounds = 8;
+inline void WuxingTowerStateSnapshot::clear_run_total_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_total_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::run_total_rounds() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.run_total_rounds)
+  return _internal_run_total_rounds();
+}
+inline void WuxingTowerStateSnapshot::set_run_total_rounds(::uint32_t value) {
+  _internal_set_run_total_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.run_total_rounds)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_run_total_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.run_total_rounds_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_run_total_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_total_rounds_ = value;
+}
+
+// repeated uint32 active_sigil_ids = 9;
+inline int WuxingTowerStateSnapshot::_internal_active_sigil_ids_size() const {
+  return _internal_active_sigil_ids().size();
+}
+inline int WuxingTowerStateSnapshot::active_sigil_ids_size() const {
+  return _internal_active_sigil_ids_size();
+}
+inline void WuxingTowerStateSnapshot::clear_active_sigil_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_sigil_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::active_sigil_ids(int index) const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.active_sigil_ids)
+  return _internal_active_sigil_ids().Get(index);
+}
+inline void WuxingTowerStateSnapshot::set_active_sigil_ids(int index, ::uint32_t value) {
+  _internal_mutable_active_sigil_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.active_sigil_ids)
+}
+inline void WuxingTowerStateSnapshot::add_active_sigil_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_active_sigil_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:WuxingTowerStateSnapshot.active_sigil_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& WuxingTowerStateSnapshot::active_sigil_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:WuxingTowerStateSnapshot.active_sigil_ids)
+  return _internal_active_sigil_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL WuxingTowerStateSnapshot::mutable_active_sigil_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:WuxingTowerStateSnapshot.active_sigil_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_active_sigil_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+WuxingTowerStateSnapshot::_internal_active_sigil_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_sigil_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+WuxingTowerStateSnapshot::_internal_mutable_active_sigil_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.active_sigil_ids_;
+}
+
+// repeated uint32 pending_offer_sigil_ids = 10;
+inline int WuxingTowerStateSnapshot::_internal_pending_offer_sigil_ids_size() const {
+  return _internal_pending_offer_sigil_ids().size();
+}
+inline int WuxingTowerStateSnapshot::pending_offer_sigil_ids_size() const {
+  return _internal_pending_offer_sigil_ids_size();
+}
+inline void WuxingTowerStateSnapshot::clear_pending_offer_sigil_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_offer_sigil_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::pending_offer_sigil_ids(int index) const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.pending_offer_sigil_ids)
+  return _internal_pending_offer_sigil_ids().Get(index);
+}
+inline void WuxingTowerStateSnapshot::set_pending_offer_sigil_ids(int index, ::uint32_t value) {
+  _internal_mutable_pending_offer_sigil_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.pending_offer_sigil_ids)
+}
+inline void WuxingTowerStateSnapshot::add_pending_offer_sigil_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_pending_offer_sigil_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:WuxingTowerStateSnapshot.pending_offer_sigil_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& WuxingTowerStateSnapshot::pending_offer_sigil_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:WuxingTowerStateSnapshot.pending_offer_sigil_ids)
+  return _internal_pending_offer_sigil_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL WuxingTowerStateSnapshot::mutable_pending_offer_sigil_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:WuxingTowerStateSnapshot.pending_offer_sigil_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_pending_offer_sigil_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+WuxingTowerStateSnapshot::_internal_pending_offer_sigil_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_offer_sigil_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+WuxingTowerStateSnapshot::_internal_mutable_pending_offer_sigil_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.pending_offer_sigil_ids_;
+}
+
+// uint32 weekly_cleared_mask = 11;
+inline void WuxingTowerStateSnapshot::clear_weekly_cleared_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_cleared_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::weekly_cleared_mask() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_cleared_mask)
+  return _internal_weekly_cleared_mask();
+}
+inline void WuxingTowerStateSnapshot::set_weekly_cleared_mask(::uint32_t value) {
+  _internal_set_weekly_cleared_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_cleared_mask)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_cleared_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_cleared_mask_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_weekly_cleared_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_cleared_mask_ = value;
+}
+
+// uint32 weekly_best_floor = 12;
+inline void WuxingTowerStateSnapshot::clear_weekly_best_floor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_floor_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_floor() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_best_floor)
+  return _internal_weekly_best_floor();
+}
+inline void WuxingTowerStateSnapshot::set_weekly_best_floor(::uint32_t value) {
+  _internal_set_weekly_best_floor(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_best_floor)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_best_floor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_best_floor_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_weekly_best_floor(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_floor_ = value;
+}
+
+// uint32 weekly_best_rounds = 13;
+inline void WuxingTowerStateSnapshot::clear_weekly_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_rounds() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_best_rounds)
+  return _internal_weekly_best_rounds();
+}
+inline void WuxingTowerStateSnapshot::set_weekly_best_rounds(::uint32_t value) {
+  _internal_set_weekly_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_best_rounds)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_best_rounds_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_weekly_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_rounds_ = value;
+}
+
+// uint64 revision = 14;
+inline void WuxingTowerStateSnapshot::clear_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t WuxingTowerStateSnapshot::revision() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.revision)
+  return _internal_revision();
+}
+inline void WuxingTowerStateSnapshot::set_revision(::uint64_t value) {
+  _internal_set_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.revision)
+}
+inline ::uint64_t WuxingTowerStateSnapshot::_internal_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.revision_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = value;
+}
+
+// repeated .WuxingTowerLeaderboardEntry weekly_leaderboard = 15;
+inline int WuxingTowerStateSnapshot::_internal_weekly_leaderboard_size() const {
+  return _internal_weekly_leaderboard().size();
+}
+inline int WuxingTowerStateSnapshot::weekly_leaderboard_size() const {
+  return _internal_weekly_leaderboard_size();
+}
+inline void WuxingTowerStateSnapshot::clear_weekly_leaderboard() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_leaderboard_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::WuxingTowerLeaderboardEntry& WuxingTowerStateSnapshot::weekly_leaderboard(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_leaderboard)
+  return _internal_weekly_leaderboard().Get(index);
+}
+inline ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL WuxingTowerStateSnapshot::mutable_weekly_leaderboard(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:WuxingTowerStateSnapshot.weekly_leaderboard)
+  return _internal_mutable_weekly_leaderboard()->Mutable(index);
+}
+inline ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL WuxingTowerStateSnapshot::add_weekly_leaderboard()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::WuxingTowerLeaderboardEntry* _add =
+      _internal_mutable_weekly_leaderboard()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:WuxingTowerStateSnapshot.weekly_leaderboard)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>& WuxingTowerStateSnapshot::weekly_leaderboard() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:WuxingTowerStateSnapshot.weekly_leaderboard)
+  return _internal_weekly_leaderboard();
+}
+inline ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL
+WuxingTowerStateSnapshot::mutable_weekly_leaderboard() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:WuxingTowerStateSnapshot.weekly_leaderboard)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_weekly_leaderboard();
+}
+inline const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>&
+WuxingTowerStateSnapshot::_internal_weekly_leaderboard() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_leaderboard_;
+}
+inline ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL
+WuxingTowerStateSnapshot::_internal_mutable_weekly_leaderboard() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.weekly_leaderboard_;
+}
+
+// -------------------------------------------------------------------
+
+// GetWuxingTowerStateRequest
+
+// -------------------------------------------------------------------
+
+// GetWuxingTowerStateResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetWuxingTowerStateResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetWuxingTowerStateResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetWuxingTowerStateResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetWuxingTowerStateResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetWuxingTowerStateResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetWuxingTowerStateResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetWuxingTowerStateResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetWuxingTowerStateResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetWuxingTowerStateResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetWuxingTowerStateResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetWuxingTowerStateResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:GetWuxingTowerStateResponse.error_message)
+  return _msg;
+}
+inline void GetWuxingTowerStateResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetWuxingTowerStateResponse.error_message)
+}
+
+// .WuxingTowerStateSnapshot state = 2;
+inline bool GetWuxingTowerStateResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void GetWuxingTowerStateResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WuxingTowerStateSnapshot& GetWuxingTowerStateResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WuxingTowerStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WuxingTowerStateSnapshot>(&::WuxingTowerStateSnapshot_globals_);
+}
+inline const ::WuxingTowerStateSnapshot& GetWuxingTowerStateResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetWuxingTowerStateResponse.state)
+  return _internal_state();
+}
+inline void GetWuxingTowerStateResponse::unsafe_arena_set_allocated_state(
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetWuxingTowerStateResponse.state)
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE GetWuxingTowerStateResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE GetWuxingTowerStateResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetWuxingTowerStateResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL GetWuxingTowerStateResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WuxingTowerStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL GetWuxingTowerStateResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:GetWuxingTowerStateResponse.state)
+  return _msg;
+}
+inline void GetWuxingTowerStateResponse::set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetWuxingTowerStateResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// StartWuxingTowerRunRequest
+
+// -------------------------------------------------------------------
+
+// StartWuxingTowerRunResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool StartWuxingTowerRunResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& StartWuxingTowerRunResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& StartWuxingTowerRunResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:StartWuxingTowerRunResponse.error_message)
+  return _internal_error_message();
+}
+inline void StartWuxingTowerRunResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:StartWuxingTowerRunResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartWuxingTowerRunResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartWuxingTowerRunResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:StartWuxingTowerRunResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartWuxingTowerRunResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartWuxingTowerRunResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:StartWuxingTowerRunResponse.error_message)
+  return _msg;
+}
+inline void StartWuxingTowerRunResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:StartWuxingTowerRunResponse.error_message)
+}
+
+// .WuxingTowerStateSnapshot state = 2;
+inline bool StartWuxingTowerRunResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void StartWuxingTowerRunResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WuxingTowerStateSnapshot& StartWuxingTowerRunResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WuxingTowerStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WuxingTowerStateSnapshot>(&::WuxingTowerStateSnapshot_globals_);
+}
+inline const ::WuxingTowerStateSnapshot& StartWuxingTowerRunResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:StartWuxingTowerRunResponse.state)
+  return _internal_state();
+}
+inline void StartWuxingTowerRunResponse::unsafe_arena_set_allocated_state(
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:StartWuxingTowerRunResponse.state)
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE StartWuxingTowerRunResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE StartWuxingTowerRunResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:StartWuxingTowerRunResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL StartWuxingTowerRunResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WuxingTowerStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL StartWuxingTowerRunResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:StartWuxingTowerRunResponse.state)
+  return _msg;
+}
+inline void StartWuxingTowerRunResponse::set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:StartWuxingTowerRunResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// PickWuxingTowerSigilRequest
+
+// uint64 expected_run_id = 1;
+inline void PickWuxingTowerSigilRequest::clear_expected_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t PickWuxingTowerSigilRequest::expected_run_id() const {
+  // @@protoc_insertion_point(field_get:PickWuxingTowerSigilRequest.expected_run_id)
+  return _internal_expected_run_id();
+}
+inline void PickWuxingTowerSigilRequest::set_expected_run_id(::uint64_t value) {
+  _internal_set_expected_run_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:PickWuxingTowerSigilRequest.expected_run_id)
+}
+inline ::uint64_t PickWuxingTowerSigilRequest::_internal_expected_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_run_id_;
+}
+inline void PickWuxingTowerSigilRequest::_internal_set_expected_run_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = value;
+}
+
+// uint32 sigil_id = 2;
+inline void PickWuxingTowerSigilRequest::clear_sigil_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sigil_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t PickWuxingTowerSigilRequest::sigil_id() const {
+  // @@protoc_insertion_point(field_get:PickWuxingTowerSigilRequest.sigil_id)
+  return _internal_sigil_id();
+}
+inline void PickWuxingTowerSigilRequest::set_sigil_id(::uint32_t value) {
+  _internal_set_sigil_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:PickWuxingTowerSigilRequest.sigil_id)
+}
+inline ::uint32_t PickWuxingTowerSigilRequest::_internal_sigil_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sigil_id_;
+}
+inline void PickWuxingTowerSigilRequest::_internal_set_sigil_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sigil_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// PickWuxingTowerSigilResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool PickWuxingTowerSigilResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& PickWuxingTowerSigilResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& PickWuxingTowerSigilResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PickWuxingTowerSigilResponse.error_message)
+  return _internal_error_message();
+}
+inline void PickWuxingTowerSigilResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PickWuxingTowerSigilResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE PickWuxingTowerSigilResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE PickWuxingTowerSigilResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PickWuxingTowerSigilResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL PickWuxingTowerSigilResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL PickWuxingTowerSigilResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:PickWuxingTowerSigilResponse.error_message)
+  return _msg;
+}
+inline void PickWuxingTowerSigilResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PickWuxingTowerSigilResponse.error_message)
+}
+
+// .WuxingTowerStateSnapshot state = 2;
+inline bool PickWuxingTowerSigilResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void PickWuxingTowerSigilResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WuxingTowerStateSnapshot& PickWuxingTowerSigilResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WuxingTowerStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WuxingTowerStateSnapshot>(&::WuxingTowerStateSnapshot_globals_);
+}
+inline const ::WuxingTowerStateSnapshot& PickWuxingTowerSigilResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PickWuxingTowerSigilResponse.state)
+  return _internal_state();
+}
+inline void PickWuxingTowerSigilResponse::unsafe_arena_set_allocated_state(
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PickWuxingTowerSigilResponse.state)
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE PickWuxingTowerSigilResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE PickWuxingTowerSigilResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PickWuxingTowerSigilResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL PickWuxingTowerSigilResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WuxingTowerStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL PickWuxingTowerSigilResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:PickWuxingTowerSigilResponse.state)
+  return _msg;
+}
+inline void PickWuxingTowerSigilResponse::set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PickWuxingTowerSigilResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// AbandonWuxingTowerRunRequest
+
+// uint64 expected_run_id = 1;
+inline void AbandonWuxingTowerRunRequest::clear_expected_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t AbandonWuxingTowerRunRequest::expected_run_id() const {
+  // @@protoc_insertion_point(field_get:AbandonWuxingTowerRunRequest.expected_run_id)
+  return _internal_expected_run_id();
+}
+inline void AbandonWuxingTowerRunRequest::set_expected_run_id(::uint64_t value) {
+  _internal_set_expected_run_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:AbandonWuxingTowerRunRequest.expected_run_id)
+}
+inline ::uint64_t AbandonWuxingTowerRunRequest::_internal_expected_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_run_id_;
+}
+inline void AbandonWuxingTowerRunRequest::_internal_set_expected_run_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// AbandonWuxingTowerRunResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool AbandonWuxingTowerRunResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& AbandonWuxingTowerRunResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& AbandonWuxingTowerRunResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AbandonWuxingTowerRunResponse.error_message)
+  return _internal_error_message();
+}
+inline void AbandonWuxingTowerRunResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AbandonWuxingTowerRunResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE AbandonWuxingTowerRunResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE AbandonWuxingTowerRunResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AbandonWuxingTowerRunResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL AbandonWuxingTowerRunResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL AbandonWuxingTowerRunResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:AbandonWuxingTowerRunResponse.error_message)
+  return _msg;
+}
+inline void AbandonWuxingTowerRunResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AbandonWuxingTowerRunResponse.error_message)
+}
+
+// .WuxingTowerStateSnapshot state = 2;
+inline bool AbandonWuxingTowerRunResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void AbandonWuxingTowerRunResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WuxingTowerStateSnapshot& AbandonWuxingTowerRunResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WuxingTowerStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WuxingTowerStateSnapshot>(&::WuxingTowerStateSnapshot_globals_);
+}
+inline const ::WuxingTowerStateSnapshot& AbandonWuxingTowerRunResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AbandonWuxingTowerRunResponse.state)
+  return _internal_state();
+}
+inline void AbandonWuxingTowerRunResponse::unsafe_arena_set_allocated_state(
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AbandonWuxingTowerRunResponse.state)
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE AbandonWuxingTowerRunResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE AbandonWuxingTowerRunResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AbandonWuxingTowerRunResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL AbandonWuxingTowerRunResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WuxingTowerStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL AbandonWuxingTowerRunResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:AbandonWuxingTowerRunResponse.state)
+  return _msg;
+}
+inline void AbandonWuxingTowerRunResponse::set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AbandonWuxingTowerRunResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// SaveBattleBuildBookmarkRequest
+
+// .SavedBattleBuildBookmarkView bookmark = 1;
+inline bool SaveBattleBuildBookmarkRequest::has_bookmark() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.bookmark_ != nullptr);
+  return value;
+}
+inline void SaveBattleBuildBookmarkRequest::clear_bookmark() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bookmark_ != nullptr) _impl_.bookmark_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::SavedBattleBuildBookmarkView& SaveBattleBuildBookmarkRequest::_internal_bookmark() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SavedBattleBuildBookmarkView* p = _impl_.bookmark_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SavedBattleBuildBookmarkView>(&::SavedBattleBuildBookmarkView_globals_);
+}
+inline const ::SavedBattleBuildBookmarkView& SaveBattleBuildBookmarkRequest::bookmark() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SaveBattleBuildBookmarkRequest.bookmark)
+  return _internal_bookmark();
+}
+inline void SaveBattleBuildBookmarkRequest::unsafe_arena_set_allocated_bookmark(
+    ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bookmark_);
+  }
+  _impl_.bookmark_ = reinterpret_cast<::SavedBattleBuildBookmarkView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SaveBattleBuildBookmarkRequest.bookmark)
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE SaveBattleBuildBookmarkRequest::release_bookmark() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::SavedBattleBuildBookmarkView* released = _impl_.bookmark_;
+  _impl_.bookmark_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE SaveBattleBuildBookmarkRequest::unsafe_arena_release_bookmark() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SaveBattleBuildBookmarkRequest.bookmark)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::SavedBattleBuildBookmarkView* temp = _impl_.bookmark_;
+  _impl_.bookmark_ = nullptr;
+  return temp;
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SaveBattleBuildBookmarkRequest::_internal_mutable_bookmark() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bookmark_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SavedBattleBuildBookmarkView>(GetArena());
+    _impl_.bookmark_ = reinterpret_cast<::SavedBattleBuildBookmarkView*>(p);
+  }
+  return _impl_.bookmark_;
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SaveBattleBuildBookmarkRequest::mutable_bookmark()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::SavedBattleBuildBookmarkView* _msg = _internal_mutable_bookmark();
+  // @@protoc_insertion_point(field_mutable:SaveBattleBuildBookmarkRequest.bookmark)
+  return _msg;
+}
+inline void SaveBattleBuildBookmarkRequest::set_allocated_bookmark(::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bookmark_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.bookmark_ = reinterpret_cast<::SavedBattleBuildBookmarkView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SaveBattleBuildBookmarkRequest.bookmark)
+}
+
+// -------------------------------------------------------------------
+
+// SaveBattleBuildBookmarkResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SaveBattleBuildBookmarkResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SaveBattleBuildBookmarkResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SaveBattleBuildBookmarkResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SaveBattleBuildBookmarkResponse.error_message)
+  return _internal_error_message();
+}
+inline void SaveBattleBuildBookmarkResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SaveBattleBuildBookmarkResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SaveBattleBuildBookmarkResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SaveBattleBuildBookmarkResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SaveBattleBuildBookmarkResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SaveBattleBuildBookmarkResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SaveBattleBuildBookmarkResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:SaveBattleBuildBookmarkResponse.error_message)
+  return _msg;
+}
+inline void SaveBattleBuildBookmarkResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SaveBattleBuildBookmarkResponse.error_message)
+}
+
+// .SavedBattleBuildBookmarkView saved = 2;
+inline bool SaveBattleBuildBookmarkResponse::has_saved() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.saved_ != nullptr);
+  return value;
+}
+inline void SaveBattleBuildBookmarkResponse::clear_saved() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.saved_ != nullptr) _impl_.saved_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::SavedBattleBuildBookmarkView& SaveBattleBuildBookmarkResponse::_internal_saved() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SavedBattleBuildBookmarkView* p = _impl_.saved_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SavedBattleBuildBookmarkView>(&::SavedBattleBuildBookmarkView_globals_);
+}
+inline const ::SavedBattleBuildBookmarkView& SaveBattleBuildBookmarkResponse::saved() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SaveBattleBuildBookmarkResponse.saved)
+  return _internal_saved();
+}
+inline void SaveBattleBuildBookmarkResponse::unsafe_arena_set_allocated_saved(
+    ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.saved_);
+  }
+  _impl_.saved_ = reinterpret_cast<::SavedBattleBuildBookmarkView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SaveBattleBuildBookmarkResponse.saved)
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE SaveBattleBuildBookmarkResponse::release_saved() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::SavedBattleBuildBookmarkView* released = _impl_.saved_;
+  _impl_.saved_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE SaveBattleBuildBookmarkResponse::unsafe_arena_release_saved() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SaveBattleBuildBookmarkResponse.saved)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::SavedBattleBuildBookmarkView* temp = _impl_.saved_;
+  _impl_.saved_ = nullptr;
+  return temp;
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SaveBattleBuildBookmarkResponse::_internal_mutable_saved() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.saved_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SavedBattleBuildBookmarkView>(GetArena());
+    _impl_.saved_ = reinterpret_cast<::SavedBattleBuildBookmarkView*>(p);
+  }
+  return _impl_.saved_;
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SaveBattleBuildBookmarkResponse::mutable_saved()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::SavedBattleBuildBookmarkView* _msg = _internal_mutable_saved();
+  // @@protoc_insertion_point(field_mutable:SaveBattleBuildBookmarkResponse.saved)
+  return _msg;
+}
+inline void SaveBattleBuildBookmarkResponse::set_allocated_saved(::SavedBattleBuildBookmarkView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.saved_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.saved_ = reinterpret_cast<::SavedBattleBuildBookmarkView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SaveBattleBuildBookmarkResponse.saved)
+}
+
+// repeated .SavedBattleBuildBookmarkView all_bookmarks = 3;
+inline int SaveBattleBuildBookmarkResponse::_internal_all_bookmarks_size() const {
+  return _internal_all_bookmarks().size();
+}
+inline int SaveBattleBuildBookmarkResponse::all_bookmarks_size() const {
+  return _internal_all_bookmarks_size();
+}
+inline void SaveBattleBuildBookmarkResponse::clear_all_bookmarks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.all_bookmarks_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::SavedBattleBuildBookmarkView& SaveBattleBuildBookmarkResponse::all_bookmarks(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SaveBattleBuildBookmarkResponse.all_bookmarks)
+  return _internal_all_bookmarks().Get(index);
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SaveBattleBuildBookmarkResponse::mutable_all_bookmarks(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:SaveBattleBuildBookmarkResponse.all_bookmarks)
+  return _internal_mutable_all_bookmarks()->Mutable(index);
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SaveBattleBuildBookmarkResponse::add_all_bookmarks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SavedBattleBuildBookmarkView* _add =
+      _internal_mutable_all_bookmarks()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:SaveBattleBuildBookmarkResponse.all_bookmarks)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>& SaveBattleBuildBookmarkResponse::all_bookmarks() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:SaveBattleBuildBookmarkResponse.all_bookmarks)
+  return _internal_all_bookmarks();
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+SaveBattleBuildBookmarkResponse::mutable_all_bookmarks() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:SaveBattleBuildBookmarkResponse.all_bookmarks)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_all_bookmarks();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>&
+SaveBattleBuildBookmarkResponse::_internal_all_bookmarks() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.all_bookmarks_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+SaveBattleBuildBookmarkResponse::_internal_mutable_all_bookmarks() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.all_bookmarks_;
+}
+
+// -------------------------------------------------------------------
+
+// DeleteBattleBuildBookmarkRequest
+
+// uint64 bookmark_id = 1;
+inline void DeleteBattleBuildBookmarkRequest::clear_bookmark_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bookmark_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t DeleteBattleBuildBookmarkRequest::bookmark_id() const {
+  // @@protoc_insertion_point(field_get:DeleteBattleBuildBookmarkRequest.bookmark_id)
+  return _internal_bookmark_id();
+}
+inline void DeleteBattleBuildBookmarkRequest::set_bookmark_id(::uint64_t value) {
+  _internal_set_bookmark_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:DeleteBattleBuildBookmarkRequest.bookmark_id)
+}
+inline ::uint64_t DeleteBattleBuildBookmarkRequest::_internal_bookmark_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bookmark_id_;
+}
+inline void DeleteBattleBuildBookmarkRequest::_internal_set_bookmark_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bookmark_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// DeleteBattleBuildBookmarkResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool DeleteBattleBuildBookmarkResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& DeleteBattleBuildBookmarkResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& DeleteBattleBuildBookmarkResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:DeleteBattleBuildBookmarkResponse.error_message)
+  return _internal_error_message();
+}
+inline void DeleteBattleBuildBookmarkResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:DeleteBattleBuildBookmarkResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DeleteBattleBuildBookmarkResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DeleteBattleBuildBookmarkResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:DeleteBattleBuildBookmarkResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DeleteBattleBuildBookmarkResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DeleteBattleBuildBookmarkResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:DeleteBattleBuildBookmarkResponse.error_message)
+  return _msg;
+}
+inline void DeleteBattleBuildBookmarkResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:DeleteBattleBuildBookmarkResponse.error_message)
+}
+
+// repeated .SavedBattleBuildBookmarkView all_bookmarks = 2;
+inline int DeleteBattleBuildBookmarkResponse::_internal_all_bookmarks_size() const {
+  return _internal_all_bookmarks().size();
+}
+inline int DeleteBattleBuildBookmarkResponse::all_bookmarks_size() const {
+  return _internal_all_bookmarks_size();
+}
+inline void DeleteBattleBuildBookmarkResponse::clear_all_bookmarks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.all_bookmarks_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::SavedBattleBuildBookmarkView& DeleteBattleBuildBookmarkResponse::all_bookmarks(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:DeleteBattleBuildBookmarkResponse.all_bookmarks)
+  return _internal_all_bookmarks().Get(index);
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL DeleteBattleBuildBookmarkResponse::mutable_all_bookmarks(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:DeleteBattleBuildBookmarkResponse.all_bookmarks)
+  return _internal_mutable_all_bookmarks()->Mutable(index);
+}
+inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL DeleteBattleBuildBookmarkResponse::add_all_bookmarks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SavedBattleBuildBookmarkView* _add =
+      _internal_mutable_all_bookmarks()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:DeleteBattleBuildBookmarkResponse.all_bookmarks)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>& DeleteBattleBuildBookmarkResponse::all_bookmarks() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:DeleteBattleBuildBookmarkResponse.all_bookmarks)
+  return _internal_all_bookmarks();
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+DeleteBattleBuildBookmarkResponse::mutable_all_bookmarks() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:DeleteBattleBuildBookmarkResponse.all_bookmarks)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_all_bookmarks();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>&
+DeleteBattleBuildBookmarkResponse::_internal_all_bookmarks() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.all_bookmarks_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
+DeleteBattleBuildBookmarkResponse::_internal_mutable_all_bookmarks() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.all_bookmarks_;
 }
 
 // -------------------------------------------------------------------

@@ -113,6 +113,7 @@ type PetInstance struct {
 	TierLastResultTier     uint32            `protobuf:"varint,23,opt,name=tier_last_result_tier,json=tierLastResultTier,proto3" json:"tier_last_result_tier,omitempty"`          // 最近一次灵阶突破后的结果阶位。
 	EntryLastPresetSlot    uint32            `protobuf:"varint,24,opt,name=entry_last_preset_slot,json=entryLastPresetSlot,proto3" json:"entry_last_preset_slot,omitempty"`       // 最近一次条目方案切换的目标槽位（0 表示最近请求是 SaveEntries）。
 	EntryLastPresetTag     uint32            `protobuf:"varint,25,opt,name=entry_last_preset_tag,json=entryLastPresetTag,proto3" json:"entry_last_preset_tag,omitempty"`          // 最近一次条目方案切换的目标用途标签。
+	CosmeticId             uint32            `protobuf:"varint,26,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`                                      // 当前穿戴的灵宠幻化外观 ID（PetCosmetic.id；0 = 原形，纯外观零数值）。
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -322,6 +323,13 @@ func (x *PetInstance) GetEntryLastPresetTag() uint32 {
 	return 0
 }
 
+func (x *PetInstance) GetCosmeticId() uint32 {
+	if x != nil {
+		return x.CosmeticId
+	}
+	return 0
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 type PlayerPetComp struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -428,7 +436,7 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\tallocated\x18\x03 \x03(\v2\x1e.PetEntryPreset.AllocatedEntryR\tallocated\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe2\v\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x83\f\n" +
 	"\vPetInstance\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -458,7 +466,9 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x17tier_last_expected_tier\x18\x16 \x01(\rR\x14tierLastExpectedTier\x121\n" +
 	"\x15tier_last_result_tier\x18\x17 \x01(\rR\x12tierLastResultTier\x123\n" +
 	"\x16entry_last_preset_slot\x18\x18 \x01(\rR\x13entryLastPresetSlot\x121\n" +
-	"\x15entry_last_preset_tag\x18\x19 \x01(\rR\x12entryLastPresetTag\x1a<\n" +
+	"\x15entry_last_preset_tag\x18\x19 \x01(\rR\x12entryLastPresetTag\x12\x1f\n" +
+	"\vcosmetic_id\x18\x1a \x01(\rR\n" +
+	"cosmeticId\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a;\n" +

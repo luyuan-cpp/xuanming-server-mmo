@@ -297,6 +297,127 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int BO3_TOP4_ENABLED_FIELD_NUMBER = 21;
+  private boolean bo3Top4Enabled_ = false;
+  /**
+   * <code>bool bo3_top4_enabled = 21;</code>
+   * @return The bo3Top4Enabled.
+   */
+  @java.lang.Override
+  public boolean getBo3Top4Enabled() {
+    return bo3Top4Enabled_;
+  }
+
+  public static final int INTERMISSION_SECONDS_FIELD_NUMBER = 22;
+  private int intermissionSeconds_ = 0;
+  /**
+   * <code>uint32 intermission_seconds = 22;</code>
+   * @return The intermissionSeconds.
+   */
+  @java.lang.Override
+  public int getIntermissionSeconds() {
+    return intermissionSeconds_;
+  }
+
+  public static final int PUBLIC_KNOCKOUT_REPLAY_FIELD_NUMBER = 23;
+  private boolean publicKnockoutReplay_ = false;
+  /**
+   * <code>bool public_knockout_replay = 23;</code>
+   * @return The publicKnockoutReplay.
+   */
+  @java.lang.Override
+  public boolean getPublicKnockoutReplay() {
+    return publicKnockoutReplay_;
+  }
+
+  public static final int SALUTE_GOLD_AMOUNT_FIELD_NUMBER = 24;
+  private int saluteGoldAmount_ = 0;
+  /**
+   * <code>uint32 salute_gold_amount = 24;</code>
+   * @return The saluteGoldAmount.
+   */
+  @java.lang.Override
+  public int getSaluteGoldAmount() {
+    return saluteGoldAmount_;
+  }
+
+  public static final int SALUTE_ITEM_ID_FIELD_NUMBER = 25;
+  private int saluteItemId_ = 0;
+  /**
+   * <code>uint32 salute_item_id = 25;</code>
+   * @return The saluteItemId.
+   */
+  @java.lang.Override
+  public int getSaluteItemId() {
+    return saluteItemId_;
+  }
+
+  public static final int SALUTE_ITEM_COUNT_FIELD_NUMBER = 26;
+  private int saluteItemCount_ = 0;
+  /**
+   * <code>uint32 salute_item_count = 26;</code>
+   * @return The saluteItemCount.
+   */
+  @java.lang.Override
+  public int getSaluteItemCount() {
+    return saluteItemCount_;
+  }
+
+  public static final int WARMUP_SPAR_ENABLED_FIELD_NUMBER = 27;
+  private boolean warmupSparEnabled_ = false;
+  /**
+   * <code>bool warmup_spar_enabled = 27;</code>
+   * @return The warmupSparEnabled.
+   */
+  @java.lang.Override
+  public boolean getWarmupSparEnabled() {
+    return warmupSparEnabled_;
+  }
+
+  public static final int PREDICTION_ENABLED_FIELD_NUMBER = 28;
+  private boolean predictionEnabled_ = false;
+  /**
+   * <code>bool prediction_enabled = 28;</code>
+   * @return The predictionEnabled.
+   */
+  @java.lang.Override
+  public boolean getPredictionEnabled() {
+    return predictionEnabled_;
+  }
+
+  public static final int PREDICTION_REWARD_MIN_HITS_FIELD_NUMBER = 29;
+  private int predictionRewardMinHits_ = 0;
+  /**
+   * <code>uint32 prediction_reward_min_hits = 29;</code>
+   * @return The predictionRewardMinHits.
+   */
+  @java.lang.Override
+  public int getPredictionRewardMinHits() {
+    return predictionRewardMinHits_;
+  }
+
+  public static final int THIRD_PLACE_MATCH_ENABLED_FIELD_NUMBER = 30;
+  private boolean thirdPlaceMatchEnabled_ = false;
+  /**
+   * <code>bool third_place_match_enabled = 30;</code>
+   * @return The thirdPlaceMatchEnabled.
+   */
+  @java.lang.Override
+  public boolean getThirdPlaceMatchEnabled() {
+    return thirdPlaceMatchEnabled_;
+  }
+
+  public static final int LEYLINE_BAN_ENABLED_FIELD_NUMBER = 31;
+  private boolean leylineBanEnabled_ = false;
+  /**
+   * <code>bool leyline_ban_enabled = 31;</code>
+   * @return The leylineBanEnabled.
+   */
+  @java.lang.Override
+  public boolean getLeylineBanEnabled() {
+    return leylineBanEnabled_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -370,6 +491,39 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 20, desc_);
+    }
+    if (bo3Top4Enabled_ != false) {
+      output.writeBool(21, bo3Top4Enabled_);
+    }
+    if (intermissionSeconds_ != 0) {
+      output.writeUInt32(22, intermissionSeconds_);
+    }
+    if (publicKnockoutReplay_ != false) {
+      output.writeBool(23, publicKnockoutReplay_);
+    }
+    if (saluteGoldAmount_ != 0) {
+      output.writeUInt32(24, saluteGoldAmount_);
+    }
+    if (saluteItemId_ != 0) {
+      output.writeUInt32(25, saluteItemId_);
+    }
+    if (saluteItemCount_ != 0) {
+      output.writeUInt32(26, saluteItemCount_);
+    }
+    if (warmupSparEnabled_ != false) {
+      output.writeBool(27, warmupSparEnabled_);
+    }
+    if (predictionEnabled_ != false) {
+      output.writeBool(28, predictionEnabled_);
+    }
+    if (predictionRewardMinHits_ != 0) {
+      output.writeUInt32(29, predictionRewardMinHits_);
+    }
+    if (thirdPlaceMatchEnabled_ != false) {
+      output.writeBool(30, thirdPlaceMatchEnabled_);
+    }
+    if (leylineBanEnabled_ != false) {
+      output.writeBool(31, leylineBanEnabled_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -454,6 +608,50 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(20, desc_);
     }
+    if (bo3Top4Enabled_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(21, bo3Top4Enabled_);
+    }
+    if (intermissionSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(22, intermissionSeconds_);
+    }
+    if (publicKnockoutReplay_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(23, publicKnockoutReplay_);
+    }
+    if (saluteGoldAmount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(24, saluteGoldAmount_);
+    }
+    if (saluteItemId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(25, saluteItemId_);
+    }
+    if (saluteItemCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(26, saluteItemCount_);
+    }
+    if (warmupSparEnabled_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(27, warmupSparEnabled_);
+    }
+    if (predictionEnabled_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(28, predictionEnabled_);
+    }
+    if (predictionRewardMinHits_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(29, predictionRewardMinHits_);
+    }
+    if (thirdPlaceMatchEnabled_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(30, thirdPlaceMatchEnabled_);
+    }
+    if (leylineBanEnabled_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(31, leylineBanEnabled_);
+    }
     return size;
   }
   @java.lang.Override
@@ -518,6 +716,28 @@ private static final long serialVersionUID = 0L;
         != other.getInviteTtlSeconds()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getBo3Top4Enabled()
+        != other.getBo3Top4Enabled()) return false;
+    if (getIntermissionSeconds()
+        != other.getIntermissionSeconds()) return false;
+    if (getPublicKnockoutReplay()
+        != other.getPublicKnockoutReplay()) return false;
+    if (getSaluteGoldAmount()
+        != other.getSaluteGoldAmount()) return false;
+    if (getSaluteItemId()
+        != other.getSaluteItemId()) return false;
+    if (getSaluteItemCount()
+        != other.getSaluteItemCount()) return false;
+    if (getWarmupSparEnabled()
+        != other.getWarmupSparEnabled()) return false;
+    if (getPredictionEnabled()
+        != other.getPredictionEnabled()) return false;
+    if (getPredictionRewardMinHits()
+        != other.getPredictionRewardMinHits()) return false;
+    if (getThirdPlaceMatchEnabled()
+        != other.getThirdPlaceMatchEnabled()) return false;
+    if (getLeylineBanEnabled()
+        != other.getLeylineBanEnabled()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -570,6 +790,34 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getInviteTtlSeconds();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + BO3_TOP4_ENABLED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getBo3Top4Enabled());
+    hash = (37 * hash) + INTERMISSION_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getIntermissionSeconds();
+    hash = (37 * hash) + PUBLIC_KNOCKOUT_REPLAY_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getPublicKnockoutReplay());
+    hash = (37 * hash) + SALUTE_GOLD_AMOUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getSaluteGoldAmount();
+    hash = (37 * hash) + SALUTE_ITEM_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getSaluteItemId();
+    hash = (37 * hash) + SALUTE_ITEM_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getSaluteItemCount();
+    hash = (37 * hash) + WARMUP_SPAR_ENABLED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getWarmupSparEnabled());
+    hash = (37 * hash) + PREDICTION_ENABLED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getPredictionEnabled());
+    hash = (37 * hash) + PREDICTION_REWARD_MIN_HITS_FIELD_NUMBER;
+    hash = (53 * hash) + getPredictionRewardMinHits();
+    hash = (37 * hash) + THIRD_PLACE_MATCH_ENABLED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getThirdPlaceMatchEnabled());
+    hash = (37 * hash) + LEYLINE_BAN_ENABLED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getLeylineBanEnabled());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -721,6 +969,17 @@ private static final long serialVersionUID = 0L;
       qualifierLossPoints_ = 0;
       inviteTtlSeconds_ = 0;
       desc_ = "";
+      bo3Top4Enabled_ = false;
+      intermissionSeconds_ = 0;
+      publicKnockoutReplay_ = false;
+      saluteGoldAmount_ = 0;
+      saluteItemId_ = 0;
+      saluteItemCount_ = 0;
+      warmupSparEnabled_ = false;
+      predictionEnabled_ = false;
+      predictionRewardMinHits_ = 0;
+      thirdPlaceMatchEnabled_ = false;
+      leylineBanEnabled_ = false;
       return this;
     }
 
@@ -814,6 +1073,39 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00080000) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00100000) != 0)) {
+        result.bo3Top4Enabled_ = bo3Top4Enabled_;
+      }
+      if (((from_bitField0_ & 0x00200000) != 0)) {
+        result.intermissionSeconds_ = intermissionSeconds_;
+      }
+      if (((from_bitField0_ & 0x00400000) != 0)) {
+        result.publicKnockoutReplay_ = publicKnockoutReplay_;
+      }
+      if (((from_bitField0_ & 0x00800000) != 0)) {
+        result.saluteGoldAmount_ = saluteGoldAmount_;
+      }
+      if (((from_bitField0_ & 0x01000000) != 0)) {
+        result.saluteItemId_ = saluteItemId_;
+      }
+      if (((from_bitField0_ & 0x02000000) != 0)) {
+        result.saluteItemCount_ = saluteItemCount_;
+      }
+      if (((from_bitField0_ & 0x04000000) != 0)) {
+        result.warmupSparEnabled_ = warmupSparEnabled_;
+      }
+      if (((from_bitField0_ & 0x08000000) != 0)) {
+        result.predictionEnabled_ = predictionEnabled_;
+      }
+      if (((from_bitField0_ & 0x10000000) != 0)) {
+        result.predictionRewardMinHits_ = predictionRewardMinHits_;
+      }
+      if (((from_bitField0_ & 0x20000000) != 0)) {
+        result.thirdPlaceMatchEnabled_ = thirdPlaceMatchEnabled_;
+      }
+      if (((from_bitField0_ & 0x40000000) != 0)) {
+        result.leylineBanEnabled_ = leylineBanEnabled_;
+      }
     }
 
     @java.lang.Override
@@ -889,6 +1181,39 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00080000;
         onChanged();
+      }
+      if (other.getBo3Top4Enabled() != false) {
+        setBo3Top4Enabled(other.getBo3Top4Enabled());
+      }
+      if (other.getIntermissionSeconds() != 0) {
+        setIntermissionSeconds(other.getIntermissionSeconds());
+      }
+      if (other.getPublicKnockoutReplay() != false) {
+        setPublicKnockoutReplay(other.getPublicKnockoutReplay());
+      }
+      if (other.getSaluteGoldAmount() != 0) {
+        setSaluteGoldAmount(other.getSaluteGoldAmount());
+      }
+      if (other.getSaluteItemId() != 0) {
+        setSaluteItemId(other.getSaluteItemId());
+      }
+      if (other.getSaluteItemCount() != 0) {
+        setSaluteItemCount(other.getSaluteItemCount());
+      }
+      if (other.getWarmupSparEnabled() != false) {
+        setWarmupSparEnabled(other.getWarmupSparEnabled());
+      }
+      if (other.getPredictionEnabled() != false) {
+        setPredictionEnabled(other.getPredictionEnabled());
+      }
+      if (other.getPredictionRewardMinHits() != 0) {
+        setPredictionRewardMinHits(other.getPredictionRewardMinHits());
+      }
+      if (other.getThirdPlaceMatchEnabled() != false) {
+        setThirdPlaceMatchEnabled(other.getThirdPlaceMatchEnabled());
+      }
+      if (other.getLeylineBanEnabled() != false) {
+        setLeylineBanEnabled(other.getLeylineBanEnabled());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1016,6 +1341,61 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00080000;
               break;
             } // case 162
+            case 168: {
+              bo3Top4Enabled_ = input.readBool();
+              bitField0_ |= 0x00100000;
+              break;
+            } // case 168
+            case 176: {
+              intermissionSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00200000;
+              break;
+            } // case 176
+            case 184: {
+              publicKnockoutReplay_ = input.readBool();
+              bitField0_ |= 0x00400000;
+              break;
+            } // case 184
+            case 192: {
+              saluteGoldAmount_ = input.readUInt32();
+              bitField0_ |= 0x00800000;
+              break;
+            } // case 192
+            case 200: {
+              saluteItemId_ = input.readUInt32();
+              bitField0_ |= 0x01000000;
+              break;
+            } // case 200
+            case 208: {
+              saluteItemCount_ = input.readUInt32();
+              bitField0_ |= 0x02000000;
+              break;
+            } // case 208
+            case 216: {
+              warmupSparEnabled_ = input.readBool();
+              bitField0_ |= 0x04000000;
+              break;
+            } // case 216
+            case 224: {
+              predictionEnabled_ = input.readBool();
+              bitField0_ |= 0x08000000;
+              break;
+            } // case 224
+            case 232: {
+              predictionRewardMinHits_ = input.readUInt32();
+              bitField0_ |= 0x10000000;
+              break;
+            } // case 232
+            case 240: {
+              thirdPlaceMatchEnabled_ = input.readBool();
+              bitField0_ |= 0x20000000;
+              break;
+            } // case 240
+            case 248: {
+              leylineBanEnabled_ = input.readBool();
+              bitField0_ |= 0x40000000;
+              break;
+            } // case 248
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1713,54 +2093,343 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    // @@protoc_insertion_point(builder_scope:TournamentRuleTable)
-  }
-
-  // @@protoc_insertion_point(class_scope:TournamentRuleTable)
-  private static final com.game.table.TournamentRuleTable DEFAULT_INSTANCE;
-  static {
-    DEFAULT_INSTANCE = new com.game.table.TournamentRuleTable();
-  }
-
-  public static com.game.table.TournamentRuleTable getDefaultInstance() {
-    return DEFAULT_INSTANCE;
-  }
-
-  private static final com.google.protobuf.Parser<TournamentRuleTable>
-      PARSER = new com.google.protobuf.AbstractParser<TournamentRuleTable>() {
+    private boolean bo3Top4Enabled_ ;
+    /**
+     * <code>bool bo3_top4_enabled = 21;</code>
+     * @return The bo3Top4Enabled.
+     */
     @java.lang.Override
-    public TournamentRuleTable parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      Builder builder = newBuilder();
-      try {
-        builder.mergeFrom(input, extensionRegistry);
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(builder.buildPartial());
-      } catch (com.google.protobuf.UninitializedMessageException e) {
-        throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(e)
-            .setUnfinishedMessage(builder.buildPartial());
-      }
-      return builder.buildPartial();
+    public boolean getBo3Top4Enabled() {
+      return bo3Top4Enabled_;
     }
-  };
+    /**
+     * <code>bool bo3_top4_enabled = 21;</code>
+     * @param value The bo3Top4Enabled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBo3Top4Enabled(boolean value) {
 
-  public static com.google.protobuf.Parser<TournamentRuleTable> parser() {
-    return PARSER;
-  }
+      bo3Top4Enabled_ = value;
+      bitField0_ |= 0x00100000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool bo3_top4_enabled = 21;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBo3Top4Enabled() {
+      bitField0_ = (bitField0_ & ~0x00100000);
+      bo3Top4Enabled_ = false;
+      onChanged();
+      return this;
+    }
 
-  @java.lang.Override
-  public com.google.protobuf.Parser<TournamentRuleTable> getParserForType() {
-    return PARSER;
-  }
+    private int intermissionSeconds_ ;
+    /**
+     * <code>uint32 intermission_seconds = 22;</code>
+     * @return The intermissionSeconds.
+     */
+    @java.lang.Override
+    public int getIntermissionSeconds() {
+      return intermissionSeconds_;
+    }
+    /**
+     * <code>uint32 intermission_seconds = 22;</code>
+     * @param value The intermissionSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIntermissionSeconds(int value) {
 
-  @java.lang.Override
-  public com.game.table.TournamentRuleTable getDefaultInstanceForType() {
-    return DEFAULT_INSTANCE;
-  }
+      intermissionSeconds_ = value;
+      bitField0_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 intermission_seconds = 22;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIntermissionSeconds() {
+      bitField0_ = (bitField0_ & ~0x00200000);
+      intermissionSeconds_ = 0;
+      onChanged();
+      return this;
+    }
 
-}
+    private boolean publicKnockoutReplay_ ;
+    /**
+     * <code>bool public_knockout_replay = 23;</code>
+     * @return The publicKnockoutReplay.
+     */
+    @java.lang.Override
+    public boolean getPublicKnockoutReplay() {
+      return publicKnockoutReplay_;
+    }
+    /**
+     * <code>bool public_knockout_replay = 23;</code>
+     * @param value The publicKnockoutReplay to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPublicKnockoutReplay(boolean value) {
 
+      publicKnockoutReplay_ = value;
+      bitField0_ |= 0x00400000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool public_knockout_replay = 23;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPublicKnockoutReplay() {
+      bitField0_ = (bitField0_ & ~0x00400000);
+      publicKnockoutReplay_ = false;
+      onChanged();
+      return this;
+    }
+
+    private int saluteGoldAmount_ ;
+    /**
+     * <code>uint32 salute_gold_amount = 24;</code>
+     * @return The saluteGoldAmount.
+     */
+    @java.lang.Override
+    public int getSaluteGoldAmount() {
+      return saluteGoldAmount_;
+    }
+    /**
+     * <code>uint32 salute_gold_amount = 24;</code>
+     * @param value The saluteGoldAmount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSaluteGoldAmount(int value) {
+
+      saluteGoldAmount_ = value;
+      bitField0_ |= 0x00800000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 salute_gold_amount = 24;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSaluteGoldAmount() {
+      bitField0_ = (bitField0_ & ~0x00800000);
+      saluteGoldAmount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int saluteItemId_ ;
+    /**
+     * <code>uint32 salute_item_id = 25;</code>
+     * @return The saluteItemId.
+     */
+    @java.lang.Override
+    public int getSaluteItemId() {
+      return saluteItemId_;
+    }
+    /**
+     * <code>uint32 salute_item_id = 25;</code>
+     * @param value The saluteItemId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSaluteItemId(int value) {
+
+      saluteItemId_ = value;
+      bitField0_ |= 0x01000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 salute_item_id = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSaluteItemId() {
+      bitField0_ = (bitField0_ & ~0x01000000);
+      saluteItemId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int saluteItemCount_ ;
+    /**
+     * <code>uint32 salute_item_count = 26;</code>
+     * @return The saluteItemCount.
+     */
+    @java.lang.Override
+    public int getSaluteItemCount() {
+      return saluteItemCount_;
+    }
+    /**
+     * <code>uint32 salute_item_count = 26;</code>
+     * @param value The saluteItemCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSaluteItemCount(int value) {
+
+      saluteItemCount_ = value;
+      bitField0_ |= 0x02000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 salute_item_count = 26;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSaluteItemCount() {
+      bitField0_ = (bitField0_ & ~0x02000000);
+      saluteItemCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private boolean warmupSparEnabled_ ;
+    /**
+     * <code>bool warmup_spar_enabled = 27;</code>
+     * @return The warmupSparEnabled.
+     */
+    @java.lang.Override
+    public boolean getWarmupSparEnabled() {
+      return warmupSparEnabled_;
+    }
+    /**
+     * <code>bool warmup_spar_enabled = 27;</code>
+     * @param value The warmupSparEnabled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setWarmupSparEnabled(boolean value) {
+
+      warmupSparEnabled_ = value;
+      bitField0_ |= 0x04000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool warmup_spar_enabled = 27;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearWarmupSparEnabled() {
+      bitField0_ = (bitField0_ & ~0x04000000);
+      warmupSparEnabled_ = false;
+      onChanged();
+      return this;
+    }
+
+    private boolean predictionEnabled_ ;
+    /**
+     * <code>bool prediction_enabled = 28;</code>
+     * @return The predictionEnabled.
+     */
+    @java.lang.Override
+    public boolean getPredictionEnabled() {
+      return predictionEnabled_;
+    }
+    /**
+     * <code>bool prediction_enabled = 28;</code>
+     * @param value The predictionEnabled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPredictionEnabled(boolean value) {
+
+      predictionEnabled_ = value;
+      bitField0_ |= 0x08000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool prediction_enabled = 28;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPredictionEnabled() {
+      bitField0_ = (bitField0_ & ~0x08000000);
+      predictionEnabled_ = false;
+      onChanged();
+      return this;
+    }
+
+    private int predictionRewardMinHits_ ;
+    /**
+     * <code>uint32 prediction_reward_min_hits = 29;</code>
+     * @return The predictionRewardMinHits.
+     */
+    @java.lang.Override
+    public int getPredictionRewardMinHits() {
+      return predictionRewardMinHits_;
+    }
+    /**
+     * <code>uint32 prediction_reward_min_hits = 29;</code>
+     * @param value The predictionRewardMinHits to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPredictionRewardMinHits(int value) {
+
+      predictionRewardMinHits_ = value;
+      bitField0_ |= 0x10000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 prediction_reward_min_hits = 29;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPredictionRewardMinHits() {
+      bitField0_ = (bitField0_ & ~0x10000000);
+      predictionRewardMinHits_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private boolean thirdPlaceMatchEnabled_ ;
+    /**
+     * <code>bool third_place_match_enabled = 30;</code>
+     * @return The thirdPlaceMatchEnabled.
+     */
+    @java.lang.Override
+    public boolean getThirdPlaceMatchEnabled() {
+      return thirdPlaceMatchEnabled_;
+    }
+    /**
+     * <code>bool third_place_match_enabled = 30;</code>
+     * @param value The thirdPlaceMatchEnabled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setThirdPlaceMatchEnabled(boolean value) {
+
+      thirdPlaceMatchEnabled_ = value;
+      bitField0_ |= 0x20000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>bool third_place_match_enabled = 30;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearThirdPlaceMatchEnabled() {
+      bitField0_ = (bitField0_ & ~0x20000000);
+      thirdPlaceMatchEnabled_ = false;
+      onChanged();
+      return this;
+    }
+
+    private boolean leylineBanEnabled_ ;
+    /**
+     * <code>bool leyline_ban_enabled = 31;</code>
+     * @return The leylineBanEnabled.
+     */
+    @java.lang.Override
+    public boolean getLeylineBanEnabled() {
+      return leylineBanEnabled_;
+    }
+    /**
+     * <code>bool leyline_ban_enabled = 31;</code>
+     * @param value The leylineBanEnabled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLeylineBanEnabled(boolean value) {
+
+      leylineBanEnabled_ = value;
+      bitField0_ |= 0x40000000;
+      onChanged();
+      return this;

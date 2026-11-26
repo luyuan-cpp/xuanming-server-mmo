@@ -254,7 +254,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 4. 远端队员(别的队伍、别的队员)不需要任何新逻辑:它们的移动本来就由服务器广播。
 
 客户端实现(`mmorpg-client` main,代码随客户端提交 `f8076ce9` 入库,11-11 补的用例与兼容说明在工作区未提交;
-**都未编译、未在 Unity 里运行**,协议生成、编译与冒烟交 Codex;客户端兼容说明见该仓 `Docs/ClientProtocolCompatibility.md`
+**都未编译、未在 Unity 里运行**,协议生成、编译与冒烟交 Gemini;客户端兼容说明见该仓 `Docs/ClientProtocolCompatibility.md`
 「组队跟随改为服务器驱动」一节):
 
 - `Assets/Scripts/Game/GameClient.TeamFollow.cs`(新增 partial):`TeamFollowDriven`、`SceneEntryEpoch`、`SendTeamFollow`,
@@ -299,7 +299,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 | `kTeamFollowMaxApproachPath` | 48 米 | 加入时最长走多远,再远就瞬移;取归队阈值(24)的两倍 |
 | `kTeamFollowMaxLeaderJump` | 4 米 | 队长一 tick 挪这么远视为不连续 |
 
-## 8. 验证(未编译、未测试,待 Codex)
+## 8. 验证(未编译、未测试,待 Gemini)
 
 - 纯逻辑单测 `cpp/tests/aoi_test/team_follow_formation_test.cpp`(进 `aoi_test`):直走同速同距、同 tick 停步与起步、
   拐角不抄近路、沿路来回不动且轨迹不变长、横向来回只带动一次、真掉头后顺序与间距、加入走到队尾、比槽位近时原地等、
@@ -346,7 +346,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 
 ## 9. 没做 / 已知边界
 
-- **客户端**:§5 已写完(代码已入客户端 main,11-11 的用例与说明未提交),未编译、未在 Unity 里运行;编译、EditMode 与冒烟交 Codex。
+- **客户端**:§5 已写完(代码已入客户端 main,11-11 的用例与说明未提交),未编译、未在 Unity 里运行;编译、EditMode 与冒烟交 Gemini。
   在新客户端发 `TeamFollowC2S` 之前,本改动对线上行为没有影响。
 - **Java 版(AGENTS §12)**:待做,已登记 `PARITY.md`。需要对齐的客户端可见行为:`TeamFollowC2S` / `TeamFollowStateS2C`、
   服务器驱动队员沿队长轨迹走位并广播(含发给本人)、被驱动期间丢弃移动上报、队长换人时给全员发刷新、

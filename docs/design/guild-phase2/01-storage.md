@@ -5,7 +5,7 @@
 
 # S1 存储:帮会迁独立库 `mmorpg_guild`(批次 B1 / B1b)— 第 1 部分
 
-> 状态:设计稿(2026-09-16 按对抗评审修订,见 `s1_storage_review.md`),未落码、未编译,待 Codex 验证。本节遵守 `00_contract.md`,偏离处列在第 7 部分 §21。行号为 2026-09-16 核对值;并行会话在改同一工作树,落码前按函数名重新定位。
+> 状态:设计稿(2026-09-16 按对抗评审修订,见 `s1_storage_review.md`),未落码、未编译,待 Gemini 验证。本节遵守 `00_contract.md`,偏离处列在第 7 部分 §21。行号为 2026-09-16 核对值;并行会话在改同一工作树,落码前按函数名重新定位。
 
 ## 0. 范围与结论
 
@@ -338,7 +338,7 @@ schemamigrate 能做到和做不到的:
   - schemamigrate 若仍是 `replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1`,go/guild 末尾加同一行,上方注释:`// 与 go/schemamigrate/go.mod 的 proto2mysql replace 逐字一致:replace 只在主模块生效(guild-phase2 §7.1)。schemamigrate 改 require 正式 tag 后同步删除。`
   - schemamigrate 若已改为 require 含 191 前缀和 TiDB 选项的正式 tag(≥ v0.1.2)并删掉了 replace,go/guild 就不写 replace,也不直接 require proto2mysql。
   - 两种情况都必须满足:`go/guild/go.sum` 里 proto2mysql 的 `h1:` 行与 `go/schemamigrate/go.sum` 相同。§18 第 0、2 步负责核对。
-- `github.com/go-sql-driver/mysql` 升到 v1.9.3(schemamigrate 的要求);`golang.org/x/text` 从 indirect 变为直接依赖(§6.3)。go-zero 保持 v1.9.2。`go.sum` 与 indirect 块由 Codex 执行 `go mod tidy` 生成。
+- `github.com/go-sql-driver/mysql` 升到 v1.9.3(schemamigrate 的要求);`golang.org/x/text` 从 indirect 变为直接依赖(§6.3)。go-zero 保持 v1.9.2。`go.sum` 与 indirect 块由 Gemini 执行 `go mod tidy` 生成。
 
 ### 7.2 `go/guild/internal/data/tables.go`(新建)
 
@@ -921,7 +921,7 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 
 # S1 存储(B1 / B1b)— 第 7 部分:验证命令、切换步骤、D-14 修订、契约偏差
 
-## 18. Codex 验证(串行执行;Claude 一步也没有跑过)
+## 18. Gemini 验证(串行执行;Claude 一步也没有跑过)
 
 **前置条件**:buildenv 提供 Go 1.26.5;Docker 中 MySQL 与 Redis 已启动;先执行 §17.4 的 `git status`,如实记录,确认本批文件只做合并、不覆盖他人改动。
 
@@ -1044,13 +1044,13 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 
 > **2026-09-28 落码修正**:本节前三条已随 proto2mysql 切到 v0.2.0 而关闭或改变,详见 §0 的落码修正。
 > - 第 1 条(靠未提交的 replace 拿 191 前缀):已关闭。全仓已统一为 v0.2.0,不再依赖 191 前缀。
->   go.mod / go.sum 随 09-28 的每小时 WIP 提交进了 main;PROGRESS 同一条目要求的 Codex 复验还没做。
+>   go.mod / go.sum 随 09-28 的每小时 WIP 提交进了 main;PROGRESS 同一条目要求的 Gemini 复验还没做。
 > - 第 2 条(旧 MEDIUMTEXT 唯一键被判 `ErrLegacyKeyColumn`):已兑现。本地 `mmorpg_guild.guild` 当时的形态正是这种,
 >   处理办法是迁移 SQL 与新 guild.exe 同批上线(本地也可删表重建)。上线后再遇到同类改动,要先完成迁移设计。
 > - 第 3 条(`unicode_ci` 误判):迁移后消失。
 > - 新增风险:迁移后键列区分大小写。帮名的 `name_norm` 已在 Go 侧转成小写,不受影响;账号类键列受影响,见 PROGRESS 同一条目。
 - GET_LOCK 与 KILL QUERY 在 TiDB 上的语义尚未验证(`schemamigrate.go:75-80`);§2.1 规则 3 关于 TiDB 锁不存在键的描述,来自 TiDB 悲观事务的文档语义,未在本项目的 TiDB v8.5.2 集群实测。
-- Go 1.26.5 工具链是否可用取决于 Codex 环境;CI(`go-modules-ci.yml`)检出时必须包含 `go/schemamigrate`,并能访问替换源。
+- Go 1.26.5 工具链是否可用取决于 Gemini 环境;CI(`go-modules-ci.yml`)检出时必须包含 `go/schemamigrate`,并能访问替换源。
 - 本文行号在并行会话持续改动下会漂移,落码时以函数名为准。
 
 ---

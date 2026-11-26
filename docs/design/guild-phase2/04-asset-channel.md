@@ -5,7 +5,7 @@
 
 # S4 通用资产通道(批次 B4a C++ / B4b Go)— 第 1 部分:结论、现状、不变量、协议
 
-> 本节只设计"Go 服务让在线玩家身上的货币/物品发生一次且仅一次的变化"这条通道本身。帮会捐献、商店、活动奖励怎么用它,由 S5/S6 设计;聚宝斋 P2 以后复用它。所有代码均未编译,待 Codex 验证。
+> 本节只设计"Go 服务让在线玩家身上的货币/物品发生一次且仅一次的变化"这条通道本身。帮会捐献、商店、活动奖励怎么用它,由 S5/S6 设计;聚宝斋 P2 以后复用它。所有代码均未编译,待 Gemini 验证。
 
 ## 4.0 结论(先读这段)
 
@@ -482,7 +482,7 @@ static uint32_t DeductCurrency(entt::entity player, CurrencyType type, int64_t a
 
 流水调用改为 `LogCurrencyAdd(player, type, amount, before, after, txType, correlationId)` 和 `LogCurrencyDeduct(..., txType, correlationId)`。
 
-**这是客户端可见变化**(第二轮核实后修正):宠物、加点在扣币前先 `CanAfford` 并回各自的 `kPetGoldNotEnough / kAttributeGoldNotEnough`(`player_pet.cpp:582-583,675-676`,`player_attribute.cpp:658-659,750-751`),27000 走不到;但冻结(27003)、封禁(27005)与 GM 指令会把 27000 段码透传给客户端,而 Unity 的 `PetClient.DescribeTip` 等是手写镜像(`PetClient.cs:80-98`),未收录的码显示"tip=N"。服务端调用方不改;客户端补镜像,列为 B4a-client(第 11 部分 4.41)。`cpp/tests/currency_test/currency_test.cpp` 里断言 `kInvalidParameter` 的"余额不足 / 冻结 / 封禁"用例要跟着改期望值。Codex 用 `rg -n "kInvalidParameter" cpp/tests/currency_test/currency_test.cpp` 逐条核对。
+**这是客户端可见变化**(第二轮核实后修正):宠物、加点在扣币前先 `CanAfford` 并回各自的 `kPetGoldNotEnough / kAttributeGoldNotEnough`(`player_pet.cpp:582-583,675-676`,`player_attribute.cpp:658-659,750-751`),27000 走不到;但冻结(27003)、封禁(27005)与 GM 指令会把 27000 段码透传给客户端,而 Unity 的 `PetClient.DescribeTip` 等是手写镜像(`PetClient.cs:80-98`),未收录的码显示"tip=N"。服务端调用方不改;客户端补镜像,列为 B4a-client(第 11 部分 4.41)。`cpp/tests/currency_test/currency_test.cpp` 里断言 `kInvalidParameter` 的"余额不足 / 冻结 / 封禁"用例要跟着改期望值。Gemini 用 `rg -n "kInvalidParameter" cpp/tests/currency_test/currency_test.cpp` 逐条核对。
 
 **`transaction_log_system.h/.cpp`**:`LogCurrencyAdd`、`LogCurrencyDeduct`、`LogItemCreate` 末尾各加 `uint64_t correlationId = 0`,实现里 `entry.set_correlation_id(correlationId)`。
 
@@ -548,7 +548,7 @@ if (!IsClientGmAllowed()) {
 
 <!-- s4_asset_part4.md -->
 
-# S4 通用资产通道 — 第 4 部分:C++ 测试、B4a 文件清单、Codex 验证
+# S4 通用资产通道 — 第 4 部分:C++ 测试、B4a 文件清单、Gemini 验证
 
 ## 4.14 C++ gtest
 
@@ -648,7 +648,7 @@ if (!IsClientGmAllowed()) {
 - PROGRESS.md 与 `docs/design/guild-phase2.md` 属于文档,随批次追加,不计入手改代码名额。
 - 生成物(proto 输出、Handle 桩、tip 生成文件)不计入。
 
-## 4.16 B4a Codex 验证步骤(串行,工作目录 `E:\work\xuanming-server-mmo`)
+## 4.16 B4a Gemini 验证步骤(串行,工作目录 `E:\work\xuanming-server-mmo`)
 
 > 第二轮评审增补(第 0 步目录与 message_id 对比、第 1 步路由表检查、新第 1b 步 go/db 迁移、第 4 步过滤器、第 6 步字段号检查、B4a-2 与 B4a-client 的验证)见第 11 部分 4.42,与下文冲突时以 4.42 为准。
 
@@ -1011,7 +1011,7 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error)   // �
   - `caller := &assetop.Caller{Resolver: locator, CallTimeout: 800*time.Millisecond, Requery: assetop.DefaultRequery}`;
   - `loop, _ := assetop.NewLoop(cfg, guildAssetStore, caller, m, time.Now)`。
 
-## 4.23 B4b Codex 验证(工作目录 `E:\work\xuanming-server-mmo\go\shared`)
+## 4.23 B4b Gemini 验证(工作目录 `E:\work\xuanming-server-mmo\go\shared`)
 
 B4a 的 proto 生成必须先完成,`go/proto/common/asset` 要已存在。
 
@@ -1026,7 +1026,7 @@ B4a 的 proto 生成必须先完成,`go/proto/common/asset` 要已存在。
 > **已作废**:本节原用 `robot_9219`(帮会冒烟段)在 GUILD_* 流上以 Unix 秒作 seq,会把该账号账本下沿永久推到约 1.79e9,B5 之后 guild 从 seq 1 发起的操作全部 UNKNOWN,且测试抢占了 guild 独占的流。改为专用账号 `robot_9501` + 每次运行新纪元,步骤以第 11 部分 4.40 为准。下文仅留作对照。
 
 1. **起全栈**:按"xuanming 本地开机 runbook"启动;scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev,GM 客户端消息因此放行(**不是**靠 `MMORPG_ALLOW_CLIENT_GM`,那个变量不存在;见 `cpp/nodes/gate/SECURITY.md` §3)。启动前 `redis-cli GET player:{<id>}:location` 应为空。
-2. **准备玩家**:robot 账号 `robot_9219`(契约 §6 的帮会冒烟段)登录进场并**保持在线**(Codex 选用能保持在线的 robot 模式,记录实际命令),经 GmAddCurrency 加金币 1000。记下 player_id 与余额 B0。
+2. **准备玩家**:robot 账号 `robot_9219`(契约 §6 的帮会冒烟段)登录进场并**保持在线**(Gemini 选用能保持在线的 robot 模式,记录实际命令),经 GmAddCurrency 加金币 1000。记下 player_id 与余额 B0。
 3. **跑冒烟**:
    ```
    $env:ASSETOP_SMOKE_PLAYER_ID="<id>"
@@ -1589,7 +1589,7 @@ type ManualResolver interface {
 
 <!-- s4_asset_part11.md -->
 
-# S4 通用资产通道 — 第 11 部分:第二轮评审修订(四)冒烟重写、批次清单、Codex 验证增补、契约偏差
+# S4 通用资产通道 — 第 11 部分:第二轮评审修订(四)冒烟重写、批次清单、Gemini 验证增补、契约偏差
 
 ## 4.40 端到端冒烟(替换第 6 部分 4.24)
 
@@ -1598,7 +1598,7 @@ type ManualResolver interface {
 **每次运行一个新纪元**:`epoch := uint64(time.Now().UnixMilli())`,seq 从 1 起。上一次运行的纪元更小,scene 按 4.29 规则重置该流,不会有窗口永久滑走的问题。
 
 1. **起全栈**:按"xuanming 本地开机 runbook";scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev(GM 客户端消息放行),并注入两把资产通道开发密钥。
-2. **准备玩家**:`robot_9501` 登录进场并保持在线(Codex 选能保持在线的 robot 模式,记录实际命令);GmAddCurrency 加金币 1000;记下 player_id 与余额 B0。
+2. **准备玩家**:`robot_9501` 登录进场并保持在线(Gemini 选能保持在线的 robot 模式,记录实际命令);GmAddCurrency 加金币 1000;记下 player_id 与余额 B0。
 3. **跑冒烟**:
    ```
    $env:ASSETOP_SMOKE_PLAYER_ID="<id>"
@@ -1651,7 +1651,7 @@ type ManualResolver interface {
 
 **B4c 玩家存盘属主围栏(≤12,单独评审与授权)**:见第 9 部分 4.35。**2026-09-21 起以 [08-save-owner-fence.md](./08-save-owner-fence.md) 为准(5 个手改文件)。**
 
-## 4.42 Codex 验证增补(在第 4 部分 4.16 与第 6 部分 4.23 基础上)
+## 4.42 Gemini 验证增补(在第 4 部分 4.16 与第 6 部分 4.23 基础上)
 
 **B4a-1**:
 - 第 0 步 `git status --short` 目录追加 `go/*/generated robot/generated generated/proto/_unified`;另存 `generated/proto/_unified/proto/message_id.txt` 副本为 `message_id.before.txt`。
@@ -1696,7 +1696,7 @@ type ManualResolver interface {
 
 # S4 通用资产通道 — 第二轮对抗评审处置表(2026-09-16)
 
-评审结论:1 阻断、8 主要、8 次要。逐条对照代码核验后:**15 条采纳,2 条部分采纳,驳回部分均给出代码证据**。修订落在第 8–11 部分(新增),第 1–7 部分就地改并指向新部分;优先级 11 > 10 > 9 > 8 > 7 > 1–6。全部未编译,待 Codex 验证。
+评审结论:1 阻断、8 主要、8 次要。逐条对照代码核验后:**15 条采纳,2 条部分采纳,驳回部分均给出代码证据**。修订落在第 8–11 部分(新增),第 1–7 部分就地改并指向新部分;优先级 11 > 10 > 9 > 8 > 7 > 1–6。全部未编译,待 Gemini 验证。
 
 | # | 级别 | 问题 | 处置 | 核验证据 / 理由 | 改动位置 |
 |---|---|---|---|---|---|
@@ -1715,7 +1715,7 @@ type ManualResolver interface {
 | 13 | 次要 | payload 解码失败的毒行卡住整个循环 | **已采纳** | Claim 内解码失败 → Store 写 UNKNOWN、推迟 1h、返回 `ErrPoisonRow`,计 `store_errors{op="decode"}`,其余行照常;补 `PoisonRowSkipped` | 第 10 部分 4.37;第 5 部分测试表 |
 | 14 | 次要 | 27000 段码对客户端可见,Unity 手写镜像缺失 | **部分采纳** | **驳回其中"宠物或加点货币不足会显示兜底文案"**:`player_pet.cpp:582-583,675-676`、`player_attribute.cpp:658-659,750-751` 扣币前先 `CanAfford` 并回 `kPetGoldNotEnough / kAttributeGoldNotEnough`,27000 走不到。**采纳其余**:冻结(27003)、封禁与 GM 路径确会透传新码,`PetClient.cs:80-98` 是手写镜像。二选一定为客户端补镜像(B4a-client:PetClient、AttributeClient 各加 27000–27008);不做 scene 映射回原码——原码是 `kInvalidParameter`,映射回去等于丢信息。原稿"不用改"的说法已更正 | 第 3 部分 4.11;第 11 部分 4.41 |
 | 15 | 次要 | 提示文案过度承诺"自动继续/自动发放" | **已采纳** | 改为"稍后自动重试;超过时限可能取消",具体时限由 S5 界面显示。用"可能"而非"将":S5 偏差 #3 定商店 `deadline_ms=0` 不取消,捐献才会取消 | 第 1 部分 4.3.6 |
-| 16 | 次要 | Codex 验证缺口(生成物目录、路由表、字段号匹配) | **已采纳** | `route_table.go:119` SceneNodeGrpc 行 `ClientProtocol: false` 属实;`generated/proto/_unified/proto/message_id.txt` 存在。第 0 步补目录并留 message_id 副本,生成后只许新增 3 行;第 1 步查三个 RPC 均 `ClientProtocol: false`;字段号检查只截 `player_database` 消息体 | 第 11 部分 4.42;第 4 部分 4.16 指向 |
+| 16 | 次要 | Gemini 验证缺口(生成物目录、路由表、字段号匹配) | **已采纳** | `route_table.go:119` SceneNodeGrpc 行 `ClientProtocol: false` 属实;`generated/proto/_unified/proto/message_id.txt` 存在。第 0 步补目录并留 message_id 副本,生成后只许新增 3 行;第 1 步查三个 RPC 均 `ClientProtocol: false`;字段号检查只截 `player_database` 消息体 | 第 11 部分 4.42;第 4 部分 4.16 指向 |
 | 17 | 次要 | 聚宝斋文档改动超出"只改通用名" | **已采纳** | 第 6 部分 4.21 第 3、4、6、7、8 条改为只替换名字;结果环、快照、C5 持久化等级、字段形状写成开放项 J-A1/J-A2/J-A3 追加在 §6.4 末尾,由交易会话决定 | 第 6 部分 4.21 |
 
 ## 需主设计 / 其它分节跟进的事项

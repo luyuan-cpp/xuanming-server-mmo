@@ -1,6 +1,6 @@
 # 场景导航网格管线(Recast 烘焙 + 服务器寻路阻挡校验)
 
-日期:2026-08-26。状态:代码就位,**未编译,待 Codex 验证**(见 §6)。
+日期:2026-08-26。状态:代码就位,**未编译,待 Gemini 验证**(见 §6)。
 
 ## 1. 背景与问题
 
@@ -84,7 +84,7 @@ playerHeight/playerStepOffset)。速度信任上限 `kMaxTrustedClientSpeed=10`
 - `SceneNavManager` 是 thread_local,`LoadNavBins` 只在启动线程跑过——多场景
   线程模型下需要每线程加载(现状如此,本轮未改)。
 
-## 6. Codex 执行清单(编译 + 出数据 + 验证)
+## 6. Gemini 执行清单(编译 + 出数据 + 验证)
 
 顺序执行,C++ MSBuild 串行 `/m:1`:
 

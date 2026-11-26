@@ -404,7 +404,7 @@ player_id、battle_id 只进日志字段,不进任何指标 label。
 - **match**:`game-match/.../global/GlobalMatchStore.java` 的终局事务里写 Java 自己的两张战报表,挤出与减引用照 §7.2;建房原件照 §7.1 写 `record_replay`;两条查询各加一个 handler,在 `dispatch/MatchMethods.java` 登记。
 - **proto**:`game-proto/src/main/proto/proto/` 下的同名文件同批改。
 
-## 17. 验证(交 Codex,AGENTS §10.1)
+## 17. 验证(交 Gemini,AGENTS §10.1)
 
 任一步失败即停,保留完整输出,不改断言、不跳过。以下保留原验证顺序,2026-11-10 Codex 续验的实际结果与未执行项见 §17.1。
 

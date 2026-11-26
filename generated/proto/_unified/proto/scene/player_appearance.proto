@@ -65,6 +65,87 @@ message PlayerAppearanceInfo
 	repeated CharacterAppearanceEntry appearances = 13; // 当前可用形象列表(按 sort_order 升序)
 	bytes owned_bits = 14;                            // 已永久拥有紧凑位图(低位在前,含当前永久形象对应位,保留未知高位)
 	repeated CharacterAppearanceSeriesProgress series_progress = 15; // 收藏系列图鉴进度(按 sort_order 升序,纯外观零属性)
+	bytes pet_cosmetic_owned_bits = 16;               // 已永久拥有的灵宠幻化位图(低位在前,与 PetCosmetic bit_index 对应)
+	repeated PetCosmeticEntry pet_cosmetics = 17;     // 当前开放的灵宠幻化目录(按 sort_order 升序,纯外观零数值)
+	repeated PetEquippedCosmetic equipped_pet_cosmetics = 18; // 当前玩家各灵宠实例实际穿戴的幻化映射
+	bytes skill_vfx_owned_bits = 19;                  // 已永久拥有的技能特效位图(低位在前,与 SkillVfxCosmetic bit_index 对应)
+	repeated SkillVfxCosmeticEntry skill_vfx_cosmetics = 20; // 当前开放的技能特效目录(按 sort_order 升序,纯画面零数值)
+	map<uint32, uint32> equipped_skill_vfx = 21;      // 当前实际生效的技能特效映射(skill_table_id -> SkillVfxCosmetic.id)
+}
+
+// 灵宠幻化目录项（纯外观表现，零战斗/成长属性）。
+message PetCosmeticEntry
+{
+	uint32 config_id = 1;            // PetCosmetic.id(永久主键)
+	string cosmetic_key = 2;         // 稳定外观标识键
+	string name = 3;                 // 中文展示名
+	uint32 target_pet_table_id = 4;  // 适用灵宠种类 ID(0 = 通用)
+	uint32 visual_pet_table_id = 5;  // 表现复用灵宠种类 ID
+	string visual_art_key = 6;       // 客户端外观资源键
+	uint32 sort_order = 7;           // 展示排序(升序)
+	bool owned = 8;                  // 是否已永久拥有
+	uint64 mall_sku_id = 9;          // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
+	string acquire_hint = 10;        // 未拥有且未上架时展示的取得条件
+	string desc = 11;                // 外观简述
+}
+
+// 单只灵宠实例当前的权威幻化穿戴状态。
+message PetEquippedCosmetic
+{
+	uint64 pet_id = 1;               // 灵宠实例永久 ID
+	uint32 cosmetic_id = 2;          // 当前生效的 PetCosmetic.id(0 = 原形)
+}
+
+// 技能特效目录项（纯战斗画面表现，零数值/机制变更）。
+message SkillVfxCosmeticEntry
+{
+	uint32 config_id = 1;            // SkillVfxCosmetic.id(永久主键)
+	string vfx_key = 2;              // 稳定特效标识键
+	string name = 3;                 // 中文展示名
+	uint32 skill_table_id = 4;       // 适用技能 ID(Skill.id)
+	string fx_id = 5;                // 主特效帧条 ID
+	string projectile_fx_id = 6;     // 可选飞行段帧条 ID
+	string telegraph_fx_id = 7;      // 可选预示段帧条 ID
+	string tint_hex = 8;             // 可选色调覆盖(#RRGGBB)
+	uint32 sort_order = 9;           // 展示排序(升序)
+	bool owned = 10;                 // 是否已永久拥有
+	uint64 mall_sku_id = 11;         // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
+	string acquire_hint = 12;        // 未拥有且未上架时展示的取得条件
+	string desc = 13;                // 特效简述
+}
+
+// 为指定灵宠实例穿戴或清除幻化外观（cosmetic_id = 0 表示恢复原形；纯幂等收敛）。
+message EquipPetCosmeticRequest
+{
+	uint64 client_request_id = 1;    // 必须非 0
+	uint64 pet_id = 2;               // 目标灵宠实例永久 ID
+	uint32 cosmetic_id = 3;          // 目标 PetCosmetic.id；0 = 恢复原形
+}
+
+message EquipPetCosmeticResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	uint64 pet_id = 3;
+	uint32 equipped_cosmetic_id = 4;
+	bool replayed = 5;
+}
+
+// 为指定技能启用或恢复默认特效（cosmetic_id = 0 表示恢复默认；纯幂等收敛）。
+message EquipSkillVfxRequest
+{
+	uint64 client_request_id = 1;    // 必须非 0
+	uint32 skill_table_id = 2;       // 目标技能 ID(Skill.id)
+	uint32 cosmetic_id = 3;          // 目标 SkillVfxCosmetic.id；0 = 恢复默认
+}
+
+message EquipSkillVfxResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	uint32 skill_table_id = 3;
+	uint32 equipped_cosmetic_id = 4;
+	bool replayed = 5;
 }
 
 message GetAppearanceInfoRequest {}
@@ -142,4 +223,6 @@ service SceneAppearanceClientPlayer
 	rpc NotifyActorAppearanceChanged (ActorAppearanceChangedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 	rpc NotifyAppearanceState (AppearanceStateNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	rpc EquipPetCosmetic (EquipPetCosmeticRequest) returns (EquipPetCosmeticResponse);
+	rpc EquipSkillVfx (EquipSkillVfxRequest) returns (EquipSkillVfxResponse);
 }

@@ -2,7 +2,7 @@
 
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),这条管线已删除。本文只作历史保留,不再描述现行行为。
 
-> 状态:分析完成,修复分批进行。第 0 批的小修已落码(§7),未编译,待 Codex 验证;其余各批待负责人拍板(§5.3)。
+> 状态:分析完成,修复分批进行。第 0 批的小修已落码(§7),未编译,待 Gemini 验证;其余各批待负责人拍板(§5.3)。
 > 日期:2026-10-12
 > 范围:玩家存盘管线 C++ scene / login → Kafka `db_task_zone_*` → go/db → MySQL / Redis,以及 guild 的扩展形态。
 > 来源:四轮"多代理调研 + 对抗复核",全部是只读分析与联网核实,**没有编译、测试或压测**(AGENTS.md §10.1)。
@@ -154,7 +154,7 @@
 | G4 | 高 | 重试不绑分区属主;读不拿锁且无条件写子表缓存;读写不同分区 | 子表缓存被旧值覆盖(TTL 3600 秒) | 修复项 ①④;缓存改 CAS 写 |
 | G5 | 中 | 游标/epoch 缺键放行;游标可能倒退;两张子表不原子 | 旧版本重新通过守卫 | Lua 取最大值单调推进(纯 SETNX 会让游标推不动) |
 | G6 | 中(可用性) | 共用消费组;Stop 先 cancel 导致必等 10 秒;readiness 不反映入组 | 所有 zone 暂停;冷登录可能失败 | 修复项 ③;Stop 改成先撤拉取再等 worker;minReadySeconds(治标已落码,未编译未测试,见 §7;`minReadySeconds: 20` 已进 `deploy/k8s/manifests/go-svc/db.yaml`,随 `e76f6f747` 入库,下一次 db 滚动时生效) |
-| G7 | 中 | 停机路径没有自动化测试;两副本改动未编译 | 结论只是静态推断 | Codex 按 no-single-node-horizontal-scaling-20261001.md §3.5 做双实例杀进程、kind 删 Pod 实测 |
+| G7 | 中 | 停机路径没有自动化测试;两副本改动未编译 | 结论只是静态推断 | Gemini 按 no-single-node-horizontal-scaling-20261001.md §3.5 做双实例杀进程、kind 删 Pod 实测 |
 | G8 | 中 | gate 滚动断会话;没有运行时版本握手 | 违背"玩家在线不受影响" | gate 单独设计;发版说明写最低可混跑版本 |
 | G9 | 低 | go_services.ps1 用 `Stop-Process -Force` 停进程(旧版 `tools/scripts/go_services.ps1` 的 `Invoke-Stop`) | 本机停 db 等同崩溃 | 先发 Ctrl+C,超时再强杀(治标已落码,未编译未测试,见 §7) |
 
@@ -163,7 +163,7 @@
 - 只带 `owner_epoch` 不够:僵尸实例与新属主用的是同一个 epoch。Java 版的 `WHERE owner_epoch=?`(PROGRESS.md:7169)对这种情况推断同样无效,待 Java 侧核实。
 - 治标措施撤不回已进入 MySQL 的语句,不能当栅栏。
 
-**G6 停机顺序:Stop 五步与 ③④ 隐式互等(2026-10-16 补,未编译、未测试,待 Codex 验证):**
+**G6 停机顺序:Stop 五步与 ③④ 隐式互等(2026-10-16 补,未编译、未测试,待 Gemini 验证):**
 - 五步(`KeyOrderedKafkaConsumer.Stop`,S4 落码):① 撤拉取(关 `pullStop`)→ ② 等消费循环退出:各 claim 把已派发的任务做完并标记(`drainClaimForShutdown`,每个 claim 最多 `shutdownDrainTimeout` 10s),sarama 释放会话时最后一次提交位点,本步上限 10s + `consumerShutdownGrace` 5s → ③ 离组(`consumer.Close`)→ ④ 取消 worker 并等退出 → ⑤ 归还重试收据、收掉交接闸。R2 合入后追加 ⑥ `enqueuer.close()`。原则是先提交、后离组。
 - 缺口 [C]:sarama v1.43.1 的 `Close` 经 `leave()` 要拿 `consumerGroup.lock`;`Consume` 从入口持有这把锁,直到会话 `release` 返回;`release` 依次等全部 ConsumeClaim 返回 → Cleanup → `offsets.Close`(最后一次提交)→ 停心跳。修前 ConsumeClaim 的派发 select 没有撤拉取一路:worker 通道(容量 1000)满时,只能等 worker 腾出槽位,或者等 `w.ctx` 取消(也就是 `c.ctx`,第④步才取消)。停机时 claimCtx 又不随会话取消。MySQL 卡住时每条语句可能等满 30s 读超时,于是 ② 等满 15s 超时 → ③ 的 Close 等锁 → 会话等 claim → claim 等 ④,而 ④ 排在 ③ 之后。这不算严格死锁,但实际会一直拖到 45s SIGKILL,④⑤ 都不执行:重试收据没归还,要等租约过期才被回收。
 - 修法有三处,都在 KOC。
@@ -175,7 +175,7 @@
   - sarama 自身的网络调用(提交、心跳、JoinGroup、LeaveGroup)慢时,Close 照样要等,只受它的 Net 超时(默认 30s)和 `terminationGracePeriodSeconds: 45` 兜底,不受我们控制;
   - ④ 要等在途写 SQL 的读超时;②③④ 累加可能超过 45s,超出部分由 SIGKILL 截断,没标记的位点由新属主重放。
 - 另一处缺口(未修,建议单独立项):`routeToSubShard` 在 `subShardCount ≤ 1` 时对子 shard 通道做阻塞发送,没有 `w.ctx` 出口。④ 取消之后,如果子 shard 先退出而通道已满,路由会永久阻塞,`c.wg.Wait` 随之挂住。生产 `SubShardCount: 8`(go/db/etc/db.yaml)碰不到。
-- 读方就绪闸(D1 第 3 批;2026-10-20 核对补记,未编译、未测试,待 Codex 验证):`Placement.RequireRouteReady=true` 时 ConsumeClaim 顶层 select 多一个等待点。
+- 读方就绪闸(D1 第 3 批;2026-10-20 核对补记,未编译、未测试,待 Gemini 验证):`Placement.RequireRouteReady=true` 时 ConsumeClaim 顶层 select 多一个等待点。
   - 闸只替换 select 里的通道值(`gatedMessages`):
     - 闸关时消息通道为 nil,另带「下一次刷新完成」一路;
     - 闸放行时消息通道照常,也带这一路:刷新把闸关上时立即醒来、停在闸前,空闲分区不会在闸关之后再漏取。忙分区在关闸那一刻,刷新通道与消息可能同时就绪,select 随机选一路,每个 claim 至多多取一条,由逐条判(`lookupReady`)兜住。
@@ -271,7 +271,7 @@
 
 新旧并存安全:读不推进游标、不拿排序锁、不进 epoch 守卫,写的分区函数没变,混跑只会单调变好。覆盖范围:子表缓存还在时 login 根本不发读(ensure_player_all_data_async.go:82-87);访客与合服后跨 topic 的读写不在覆盖范围。
 
-2026-10-16 落码说明(① 已落码,未编译、未测试,待 Codex 验证):契约、两侧实现、告警与滚动步骤以 [db-task-kafka-partition-contract.md](db-task-kafka-partition-contract.md)「分区函数契约」「滚动对齐步骤与观测」为准,与上表的差异:第 1 步改用 Kafka 镜像自带的 console consumer 只读抽样(kcat 的 `%s` 会被载荷换行打断,只能用来核对分区),离线复核用 `TestDBTaskPartitionAuditDump`;第 4 步的 go/db 观测随下一次例行 go/db 发版上,不再绑 ②A;C++ 可选批也已落码(显式 `consistent_random`、`DbTaskKafkaKey`、golden 测试),随下次 scene / battle 例行发版;读规则告警等 login 全部滚完再 apply。屏障的五个缺口与放大效应见契约文档「屏障覆盖范围与剩余缺口」。
+2026-10-16 落码说明(① 已落码,未编译、未测试,待 Gemini 验证):契约、两侧实现、告警与滚动步骤以 [db-task-kafka-partition-contract.md](db-task-kafka-partition-contract.md)「分区函数契约」「滚动对齐步骤与观测」为准,与上表的差异:第 1 步改用 Kafka 镜像自带的 console consumer 只读抽样(kcat 的 `%s` 会被载荷换行打断,只能用来核对分区),离线复核用 `TestDBTaskPartitionAuditDump`;第 4 步的 go/db 观测随下一次例行 go/db 发版上,不再绑 ②A;C++ 可选批也已落码(显式 `consistent_random`、`DbTaskKafkaKey`、golden 测试),随下次 scene / battle 例行发版;读规则告警等 login 全部滚完再 apply。屏障的五个缺口与放大效应见契约文档「屏障覆盖范围与剩余缺口」。
 
 **② 1040 延后与连接预算(未经独立复核)**
 - 批 A:handler 返回 error,识别 1040、1203、ErrBadConn、ErrInvalidConn、net.Error 并包成 errStoreConnUnavailable;写任务豁免重试预算、读任务照常消耗;新增 `db_task_deferred_total{reason}`;导出 DBStats(go/db、data_service 5 个池、friend、trade);同批加"重试队列持续增长""deferred 持续大于 0"告警。
@@ -287,7 +287,7 @@
 - 回档:组判定挪到 Step 0;merge_zone 只认唯一权威组(原来的"多组取最小 LAG"是 fail-open)。
 - 上线:发布带闸二进制、配置不变(记录 rebalance_gap 基线)→ 发布脚本工具 → 金丝雀 zone 切组(冻结其它 zone 发布;看 seeded=10、conflict=0、gap<15 秒、播种值等于切换前 CURRENT-OFFSET)→ 浸泡 24 小时并做一次 delete pod → 其余 zone 每天切 1–2 个。回滚:单 zone 反向交接。
 - 如实说明:闸 + 守望做不到绝对互斥,兜底靠按 topic 的游标;"没有重叠就没有并发写者"要等 ① 落地后才成立。
-- 2026-10-16 落码说明(③ 已落码,未编译、未测试,待 Codex 验证;设计、决策表与 runbook 以 [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md) 为准)。相对原方案的四处偏离:
+- 2026-10-16 落码说明(③ 已落码,未编译、未测试,待 Gemini 验证;设计、决策表与 runbook 以 [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md) 为准)。相对原方案的四处偏离:
   - **最终形状 + 必填键证明**(取代 OCI label 等镜像能力校验):go-svc-db-config 只有四种形状——最终形状 `GroupID: "G"`(任何二进制都能起),交接形状 `ConsumerGroup` + `GroupHandoffFrom`、不写 `GroupID`(交接闸之前的二进制把 `GroupID` 当必填,在 `conf.MustLoad` 就拒启);回档 Step 6、全新 namespace、收尾之后的 keep 都只渲染最终形状。
   - **收尾后去掉 `GroupHandoffFrom`**:`kafka_offset_reset.ps1 -FinalizeHandoff` 删掉旧组在本 topic 的位点之后,以 keep 再跑一次 zone-up,`k8s_deploy.ps1` 读到「交接形状 + 对方组已无位点」就渲染最终形状(source=handoff-finalized),db 滚动一次;收尾之后进程里没有交接闸,不再依赖 legacy 组的 coordinator。
   - **运行时 R7 保留**:两组在同一分区都有位点且对方更大时闸不放(`wait_own_behind_peer`,告警 `DbConsumerGroupHandoffOwnBehindPeer`),作为手工部署、旧脚本的纵深防御;部署期由 `k8s_deploy.ps1` 读 Kafka 事实(`Read-DbGroupTopicFacts`,`kubectl exec` 进 kafka-0)做 F2 / F4 的拒绝。
@@ -305,7 +305,7 @@
 - 阶段 1:按压测判据逐项打开;在 TiDB 上去掉全局哨兵。
 - 上线:dev 双实例 → SET GLOBAL 提高上限 → migrate Job → apply guild → data-service 补 GuildInternalRpc → kind 滚动重启演练 → G0 压测决定是否做阶段 1。
 
-### 5.5 交给 Codex 的验证(各批落码后执行)
+### 5.5 交给 Gemini 的验证(各批落码后执行)
 
 | 项 | 命令 | 通过标准 |
 |---|---|---|
@@ -350,7 +350,7 @@
 
 | 步骤 | 改动 | 写任务往返(Redis / MySQL) | 前置 |
 |---|---|---|---|
-| 0 补测量(单独 PR,只加观测) | ① 汇总脚本 DB 段已修(§7),若 R17~R19 快照还在,用修好的脚本重跑出基线。② go/db 打点:`db_task_redis_step_seconds{step}`(11 个固定取值);新 stage:sql、task_total、queue_wait、kafka_e2e;`db_ordering_guard_total`、`db_subshard_batch_size`;go-redis PoolStats 与 sql.DBStats。0.1ms、0.25ms 两档桶放在新指标里,不改原 stageBuckets;共享 client 只挂一个 Hook;label 不带 player_id。③ Redis commandstats / SLOWLOG;MySQL 用 performance_schema 核实 Save 的实际语句与条数。④ Codex 按 AGENTS §6.2 跑 R20(基线 R19),加"突发全量存盘"场景 | 不变 11 / 1 | 由负责人定排空 SLO(现在没有);确认生产是否配了独立 Placement.Redis |
+| 0 补测量(单独 PR,只加观测) | ① 汇总脚本 DB 段已修(§7),若 R17~R19 快照还在,用修好的脚本重跑出基线。② go/db 打点:`db_task_redis_step_seconds{step}`(11 个固定取值);新 stage:sql、task_total、queue_wait、kafka_e2e;`db_ordering_guard_total`、`db_subshard_batch_size`;go-redis PoolStats 与 sql.DBStats。0.1ms、0.25ms 两档桶放在新指标里,不改原 stageBuckets;共享 client 只挂一个 Hook;label 不带 player_id。③ Redis commandstats / SLOWLOG;MySQL 用 performance_schema 核实 Save 的实际语句与条数。④ Gemini 按 AGENTS §6.2 跑 R20(基线 R19),加"突发全量存盘"场景 | 不变 11 / 1 | 由负责人定排空 SLO(现在没有);确认生产是否配了独立 Placement.Redis |
 | 1 低成本 | 显式设置 go-redis PoolSize;retryClaim / Release / Extend 改走 EVALSHA;删 expand 死代码(单独决策) | 删 expand 后 11→10 | 第 0 步数据显示有连接池等待 |
 | 2 正确性轨:条件写 | DBTask 加 save_seq;两张玩家表加 fence 列;proto2mysql 提供带 ctx 的条件 UPDATE(外部仓库发版需授权);写库改按 (epoch, seq) 条件写,缓存改带版本写入;补 MySQL 读写超时 | Redis 仍 11;MySQL 稳态 1 条 UPDATE | K8s 2 副本上线前完成;20~25 个文件,约 3~4 人周,每个库都要 DDL |
 | 3a 性能轨:条件写之后删守卫 | 一类任务跳过排序锁、游标、applied_epoch | 11→4(删 expand 后 3) | 满足立项判据;能力心跳做机器门禁;回退只能先切回双轨 |
@@ -388,11 +388,11 @@
 - **go/db 映射**(设计评审定稿):class-1 严格模式、栅栏 `[fence_owner_epoch, fence_save_seq]`;class-2 用 AllowEqual,dual 模式遇到 Stored=(E, s>0) 时再发一次 `Fence=[epoch] + AllowEqual + Preserve=[seq]`;class-3 在 dual 与 sql 都用 AllowEqual(消息栅栏 (0,0));off 只带 `PreserveFields`(不清零栅栏)。不可能出现的分支报错、不 ack。
 - **关键性质**:状态查询与整行比较一律 FOR UPDATE(读写分离层留在主库,防止从库滞后把旧属主重放误判成已生效);最多两轮,`ErrConditionalSaveRace` 可重试、`ErrSaveMatchMismatch` 指向表结构问题;栅栏参数一律 uint64 绑定;Save 的语句一字未改。
 - **评审与复核**:设计经三视角对抗评审(去掉任意上界 FenceBelow、改先读状态再 INSERT 等),实现经两轮代码复核(无编译错误、无必然失败用例)。本机没有 Go 工具链,**未编译、未运行**。
-- **Codex 验证**(在 `D:\luyuan\proto2mysql`、分支 `feat/conditional-save`):`go vet ./...`;`go test -count=1 ./...`;`cd tools/proto2sql && go test -count=1 ./...`;`PROTO2MYSQL_INTEGRATION=1 go test -count=1 -run SaveConditional -v .` 分别对 MySQL 8.x 与 TiDB 8.5;`go test -race -count=1 -run SaveConditional .`。通过标准:全绿、真库用例零 SKIP。通过后合入 main、打 v0.3.0(打 tag 需负责人确认),再改 go/db 的 go.mod 与 replace。
+- **Gemini 验证**(在 `D:\luyuan\proto2mysql`、分支 `feat/conditional-save`):`go vet ./...`;`go test -count=1 ./...`;`cd tools/proto2sql && go test -count=1 ./...`;`PROTO2MYSQL_INTEGRATION=1 go test -count=1 -run SaveConditional -v .` 分别对 MySQL 8.x 与 TiDB 8.5;`go test -race -count=1 -run SaveConditional .`。通过标准:全绿、真库用例零 SKIP。通过后合入 main、打 v0.3.0(打 tag 需负责人确认),再改 go/db 的 go.mod 与 replace。
 
 ---
 
-## 7. 本轮已落码(已随本地提交 d5cbb8a8e 入库、未 push;未编译、未测试,待 Codex 验证)
+## 7. 本轮已落码(已随本地提交 d5cbb8a8e 入库、未 push;未编译、未测试,待 Gemini 验证)
 
 | 项 | 改动 | 测试 |
 |---|---|---|
@@ -401,7 +401,7 @@
 | 回档位点重置静默失效(⓪) | tools/scripts/kafka_offset_reset.ps1 收集 kafka-consumer-groups 的 stdout+stderr,新增 `Assert-KafkaToolOutputClean`:退出码非 0 或任一行以 `Error:` 开头即失败 | 新增 tools/scripts/tests/kafka_offset_reset_output_guard.tests.ps1(7 例) |
 | 压测汇总 db 分段显示 "-" | tools/scripts/stress_summarize.ps1:client_golang 输出时按 label 名排序(`op` < `stage`),脚本按 `{stage=..,op=..}` 精确查永远查不到;改为 `{op=..,stage=..}` | tools/scripts/test_stress_summarize.ps1 补 DB 段用例:按真实 label 顺序伪造 t18m_db 快照,断言 6 个平均值都算得出来 |
 
-Codex 验证命令:
+Gemini 验证命令:
 
 ```bash
 # go/db
@@ -417,7 +417,7 @@ pwsh -File tools/scripts/test_stress_summarize.ps1
 
 ### S4 落码(G1 治标与 go/db 小项)
 
-> 2026-10-16 补。状态:**已落码,未编译、未测试,待 Codex 验证**。go/db 部分随 `de4960bee` 入库(其后 R1 语义复核的补修——§4.4「G6 停机顺序」那三处与对应用例——以及 R2(④)对 KOC、`store_failure.go` 等同批文件的改动,随 `e76f6f747` 入库);
+> 2026-10-16 补。状态:**已落码,未编译、未测试,待 Gemini 验证**。go/db 部分随 `de4960bee` 入库(其后 R1 语义复核的补修——§4.4「G6 停机顺序」那三处与对应用例——以及 R2(④)对 KOC、`store_failure.go` 等同批文件的改动,随 `e76f6f747` 入库);
 > 脚本随 `a7c510d65` / `0f6690604` 入库;`deploy/k8s/manifests/go-svc/db.yaml` 的 `minReadySeconds: 20` 与 `deploy/k8s/db-task-retry-alerts.yaml` 的 `db-task.ordering-lease` 组随 `e76f6f747` 入库。
 > 规格:`docs/handoff/godb-pipeline-impl-20261015/S4-g1-and-small-items-spec.md`(没有单独复核);落码阶段 A3 因额度中断没有报告,由 R1 对照代码核实补完。验证与上线清单见[上线待做](../ops/godb-pipeline-launch-todo.md) §4。
 
@@ -456,8 +456,8 @@ A3 落码相对规格的三处偏离(以代码为准):
 - ~~proto2mysql 的 Save 实际是 REPLACE 还是 INSERT…ODKU~~ 已核实(2026-10-13,proto2mysql v0.2.0 源码):都不是。Save 是「按完整主键 UPDATE → 0 行则 INSERT → 1062 则重试 UPDATE → 仍 0 行则 FOR UPDATE 归类」,1~4 条语句,没有版本条件。store_registry.go:294 与 migrate/plan.go:177 的说法都过时。
 - go-sql-driver 默认超时;客户端断开后 MySQL 是否仍执行已排队的语句;Redis 的 appendfsync 实际值;topic 实际保留期。
 - `--reset-offsets` 对非 Empty 组在钉死的 Kafka 版本上的退出码;`--delete-offsets` 的成功条件。
-  - 2026-10-16 更新:版本已钉 `apache/kafka:4.3.1`,这两项改为「待 Codex 在 4.3.1 上核实(V3)」,清单与回填位置见 db-consumer-group-per-zone.md §11 与[上线待做](../ops/godb-pipeline-launch-todo.md) §6。
-- 生产 C++ 是否全部走 CRC32(等 ① 第 1 步的 kcat 抽样);librdkafka 子模块本机未检出,golden 表要 Codex 双向复核。
+  - 2026-10-16 更新:版本已钉 `apache/kafka:4.3.1`,这两项改为「待 Gemini 在 4.3.1 上核实(V3)」,清单与回填位置见 db-consumer-group-per-zone.md §11 与[上线待做](../ops/godb-pipeline-launch-todo.md) §6。
+- 生产 C++ 是否全部走 CRC32(等 ① 第 1 步的 kcat 抽样);librdkafka 子模块本机未检出,golden 表要 Gemini 双向复核。
   - 2026-10-16 更新:源码静态核对已闭合(db_task 只有 `SavePlayerToRedisImpl` 一个生产点,`createProducer` 显式钉 `consistent_random`);线上分布改由 console consumer 只读抽样证实;子模块在 C1 落码时已检出;golden 表改为 Go `crc32`、sarama、librdkafka 三方机械复核(契约文档「golden 向量」)。
 - be6b4ab1d 双副本基线从没运行过;线上实际镜像与副本数未知。
 - ② 整体没有经过独立复核;MySQL 每条连接内存、Hikari 默认值未核实。

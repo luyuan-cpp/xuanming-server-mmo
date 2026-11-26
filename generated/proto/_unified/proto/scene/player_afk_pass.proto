@@ -13,17 +13,32 @@ option (OptionFileDefaultNode) = NODE_SCENE;
 // 月卡就是存档里的一个到期时刻(PlayerUint64Comp.afk_pass_expires_at)。获得只有一个写入口:花灵石开通(BuyAfkPass),
 // 到期 = max(现在, 原到期) + period_days 天,可叠加,剩余不超过 max_remaining_days 天。真钱经现有充值档位买灵石。
 
+// 最近一次离线托管收获简报(只汇总真实结算入账收益,不额外发放产出)。
+message HostedRecapSummary
+{
+	uint64 started_at = 1;    // 托管开始 Unix 秒;0 = 无记录
+	uint64 ended_at = 2;      // 托管结束 Unix 秒;0 = 仍在托管中
+	uint32 battle_count = 3;  // 结算总场次
+	uint32 win_count = 4;     // 胜利场次
+	uint64 exp_gained = 5;    // 实际入账经验
+	uint64 silver_gained = 6; // 实际入账银两
+	uint32 item_count = 7;    // 实际入账物品总件数(含溢出转邮件)
+	bool pending_ack = 8;     // true = 待客户端弹窗展示并确认
+}
+
 // 月卡此刻的状态与售价。所有时间都是服务器墙钟的 Unix 秒。
 message AfkPassInfo
 {
-	uint64 expires_at = 1;          // 到期时刻;0 = 从未开通或已清除;<= server_now = 已到期
-	uint64 server_now = 2;          // 组这份应答时服务器的墙钟:客户端用它算剩余时长,不信本机时钟
-	uint32 price_currency_type = 3; // 开通扣的货币(CurrencyType)
-	uint64 price = 4;               // 开通一次的价格;0 = 暂不出售(规则表不可用),此时下面三项也是 0
-	uint32 period_days = 5;         // 开通一次加多少天
-	uint32 max_remaining_days = 6;  // 剩余时长的上限:续费后超过它就拒绝
-	uint32 remind_before_hours = 7; // 剩余不超过这么多小时时,客户端提醒快到期;0 = 不提醒
-	uint64 balance = 8;             // 玩家此刻持有的 price_currency_type 余额,只供展示(买不买得起由服务器裁决)
+	uint64 expires_at = 1;                  // 到期时刻;0 = 从未开通或已清除;<= server_now = 已到期
+	uint64 server_now = 2;                  // 组这份应答时服务器的墙钟:客户端用它算剩余时长,不信本机时钟
+	uint32 price_currency_type = 3;         // 开通扣的货币(CurrencyType)
+	uint64 price = 4;                       // 开通一次的价格;0 = 暂不出售(规则表不可用),此时下面三项也是 0
+	uint32 period_days = 5;                 // 开通一次加多少天
+	uint32 max_remaining_days = 6;          // 剩余时长的上限:续费后超过它就拒绝
+	uint32 remind_before_hours = 7;         // 剩余不超过这么多小时时,客户端提醒快到期;0 = 不提醒
+	uint64 balance = 8;                     // 玩家此刻持有的 price_currency_type 余额,只供展示(买不买得起由服务器裁决)
+	bool auto_return_city_on_team_end = 9;  // 离线托管期间离队 / 解散时是否自动回默认主城安全区
+	HostedRecapSummary hosted_recap = 10;   // 最近一次待确认的离线托管收获简报(无记录时不填)
 }
 
 message GetAfkPassRequest {}
@@ -66,6 +81,30 @@ message GmSetAfkPassResponse
 	AfkPassInfo info = 2;
 }
 
+// 修改离线托管偏好设置(可重放,无资产扣费)。
+message SetAfkPassSettingsRequest
+{
+	bool auto_return_city_on_team_end = 1;
+}
+
+message SetAfkPassSettingsResponse
+{
+	TipInfoMessage error_message = 1;
+	AfkPassInfo info = 2;
+}
+
+// 确认已阅离线托管收获简报(按 started_at 幂等清零,避免误清后续新会话)。
+message AckHostedRecapRequest
+{
+	uint64 started_at = 1;
+}
+
+message AckHostedRecapResponse
+{
+	TipInfoMessage error_message = 1;
+	AfkPassInfo info = 2;
+}
+
 service SceneAfkPassClientPlayer
 {
 	option (OptionIsPlayerService) = true;
@@ -78,4 +117,8 @@ service SceneAfkPassClientPlayer
 	// GM:设定剩余时长(gate 的 GM 消息清单与 scene 的 GM 闸两道锁,生产环境整条关掉)。
 	rpc GmSetAfkPass (GmSetAfkPassRequest) returns (GmSetAfkPassResponse);
 	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	// 修改离线托管偏好设置(例如离队 / 解散自动回主城安全区)。
+	rpc SetAfkPassSettings (SetAfkPassSettingsRequest) returns (SetAfkPassSettingsResponse);
+	// 确认已阅离线托管收获简报。
+	rpc AckHostedRecap (AckHostedRecapRequest) returns (AckHostedRecapResponse);
 }

@@ -5345,11 +5345,11 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
     {
       PROTOBUF_FIELD_OFFSET(PetInfo, _impl_._has_bits_),
       0, // no _extensions_
-      21, 248,  // max_field_number, fast_idx_mask
+      23, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4292870144,  // skipmap
+      4286578688,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      21,  // num_field_entries
+      23,  // num_field_entries
       4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -5361,52 +5361,52 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 pet_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetInfo, _impl_.pet_id_), 9>(),
-       {8, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetInfo, _impl_.pet_id_), 10>(),
+       {8, 10, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pet_id_)}},
       // uint32 pet_table_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.pet_table_id_), 10>(),
-       {16, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.pet_table_id_), 11>(),
+       {16, 11, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pet_table_id_)}},
       // string name = 3;
       {::_pbi::TcParser::FastUS1,
        {26, 2, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.name_)}},
       // uint32 level = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.level_), 11>(),
-       {32, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.level_), 12>(),
+       {32, 12, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.level_)}},
       // uint32 quality = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.quality_), 12>(),
-       {40, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.quality_), 13>(),
+       {40, 13, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.quality_)}},
       // uint32 model_id = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.model_id_), 13>(),
-       {48, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.model_id_), 14>(),
+       {48, 14, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.model_id_)}},
       // bool is_active = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PetInfo, _impl_.is_active_), 14>(),
-       {56, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PetInfo, _impl_.is_active_), 15>(),
+       {56, 15, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.is_active_)}},
       // uint32 total_points = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.total_points_), 15>(),
-       {64, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.total_points_), 16>(),
+       {64, 16, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.total_points_)}},
       // uint32 remaining_points = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.remaining_points_), 16>(),
-       {72, 16, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.remaining_points_), 17>(),
+       {72, 17, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.remaining_points_)}},
       // uint32 pool_id = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.pool_id_), 17>(),
-       {80, 17, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.pool_id_), 18>(),
+       {80, 18, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pool_id_)}},
       // uint64 reset_cost_gold = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetInfo, _impl_.reset_cost_gold_), 18>(),
-       {88, 18, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetInfo, _impl_.reset_cost_gold_), 19>(),
+       {88, 19, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.reset_cost_gold_)}},
       // uint32 growth = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.growth_), 19>(),
-       {96, 19, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetInfo, _impl_.growth_), 20>(),
+       {96, 20, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.growth_)}},
       // repeated .PetDimensionInfo dimensions = 13;
       {::_pbi::TcParser::FastMtR1,
@@ -5414,7 +5414,7 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.dimensions_)}},
       // .PetDerivedInfo derived = 14;
       {::_pbi::TcParser::FastMtS1,
-       {114, 6, 1,
+       {114, 7, 1,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.derived_)}},
       // repeated uint32 skill_table_ids = 15;
       {::_pbi::TcParser::FastV32P1,
@@ -5426,7 +5426,7 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.desc_)}},
       // uint32 cultivation_tier = 17;
       {::_pbi::TcParser::FastV32S2,
-       {392, 20, 0,
+       {392, 21, 0,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_tier_)}},
       // string cultivation_tier_name = 18;
       {::_pbi::TcParser::FastUS2,
@@ -5438,14 +5438,20 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_art_key_)}},
       // .PetEntriesInfo entries = 20;
       {::_pbi::TcParser::FastMtS2,
-       {418, 7, 2,
+       {418, 8, 2,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.entries_)}},
       // .PetTierAscensionInfo next_tier = 21;
       {::_pbi::TcParser::FastMtS2,
-       {426, 8, 3,
+       {426, 9, 3,
         PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.next_tier_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 cosmetic_id = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 22, 0,
+        PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cosmetic_id_)}},
+      // string cosmetic_art_key = 23;
+      {::_pbi::TcParser::FastUS2,
+       {442, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cosmetic_art_key_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -5458,47 +5464,51 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
       65535, 65535
     }}, {{
       // uint64 pet_id = 1;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pet_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pet_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 pet_table_id = 2;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 3;
       {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 level = 4;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.level_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.level_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 quality = 5;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.quality_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.quality_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 model_id = 6;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.model_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.model_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool is_active = 7;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.is_active_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.is_active_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 total_points = 8;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.total_points_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.total_points_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 remaining_points = 9;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.remaining_points_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.remaining_points_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 pool_id = 10;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pool_id_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.pool_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 reset_cost_gold = 11;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.reset_cost_gold_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.reset_cost_gold_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 growth = 12;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.growth_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.growth_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .PetDimensionInfo dimensions = 13;
       {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.dimensions_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PetDerivedInfo derived = 14;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.derived_), _Internal::kHasBitsOffset + 6, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.derived_), _Internal::kHasBitsOffset + 7, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated uint32 skill_table_ids = 15;
       {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.skill_table_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // string desc = 16;
       {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.desc_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 cultivation_tier = 17;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_tier_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_tier_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string cultivation_tier_name = 18;
       {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_tier_name_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string cultivation_art_key = 19;
       {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_art_key_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .PetEntriesInfo entries = 20;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.entries_), _Internal::kHasBitsOffset + 7, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.entries_), _Internal::kHasBitsOffset + 8, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PetTierAscensionInfo next_tier = 21;
-      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.next_tier_), _Internal::kHasBitsOffset + 8, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.next_tier_), _Internal::kHasBitsOffset + 9, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 cosmetic_id = 22;
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cosmetic_id_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string cosmetic_art_key = 23;
+      {PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cosmetic_art_key_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -5523,12 +5533,13 @@ constexpr PetInfo::ParseTableT_ PetInfo::InternalGenerateParseTable_(const ::_pb
         #endif
     }},
     {{
-      "\7\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0\4\0\25\23\0\0\0\0"
+      "\7\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0\4\0\25\23\0\0\0\20"
       "PetInfo"
       "name"
       "desc"
       "cultivation_tier_name"
       "cultivation_art_key"
+      "cosmetic_art_key"
     }},
   };
 }
@@ -5561,6 +5572,9 @@ inline constexpr PetInfo::Impl_::Impl_(
         cultivation_art_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        cosmetic_art_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         derived_{nullptr},
         entries_{nullptr},
         next_tier_{nullptr},
@@ -5575,7 +5589,8 @@ inline constexpr PetInfo::Impl_::Impl_(
         pool_id_{0u},
         reset_cost_gold_{::uint64_t{0u}},
         growth_{0u},
-        cultivation_tier_{0u} {}
+        cultivation_tier_{0u},
+        cosmetic_id_{0u} {}
 
 template <typename>
 constexpr PetInfo::PetInfo(::_pbi::ConstantInitialized,
@@ -7714,7 +7729,7 @@ const ::uint32_t
         10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_._has_bits_),
-        24, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.pet_id_),
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.pet_table_id_),
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.name_),
@@ -7736,10 +7751,11 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.entries_),
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.next_tier_),
         PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.desc_),
-        9,
+        PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.cosmetic_id_),
+        PROTOBUF_FIELD_OFFSET(::PetInfo, _impl_.cosmetic_art_key_),
         10,
-        2,
         11,
+        2,
         12,
         13,
         14,
@@ -7748,15 +7764,18 @@ const ::uint32_t
         17,
         18,
         19,
-        0,
-        6,
-        1,
         20,
+        0,
+        7,
+        1,
+        21,
         4,
         5,
-        7,
         8,
+        9,
         3,
+        22,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_._has_bits_),
         7, // hasbit index offset
@@ -8132,47 +8151,47 @@ static const ::_pbi::MigrationSchema
         {21, sizeof(::PetDerivedInfo)},
         {40, sizeof(::PetTierAscensionInfo)},
         {65, sizeof(::PetInfo)},
-        {110, sizeof(::PetListInfo)},
-        {121, sizeof(::GetPetListRequest)},
-        {122, sizeof(::GetPetListResponse)},
-        {129, sizeof(::SummonPetRequest)},
-        {134, sizeof(::SummonPetResponse)},
-        {141, sizeof(::RecallPetRequest)},
-        {142, sizeof(::RecallPetResponse)},
-        {149, sizeof(::AllocatePetPointsRequest_AllocatedEntry_DoNotUse)},
-        {156, sizeof(::AllocatePetPointsRequest)},
-        {163, sizeof(::AllocatePetPointsResponse)},
-        {170, sizeof(::ResetPetPointsRequest)},
-        {175, sizeof(::ResetPetPointsResponse)},
-        {182, sizeof(::AutoAllocatePetPointsRequest)},
-        {187, sizeof(::AutoAllocatePetPointsResponse_SuggestedEntry_DoNotUse)},
-        {194, sizeof(::AutoAllocatePetPointsResponse)},
-        {203, sizeof(::RenamePetRequest)},
-        {210, sizeof(::RenamePetResponse)},
-        {217, sizeof(::PetListChangedS2C)},
-        {222, sizeof(::GmGrantPetRequest)},
-        {227, sizeof(::GmGrantPetResponse)},
-        {236, sizeof(::PetShopOffer)},
-        {251, sizeof(::GetPetShopRequest)},
-        {252, sizeof(::GetPetShopResponse)},
-        {263, sizeof(::BuyPetRequest)},
-        {272, sizeof(::BuyPetResponse)},
-        {285, sizeof(::PetEntryInfo)},
-        {312, sizeof(::PetEntryPresetSummary_AllocatedEntry_DoNotUse)},
-        {319, sizeof(::PetEntryPresetSummary)},
-        {330, sizeof(::PetEntriesInfo)},
-        {359, sizeof(::GetPetEntriesRequest)},
-        {364, sizeof(::GetPetEntriesResponse)},
-        {371, sizeof(::PreviewPetEntriesRequest_TargetEntry_DoNotUse)},
-        {378, sizeof(::PreviewPetEntriesRequest)},
-        {389, sizeof(::PreviewPetEntriesResponse)},
-        {396, sizeof(::SavePetEntriesRequest_TargetEntry_DoNotUse)},
-        {403, sizeof(::SavePetEntriesRequest)},
-        {416, sizeof(::SavePetEntriesResponse)},
-        {427, sizeof(::SwitchPetEntryPresetRequest)},
-        {442, sizeof(::SwitchPetEntryPresetResponse)},
-        {453, sizeof(::AscendPetTierRequest)},
-        {462, sizeof(::AscendPetTierResponse)},
+        {114, sizeof(::PetListInfo)},
+        {125, sizeof(::GetPetListRequest)},
+        {126, sizeof(::GetPetListResponse)},
+        {133, sizeof(::SummonPetRequest)},
+        {138, sizeof(::SummonPetResponse)},
+        {145, sizeof(::RecallPetRequest)},
+        {146, sizeof(::RecallPetResponse)},
+        {153, sizeof(::AllocatePetPointsRequest_AllocatedEntry_DoNotUse)},
+        {160, sizeof(::AllocatePetPointsRequest)},
+        {167, sizeof(::AllocatePetPointsResponse)},
+        {174, sizeof(::ResetPetPointsRequest)},
+        {179, sizeof(::ResetPetPointsResponse)},
+        {186, sizeof(::AutoAllocatePetPointsRequest)},
+        {191, sizeof(::AutoAllocatePetPointsResponse_SuggestedEntry_DoNotUse)},
+        {198, sizeof(::AutoAllocatePetPointsResponse)},
+        {207, sizeof(::RenamePetRequest)},
+        {214, sizeof(::RenamePetResponse)},
+        {221, sizeof(::PetListChangedS2C)},
+        {226, sizeof(::GmGrantPetRequest)},
+        {231, sizeof(::GmGrantPetResponse)},
+        {240, sizeof(::PetShopOffer)},
+        {255, sizeof(::GetPetShopRequest)},
+        {256, sizeof(::GetPetShopResponse)},
+        {267, sizeof(::BuyPetRequest)},
+        {276, sizeof(::BuyPetResponse)},
+        {289, sizeof(::PetEntryInfo)},
+        {316, sizeof(::PetEntryPresetSummary_AllocatedEntry_DoNotUse)},
+        {323, sizeof(::PetEntryPresetSummary)},
+        {334, sizeof(::PetEntriesInfo)},
+        {363, sizeof(::GetPetEntriesRequest)},
+        {368, sizeof(::GetPetEntriesResponse)},
+        {375, sizeof(::PreviewPetEntriesRequest_TargetEntry_DoNotUse)},
+        {382, sizeof(::PreviewPetEntriesRequest)},
+        {393, sizeof(::PreviewPetEntriesResponse)},
+        {400, sizeof(::SavePetEntriesRequest_TargetEntry_DoNotUse)},
+        {407, sizeof(::SavePetEntriesRequest)},
+        {420, sizeof(::SavePetEntriesResponse)},
+        {431, sizeof(::SwitchPetEntryPresetRequest)},
+        {446, sizeof(::SwitchPetEntryPresetResponse)},
+        {457, sizeof(::AscendPetTierRequest)},
+        {466, sizeof(::AscendPetTierResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -8243,7 +8262,7 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto[] ABSL
     "\r\022\027\n\017cost_item_count\030\006 \001(\r\022\021\n\tcost_gold\030"
     "\007 \001(\004\022\032\n\022bonus_entry_points\030\010 \001(\r\022\030\n\020own"
     "ed_item_count\030\t \001(\004\022\022\n\ncan_ascend\030\n \001(\010\022"
-    "\024\n\014block_tip_id\030\013 \001(\r\"\376\003\n\007PetInfo\022\016\n\006pet"
+    "\024\n\014block_tip_id\030\013 \001(\r\"\255\004\n\007PetInfo\022\016\n\006pet"
     "_id\030\001 \001(\004\022\024\n\014pet_table_id\030\002 \001(\r\022\014\n\004name\030"
     "\003 \001(\t\022\r\n\005level\030\004 \001(\r\022\017\n\007quality\030\005 \001(\r\022\020\n"
     "\010model_id\030\006 \001(\r\022\021\n\tis_active\030\007 \001(\010\022\024\n\014to"
@@ -8256,135 +8275,136 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto[] ABSL
     "tier_name\030\022 \001(\t\022\033\n\023cultivation_art_key\030\023"
     " \001(\t\022 \n\007entries\030\024 \001(\0132\017.PetEntriesInfo\022("
     "\n\tnext_tier\030\025 \001(\0132\025.PetTierAscensionInfo"
-    "\022\014\n\004desc\030\020 \001(\t\"h\n\013PetListInfo\022\026\n\004pets\030\001 "
-    "\003(\0132\010.PetInfo\022\025\n\ractive_pet_id\030\002 \001(\004\022\020\n\010"
-    "max_pets\030\003 \001(\r\022\030\n\020rename_cost_gold\030\004 \001(\004"
-    "\"\023\n\021GetPetListRequest\"X\n\022GetPetListRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\"\n\020Summo"
-    "nPetRequest\022\016\n\006pet_id\030\001 \001(\004\"W\n\021SummonPet"
-    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
-    "oMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\022\n\020"
-    "RecallPetRequest\"W\n\021RecallPetResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n"
-    "\004pets\030\002 \001(\0132\014.PetListInfo\"\231\001\n\030AllocatePe"
-    "tPointsRequest\022\016\n\006pet_id\030\001 \001(\004\022;\n\talloca"
-    "ted\030\002 \003(\0132(.AllocatePetPointsRequest.All"
-    "ocatedEntry\0320\n\016AllocatedEntry\022\013\n\003key\030\001 \001"
-    "(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"_\n\031AllocatePetPoin"
-    "tsResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\'"
-    "\n\025ResetPetPointsRequest\022\016\n\006pet_id\030\001 \001(\004\""
-    "\\\n\026ResetPetPointsResponse\022&\n\rerror_messa"
+    "\022\014\n\004desc\030\020 \001(\t\022\023\n\013cosmetic_id\030\026 \001(\r\022\030\n\020c"
+    "osmetic_art_key\030\027 \001(\t\"h\n\013PetListInfo\022\026\n\004"
+    "pets\030\001 \003(\0132\010.PetInfo\022\025\n\ractive_pet_id\030\002 "
+    "\001(\004\022\020\n\010max_pets\030\003 \001(\r\022\030\n\020rename_cost_gol"
+    "d\030\004 \001(\004\"\023\n\021GetPetListRequest\"X\n\022GetPetLi"
+    "stResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
+    "nfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\""
+    "\n\020SummonPetRequest\022\016\n\006pet_id\030\001 \001(\004\"W\n\021Su"
+    "mmonPetResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListI"
+    "nfo\"\022\n\020RecallPetRequest\"W\n\021RecallPetResp"
+    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
+    "sage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\231\001\n\030All"
+    "ocatePetPointsRequest\022\016\n\006pet_id\030\001 \001(\004\022;\n"
+    "\tallocated\030\002 \003(\0132(.AllocatePetPointsRequ"
+    "est.AllocatedEntry\0320\n\016AllocatedEntry\022\013\n\003"
+    "key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"_\n\031Allocate"
+    "PetPointsResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetLis"
+    "tInfo\"\'\n\025ResetPetPointsRequest\022\016\n\006pet_id"
+    "\030\001 \001(\004\"\\\n\026ResetPetPointsResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets"
+    "\030\002 \001(\0132\014.PetListInfo\".\n\034AutoAllocatePetP"
+    "ointsRequest\022\016\n\006pet_id\030\001 \001(\004\"\313\001\n\035AutoAll"
+    "ocatePetPointsResponse\022&\n\rerror_message\030"
+    "\001 \001(\0132\017.TipInfoMessage\022\016\n\006pet_id\030\002 \001(\004\022@"
+    "\n\tsuggested\030\003 \003(\0132-.AutoAllocatePetPoint"
+    "sResponse.SuggestedEntry\0320\n\016SuggestedEnt"
+    "ry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"0\n\020Re"
+    "namePetRequest\022\016\n\006pet_id\030\001 \001(\004\022\014\n\004name\030\002"
+    " \001(\t\"W\n\021RenamePetResponse\022&\n\rerror_messa"
     "ge\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132"
-    "\014.PetListInfo\".\n\034AutoAllocatePetPointsRe"
-    "quest\022\016\n\006pet_id\030\001 \001(\004\"\313\001\n\035AutoAllocatePe"
-    "tPointsResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022\016\n\006pet_id\030\002 \001(\004\022@\n\tsugge"
-    "sted\030\003 \003(\0132-.AutoAllocatePetPointsRespon"
-    "se.SuggestedEntry\0320\n\016SuggestedEntry\022\013\n\003k"
-    "ey\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"0\n\020RenamePet"
-    "Request\022\016\n\006pet_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\"W\n"
-    "\021RenamePetResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetLi"
-    "stInfo\"/\n\021PetListChangedS2C\022\032\n\004pets\030\001 \001("
-    "\0132\014.PetListInfo\")\n\021GmGrantPetRequest\022\024\n\014"
-    "pet_table_id\030\001 \001(\r\"h\n\022GmGrantPetResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\022\016\n\006pet_id\030\003"
-    " \001(\004\"|\n\014PetShopOffer\022\024\n\014pet_table_id\030\001 \001"
-    "(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010model_id\030\003 \001(\r\022\024\n\014un"
-    "lock_level\030\004 \001(\r\022\022\n\nprice_gold\030\005 \001(\004\022\014\n\004"
-    "desc\030\006 \001(\t\"\023\n\021GetPetShopRequest\"\211\001\n\022GetP"
-    "etShopResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\035\n\006offers\030\002 \003(\0132\r.PetShop"
-    "Offer\022\014\n\004gold\030\003 \001(\004\022\036\n\026next_purchase_seq"
-    "uence\030\004 \001(\004\"T\n\rBuyPetRequest\022\024\n\014pet_tabl"
-    "e_id\030\001 \001(\r\022\031\n\021purchase_sequence\030\002 \001(\004\022\022\n"
-    "\nprice_gold\030\003 \001(\004\"\222\001\n\016BuyPetResponse\022&\n\r"
-    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004"
-    "pets\030\002 \001(\0132\014.PetListInfo\022\016\n\006pet_id\030\003 \001(\004"
-    "\022\014\n\004gold\030\004 \001(\004\022\036\n\026next_purchase_sequence"
-    "\030\005 \001(\004\"\327\001\n\014PetEntryInfo\022\n\n\002id\030\001 \001(\r\022\014\n\004n"
-    "ame\030\002 \001(\t\022\014\n\004desc\030\003 \001(\t\022\020\n\010category\030\004 \001("
-    "\r\022\017\n\007channel\030\005 \001(\r\022\022\n\nstate_kind\030\006 \001(\r\022\013"
-    "\n\003cap\030\007 \001(\r\022\025\n\rper_point_bps\030\010 \001(\r\022\021\n\tal"
-    "located\030\t \001(\r\022\025\n\reffective_bps\030\n \001(\r\022\014\n\004"
-    "sort\030\013 \001(\r\022\014\n\004icon\030\014 \001(\t\"\266\001\n\025PetEntryPre"
-    "setSummary\022\017\n\007slot_id\030\001 \001(\r\022\013\n\003tag\030\002 \001(\r"
-    "\022\023\n\013used_points\030\003 \001(\r\0228\n\tallocated\030\004 \003(\013"
-    "2%.PetEntryPresetSummary.AllocatedEntry\032"
-    "0\n\016AllocatedEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030"
-    "\002 \001(\r:\0028\001\"\356\002\n\016PetEntriesInfo\022\016\n\006pet_id\030\001"
-    " \001(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016config_ve"
-    "rsion\030\003 \001(\r\022\024\n\014total_points\030\004 \001(\r\022\030\n\020rem"
-    "aining_points\030\005 \001(\r\022\026\n\016max_directions\030\006 "
-    "\001(\r\022\036\n\007entries\030\007 \003(\0132\r.PetEntryInfo\022\'\n\007e"
-    "ffects\030\010 \001(\0132\026.PetCultivationEffects\022\021\n\t"
-    "effective\030\t \001(\010\022\033\n\023unknown_used_points\030\n"
-    " \001(\004\022\027\n\017last_request_id\030\013 \001(\t\022\032\n\022active_"
-    "preset_slot\030\014 \001(\r\022\'\n\007presets\030\r \003(\0132\026.Pet"
-    "EntryPresetSummary\"&\n\024GetPetEntriesReque"
-    "st\022\016\n\006pet_id\030\001 \001(\004\"a\n\025GetPetEntriesRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022 \n\007entries\030\002 \001(\0132\017.PetEntriesInfo\"\277\001"
-    "\n\030PreviewPetEntriesRequest\022\016\n\006pet_id\030\001 \001"
-    "(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016config_vers"
-    "ion\030\003 \001(\r\0225\n\006target\030\004 \003(\0132%.PreviewPetEn"
-    "triesRequest.TargetEntry\032-\n\013TargetEntry\022"
-    "\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"e\n\031Previ"
-    "ewPetEntriesResponse\022&\n\rerror_message\030\001 "
-    "\001(\0132\017.TipInfoMessage\022 \n\007entries\030\002 \001(\0132\017."
-    "PetEntriesInfo\"\315\001\n\025SavePetEntriesRequest"
-    "\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rstate_version\030\002 \001(\004\022"
-    "\026\n\016config_version\030\003 \001(\r\0222\n\006target\030\004 \003(\0132"
-    "\".SavePetEntriesRequest.TargetEntry\022\022\n\nr"
-    "equest_id\030\005 \001(\t\032-\n\013TargetEntry\022\013\n\003key\030\001 "
-    "\001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\210\001\n\026SavePetEntrie"
-    "sResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
-    "foMessage\022 \n\007entries\030\002 \001(\0132\017.PetEntriesI"
-    "nfo\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replayed\030\004 \001("
-    "\010\"\216\001\n\033SwitchPetEntryPresetRequest\022\016\n\006pet"
-    "_id\030\001 \001(\004\022\017\n\007slot_id\030\002 \001(\r\022\013\n\003tag\030\003 \001(\r\022"
-    "\025\n\rstate_version\030\004 \001(\004\022\026\n\016config_version"
-    "\030\005 \001(\r\022\022\n\nrequest_id\030\006 \001(\t\"\216\001\n\034SwitchPet"
-    "EntryPresetResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022 \n\007entries\030\002 \001(\0132\017.P"
-    "etEntriesInfo\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010rep"
-    "layed\030\004 \001(\010\"X\n\024AscendPetTierRequest\022\016\n\006p"
-    "et_id\030\001 \001(\004\022\025\n\rexpected_tier\030\002 \001(\r\022\031\n\021cl"
-    "ient_request_id\030\003 \001(\004\"\250\001\n\025AscendPetTierR"
+    "\014.PetListInfo\"/\n\021PetListChangedS2C\022\032\n\004pe"
+    "ts\030\001 \001(\0132\014.PetListInfo\")\n\021GmGrantPetRequ"
+    "est\022\024\n\014pet_table_id\030\001 \001(\r\"h\n\022GmGrantPetR"
     "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\022\014\n\004g"
-    "old\030\003 \001(\004\022\031\n\021client_request_id\030\004 \001(\004\022\020\n\010"
-    "replayed\030\005 \001(\010\022\020\n\010new_tier\030\006 \001(\r2\224\010\n\024Sce"
-    "nePetClientPlayer\0225\n\nGetPetList\022\022.GetPet"
-    "ListRequest\032\023.GetPetListResponse\0222\n\tSumm"
-    "onPet\022\021.SummonPetRequest\032\022.SummonPetResp"
-    "onse\0222\n\tRecallPet\022\021.RecallPetRequest\032\022.R"
-    "ecallPetResponse\022J\n\021AllocatePetPoints\022\031."
-    "AllocatePetPointsRequest\032\032.AllocatePetPo"
-    "intsResponse\022A\n\016ResetPetPoints\022\026.ResetPe"
-    "tPointsRequest\032\027.ResetPetPointsResponse\022"
-    "V\n\025AutoAllocatePetPoints\022\035.AutoAllocateP"
-    "etPointsRequest\032\036.AutoAllocatePetPointsR"
-    "esponse\0222\n\tRenamePet\022\021.RenamePetRequest\032"
-    "\022.RenamePetResponse\0229\n\024NotifyPetListChan"
-    "ged\022\022.PetListChangedS2C\032\006.Empty\"\005\210\231\310\001\002\0225"
-    "\n\nGmGrantPet\022\022.GmGrantPetRequest\032\023.GmGra"
-    "ntPetResponse\0225\n\nGetPetShop\022\022.GetPetShop"
-    "Request\032\023.GetPetShopResponse\022)\n\006BuyPet\022\016"
-    ".BuyPetRequest\032\017.BuyPetResponse\022>\n\rGetPe"
-    "tEntries\022\025.GetPetEntriesRequest\032\026.GetPet"
-    "EntriesResponse\022J\n\021PreviewPetEntries\022\031.P"
-    "reviewPetEntriesRequest\032\032.PreviewPetEntr"
-    "iesResponse\022A\n\016SavePetEntries\022\026.SavePetE"
-    "ntriesRequest\032\027.SavePetEntriesResponse\022S"
-    "\n\024SwitchPetEntryPreset\022\034.SwitchPetEntryP"
-    "resetRequest\032\035.SwitchPetEntryPresetRespo"
-    "nse\022>\n\rAscendPetTier\022\025.AscendPetTierRequ"
-    "est\032\026.AscendPetTierResponse\032\n\200\250\303\001\001\210\250\303\001\001B"
-    "\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "Message\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\022\016\n\006p"
+    "et_id\030\003 \001(\004\"|\n\014PetShopOffer\022\024\n\014pet_table"
+    "_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010model_id\030\003 \001("
+    "\r\022\024\n\014unlock_level\030\004 \001(\r\022\022\n\nprice_gold\030\005 "
+    "\001(\004\022\014\n\004desc\030\006 \001(\t\"\023\n\021GetPetShopRequest\"\211"
+    "\001\n\022GetPetShopResponse\022&\n\rerror_message\030\001"
+    " \001(\0132\017.TipInfoMessage\022\035\n\006offers\030\002 \003(\0132\r."
+    "PetShopOffer\022\014\n\004gold\030\003 \001(\004\022\036\n\026next_purch"
+    "ase_sequence\030\004 \001(\004\"T\n\rBuyPetRequest\022\024\n\014p"
+    "et_table_id\030\001 \001(\r\022\031\n\021purchase_sequence\030\002"
+    " \001(\004\022\022\n\nprice_gold\030\003 \001(\004\"\222\001\n\016BuyPetRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\022\016\n\006pet_i"
+    "d\030\003 \001(\004\022\014\n\004gold\030\004 \001(\004\022\036\n\026next_purchase_s"
+    "equence\030\005 \001(\004\"\327\001\n\014PetEntryInfo\022\n\n\002id\030\001 \001"
+    "(\r\022\014\n\004name\030\002 \001(\t\022\014\n\004desc\030\003 \001(\t\022\020\n\010catego"
+    "ry\030\004 \001(\r\022\017\n\007channel\030\005 \001(\r\022\022\n\nstate_kind\030"
+    "\006 \001(\r\022\013\n\003cap\030\007 \001(\r\022\025\n\rper_point_bps\030\010 \001("
+    "\r\022\021\n\tallocated\030\t \001(\r\022\025\n\reffective_bps\030\n "
+    "\001(\r\022\014\n\004sort\030\013 \001(\r\022\014\n\004icon\030\014 \001(\t\"\266\001\n\025PetE"
+    "ntryPresetSummary\022\017\n\007slot_id\030\001 \001(\r\022\013\n\003ta"
+    "g\030\002 \001(\r\022\023\n\013used_points\030\003 \001(\r\0228\n\tallocate"
+    "d\030\004 \003(\0132%.PetEntryPresetSummary.Allocate"
+    "dEntry\0320\n\016AllocatedEntry\022\013\n\003key\030\001 \001(\r\022\r\n"
+    "\005value\030\002 \001(\r:\0028\001\"\356\002\n\016PetEntriesInfo\022\016\n\006p"
+    "et_id\030\001 \001(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016co"
+    "nfig_version\030\003 \001(\r\022\024\n\014total_points\030\004 \001(\r"
+    "\022\030\n\020remaining_points\030\005 \001(\r\022\026\n\016max_direct"
+    "ions\030\006 \001(\r\022\036\n\007entries\030\007 \003(\0132\r.PetEntryIn"
+    "fo\022\'\n\007effects\030\010 \001(\0132\026.PetCultivationEffe"
+    "cts\022\021\n\teffective\030\t \001(\010\022\033\n\023unknown_used_p"
+    "oints\030\n \001(\004\022\027\n\017last_request_id\030\013 \001(\t\022\032\n\022"
+    "active_preset_slot\030\014 \001(\r\022\'\n\007presets\030\r \003("
+    "\0132\026.PetEntryPresetSummary\"&\n\024GetPetEntri"
+    "esRequest\022\016\n\006pet_id\030\001 \001(\004\"a\n\025GetPetEntri"
+    "esResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
+    "nfoMessage\022 \n\007entries\030\002 \001(\0132\017.PetEntries"
+    "Info\"\277\001\n\030PreviewPetEntriesRequest\022\016\n\006pet"
+    "_id\030\001 \001(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016conf"
+    "ig_version\030\003 \001(\r\0225\n\006target\030\004 \003(\0132%.Previ"
+    "ewPetEntriesRequest.TargetEntry\032-\n\013Targe"
+    "tEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"e"
+    "\n\031PreviewPetEntriesResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\022 \n\007entries\030\002"
+    " \001(\0132\017.PetEntriesInfo\"\315\001\n\025SavePetEntries"
+    "Request\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rstate_version"
+    "\030\002 \001(\004\022\026\n\016config_version\030\003 \001(\r\0222\n\006target"
+    "\030\004 \003(\0132\".SavePetEntriesRequest.TargetEnt"
+    "ry\022\022\n\nrequest_id\030\005 \001(\t\032-\n\013TargetEntry\022\013\n"
+    "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\210\001\n\026SavePe"
+    "tEntriesResponse\022&\n\rerror_message\030\001 \001(\0132"
+    "\017.TipInfoMessage\022 \n\007entries\030\002 \001(\0132\017.PetE"
+    "ntriesInfo\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replay"
+    "ed\030\004 \001(\010\"\216\001\n\033SwitchPetEntryPresetRequest"
+    "\022\016\n\006pet_id\030\001 \001(\004\022\017\n\007slot_id\030\002 \001(\r\022\013\n\003tag"
+    "\030\003 \001(\r\022\025\n\rstate_version\030\004 \001(\004\022\026\n\016config_"
+    "version\030\005 \001(\r\022\022\n\nrequest_id\030\006 \001(\t\"\216\001\n\034Sw"
+    "itchPetEntryPresetResponse\022&\n\rerror_mess"
+    "age\030\001 \001(\0132\017.TipInfoMessage\022 \n\007entries\030\002 "
+    "\001(\0132\017.PetEntriesInfo\022\022\n\nrequest_id\030\003 \001(\t"
+    "\022\020\n\010replayed\030\004 \001(\010\"X\n\024AscendPetTierReque"
+    "st\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rexpected_tier\030\002 \001("
+    "\r\022\031\n\021client_request_id\030\003 \001(\004\"\250\001\n\025AscendP"
+    "etTierResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListIn"
+    "fo\022\014\n\004gold\030\003 \001(\004\022\031\n\021client_request_id\030\004 "
+    "\001(\004\022\020\n\010replayed\030\005 \001(\010\022\020\n\010new_tier\030\006 \001(\r2"
+    "\224\010\n\024ScenePetClientPlayer\0225\n\nGetPetList\022\022"
+    ".GetPetListRequest\032\023.GetPetListResponse\022"
+    "2\n\tSummonPet\022\021.SummonPetRequest\032\022.Summon"
+    "PetResponse\0222\n\tRecallPet\022\021.RecallPetRequ"
+    "est\032\022.RecallPetResponse\022J\n\021AllocatePetPo"
+    "ints\022\031.AllocatePetPointsRequest\032\032.Alloca"
+    "tePetPointsResponse\022A\n\016ResetPetPoints\022\026."
+    "ResetPetPointsRequest\032\027.ResetPetPointsRe"
+    "sponse\022V\n\025AutoAllocatePetPoints\022\035.AutoAl"
+    "locatePetPointsRequest\032\036.AutoAllocatePet"
+    "PointsResponse\0222\n\tRenamePet\022\021.RenamePetR"
+    "equest\032\022.RenamePetResponse\0229\n\024NotifyPetL"
+    "istChanged\022\022.PetListChangedS2C\032\006.Empty\"\005"
+    "\210\231\310\001\002\0225\n\nGmGrantPet\022\022.GmGrantPetRequest\032"
+    "\023.GmGrantPetResponse\0225\n\nGetPetShop\022\022.Get"
+    "PetShopRequest\032\023.GetPetShopResponse\022)\n\006B"
+    "uyPet\022\016.BuyPetRequest\032\017.BuyPetResponse\022>"
+    "\n\rGetPetEntries\022\025.GetPetEntriesRequest\032\026"
+    ".GetPetEntriesResponse\022J\n\021PreviewPetEntr"
+    "ies\022\031.PreviewPetEntriesRequest\032\032.Preview"
+    "PetEntriesResponse\022A\n\016SavePetEntries\022\026.S"
+    "avePetEntriesRequest\032\027.SavePetEntriesRes"
+    "ponse\022S\n\024SwitchPetEntryPreset\022\034.SwitchPe"
+    "tEntryPresetRequest\032\035.SwitchPetEntryPres"
+    "etResponse\022>\n\rAscendPetTier\022\025.AscendPetT"
+    "ierRequest\032\026.AscendPetTierResponse\032\n\200\250\303\001"
+    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_deps[4] = {
@@ -8397,7 +8417,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto = {
     false,
     false,
-    6423,
+    6470,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto,
     "proto/scene/player_pet.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_once,
@@ -9698,7 +9718,8 @@ PROTOBUF_NDEBUG_INLINE PetInfo::Impl_::Impl_(
         name_(arena, from.name_),
         desc_(arena, from.desc_),
         cultivation_tier_name_(arena, from.cultivation_tier_name_),
-        cultivation_art_key_(arena, from.cultivation_art_key_) {}
+        cultivation_art_key_(arena, from.cultivation_art_key_),
+        cosmetic_art_key_(arena, from.cosmetic_art_key_) {}
 
 PetInfo::PetInfo(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -9715,22 +9736,22 @@ PetInfo::PetInfo(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.derived_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+  _impl_.derived_ = (CheckHasBit(cached_has_bits, 0x00000080U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.derived_)
                 : nullptr;
-  _impl_.entries_ = (CheckHasBit(cached_has_bits, 0x00000080U))
+  _impl_.entries_ = (CheckHasBit(cached_has_bits, 0x00000100U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.entries_)
                 : nullptr;
-  _impl_.next_tier_ = (CheckHasBit(cached_has_bits, 0x00000100U))
+  _impl_.next_tier_ = (CheckHasBit(cached_has_bits, 0x00000200U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.next_tier_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, pet_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, pet_id_),
-           offsetof(Impl_, cultivation_tier_) -
+           offsetof(Impl_, cosmetic_id_) -
                offsetof(Impl_, pet_id_) +
-               sizeof(Impl_::cultivation_tier_));
+               sizeof(Impl_::cosmetic_id_));
 
   // @@protoc_insertion_point(copy_constructor:PetInfo)
 }
@@ -9752,16 +9773,17 @@ PROTOBUF_NDEBUG_INLINE PetInfo::Impl_::Impl_(
         name_(arena),
         desc_(arena),
         cultivation_tier_name_(arena),
-        cultivation_art_key_(arena) {}
+        cultivation_art_key_(arena),
+        cosmetic_art_key_(arena) {}
 
 inline void PetInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, derived_),
            0,
-           offsetof(Impl_, cultivation_tier_) -
+           offsetof(Impl_, cosmetic_id_) -
                offsetof(Impl_, derived_) +
-               sizeof(Impl_::cultivation_tier_));
+               sizeof(Impl_::cosmetic_id_));
 }
 PetInfo::~PetInfo() {
   // @@protoc_insertion_point(destructor:PetInfo)
@@ -9778,6 +9800,7 @@ inline void PetInfo::SharedDtor(MessageLite& self) {
   this_._impl_.desc_.Destroy();
   this_._impl_.cultivation_tier_name_.Destroy();
   this_._impl_.cultivation_art_key_.Destroy();
+  this_._impl_.cosmetic_art_key_.Destroy();
   delete this_._impl_.derived_;
   delete this_._impl_.entries_;
   delete this_._impl_.next_tier_;
@@ -9838,27 +9861,32 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
       _impl_.cultivation_art_key_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.cosmetic_art_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(_impl_.derived_ != nullptr);
       _impl_.derived_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       ABSL_DCHECK(_impl_.entries_ != nullptr);
       _impl_.entries_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      ABSL_DCHECK(_impl_.next_tier_ != nullptr);
+      _impl_.next_tier_->Clear();
+    }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    ABSL_DCHECK(_impl_.next_tier_ != nullptr);
-    _impl_.next_tier_->Clear();
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000fe00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000fc00U)) {
     ::memset(&_impl_.pet_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.total_points_) -
-        reinterpret_cast<char*>(&_impl_.pet_id_)) + sizeof(_impl_.total_points_));
+        reinterpret_cast<char*>(&_impl_.is_active_) -
+        reinterpret_cast<char*>(&_impl_.pet_id_)) + sizeof(_impl_.is_active_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
-    ::memset(&_impl_.remaining_points_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cultivation_tier_) -
-        reinterpret_cast<char*>(&_impl_.remaining_points_)) + sizeof(_impl_.cultivation_tier_));
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    ::memset(&_impl_.total_points_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.cosmetic_id_) -
+        reinterpret_cast<char*>(&_impl_.total_points_)) + sizeof(_impl_.cosmetic_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -9884,7 +9912,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 pet_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_pet_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -9893,7 +9921,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 pet_table_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_pet_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9912,7 +9940,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 level = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9921,7 +9949,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 quality = 5;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_quality() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9930,7 +9958,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 model_id = 6;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_model_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9939,7 +9967,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // bool is_active = 7;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_is_active() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -9948,7 +9976,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 total_points = 8;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_total_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9957,7 +9985,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 remaining_points = 9;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_remaining_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9966,7 +9994,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 pool_id = 10;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_pool_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9975,7 +10003,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint64 reset_cost_gold = 11;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_reset_cost_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -9984,7 +10012,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 growth = 12;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_growth() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10006,7 +10034,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // .PetDerivedInfo derived = 14;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         14, *this_._impl_.derived_, this_._impl_.derived_->GetCachedSize(), target,
         stream);
@@ -10034,7 +10062,7 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // uint32 cultivation_tier = 17;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (this_._internal_cultivation_tier() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10063,17 +10091,36 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
   }
 
   // .PetEntriesInfo entries = 20;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         20, *this_._impl_.entries_, this_._impl_.entries_->GetCachedSize(), target,
         stream);
   }
 
   // .PetTierAscensionInfo next_tier = 21;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         21, *this_._impl_.next_tier_, this_._impl_.next_tier_->GetCachedSize(), target,
         stream);
+  }
+
+  // uint32 cosmetic_id = 22;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_cosmetic_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_cosmetic_id(), target);
+    }
+  }
+
+  // string cosmetic_art_key = 23;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_cosmetic_art_key().empty()) {
+      const ::std::string& _s = this_._internal_cosmetic_art_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PetInfo.cosmetic_art_key");
+      target = stream->WriteStringMaybeAliased(23, _s, target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -10144,106 +10191,120 @@ PROTOBUF_NOINLINE void PetInfo::Clear() {
                                         this_._internal_cultivation_art_key());
       }
     }
-    // .PetDerivedInfo derived = 14;
+    // string cosmetic_art_key = 23;
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_cosmetic_art_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_cosmetic_art_key());
+      }
+    }
+    // .PetDerivedInfo derived = 14;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.derived_);
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // .PetEntriesInfo entries = 20;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.entries_);
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // .PetTierAscensionInfo next_tier = 21;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.next_tier_);
     }
     // uint64 pet_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_pet_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_pet_id());
       }
     }
     // uint32 pet_table_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_pet_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pet_table_id());
       }
     }
     // uint32 level = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_level());
       }
     }
     // uint32 quality = 5;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_quality() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_quality());
       }
     }
     // uint32 model_id = 6;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_model_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_model_id());
       }
     }
     // bool is_active = 7;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_is_active() != 0) {
         total_size += 2;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     // uint32 total_points = 8;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_total_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_total_points());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
     // uint32 remaining_points = 9;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_remaining_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_remaining_points());
       }
     }
     // uint32 pool_id = 10;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_pool_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pool_id());
       }
     }
     // uint64 reset_cost_gold = 11;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_reset_cost_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_reset_cost_gold());
       }
     }
     // uint32 growth = 12;
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_growth() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_growth());
       }
     }
     // uint32 cultivation_tier = 17;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (this_._internal_cultivation_tier() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_cultivation_tier());
+      }
+    }
+    // uint32 cosmetic_id = 22;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_cosmetic_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_cosmetic_id());
       }
     }
   }
@@ -10311,6 +10372,15 @@ void PetInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_cosmetic_art_key().empty()) {
+        _this->_internal_set_cosmetic_art_key(from._internal_cosmetic_art_key());
+      } else {
+        if (_this->_impl_.cosmetic_art_key_.IsDefault()) {
+          _this->_internal_set_cosmetic_art_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(from._impl_.derived_ != nullptr);
       if (_this->_impl_.derived_ == nullptr) {
         _this->_impl_.derived_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.derived_);
@@ -10318,7 +10388,9 @@ void PetInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.derived_->MergeFrom(*from._impl_.derived_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       ABSL_DCHECK(from._impl_.entries_ != nullptr);
       if (_this->_impl_.entries_ == nullptr) {
         _this->_impl_.entries_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.entries_);
@@ -10326,9 +10398,7 @@ void PetInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.entries_->MergeFrom(*from._impl_.entries_);
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       ABSL_DCHECK(from._impl_.next_tier_ != nullptr);
       if (_this->_impl_.next_tier_ == nullptr) {
         _this->_impl_.next_tier_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.next_tier_);
@@ -10336,66 +10406,71 @@ void PetInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.next_tier_->MergeFrom(*from._impl_.next_tier_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_pet_id() != 0) {
         _this->_impl_.pet_id_ = from._impl_.pet_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_pet_table_id() != 0) {
         _this->_impl_.pet_table_id_ = from._impl_.pet_table_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_level() != 0) {
         _this->_impl_.level_ = from._impl_.level_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_quality() != 0) {
         _this->_impl_.quality_ = from._impl_.quality_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_model_id() != 0) {
         _this->_impl_.model_id_ = from._impl_.model_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_is_active() != 0) {
         _this->_impl_.is_active_ = from._impl_.is_active_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_total_points() != 0) {
         _this->_impl_.total_points_ = from._impl_.total_points_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_remaining_points() != 0) {
         _this->_impl_.remaining_points_ = from._impl_.remaining_points_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_pool_id() != 0) {
         _this->_impl_.pool_id_ = from._impl_.pool_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_reset_cost_gold() != 0) {
         _this->_impl_.reset_cost_gold_ = from._impl_.reset_cost_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_growth() != 0) {
         _this->_impl_.growth_ = from._impl_.growth_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_cultivation_tier() != 0) {
         _this->_impl_.cultivation_tier_ = from._impl_.cultivation_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_cosmetic_id() != 0) {
+        _this->_impl_.cosmetic_id_ = from._impl_.cosmetic_id_;
       }
     }
   }
@@ -10424,9 +10499,10 @@ void PetInfo::InternalSwap(PetInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.cultivation_tier_name_, &other->_impl_.cultivation_tier_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.cultivation_art_key_, &other->_impl_.cultivation_art_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.cosmetic_art_key_, &other->_impl_.cosmetic_art_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cultivation_tier_)
-      + sizeof(PetInfo::_impl_.cultivation_tier_)
+      PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.cosmetic_id_)
+      + sizeof(PetInfo::_impl_.cosmetic_id_)
       - PROTOBUF_FIELD_OFFSET(PetInfo, _impl_.derived_)>(
           reinterpret_cast<char*>(&_impl_.derived_),
           reinterpret_cast<char*>(&other->_impl_.derived_));

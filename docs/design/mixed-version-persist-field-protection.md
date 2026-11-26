@@ -480,8 +480,8 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
   - `data_stress` 盖戳、`debug_import` 世代前置检查；
   - `deploy/k8s/persist-schema-alerts.yaml` 与 `deploy/k8s/README.md` 运维小节。
 
-  `save_barrier_restore` 接受 `schema_gen` 字段、并按两行 SQL 世代的最大值重建屏障，这部分由 Codex 在 `da0f1822c` 完成。
-- **第 3a 批：已落码，未编译、未测试（Claude，2026-10-19）。** 待 Codex 按下面「Codex 验证」一列执行：
+  `save_barrier_restore` 接受 `schema_gen` 字段、并按两行 SQL 世代的最大值重建屏障，这部分由 Gemini 在 `da0f1822c` 完成。
+- **第 3a 批：已落码，未编译、未测试（Claude，2026-10-19）。** 待 Gemini 按下面「Gemini 验证」一列执行：
   - 载体与统一入口：`unknown_field_carry.h`（engine/core/utils/proto）、两个 Carry 组件（`player_persist_carry_comp.h`，在两张表的手写 Unmarshal 里创建）、`player_persist_marshal.h`（统一入口，只有头文件）；存盘的 `MarshalPlayerForSave` 与回档快照 `SnapshotSystem::CaptureAndSend` 都改为调用它，两表盖戳 max(本二进制世代, 两表加载世代的最小值)；
   - 对象内携带：欠款 `CurrencyDebt.unknownFields`（`SaveToProto` 改为返回 bool，解析失败整份拒存）、`MissionListComp` 本层未知字段（重复 scope 只取首份）、`SanitizeSkillList` 替换前并回组件本层未知字段；
   - 守卫：`ResetAssetOpStreamForEpoch` 改为 `Clear()` 后重设流号与纪元（清掉的字段与旧写法一致，包括回执）；`ItemStore::IsIndependentInstance` 统一 `CanStack`、reserve 侧空余估算、整理合并三处判定；`AttachDebt` 遇到带未知字段的既有欠款返回 `kFeatureUnavailable`，不合并；
@@ -500,17 +500,17 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 - **第 3b 批：已落码，未编译、未测试（Claude，2026-10-19～20）。** §5.2 先改为写方令牌（v0.6，§15）再落码：
   - 严格屏障 Lua 11 参（`num_gt`、C3 放在 owner / 版本判定之后、同版本重放与本实体令牌跳过、warn 返回 2 照写、enforce 返回 3 不写、`schema_gen` 只升不降、`schema_writer`）；`RedisSaveSchemaGen` 与入队前同口径校验；`OnSaved` 的 2 / 3 分支与两个新回调（返回 3 时排队值 guard 与令牌都相同才丢）；
   - scene：`PlayerPersistWriterComp`（令牌，存盘写入口懒建）、调用点传输出 / 加载世代与模式、`HandlePlayerSaveSchemaWarned` / `HandlePlayerSaveSchemaRejected` 分派、`persist_schema_stats` 与 30 秒 `[PersistSchema]` 汇总；
-  - 配置：`BaseDeployConfig.persist_schema_regression_mode`（字段 23，**proto 待 Codex 重新生成**）、`readBaseDeployConfig` 归一化、`bin/etc` 默认 `warn`、`k8s_deploy.ps1` 镜像与生成期校验、契约测试、`start_game.ps1` 启动前校验；
+  - 配置：`BaseDeployConfig.persist_schema_regression_mode`（字段 23，**proto 待 Gemini 重新生成**）、`readBaseDeployConfig` 归一化、`bin/etc` 默认 `warn`、`k8s_deploy.ps1` 镜像与生成期校验、契约测试、`start_game.ps1` 启动前校验；
   - `save_barrier_restore` 字段白名单接受 `schema_writer`；运维 LogQL 固定查询（`deploy/k8s/README.md`）。
 - **第 4 批：已落码，未编译、未测试（Claude，2026-10-19～20）。** login C4：`beginParentLoad` 追加 `schema_gen` 与存在标记（字段存在但为空串按损坏），快路径在身份 / 水位 / 种子校验之后判；warn 计数放行、enforce 返回错误走现有失败路径；`login_persist_schema_regression_total{reason,mode}` 起服预置 4 条序列；`login.yaml` 键与启动期归一化（非法值拒绝启动）；`k8s_deploy.ps1` login ConfigMap 镜像与契约测试；告警 `LoginPersistSchemaRegression`；种子不盖戳与 backfill 往返用例。
-- **§12.2 一批（持久值域 D1–D6 与等级上限）：已落码（Claude，2026-10-23～24）；Codex 10-24 构建与三个测试工程全量运行通过（旁证，§12.2）。** 加载与重算不再改写加点、技能重数、等级：纯规则在 `attribute_allocation_rules.h`（`StoredPoolAllocation` / `PoolAllocationEffective` / `RemainingPoints`，角色与宝宝共用）、`player_level_rules.h`（`CappedLevel`）；改动在 `player_attribute.cpp`、`player_pet.cpp`、`player_skill.cpp`、`player_database_loader.cpp`，以及各等级读点。用例在 `skill_test`、`turn_battle_engine_test`、`bag_test`（含 `PersistRoundTripTest.ValueDomainsBeyondThisBuildSurviveLoadAndSave`）。Codex 验证清单见交接 §13.2。
+- **§12.2 一批（持久值域 D1–D6 与等级上限）：已落码（Claude，2026-10-23～24）；Codex 10-24 构建与三个测试工程全量运行通过（旁证，§12.2）。** 加载与重算不再改写加点、技能重数、等级：纯规则在 `attribute_allocation_rules.h`（`StoredPoolAllocation` / `PoolAllocationEffective` / `RemainingPoints`，角色与宝宝共用）、`player_level_rules.h`（`CappedLevel`）；改动在 `player_attribute.cpp`、`player_pet.cpp`、`player_skill.cpp`、`player_database_loader.cpp`，以及各等级读点。用例在 `skill_test`、`turn_battle_engine_test`、`bag_test`（含 `PersistRoundTripTest.ValueDomainsBeyondThisBuildSurviveLoadAndSave`）。Gemini 验证清单见交接 §13.2。
 - **恢复工具口径已对齐（2026-10-22，未编译）**：`save_barrier_restore` 的 `schema_gen` 改为两行戳最小值、覆盖旧值，与 C3 / C4 的加载世代同口径（§13 第 8 条）。
 - **第 6 批：已落码（Claude，2026-10-23；10-30 按对抗复核补齐）。Codex 10-24 运行旁证：currency_test 318 条、bag_test 708 条全量通过，其中含这批 10-23 的新用例；Go 只有 shared 模块有 10-24 全量单测旁证。10-30 新增或改动的部分未编译、未测试。** 三件事：
   - 退役字段残留不算版本错位：生成器把台账的 `retired=` 行生成为 `persist_schema::kRetiredFields` / `IsRetiredField`；`unknown_field_carry::CarriesNewerVersionFields` 取代 `HasUnknown`，合堆、欠款合并、按数量扣除三处守卫统一用它（§4.4）；
   - 按数量扣除守卫（§4.4）：`IsCountableByConfig`、三态 `CheckQuantities`（`HasAll` 已删）、`DrainStacks` 过滤；资产通道、强化、镶嵌、战斗快照四处按三态分支。10-30 补：资产扣出把版本错位排到按 guid / 宝宝的确定性校验之后；聚宝斋卖家在托管阶段也可撤单（材料订单的托管腿没有截止，否则 RETRY 没有出口）；
   - 新币种（§12）：取值表唯一来源 `proto/common/base/currency_type.proto`，C++ `currency.h` 与 Go `shared/currencytype` 都从它派生，`IsKnownCurrencyType` 收成一份；Go 各入口（收件箱入箱、邮件附件、帮会捐献配置、交易配置与托管包、神秘商人表）按同源取值表校验；scene 收件箱执行器遇到不认识的币种回 `kVersionSkew`（与版本无关的解码、金额校验先判），资产通道新增第 8b 步回 RETRY + 1006、不记账（排在中止与确定性包校验之后）；战斗节点奖励档的两处币种判据改调同一谓词。
 
-  文件、用例与 Codex 命令见交接 §14（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
+  文件、用例与 Gemini 命令见交接 §14（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
   - **运行证据（10-30 部分）**：Codex 11-02 的全量 C++ 回归（`build/player-store-verify-20261102-r3-prep/06-cpp-tests/`）里，这批 16 条 C++ 用例都实际运行且通过，其中包括 10-30 新增的 `AssetOpSystemTest.QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry`；currency_test 299 条、turn_battle_engine_test 300 条全绿。同一轮 bag_test 的 16 条失败与这批无关：13 条装备属性测试的数值超过了配置表上限，1 条宝宝加点用例属另一会话；`PersistRoundTripTest.UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave` 报的是新持久类型 `AssetRecallLine` 不在往返夹具里，已由别人在 `ccbb4af69` 补上夹具，尚未重跑。Go 侧（`currencytype`、收件箱入箱、交易托管撤单）没有运行记录。
 - **第 7 批：已落码，未编译、未测试（Claude，2026-11-05）**。四件事：
   - 台账封存门禁（§3.1「封存」）：生成器 `persistschema` 的封存行解析、写回与核对（`ledger.go`、`apply.go`、`generate.go`），生成器命令行开关 `--persist-schema-seal`（`cmd/root.go`），`dev_tools.ps1 -Command persist-schema-seal`，发布预检 `release.persist_schema.sealed`，以及 `release-checklist.md` §2.1 ① / ⑦、§6.2。用例在 `persistschema_test.go`、`dev_tools_proto_gen_exit.tests.ps1`、`release_common_version.tests.ps1`。
@@ -519,7 +519,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
   - 评审修正：生成器加只核不写的 `--persist-schema-verify`（`dev_tools.ps1 -Command persist-schema-verify`），发布预检用它核摘要；封存违反按两种成因分别给处置，同一根因只报一次；`TestRepositoryLedgerIsCanonical` 同时核仓库台账的封存。
   - 收件箱域停用的周期补打：停用之后每 5 分钟补打一条 `metric=inbox_halted ... relog=1`（`kHaltedDomainRelogIntervalMs`），告警在实体存活期间一直亮着；`player-inbox-alerts.yaml` 的毒消息告警描述先排除版本错位。用例 `PlayerInboxSystemTest.HaltedDomainRelogsOnTheIntervalWhileTheEntityLives`。
 
-  文件与 Codex 命令见交接 §17、§19（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
+  文件与 Gemini 命令见交接 §17、§19（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 - **第 8 批：已落码，未编译、未测试（Claude，2026-11-11）**。§12 载荷行剩下的两项，以及 §13 第 10 条的三项待拍板：
   - **载荷新字段**（§12）：收件箱载荷与资产通道请求一律整棵判未知字段（`unknown_field_carry::TreeCarriesNewerVersionFields`）。退役判据是该层消息的 reserved 段或台账退役行；bytes 字段（原样携带的实例）不往里解。
     - 收件箱：`player_inbox_registry::PayloadCarriesNewerVersionFields`，带新字段的条目按 `kVersionSkew` 停用本域，不调执行器。
@@ -532,7 +532,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
     - 战斗结算对查不到表的掉落 / 消耗当时仍按 C-2 剔除该项、记 ERROR 交人工；已在下面的「第 8 批收尾」改成整笔 DEFER。
   - **§13 第 10 条第 2、3 项**：照推荐定案，不改代码（见 §13）。
 
-  文件与 Codex 命令见交接 §24（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
+  文件与 Gemini 命令见交接 §24（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 - **第 8 批收尾：已落码，未编译、未测试（Claude，代码 2026-11-11、用例与文档 11-12）**。scene 收件箱战斗结算执行器遇到「本节点 Item / Pet 表查不到」改为整笔 DEFER、零副作用（§13 第 10 条）：
   - **物品**：`ApplySettlementToEntity` 在剔除封禁项、算实际可扣量之前判。消耗或掉落里有查不到的配置号，整笔返回 false，日志 `metric=persist_version_skew where=battle_item`（带 `side`、`config_id`）。`DropItemsWithoutConfigRow` 与 `metric=battle_inbox_item_effect_skipped` 已删。
   - **宝宝**：玩家带进这一局的宝宝，种类在本节点 Pet 表查不到时，`CollectApplicableInboxPets` 不再跳过这一只，整笔返回 false，日志 `where=battle_pet`（带 `pet_id`、`pet_table_id`）。宝宝已不在身上、宝宝属性池缺配不属于这条规则，仍只跳过这一只。
@@ -544,9 +544,9 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
     - `PlayerBattleSettlementTest.InboxPetConfigUnknownToThisNodeDefersWholeSettlement`；
     - `PlayerBattleSettlementTest.InboxSettlementAppliesOnRetryOnceThePetRowIsHotUpdated`。
 
-  文件与 Codex 命令见交接 §25（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
+  文件与 Gemini 命令见交接 §25（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 
-| 批 | 内容 | 主要改动 | Codex 验证 |
+| 批 | 内容 | 主要改动 | Gemini 验证 |
 |---|---|---|---|
 | 1 | 台账；生成器（发号、冻结和投影检查、R2 / R3、"引导中"标记）；两个 option 及其标注；两张表的戳字段；生成常量与清单 | `proto/db/proto_option.proto`、各持久 proto 的标注、`proto/persist_schema_gen.txt`、`tools/proto_generator/protogen/internal/...`（新增生成器及测试）、生成产物 | 先 `proto-gen-build`，再 `proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`；protogen 跑 `go test ./...`；最后完整编译 C++ 与全部 Go module。生成的 .pb 文件如果超过 30 个，先按 §10.2 报告 |
 | 2 | go/db：C0 / C1 / C1b / C2 及其接线，新的延后原因和死信原因，指标、告警、引导期标记，日志限速；cmd/migrate 的 DDL；save_barrier_restore、debug_import、data_stress 的配套改动 | `go/db/internal/kafka/{player_row_fence,key_ordered_consumer,store_failure,placement_route}.go`、`go/db/db.go`、`go/db/internal/metrics`、`go/db/internal/barrierrestore/scripts.go`、`go/data_service/cmd/debug_import`、`deploy/k8s/persist-schema-alerts.yaml`、测试 | go/db 与 data_service 跑 `go test ./...`、`go vet`；真库集成测试（自起一次性 MySQL / TiDB） |
@@ -589,7 +589,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 - 以下情况生成失败：改类型、复用号、给 oneof 加成员、给冻结类型加字段、换存储分组、已封存的世代被增删字段；
 - 输出稳定、可重复。
 
-**真实环境**（由 Codex 或负责人执行，**还没有做过**）：加一个测试用的持久字段，把台账切到 `active`、升到世代 2，用新旧两套二进制按 §7 的矩阵逐行混跑。重点是：旧 scene 接手新存档后改同一行里的字段再存、跨 zone 来回、scene 回滚、go/db 与 scene 先后顺序颠倒。这一步不能用单测代替；跑完之前，不能宣称「混版本安全」。
+**真实环境**（由 Gemini 或负责人执行，**还没有做过**）：加一个测试用的持久字段，把台账切到 `active`、升到世代 2，用新旧两套二进制按 §7 的矩阵逐行混跑。重点是：旧 scene 接手新存档后改同一行里的字段再存、跨 zone 来回、scene 回滚、go/db 与 scene 先后顺序颠倒。这一步不能用单测代替；跑完之前，不能宣称「混版本安全」。
 
 ---
 
@@ -717,7 +717,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 
 > **来由**：2026-10-23 用户（负责人）确认项目未上线、存量玩家数据可以清空，要求按最标准的方式做完：数据强一致、代码可读、可水平扩展。据此把 §12.1 的 D1–D6 与等级上限一行改掉，不写存量迁移；W1–W3 按 §12.1 的建议不改代码；D7 起初保留为发布约束，2026-10-31 随战斗结算账本移出玩家存档作废。代码已随整仓快照提交入库（`5de132e2`、`a3c9b9b7` 等）。
 > **运行证据（旁证）**：Codex 2026-10-24 在含这批改动的共享工作区实际构建 `game.sln`（0 错误），并全量运行 bag_test（708 条）、skill_test（76 条）、turn_battle_engine_test（287 条），均 0 失败，这批新增用例全部在列且通过（PROGRESS「2026-10-24 07:38 UTC」「07:43 UTC 后继实际结果」两条；原始 gtest XML 在 Codex 证据目录 `cpp-current1884-post-full-gtests-evidence-r1/run-20261024T071358902Z-25be95de/`，本会话 10-30 按用例名逐条核对）。这不是本主题专门的验证：构建前没有封存源快照，也没有做真实回滚演练；10-29 之后别的会话又改过 `player_battle.cpp`、`class_skill_test.cpp`，并新增了一条任务等级用例。最新状态的复跑清单见 交接 §13.2（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
-> **11-02 r3 回归**（玩家存盘重构那条线的 Codex 运行，`build/player-store-verify-20261102-r3-prep/06-cpp-tests/bag_test.stdout.log`）：本主题在 bag_test 里的用例，含 10-30 新增的宝宝生效等级两条与"只剩未知键时洗点"两条，都通过；只有角色与宝宝的 `AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 两条失败，原因是夹具没加载自动加点方案表，`AutoAllocate` 回了"无自动加点方案"。11-02 的 `ccbb4af69` 已给两个夹具补 `AttributeAutoPlanTableManager::Instance().Load()`，补完后还没有复跑。
+> **11-02 r3 回归**（玩家存盘重构那条线的 Gemini 运行，`build/player-store-verify-20261102-r3-prep/06-cpp-tests/bag_test.stdout.log`）：本主题在 bag_test 里的用例，含 10-30 新增的宝宝生效等级两条与"只剩未知键时洗点"两条，都通过；只有角色与宝宝的 `AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 两条失败，原因是夹具没加载自动加点方案表，`AutoAllocate` 回了"无自动加点方案"。11-02 的 `ccbb4af69` 已给两个夹具补 `AttributeAutoPlanTableManager::Instance().Load()`，补完后还没有复跑。
 
 **统一规则**：
 1. 加载、重算、存盘都不改写这些持久值。会改它们的只有玩家主动的操作（加点、洗点、修习）和 GM。
@@ -754,7 +754,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 - **属性面板与宝宝列表**：`allocated` 仍是存储值，`value` 只含生效的已分配点；池不生效时 `remaining = 0`、`reset_cost_gold = 0`。
 - **技能书**：`skill_list` 改为显式投影；目录里的 `rank` 可能大于 `max_rank`；`player_level` 下发的是生效等级。
 - **等级展示**：战斗快照、属性面板与宝宝列表下发生效等级（宝宝按种类上限封顶）；Go 侧好友 / 队伍展示读存储等级，回滚窗口里两边可能不一致。不在 Go 里复制上限常量，免得多出第二份真相。
-- **proto**：只改了注释（`player_skill_comp.proto`、`player_attribute.proto`、`player_pet.proto`），需要 Codex 用 no-unity 配置重新生成。
+- **proto**：只改了注释（`player_skill_comp.proto`、`player_attribute.proto`、`player_pet.proto`），需要 Gemini 用 no-unity 配置重新生成。
 
 **Java 版**：待做。Java 的 `PlayerLevels.clampStored` 同样会在加载时压回等级；加点、技能也要按同一口径实现，见交接 §13.2。
 
@@ -1034,4 +1034,4 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 
 这只是恢复工具兼容，不代替C3/C4实现或真实升世代/双区故障。新真TiDB部署矩阵仍待执行，既往64通过不绑定本批；Java直接SQL/BLOB路径不使用这个Redis父屏障协议，本项不代表Java整体持久补偿天然等价。运维前提与当前证据边界见 `docs/ops/mysql-backup-pitr-runbook.md` 的同日补充。
 
-> **2026-10-22 口径变更**：上文"SQL 世代 max 恢复、已有 Redis floor 不降"已作废，改为两行戳最小值、覆盖 hash 旧值（§13 第 8 条、§15 v0.6 最后一行）；上文记录的验证证据只对旧口径成立，新口径未编译、待 Codex 重新验证（交接 §11.9）。
+> **2026-10-22 口径变更**：上文"SQL 世代 max 恢复、已有 Redis floor 不降"已作废，改为两行戳最小值、覆盖 hash 旧值（§13 第 8 条、§15 v0.6 最后一行）；上文记录的验证证据只对旧口径成立，新口径未编译、待 Gemini 重新验证（交接 §11.9）。

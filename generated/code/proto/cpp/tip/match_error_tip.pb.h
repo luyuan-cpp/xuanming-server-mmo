@@ -119,6 +119,14 @@ enum match_error : int {
   kMatchBattleSurrenderTooEarly = 16053,
   kMatchBattleSurrenderCooldown = 16054,
   kMatchBattleSurrenderAlreadyVoted = 16055,
+  kMatchTournamentAlreadySalutedToday = 16056,
+  kMatchTournamentNoChampionToSalute = 16057,
+  kMatchTournamentSpectateCheerCooldown = 16058,
+  kMatchTournamentSpectateCheerInvalid = 16059,
+  kMatchTournamentEmblemInvalid = 16060,
+  kMatchTournamentPredictionClosed = 16061,
+  kMatchTournamentPredictionTargetInvalid = 16062,
+  kMatchTournamentWarmupUnavailable = 16063,
   match_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   match_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -129,11 +137,11 @@ extern const uint32_t match_error_internal_data_[];
 inline constexpr match_error match_error_MIN =
     static_cast<match_error>(0);
 inline constexpr match_error match_error_MAX =
-    static_cast<match_error>(16055);
+    static_cast<match_error>(16063);
 [[nodiscard]] inline bool match_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, match_error_internal_data_);
 }
-inline constexpr int match_error_ARRAYSIZE = 16055 + 1;
+inline constexpr int match_error_ARRAYSIZE = 16063 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 match_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(match_error) {

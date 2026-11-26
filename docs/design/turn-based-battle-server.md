@@ -3,16 +3,16 @@
 > 状态:一期已落地(2026-08-15 起实现,2026-08-17 全栈冒烟通);二期实现中(2026-08-31 起,
 > 见 §10 观战、§11 自动战斗/5v5/队伍上限)。本文是回合制战斗(问道/梦幻式)的架构决策与
 > 模块规格,是 battle 节点、battle 引擎、scene 集成、match 服务四个模块的实现依据。
-> 未编译声明:二期代码为"待 Codex 生成+编译验证"状态,见 §14。
+> 未编译声明:二期代码为"待 Gemini 生成+编译验证"状态,见 §14。
 >
 > **(2026-09-29 更正)客户端战斗链路已被 §22 收缩取代**:§2–§14 里凡是「客户端战斗消息经 gate 中继到 battle」
 > 「`BindBattleEvent` / `UnbindBattleEvent` 会话绑定」「S2C 经 Kafka→gate 下发战斗帧」「scene RECONNECT 重发 Bind」的描述
 > (如 D6、D10 / D11 的理由、§3.1、§3.2、§4.3、§10.2、§11 的 `SetAutoBattle` 路由、§14 验收项),都是收缩前的形态,原文保留作判据链。
 > 现状:战斗上行与战斗帧只走客户端直连 battle(§22 D66 / D68),Bind / Unbind 契约已删、事件号墓碑(D67),
-> scene 换会话只推重连提示(D72)。未编译、未测试,待 Codex 验证(§22.7)。
+> scene 换会话只推重连提示(D72)。未编译、未测试,待 Gemini 验证(§22.7)。
 >
 > **(2026-10-30 更正)结算只走 match SQL + 收件箱**:§3.2、§6、§7 以及后文各处的 `battle:settlement:pending:*`、`battle:activity_result:*`、`BattleSettlementEvent`、R07 结算发件箱(先落 Redis → 投 SceneCommand → 未销账重投 → 登录补应用)、旧协议 0 与本地模式都已删除,原文保留作判据链。
-> 现状([玩家数据只存 TiDB 总体方案](./player-data-tidb-scaling-plan.md) §5.4):battle 只接受 `outcome_protocol_version = 1` 的房间,打完把冻结的终局原件经 `CommitBattleOutcome` 提交 match SQL,拿到持久决定才公布终局、删房;match 发件箱投 player_inbox 与 Kafka;scene 经 `ApplyInboxSettlement` 应用,结算随存档提交、同 E/q 双 SQL 确认之后由 `CompleteInboxSettlement` 解冻、条件删 `battle:lock` + `battle:ctx`、推 `BattleEndS2C`。这两个键是协调键,留在 Redis;其余释放时机(备战取消、冻结到期、TTL)见 `cpp/libs/services/scene/battle/system/battle_lock_rules.h` 文件头。未编译、未测试,待 Codex 验证。
+> 现状([玩家数据只存 TiDB 总体方案](./player-data-tidb-scaling-plan.md) §5.4):battle 只接受 `outcome_protocol_version = 1` 的房间,打完把冻结的终局原件经 `CommitBattleOutcome` 提交 match SQL,拿到持久决定才公布终局、删房;match 发件箱投 player_inbox 与 Kafka;scene 经 `ApplyInboxSettlement` 应用,结算随存档提交、同 E/q 双 SQL 确认之后由 `CompleteInboxSettlement` 解冻、条件删 `battle:lock` + `battle:ctx`、推 `BattleEndS2C`。这两个键是协调键,留在 Redis;其余释放时机(备战取消、冻结到期、TTL)见 `cpp/libs/services/scene/battle/system/battle_lock_rules.h` 文件头。未编译、未测试,待 Gemini 验证。
 
 ## 1. 背景与一期范围
 
@@ -404,7 +404,7 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 
 
 
-## 12. Codex 验证清单(总执行顺序,2026-08-15 首轮实现后固化)
+## 12. Gemini 验证清单(总执行顺序,2026-08-15 首轮实现后固化)
 
 > 各模块的细化步骤见 PROGRESS.md 对应条目;本节是跨模块的**总顺序**,乱序必失败。
 > 全部 C++ MSBuild 必须 `/m:1` 串行(并发报假 C1041/LNK1104)。
@@ -484,7 +484,7 @@ etcdctl 验 `BattleNodeService.rpc` 记录 `protocolType=PROTOCOL_GRPC` → 登�
 - `BindBattleEventHandler` 守护段:`gate_battle_binding::HandleBindBattle(event);`
 - `UnbindBattleEventHandler` 守护段:`gate_battle_binding::HandleUnbindBattle(event);`
 
-## 14. 二期 Codex 验证清单(观战 + 自动战斗 + 5v5,2026-08-31)
+## 14. 二期 Gemini 验证清单(观战 + 自动战斗 + 5v5,2026-08-31)
 
 > 总顺序与 §12 相同:proto 重生成 → C++ 串行编译 → go/match → 客户端 → 冒烟。
 > C++ MSBuild 一律 `/m:1`。
@@ -668,7 +668,7 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 
 > **2026-10-17 契约勘误**：需要保留的是通用回包行为，现由 `gate_rpc_reply_bridge::DeliverReply` 收口；`SetIfEmptyHandler` 全局安装已删除，直连和路由的每次调用回调分别调用同一桥接。battle 收缩结论不变。
 
-### 18.8 Codex 验证清单(按序;任一步红即停)
+### 18.8 Gemini 验证清单(按序;任一步红即停)
 
 > **2026-10-26 当前执行说明**：以下 2026-09-05 实跑坑点、旧工具路径、旧生成分派方式与通过数量均为历史记录，原文保留。
 > 新运行采用 §12 的独立依赖与 no-unity 生成口径，不把旧 SDK、官方插件或 `*.grpc.pb.*` 作为前置条件。
@@ -729,7 +729,7 @@ obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_dir
 - `cpp/libs/services/scene/battle/system/player_battle.cpp` `OnPlayerEnterScene` 第 2 步:条件由 `enterGsType == LOGIN_RECONNECT` 改为 `LOGIN_RECONNECT || LOGIN_REPLACE`(D38)。判据链见 §18.7 原文:跨 gate 重定向后旧会话通常仍 `Online`,login 判 `REPLACE`,原条件漏掉这条路径。`LOGIN_FIRST` 不进该分支(首登实体新建、无 `InBattleComp`,由第 1 步按锁 + ctx 重建)。
 - 文档:§18 状态行改为已冒烟通过;§18.7 待修项标记已修;[moba-battle-target-architecture.md](../notes/moba/moba-battle-target-architecture.md) §六 过时缺口更正。
 
-### 19.3 未编译,待 Codex 验证(按序)
+### 19.3 未编译,待 Gemini 验证(按序)
 
 1. **C++ scene 串行编译**(仓库根):`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64 /t:scene`;期望 0 error,`bin/scene.exe` 更新。并行会话正在改 `cpp/nodes/scene/handler/grpc/scene_node_service.*`,若因其未完成改动报错,只保留错误摘要、不改判据。
 2. **【已被 §22.7 第 9 步取代(2026-09-29):`skip_direct_connect` 回落已删,两种路由模式都只验直连】** **整栈冒烟回归(当前 HEAD)**:§18.8 第 5 步三条(直连 / `skip_direct_connect` 回落 / 跨 zone)。注意路由模式下 `skip_direct_connect: true` 预期失败(client-rpc-router.md §7.5),只在 `GATE_CLIENT_RPC_ROUTER=0` 下跑回落那条。
@@ -739,7 +739,7 @@ obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_dir
 
 ## 20. 回合制战斗缺口收口 G1–G9 索引(2026-09-17)
 
-- 详细设计、决策 D41–D50、改动集与 Codex 验证清单:[turn-battle-gap-closure.md](./turn-battle-gap-closure.md)。
+- 详细设计、决策 D41–D50、改动集与 Gemini 验证清单:[turn-battle-gap-closure.md](./turn-battle-gap-closure.md)。
 - 一句话:掉落(Monster 表加 `drop` 槽 + 引擎终局摇点 + scene 真入包)、战斗内用药(Item 表加三列、
   可给队友、PVP 限次、提交回错误码)、消耗按实际持有夹紧扣除并逐条落流水、局中闸补五处、
   快照 buff 与技能进引擎前清洗、战斗状态按收信人裁剪并回传本人道具余量、Item 表并入配表指纹。
@@ -831,7 +831,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 
 ## 22. 直连收缩一次做完(2026-09-29)
 
-> 状态:**已落码;未编译、未测试、未上集群,待 Codex 验证(AGENTS §10.1)。** 用户 2026-09-29 拍板「一次全做,事后验」:
+> 状态:**已落码;未编译、未测试、未上集群,待 Gemini 验证(AGENTS §10.1)。** 用户 2026-09-29 拍板「一次全做,事后验」:
 > 删 gate 战斗中继、D39 回落收窄、D26 改 fail-closed、删 Kafka Bind/Unbind 契约、robot 与 Unity 改为直连唯一,一批落完,
 > 不再等 D36 / D37 的「K8s 路由模式 battle-smoke 先跑通」。
 > 本节**取代** §18.1 D23 / D26、§18.2「回落」条款、§18.6 部署寻址、§18.7 收缩条、§18.8 第 5 步 `skip_direct_connect` 回落、
@@ -1073,7 +1073,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    - 完整重登按 FIGHTING 重建时照旧总推(`RestoreBattleFreezeOnLogin`)。
    残留:升级时的补推依赖确认事件到达(battle 在确认补发窗口内周期补发);重复提示无害(客户端对同局已有活直连或补签在途直接返回)。
    match 侧没改。回归测试没写:组件在匿名命名空间里,只能按行为观察;「同会话不推 / 换会话推」要先走完整个 `PrepareBattle`,
-   可把组件挪到 `battle/comp/` 或在 `PlayerBattleSettlementTestAccess` 加入口,交 Codex 评估。
+   可把组件挪到 `battle/comp/` 或在 `PlayerBattleSettlementTestAccess` 加入口,交 Gemini 评估。
 4. **补签依赖观战索引(§21.5 第 2 条;收缩批不做,已由集群外入口 2b 第 9 条修掉失败路径)**:
    - 原风险「SETEX 写失败 → 开了局却补不了签」**已不存在**。match 现在在 CreateBattle **之前**写 `spectate:battle:{id}`
      (`gather.go:308-321`;`writeSpectateRecord`,`spectate.go:120-145`):有界重试共 2 次,每次 ctx 截止 1s(go-redis 读超时下实际上限 3s),
@@ -1095,7 +1095,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      - chat:10-21 改为 SQL 原件,K8s 上不再连这个集群;11-11 连句柄与 `ChatRedis` 段都删了。
 
      上面的静默淘汰风险已不存在,剩下的是写满时写失败。这个集群 11-11 起也有了显式 maxclients 与单独一份连接总账(`deploy/k8s/README.md`「Redis 连接总账」)。〕
-   - 以上 match 改动未编译、未测试,待 Codex 验证。
+   - 以上 match 改动未编译、未测试,待 Gemini 验证。
 5. **match 侧**:`createBattle` 不区分 RPC 失败与 tip≠0 明确拒绝,明确拒绝后若 `DestroyBattle` 也失败,会走 `create_failed_room_alive`
    保守分支(不解冻,冻结等 scene 的 `prepare_deadline_ms` 清掉、票据等 matched TTL 自愈);`PickRandom` 不排除坏节点,签票失败的节点
    可能被反复选中,造成 Prepare / Cancel 空转;`match_gather_total{outcome="create_failed"}` 分不出两类。`WatchBattle` 对 battle 的 1003
@@ -1103,7 +1103,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    **(2026-09-29 补充)** 节点级准入拒绝(gRPC `UNAVAILABLE` + `battle_not_allocatable`)已由集群外入口 D82 单独处理:跳过 `DestroyBattle`,
    用 `PickRandomExcept` 排除已试节点、换节点重试**一次**(`gather.go:324-357`、`discovery/node_watcher.go:317`),仍被拒记
    `match_gather_total{outcome="not_allocatable"}`(`metrics.go:43`)。上面「不排除坏节点、记 `create_failed`」只对 tip≠0 的明确拒绝(如 D70 签票失败回 1003)
-   和 RPC 失败仍然成立。未编译、未测试,待 Codex 验证。
+   和 RPC 失败仍然成立。未编译、未测试,待 Gemini 验证。
 6. **停机路径未改(§21.5 第 1 条)**:`AbortAllRooms` 之后 `DisconnectAll` 立即 forceClose 房间直连;没有 gate 兜底后,
    停机时积压在用户态缓冲里的观众 `SpectateEnd` 丢了就无法补回。
 7. **D70 没有 C++ 单测**:CreateBattle 预签拒绝与 AddObserver 三条签票失败路径只由代码评审、match 回归测试与冒烟覆盖。
@@ -1163,7 +1163,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 - 集群外入口 D76–D93 及其登记为独立任务的后续项,见 [k8s-client-entry.md](./k8s-client-entry.md)。
 - 本节不改 AGENTS.md:§4.1 的 proto 重生命令写法已过时(见 §22.7 第 3 步),改它需用户确认。
 
-### 22.7 Codex 验证清单(按依赖顺序;任一步红即停)
+### 22.7 Gemini 验证清单(按依赖顺序;任一步红即停)
 
 > 全部**未执行**:Claude 未编译、未测试(AGENTS §10.1)。本清单合并收缩批各工作包的验证命令;集群外入口(D76–D93)的
 > kind 端到端验证见 [k8s-client-entry.md](./k8s-client-entry.md),与本清单共用第 3 步 proto 重生。
@@ -1236,7 +1236,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
    (本批新增用例:gate 默认以路由模式部署、`-GateRouterMode 0` 回退仍可生成、负向只收 "0" / "1"、发现前缀、dev_tools / k8s_image 留空不透传);
    `k8s_zone_rollback_gate_router_mode.tests.ps1`、`dev_tools_merge_zone_contract.tests.ps1`、`start_game_command_contract.tests.ps1`。
    通过:四个文件都是退出码 0、fail=0(严格口径,2026-09-30 恢复)。任何一条红都是真实问题,即停并保留该文件的完整输出。
-   **已知会红:无。** 2026-09-29 登记的四项,2026-09-30 按磁盘静态核对,测试属主都已在工作树里改好(未提交,未经 Codex 运行):
+   **已知会红:无。** 2026-09-29 登记的四项,2026-09-30 按磁盘静态核对,测试属主都已在工作树里改好(未提交,未经 Gemini 运行):
    - `k8s_zone_rollback_gate_router_mode.tests.ps1` 原 `:343`:沙箱缺拷 `lib/k8s_client_entry.ps1`(`k8s_zone_rollback.ps1:227` 在
      `$ErrorActionPreference = "Stop"` 下 dot-source 它),现已补拷;
    - 同文件原 `:776`、`:820` 两个旧负向用例:已按「dev_tools 透传 `-AllowDisruptiveSwitch` / `-RequireClientEndpoint`」改写为正向用例
@@ -1350,7 +1350,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
   - `PrepareNotBlockedByExpiredSceneChangeSlot`:槽过期或时钟回拨时不挡。
   - 夹具没挂等级、技能等加载组件,所以放过换图闸后会停在组快照那一步(`kServiceUnavailable`),用例用它来区分拒绝原因。
 - Java 版:原本就对(`PlayerBattleService.prepare` 的 `switchInFlight` → 1006),没有待做项,Java 仓 `PARITY.md` 不登记。
-- Codex 验证(仓库根,串行):
+- Gemini 验证(仓库根,串行):
   1. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,0 error。
   2. `build\cpp\tests\bag_test.exe --gtest_filter=PlayerBattleSettlementTest.*:PlayerBattleSettlementItemTest.*`,全部 PASS,新增四条在列。
   3. `build\cpp\tests\cross_zone_test.exe --gtest_filter=EnterSceneTransportFailureEcs.*:HandoffMarkWithdrawQueue.*`,全部 PASS(`IsSceneChangeBusy` 语义未改,只做回归)。

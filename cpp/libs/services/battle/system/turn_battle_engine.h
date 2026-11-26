@@ -26,6 +26,8 @@
 
 #include "constants/turn_battle_constants.h"
 #include "constants/battle_effect_constants.h"
+#include "constants/boss_trial_weekly_affix_rules.h"
+#include "constants/wuxing_expansion_rules.h"
 #include "data/battle_data_provider.h"
 #include "system/class_skill_rules.h"
 #include "system/dungeon_monster_ai.h"
@@ -86,16 +88,54 @@ public:
     bool UsesFreePreset() const {
         return createRequest.has_ranked_context() && createRequest.ranked_context().use_free_preset();
     }
-    // 竞技 PVP（正式会武 / 物法易势 5V5 / 赛季锦标赛）：启用主目标凝锋与后期战意渐盛，绝不影响 PVE。
+    // 帮会全天帮战 V2（9=真人帮战 / 10=守旗阵踢馆 AI 托管）：真实养成入场、第 12 回合起决胜煞气、打满判平。
+    bool IsGuildWarBattle() const {
+        return createRequest.match_mode() == kMatchModeGuildWarPvp ||
+               createRequest.match_mode() == kMatchModeGuildWarSiege;
+    }
+    bool IsAiControlledPlayer(uint64_t playerId) const {
+        return aiControlledPlayers.contains(playerId);
+    }
+    // 竞技 PVP（正式会武 / 物法易势 5V5 / 赛季锦标赛 / 帮会帮战）：启用主目标凝锋与后期战意渐盛，绝不影响 PVE。
     bool IsCompetitivePvpBattle() const {
         return !IsPveMatch() &&
                (IsRankedBattle() ||
                 bossTrialKind == kBossTrialKindPolarity5v5 ||
                 createRequest.match_mode() == kMatchModePolarity5v5 ||
-                createRequest.match_mode() == kMatchModeSeasonTournament);
+                createRequest.match_mode() == kMatchModeSeasonTournament ||
+                IsGuildWarBattle());
+    }
+    // 全服赛季战队锦标赛 V2 / 五行幻境爬塔灵脉阵眼（确定性定点数倍率，零浮点漂移）。
+    TournamentLeylineElement ActiveTournamentLeyline() const {
+        if (hasTowerContext && towerContext.leyline_element() != TOURNAMENT_LEYLINE_UNSPECIFIED) {
+            return towerContext.leyline_element();
+        }
+        return createRequest.has_tournament_context()
+            ? createRequest.tournament_context().leyline_element()
+            : TOURNAMENT_LEYLINE_UNSPECIFIED;
+    }
+    bool IsWuxingTowerBattle() const { return hasTowerContext; }
+    bool HasCustomDuelPolarity() const {
+        return hasCustomDuelRules && customDuelRules.enable_polarity_rotation();
+    }
+    bool IsControlBannedByCustomDuel() const {
+        return hasCustomDuelRules && customDuelRules.ban_control_skills();
+    }
+    uint32_t TeamFormationId(uint32_t teamIndex) const {
+        return teamIndex == 0u ? teamAFormationId : (teamIndex == 1u ? teamBFormationId : 0u);
+    }
+    bool IsWuxingSynergyActiveForActor(uint64_t actorId) const {
+        return wuxingSynergyActorIds.contains(actorId);
+    }
+    uint64_t TournamentEarthShieldOf(uint64_t actorId) const {
+        const auto it = leylineEarthShieldByActor.find(actorId);
+        return it == leylineEarthShieldByActor.end() ? 0ULL : it->second;
     }
     uint32_t MaxRounds() const { return maxRounds; }
     uint32_t EscalationStartRound() const {
+        if (IsGuildWarBattle()) {
+            return maxRounds >= kGuildWarEscalationStartRound ? kGuildWarEscalationStartRound : 0u;
+        }
         return (IsCompetitivePvpBattle() && maxRounds >= kPvpEscalationMinMaxRounds)
             ? (maxRounds - kPvpEscalationLeadRounds)
             : 0u;
@@ -105,10 +145,12 @@ public:
         return (start > 0u && roundIndex >= start) ? (roundIndex - start + 1u) : 0u;
     }
     uint32_t EscalationDamagePct() const {
-        return 100u + EscalationStacks() * kPvpEscalationDamageStepPct;
+        const uint32_t step = IsGuildWarBattle() ? kGuildWarEscalationDamageStepPct : kPvpEscalationDamageStepPct;
+        return 100u + EscalationStacks() * step;
     }
     uint32_t EscalationSupportPct() const {
-        const uint32_t drop = EscalationStacks() * kPvpEscalationSupportStepPct;
+        const uint32_t step = IsGuildWarBattle() ? kGuildWarEscalationSupportStepPct : kPvpEscalationSupportStepPct;
+        const uint32_t drop = EscalationStacks() * step;
         const uint32_t maxDrop = 100u - kPvpEscalationSupportFloorPct;
         return drop >= maxDrop ? kPvpEscalationSupportFloorPct : (100u - drop);
     }
@@ -126,6 +168,10 @@ public:
                               bool ready, BattlePrepState* outPrepState = nullptr);
     bool FinalizePrepPhase();
     void FillPrepStateForViewer(BattleStateS2C& state, uint64_t viewerPlayerId, uint64_t deadlineMs) const;
+    // 论剑 V4 队内一键战术标点：每名玩家每回合（含变阵期独立计 1 轮）至多 2 次，仅同队可见。
+    uint32_t SubmitBattlePing(uint64_t playerId, uint64_t targetActorId, BattlePingKind kind,
+                              BattleTacticalPing* outPing = nullptr);
+    void FillTeamPingsForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const;
     // 查询指定参战者的阵营（0/1），不存在返回 std::nullopt。
     std::optional<uint32_t> TeamIndexOfPlayer(uint64_t playerId) const;
     void MarkPlayerEntered(uint64_t playerId);
@@ -163,6 +209,8 @@ public:
 
     // 当前对局是否属于首领试炼（1..4 / 8），供房间管理器应用 18 秒紧凑指令窗等试炼策略。
     bool IsBossTrialBattle() const { return IsBossTrialKind(bossTrialKind); }
+    // 本局冻结的首领试炼周常五行词缀（0=无/非首领试炼或爬塔，1金/2木/3水/4火/5土）。
+    uint32_t BossWeeklyAffixId() const { return bossWeeklyAffixId; }
 
     // 开局时被忽略的战斗剧本及原因(英文,每条一句;CreateBattleRequest.team_scripts 里不合法的条目)。
     // 引擎不打日志,由节点在 Initialize 成功后逐条记 ERROR;被忽略的队出手照旧,对局照常进行
@@ -209,6 +257,7 @@ private:
         bool isMultiTargetSkill = false;
         bool primaryFocusBonus = false;
         bool isPrimaryFocus = false;
+        bool isPreparedCast = false;
     };
     bool ConfiguredSubjectAllowed(const BattleActorState& actor, const SkillTable& row) const;
     uint32_t ConfiguredRank(const BattleActorState& actor, const SkillTable& row) const;
@@ -532,7 +581,7 @@ private:
     // 为 0(必不抵抗)或 >= 100(必抵抗)都不掷骰,只有 1..99 消耗一个随机数(RollPercent 两端短路)
     bool RollAilmentResist(const BattleActorState& target, const BuffTable& buffRow,
                            uint64_t casterId);
-    void DispelBuffsByTag(BattleActorState& target, const BuffTable& buffRow, TurnResultS2C& result);
+    uint32_t DispelBuffsByTag(BattleActorState& target, const BuffTable& buffRow, TurnResultS2C& result);
     // 重挂持续刷新为满。职业属性 Buff 幅度取更强者;属性 / 下次普攻 Buff 的施加回合记为本回合。
     bool StackOrRefreshExistingBuff(BattleActorState& target, const BuffTable& buffRow,
                                     uint64_t casterId, TurnResultS2C& result, double statPercent);
@@ -605,7 +654,12 @@ private:
     uint64_t ApplyEncounterDamageModifiers(const BattleActorState& source, BattleActorState& target,
                                            uint64_t damage, uint32_t damageType, bool isDirectPrimary,
                                            TurnResultS2C& result, bool isMultiTargetSkill = false,
-                                           bool isPrimaryTarget = true, bool* outSplashReduced = nullptr);
+                                           bool isPrimaryTarget = true, bool* outSplashReduced = nullptr,
+                                           bool isWeeklyChargedOrPeriodic = false, bool isPursuit = false);
+    bool IsActorExposed(uint64_t actorId) const;
+    bool IsWeeklyWaterDiscountSkill(const SkillTable& skillRow) const;
+    void OnBossWeeklyAffixDispelTriggered(uint64_t casterActorId, TurnResultS2C& result);
+    void OnBossWeeklyAffixParryTriggered(uint64_t bossActorId, TurnResultS2C& result);
     bool HasActiveEncounterDamageModifiers() const;
     bool IsActorControlLocked(const BattleActorState& actor) const;
     bool IsFestivalBeastBattle() const;
@@ -642,6 +696,10 @@ private:
     // 赛季首领试炼、护卫救援、物法易势 5V5 与防挂机战中事实（全部确定性）
     uint32_t bossTrialKind = 0;
     uint32_t battleDifficulty = 0;
+    uint32_t bossWeeklyAffixId = 0;
+    uint32_t weeklyAffixWoodTeamBoostUntilRound = 0;
+    uint32_t weeklyAffixEarthTeamBoostUntilRound = 0;
+    std::set<uint64_t> weeklyAffixWoodManaTriggeredActors;
     uint32_t initialAttackerHumanCount = 0;
     uint64_t protectedGuardActorId = 0;
     uint32_t initialPolarity = 0;
@@ -668,6 +726,24 @@ private:
     uint64_t telegraphStateVersion = 0;
     std::map<uint64_t, std::set<uint32_t>> manualActionRoundsByPlayer;
     std::set<uint64_t> effectiveContributionPlayers;
+    // 群仙问道赛 V3 MVP & 论剑 V4 复盘高光累计统计（本人及本人出战宝宝，每回合末从权威事件流确定性汇总）
+    std::map<uint64_t, uint64_t> totalDamageDealtByPlayer;
+    std::map<uint64_t, uint64_t> totalHealingDoneByPlayer;
+    std::map<uint64_t, uint32_t> totalControlsLandedByPlayer;
+    std::map<uint64_t, uint64_t> primaryFocusDamageByPlayer;
+    std::map<uint64_t, uint64_t> totalShieldGrantedByPlayer;
+    std::map<uint64_t, uint32_t> totalDispelsLandedByPlayer;
+    std::map<uint64_t, uint64_t> damageTakenByPlayer;
+    std::set<uint64_t> lowHpExperiencedPlayers;
+    uint32_t peakEscalationStacks = 0;
+    void AccumulateRoundMvpMetrics(const TurnResultS2C& result);
+    void RecordDispelLanded(uint64_t casterActorId, uint32_t count);
+    BattleHighlightKind ComputeHighlightKind(uint64_t playerId, uint32_t teamIndex,
+                                             bool playerWon, bool isDead) const;
+    bool IsHardControlBuff(uint32_t buffTableId) const;
+    // 论剑 V4 队内一键战术标点（按阵营隔离，每名队友至多保留 1 条最新意图，回合推进清空）
+    std::array<std::map<uint64_t, BattleTacticalPing>, 2> teamPings;
+    std::map<uint64_t, uint32_t> roundPingCountByPlayer;
     // 论剑排位有效参与事实(有序集合保确定性;终局前由 BuildParticipationFact 冻结进 BattleResultEvent)
     std::set<uint64_t> enteredPlayers;
     std::set<uint64_t> manualActionPlayers;
@@ -708,6 +784,47 @@ private:
     // ---- 表现层附加数据(不参与判定) ----
     std::vector<uint64_t> lastActionOrder;  // 最近一回合出手序(D3)
     std::map<uint64_t, uint64_t> roundStartSpeeds;  // 本回合排速冻结值（供低速定向策略读取，不随回合内加减速漂移）
+    std::map<uint64_t, uint64_t> leylineEarthShieldByActor;  // 锦标赛 V2 土厚灵脉 / 地载阵 / 土系符印首回合气血护盾余额
+    uint64_t AbsorbTournamentEarthShield(uint64_t actorId, uint64_t& remaining);
+
+    // 五行阵法 × 人宠相生 × 五行幻境爬塔 × 道友切磋坊自定义规则（开局冻结，确定性零时钟）
+    struct TowerSigilAggregate {
+        uint32_t damagePct = 0;
+        uint32_t critPct = 0;
+        uint32_t critDamagePct = 0;
+        uint32_t shieldBreakBonusPct = 0;
+        uint32_t healShieldPct = 0;
+        uint32_t petDamagePct = 0;
+        uint32_t roundHpRegenPct = 0;
+        uint32_t roundManaRegenPct = 0;
+        uint32_t controlResistPct = 0;
+        uint32_t onHitManaRegenPct = 0;
+        uint32_t damageTakenReducePct = 0;
+        uint32_t first3RoundsDamagePct = 0;
+        uint32_t singleTargetDamagePct = 0;
+        uint32_t critBurnMaxHpPct = 0;
+        uint32_t openingShieldPct = 0;
+        uint32_t reflectPct = 0;
+    };
+    uint32_t teamAFormationId = 0;
+    uint32_t teamBFormationId = 0;
+    bool hasTowerContext = false;
+    ::WuxingTowerBattleContext towerContext;
+    TowerSigilAggregate towerSigilTotals;
+    bool hasCustomDuelRules = false;
+    ::CustomDuelRules customDuelRules;
+    bool wuxingSynergyActiveThisRound = false;
+    std::set<uint64_t> wuxingSynergyActorIds;
+    uint32_t activeSeasonWeeklyAffixId = 0; // 赛季全员对称周环境词缀（开局由全体快照一致冻结，0=无/禁用）
+    std::set<uint64_t> aiControlledPlayers; // 守旗阵 AI 托管守擂玩家：全程自动出手、不阻塞回合、不回写个人资产。
+
+    bool HasAnyActiveShield(const BattleActorState& target) const;
+    uint32_t WuxingHealShieldBonusPct(const BattleActorState& caster) const;
+    uint32_t WuxingControlResistPct(const BattleActorState& target) const;
+    bool IsControlSkill(const SkillTable& skillRow) const;
+    void ApplyWuxingPostDirectHitEffects(BattleActorState& attacker, BattleActorState& target,
+                                         uint64_t dealt, bool isCritical, TurnResultS2C& result);
+
     uint32_t currentGroupId = 0;            // 当前事件组 id,每回合结算开始归 0(D2)
     uint32_t currentHitIndex = 0;           // 当前事件组内的段序/目标序(D2)
 };

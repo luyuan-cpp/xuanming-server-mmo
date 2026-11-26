@@ -49,6 +49,7 @@ message PetInstance {
   uint32 tier_last_result_tier = 23;         // 最近一次灵阶突破后的结果阶位。
   uint32 entry_last_preset_slot = 24;        // 最近一次条目方案切换的目标槽位（0 表示最近请求是 SaveEntries）。
   uint32 entry_last_preset_tag = 25;         // 最近一次条目方案切换的目标用途标签。
+  uint32 cosmetic_id = 26;                   // 当前穿戴的灵宠幻化外观 ID（PetCosmetic.id；0 = 原形，纯外观零数值）。
 }
 
 // 玩家宝宝数据(持久化到 player_database.pet_component)

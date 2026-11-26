@@ -329,7 +329,7 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 9. 演练登记处整个丢失:删掉演练登记处的全部键。补一个墓碑:拒绝(`not opened`)。在一个地域跑 `-id-issuer-recover`;`-id-registry-open` 报 `has region entries but no next claimable code`;`-id-registry-rebuild` 给一个不大于已登记码的值,报 `already has an entry`;给对的值声明;`-id-issuer-init` 报 `being rebuilt`;补一个小于指针的墓碑(写入)、一个远大于指针的墓碑(拒绝);`-id-registry-open` 给错的值报 `does not match`,给登记处里的值开放;之后新码照常初始化。
 10. 三份一起回档:拍本地两套 etcd 和演练登记处的快照,发几块号,再把三套都恢复到快照,发号进程不重启。预期 10 秒内日志出现 `which this process already confirmed`、指标 `records_behind_issuer` 增长,三份记录回到恢复前的水位;之后新起的进程从那之上发号。再做一遍,这次把演练登记处这个码的键删掉而不是恢复:本地两份被抬回去,登记处不出现这个码;`-id-issuer-recover` 重新登记的水位不低于恢复前的水位。
 
-单机上的自动化演练(真 etcd、真快照恢复)由 Codex 按 交接说明（原 `docs/handoff/global-id-issuer-registry-20261105.md`，已清理，见 `ccf2840b2`） 执行。
+单机上的自动化演练(真 etcd、真快照恢复)由 Gemini 按 交接说明（原 `docs/handoff/global-id-issuer-registry-20261105.md`，已清理，见 `ccf2840b2`） 执行。
 
 ## 6. 证书怎么签
 

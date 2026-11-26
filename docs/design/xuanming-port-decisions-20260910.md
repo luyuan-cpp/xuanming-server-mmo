@@ -217,7 +217,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 
 > 以下三条为 2026-09-14 追加,来源 [microservice-zone-contract-20260914.md](./microservice-zone-contract-20260914.md)
 > (Go 微服务接入 zone 契约 v1)。它们推翻或补充了既有决策,按本文「凡冲突以本文为准」的口径生效。
-> 相关代码**未编译、未运行**,行为以 Codex 验证结果为准。
+> 相关代码**未编译、未运行**,行为以 Gemini 验证结果为准。
 
 ## D-11 Go 服务注册的失租口径:**先重夺原 id;抢不回时,无状态全局服务换 id 继续,持久身份服务退出**
 
@@ -547,7 +547,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 
 > 以下一条为 2026-09-18 追加,随 friend 移植 F1 批落盘。它**修订 D-10 的一个子项**,
 > D-10 原文与其余条目一字不改;该子项上冲突时以本段为准(AGENTS.md §5「没写文档 = 没说过」)。
-> 相关代码**未编译、未运行**,行为以 Codex 验证结果为准。
+> 相关代码**未编译、未运行**,行为以 Gemini 验证结果为准。
 
 ## D-10 修订(2026-09-18)`friend_capacity` 回填就绪门禁:**退役;保留容量锁行与「缺行按权威边数、绝不猜 0」**
 
@@ -600,13 +600,13 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 - **D-10 原文的行号引用已失效**:本文 `:184` 里引的 `internal/data/friend_repo.go:222-230`、`:59`、`:518` 是 B 侧旧形态的行号,经移植与本次删除后已全部对不上(现行位置见上面的证据表)。按「不改原文」的口径未回头修正,属已知残留 —— 读 D-10 时以本段证据表的行号为准。
 - **历史文档残留（2026-09-18 记录，2026-10-23 已清理）**：当时的好友持久化说明与公会／好友旧实现笔记仍按 B 侧旧形态描述这道门禁，本批没有修改。现行说明见 [好友持久化架构](./friend-persistence-architecture.md) 与 [公会与好友中文说明](./guild_friend_service_notes_zh.md)，两者均明确旧门禁已退役；旧主文与英文副本已删除。
 
-**验证状态**:未编译、未运行测试(AGENTS.md §10.1),待 Codex 验证。
+**验证状态**:未编译、未运行测试(AGENTS.md §10.1),待 Gemini 验证。
 
 ---
 
 > 以下一条为 2026-09-29 追加,随 battle 直连收缩批(`turn-based-battle-server.md` §22 D65–D75)落盘,仿本文「D-10 修订(2026-09-18)」的先例。
 > 它**修订 D-12 的 K8s 默认值、前提与一条理由**;D-12 原文(本文 :252-:290)不删不改,只在被修订的三处旁加了就地标注(:263、:270、:272,指向本段),冲突时以本段为准(AGENTS.md §5「没写文档 = 没说过」)。
-> 相关脚本与代码**未编译、未运行测试、未上集群**,行为以 Codex 验证结果为准。
+> 相关脚本与代码**未编译、未运行测试、未上集群**,行为以 Gemini 验证结果为准。
 
 ## D-12 修订(2026-09-29)K8s 默认翻为路由模式:**`k8s_deploy.ps1 -GateRouterMode` 默认 `"1"`;C++ 默认值与单测仍不改;回退态不粘滞**
 
@@ -658,7 +658,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 - **合服 zone-up 与文档示例**不带 `-GateRouterMode`,回退态下只能靠人工补传(见结论)。
 - **D34 遗留的「何时删 C++ 直连模式代码」仍待拍板**:直连模式目前仍是 login / scene_manager / match 这些既有服务的回退面(回退时 chat 等只承诺路由模式的服务不可达,见 D-12 原文 :264),C++ 默认值不改的前提下它不能删。
 
-**验证状态**:未编译、未运行测试、未上集群(AGENTS.md §10.1),待 Codex 验证。Codex 在仓库根执行:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 与 `pwsh -NoProfile -File tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1`,通过标准 fail=0;C++ `gate_security_test` 回归(`GateRouterMode.*` 全过,默认仍直连);K8s 路由模式 battle-smoke 由用户或 Codex 在集群上补跑。
+**验证状态**:未编译、未运行测试、未上集群(AGENTS.md §10.1),待 Gemini 验证。Gemini 在仓库根执行:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 与 `pwsh -NoProfile -File tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1`,通过标准 fail=0;C++ `gate_security_test` 回归(`GateRouterMode.*` 全过,默认仍直连);K8s 路由模式 battle-smoke 由用户或 Gemini 在集群上补跑。
 
 ---
 

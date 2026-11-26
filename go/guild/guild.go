@@ -35,6 +35,8 @@ import (
 	"guild/internal/node"
 	"guild/internal/server"
 	"guild/internal/svc"
+	"guild/internal/war"
+	battlepb "proto/battle"
 	base "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	pb "proto/guild"
@@ -85,6 +87,9 @@ func validateGuildTableSet(_ string, ts *table.TableSet) (func(), error) {
 	}
 	if err := activity.ValidateTablesIn(ts); err != nil {
 		return nil, fmt.Errorf("guild activity tables invalid: %w", err)
+	}
+	if err := war.ValidateTablesIn(ts); err != nil {
+		return nil, fmt.Errorf("guild war tables invalid: %w", err)
 	}
 	return nil, nil
 }
@@ -188,6 +193,9 @@ func main() {
 	// 这类错误在运行期只会静默发生、且不可逆。
 	if err := activity.ValidateTables(); err != nil {
 		logx.Must(fmt.Errorf("guild activity tables invalid: %w", err))
+	}
+	if err := war.ValidateTables(); err != nil {
+		logx.Must(fmt.Errorf("guild war tables invalid: %w", err))
 	}
 	svcCtx.TableBundle.SetPrepareHook(validateGuildTableSet)
 	svcCtx.TableBundle.Start()
@@ -520,6 +528,30 @@ func main() {
 	if err != nil {
 		logx.Must(fmt.Errorf("content guard client: %w", err))
 	}
+	warRepo, err := data.NewWarRepo(repo)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild war repo: %w", err))
+	}
+	var warMatch logic.WarBattleStarter
+	if trialResultActive && matchConfigured {
+		warMatch, err = logic.NewSignedWarStarter(svcCtx.MatchInternal, matchSecret)
+		if err != nil {
+			logx.Must(errors.New("guild war battle start signing dependency not ready"))
+		}
+	}
+	warDeps := logic.WarDeps{
+		Repo:         warRepo,
+		Loop:         economy.Loop,
+		OpIDs:        assetOpIDs,
+		BountyIDs:    guildIDs,
+		Match:        warMatch,
+		PlayerRedis:  svcCtx.PlayerRedis,
+		ControlRedis: svcCtx.ControlRedis,
+		Now:          time.Now,
+		SyncBudget:   economySyncBudget,
+		Lease:        economy.Lease,
+		MatchBudget:  time.Duration(config.AppConfig.MatchRpc.Timeout) * time.Millisecond,
+	}
 	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, homeZones,
 		logic.WithApplicationQuota(applicationQuota),
 		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerRedis, relay)),
@@ -528,6 +560,7 @@ func main() {
 		logic.WithContentGuard(contentGuard),
 		logic.WithEconomy(economy),
 		logic.WithActivities(activities),
+		logic.WithWar(warDeps),
 		logic.WithSyncBumper(logic.NewGuildSyncBumper(svcCtx.PlayerSyncBumper, relay)))
 
 	// 终结推送回调。必须在重投循环与 gRPC server 启动**之前**赋值:此后只读,不需要同步。
@@ -863,6 +896,9 @@ func startTrialResultConsumerWithOwner(c config.Config, guildLogic *logic.GuildL
 	consumerConfig.RelayAdmission = relay
 	resultConf := c.Activity.TrialResult
 	consumer, err := guildkafka.NewTrialResultConsumer(consumerConfig, func(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
+		if ev.GetActivityContext().GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR {
+			return guildLogic.SettleGuildWarResult(ctx, ev)
+		}
 		_, err := guildLogic.SettleTrialResult(ctx, ev)
 		return err
 	}, guildkafka.TrialResultCounters{

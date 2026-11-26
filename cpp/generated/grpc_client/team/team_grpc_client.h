@@ -135,6 +135,22 @@ void SendClientPlayerTeamConfirmRankedPreset(entt::registry& registry, entt::ent
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendClientPlayerTeamConfirmRankedPresetErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region ClientPlayerTeamSetTeamFormation
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerTeamSetTeamFormationGrpcPath = "/teampb.ClientPlayerTeam/SetTeamFormation";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerTeamSetTeamFormation(entt::registry& registry, entt::entity nodeEntity, const ::teampb::SetTeamFormationRequest& request, GrpcDone<::teampb::TeamResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerTeamSetTeamFormationErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region ClientPlayerTeamRecallTeamMembers
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerTeamRecallTeamMembersGrpcPath = "/teampb.ClientPlayerTeam/RecallTeamMembers";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerTeamRecallTeamMembers(entt::registry& registry, entt::entity nodeEntity, const ::teampb::RecallTeamMembersRequest& request, GrpcDone<::teampb::TeamResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerTeamRecallTeamMembersErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetTeamCallDeadline(std::chrono::milliseconds deadline);
 

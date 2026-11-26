@@ -2,7 +2,7 @@
 
 > **2026-11-01 更正**:结算已改为只走 match SQL + player_inbox([总体方案 §5.4](./player-data-tidb-scaling-plan.md))。
 > §3、§5–§9 里的 `battle:settlement:pending`、发件箱、结算账本、「锁留到落盘」都是历史记录,代码里已经没有了。
-> 战斗锁本身的可靠性与恢复分支的去向见 [§10](#10-2026-11-01-战斗锁写入可靠性恢复分支的去向已落码未编译待-codex-验证)。
+> 战斗锁本身的可靠性与恢复分支的去向见 [§10](#10-2026-11-01-战斗锁写入可靠性恢复分支的去向已落码未编译待-gemini-验证)。
 >
 > 状态:**已落码;导表与 proto 重生成已执行(2026-09-18);未编译、未跑测试、未跑冒烟**。
 > 用户 2026-09-18 明确指示"不用等 Codex,你帮他做完,不用编译,直接合并到 main",
@@ -191,7 +191,7 @@
 
 2026-10-26 工具路径注记：本节命令和结果保留 09-18 的实际记录。今后重跑使用 §7 的独立 Protobuf 路径，不再从下文历史 gRPC SDK 目录取工具。
 
-本会话按用户指示替 Codex 跑完了生成链的两步。**这两步不是编译**,产物已随仓库的每小时自动提交进入 `main`。
+本会话按用户指示替 Gemini 跑完了生成链的两步。**这两步不是编译**,产物已随仓库的每小时自动提交进入 `main`。
 
 ### 8.1 实际执行的命令
 
@@ -408,7 +408,7 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
 **仍未验证的**:§9.3 的"锁留到落盘"及之后两轮修订(09-28 04:40 以后的代码)还没被编译过;
 `battle_smoke` 通过的那次也是旧版结算逻辑。按 §9.3 验证清单重跑。
 
-## 10. 2026-11-01 战斗锁写入可靠性;恢复分支的去向(已落码,未编译,待 Codex 验证)
+## 10. 2026-11-01 战斗锁写入可靠性;恢复分支的去向(已落码,未编译,待 Gemini 验证)
 
 ### 10.1 来龙去脉
 
@@ -475,7 +475,7 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
 - **删锁仍是 fire-and-forget**(既有):结算确认后锁没删掉时,排队闸多挡到 TTL,重登会按锁短暂重建冻结,由收件箱重放或 reaper 收尾。
   只影响活性,不影响数据。
 
-### 10.7 验证(全部未执行,待 Codex)
+### 10.7 验证(全部未执行,待 Gemini)
 
 本批没有动 proto,不需要协议生成。命令见 `docs/PROGRESS.md` 2026-11-01 同名条目。
 
@@ -490,7 +490,7 @@ Java 版:`PARITY.md`「战斗锁不再是销账证据」一行已更正(Java 待
 
 任务由 Scene 持久作用域持有（`TryStartDurable`），维护 P1、普通停机和身份冲突时不随瞬态任务停止。这些窗口里备战（gRPC 保留到 P3）和 battle 的确认补发（Kafka）仍会到达，改造前的回调链也照常写锁和续期；这时停写，锁会停在“备战期限 + 60 秒”、ctx 停在 PREPARING，玩家在别的节点重登就重建不出冻结。只有拆除前的 `StopAll` 结束本地等待，之后迟到回复和定时器不再恢复业务。取消不撤回已发送 Lua，也不影响锁的现有 TTL。2026-11-10 订正：11-05 的实现把三条链放进了瞬态作用域，一进入停机就停写，现已改回持久作用域，回归用例为 `BattleLockWritesKeepRunningAfterGameplayStopUntilStopAll`。Java 写锁失败即拒绝备战、C++ 同步备战后异步补写的既有差异仍在，本次不改变可观察业务行为。
 
-## 11. 2026-11-06 号段预检续段;FIGHTING 冻结到期先查 SQL 终局(已落码,未编译,待 Codex 验证)
+## 11. 2026-11-06 号段预检续段;FIGHTING 冻结到期先查 SQL 终局(已落码,未编译,待 Gemini 验证)
 
 来源:数据覆写审计 R2 的 r2-battle#3 与 r2-v1#1 残余窗口(`data-overwrite-rollback-audit-r2-20261019.md`)。两条都按当前代码复核成立。
 
@@ -669,7 +669,7 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
   `deploy/k8s/asset-channel-alerts.yaml` 头注释的固定查询清单,但 scene 的这两个信号只在结构化日志里,Loki ruler 还没接线(上线批 BK8s),
   接线之前不会自动告警。match 一侧的发件箱积压已有 PromQL 规则(`deploy/k8s/match-outcome-outbox-alerts.yaml`,见上面「指标」段)。
 
-**2026-11-10 复核:上限之后这一段怎么堵(负责人当日拍板方案 A,已落码,未编译,待 Codex;
+**2026-11-10 复核:上限之后这一段怎么堵(负责人当日拍板方案 A,已落码,未编译,待 Gemini;
 做法与验证见 [battle-item-reservation.md](battle-item-reservation.md))。**
 
 越过上限之后的残余有两种来源,一致性上都不成立:
@@ -717,12 +717,12 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 冻结已不在的预留由 reaper 按同一张终局表收尾、没有上限(`ReviewBattleItemHolds`);上面「残余与代价」的第一条
 (越过上限之后照现行规则解冻)因此只剩 HP / MP 与宠物状态的覆盖,道具不再夹紧。
 
-**2026-11-12 补记(已落码,未编译,待 Codex)**:上面第 1 条「会死锁」的出口不再是 15 分钟上限。两个背包都放不下的掉落
+**2026-11-12 补记(已落码,未编译,待 Gemini)**:上面第 1 条「会死锁」的出口不再是 15 分钟上限。两个背包都放不下的掉落
 改投邮件([battle-overflow-mail.md](battle-overflow-mail.md),负责人 2026-11-11 定),结算在冻结期间就能应用,
 不用等玩家腾位;人物背包里全是被押着的满堆、临时格也满的局面同样由它解掉。方案 A 的代价一栏里「客户端要显示占用的数量」
 也已做:`BagInfo.held_items`([battle-item-reservation.md](battle-item-reservation.md) §4.1)。续冻与上限的规则没有改。
 
-### 11.3 用例与验证(全部未执行,待 Codex)
+### 11.3 用例与验证(全部未执行,待 Gemini)
 
 - `cpp/tests/bag_test/bag_test.cpp`:`GuidSegmentClientTest.TopUpFetchesWhenABatchNeedsMoreThanIsLeftAboveThePrefetchThreshold`、
   `TopUpReportsEnoughExceedsMaxStepOrUnavailableWithoutSending`(评审改名,原 `TopUpReportsEnoughFullOrUnavailableWithoutSending`)、

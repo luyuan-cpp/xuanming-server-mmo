@@ -45,7 +45,7 @@
 
 | 序 | 批次 | 手改文件 | 依赖 | 正文 |
 |---|---|---|---|---|
-| ~~1~~ | ~~**B3a-2**~~ | 24 | B3a-1 | **已落码 2026-09-20**,待 Codex 验证(§8.3) |
+| ~~1~~ | ~~**B3a-2**~~ | 24 | B3a-1 | **已落码 2026-09-20**,待 Gemini 验证(§8.3) |
 | 2 | **B3b 客户端** | 12 | B2c、B3a-2 | `03-names.md` §3.22–§3.23;服务端 7+1 个文件已落码。**被客户端仓阻塞**(§8.0) |
 | ~~3~~ | ~~**B5a**~~ | 22 | B2c、B4b | **18 个已落码 2026-09-20**,4 个 xlsx 待跑脚本(§10.0);待用户验证(§10.4) |
 | 4 | **B5b** | 21 | B5a | `05-economy.md` §5.15–§5.29 + 顶部「接口终稿」块 |
@@ -112,7 +112,7 @@
 4. **C++**:MSBuild **必须串行 `/m:1`**(并发会报假的 C1041/LNK1104)。
 5. 之后才是各服务的 `go build ./... && go vet ./... && go test ./... -count=1`。
 
-各批的完整 Codex 验证序列在 `91-batches-and-codex.md` §2 与各节的"Codex 验证"小节。
+各批的完整 Gemini 验证序列在 `91-batches-and-codex.md` §2 与各节的"Gemini 验证"小节。
 
 ## 5. 多会话协作规矩(踩过坑,别重蹈)
 
@@ -226,7 +226,7 @@
 6. **孤儿的运维处置**:ERROR 日志 `[player-name] orphan reservation player_id=%d name=%q account=%s` 是手工释放的输入 → 带 `x-admin-token` 调
    `ReleasePlayerName{player_id,name}`;告警 `increase(login_create_player_name_orphan_total[10m]) > 0`。目前只在 `merge-zone-runbook.md §4.4`
    与 `03-names.md` 里有,还没有独立的 ops 条目(90 清单 G-07 要求进"运维"节)。
-7. 三条只经静态核对、要 Codex 运行时留意的测试前提:miniredis 下 `consumePostMergeFlags` 流水线对不存在的 key 回 `redis.Nil`;
+7. 三条只经静态核对、要 Gemini 运行时留意的测试前提:miniredis 下 `consumePostMergeFlags` 流水线对不存在的 key 回 `redis.Nil`;
    `ants.Pool.ReleaseTimeout` 会等在跑的 worker 退出;`PlayerAllData` 键存在时 `EnsurePlayerAllDataInRedisAsync` 走快路径、不解引用 nil 的
    dispatcher / Kafka。以及 miniredis"脚本内先 SET 再 `error_reply`,SET 不回滚"是推断。这几条若不成立,红的是用例构造,不是生产代码。
 
@@ -241,10 +241,10 @@
 - robot 的 `member-names` 步骤**依赖 B3a-2 已验证通过**:此前建的角色没有名字,它会失败并提示清哪些账号(含 Y-09 的 9211–9219)。
 - **清单外的旧问题(已单独挂任务,未改)**:`OnlineStatusResolver.BatchResolve` 没有独立超时,locator Redis 客户端同样没开 `ContextTimeoutEnabled`;
   Redis 卡住时 handler 协程约 6s 才退出,活过 3500ms 业务预算与 zrpc 的 4000ms。
-- Codex 验证:`go/guild` 下 `gofmt -l guild.go internal/logic` → `go vet ./...` → `go test ./internal/logic/... -count=1 -race`;
+- Gemini 验证:`go/guild` 下 `gofmt -l guild.go internal/logic` → `go vet ./...` → `go test ./internal/logic/... -count=1 -race`;
   慢响应用例应在约 20ms 内结束,**单个用例耗时接近 5s = resolver 漏设超时、踩到了安全网,必须当失败上报**。robot 本批**不** `go mod vendor`(Y-10)。
 
-### 8.3 B3a-2 Codex 验证序列(串行;全部未执行)
+### 8.3 B3a-2 Gemini 验证序列(串行;全部未执行)
 
 ```text
 【总则】
@@ -454,7 +454,7 @@
 - 没有对比表,不得声称性能结论。
 
 【交付口径】
-- Codex 回报每一步的实际退出码和证据路径(建议放 ..\tmp\b3a2-verify\)。
+- Gemini 回报每一步的实际退出码和证据路径(建议放 ..\tmp\b3a2-verify\)。
 - 任何一步未执行,都要明确写「未验证」。
 - Claude 侧在拿到这些结果之前,不得声称编译通过或测试通过。
 ```
@@ -1100,7 +1100,7 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
 
 ### 13.1 各批次落在哪、有什么运行证据
 
-| 批次 | 提交 | 运行证据(Codex,2026-10-08) | 与设计的偏差记在哪 |
+| 批次 | 提交 | 运行证据(Gemini,2026-10-08) | 与设计的偏差记在哪 |
 |---|---|---|---|
 | B3b 名字(服务端 + 客户端) | 服务端早先已在主干;客户端 `90c38fd` | 无 | `03-names.md` §3.22 / §3.24 落码修正;`90-consistency.md` Y-08 |
 | B5c 帮会经济客户端 + robot 经济冒烟 | 客户端 `98cd0d9`;robot 在主干 | 无(组队会话的编译检查发生在评审修复之前) | `05-economy.md` 各节落码修正;`mmorpg-client/Docs/GuildUI.md` |
@@ -1115,9 +1115,9 @@ Q2 = 三个 `Rollback*` 一律要 `x-admin-token`、Q3 = 写后分歧只报错 +
 U9 = "不可证明"可被合法放行覆盖、U10 = 静态 Endpoints(`127.0.0.1:50300`)。要改口径先改 `07-rollback-fail-closed.md` 再改代码。
 
 评审情况:B5d 两轮、B6b-srv2 一轮、B6 客户端一轮,都是"多视角查找 → 三票核验 → 修复"。确认的全部是 P2,没有 P0 / P1;
-**修复之后没有再跑下一轮评审**。B6b-srv2 的 Codex 用例是在含修复的 `43e5a9953e` 上跑的。
+**修复之后没有再跑下一轮评审**。B6b-srv2 的 Gemini 用例是在含修复的 `43e5a9953e` 上跑的。
 
-### 13.2 待办(按顺序;生成与构建交 Codex 或用户执行)
+### 13.2 待办(按顺序;生成与构建交 Gemini 或用户执行)
 
 ① **客户端生成 —— 帮会三份已补(2026-10-10,`f5370798`),整份重跑留给装备批次**。
    已做:`Guild.cs`、`GuildErrorTip.cs` 用 protoc 35.1 按 `tools/gen_proto.ps1` 的参数只对帮会两个 proto 生成(源 = 服务端 `origin/main` `f478fa9c43`);

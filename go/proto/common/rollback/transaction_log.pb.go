@@ -118,6 +118,13 @@ const (
 	TransactionType_TX_GUILD_BOUNTY_ESCROW TransactionType = 41 // 发布江湖追杀令预扣银两(ASSET_OP_STREAM_GUILD_DEBIT)
 	TransactionType_TX_GUILD_WAR_REWARD    TransactionType = 42 // 帮战即时银两、周战功里程碑宝箱与灵脉分红(ASSET_OP_STREAM_GUILD_CREDIT)
 	TransactionType_TX_GUILD_BOUNTY_PAYOUT TransactionType = 43 // 追杀赏金、反杀赏金与过期本金退还(ASSET_OP_STREAM_GUILD_CREDIT)
+	// ── 官方灵石百宝阁直购(docs/design/spirit-shop-and-starter-packs-v1.md §2.4) ──
+	// 扣灵石与发绑定物品共用同一 correlation_id = client_request_id。只追加,不复用旧编号。
+	TransactionType_TX_SPIRIT_SHOP_BUY TransactionType = 44
+	// ── 游历手记典藏解锁与双轨领奖(docs/design/activity-travel-pass-and-showcase-v1.md §2.4) ──
+	// correlation_id = client_request_id。只追加,不复用旧编号。
+	TransactionType_TX_TRAVEL_PASS_UNLOCK TransactionType = 45
+	TransactionType_TX_TRAVEL_PASS_REWARD TransactionType = 46
 )
 
 // Enum value maps for TransactionType.
@@ -167,6 +174,9 @@ var (
 		41: "TX_GUILD_BOUNTY_ESCROW",
 		42: "TX_GUILD_WAR_REWARD",
 		43: "TX_GUILD_BOUNTY_PAYOUT",
+		44: "TX_SPIRIT_SHOP_BUY",
+		45: "TX_TRAVEL_PASS_UNLOCK",
+		46: "TX_TRAVEL_PASS_REWARD",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":                 0,
@@ -213,6 +223,9 @@ var (
 		"TX_GUILD_BOUNTY_ESCROW":     41,
 		"TX_GUILD_WAR_REWARD":        42,
 		"TX_GUILD_BOUNTY_PAYOUT":     43,
+		"TX_SPIRIT_SHOP_BUY":         44,
+		"TX_TRAVEL_PASS_UNLOCK":      45,
+		"TX_TRAVEL_PASS_REWARD":      46,
 	}
 )
 
@@ -484,7 +497,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xf6\a\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xc4\b\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -531,7 +544,10 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x12TX_CRAFT_PROXY_FEE\x10(\x12\x1a\n" +
 	"\x16TX_GUILD_BOUNTY_ESCROW\x10)\x12\x17\n" +
 	"\x13TX_GUILD_WAR_REWARD\x10*\x12\x1a\n" +
-	"\x16TX_GUILD_BOUNTY_PAYOUT\x10+B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x16TX_GUILD_BOUNTY_PAYOUT\x10+\x12\x16\n" +
+	"\x12TX_SPIRIT_SHOP_BUY\x10,\x12\x19\n" +
+	"\x15TX_TRAVEL_PASS_UNLOCK\x10-\x12\x19\n" +
+	"\x15TX_TRAVEL_PASS_REWARD\x10.B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

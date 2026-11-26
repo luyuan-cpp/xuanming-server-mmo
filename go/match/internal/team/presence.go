@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"shared/playerredis"
+	"shared/redisslot"
 )
 
 // 在线态与展示信息(设计文档 docs/design/team-system.md §G.1 / §G.2)。
@@ -17,17 +18,19 @@ import (
 // 这些都是显示层数据:每次构建视图或做惰性转让判定时按需批量读,绝不写进 TeamRecord
 // (AGENTS §11.6)。只读,写者都不是 match:
 //
-//	player:session:{<id>}    player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
-//	battle:lock:{<id>}       C++ scene       咨询性"战斗中"(值是 battle_id,非空)
-//	data_service             player_store    等级、职业、昵称、外观、性别(尽力而为,缺失或读失败填零值)
+//	player:session:{<id>}          player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
+//	player:{<id>}:hosted_presence  C++ scene       离线托管在场心跳(非空且不在线时视为「托管中」)
+//	battle:lock:{<id>}             C++ scene       咨询性"战斗中"(值是 battle_id,非空)
+//	data_service                   player_store    等级、职业、昵称、外观、性别(尽力而为,缺失或读失败填零值)
 //
-// 失败语义:任何一次 MGET 失败只让对应字段按"离线 / 不在战斗 / 0"处理并记日志,
+// 失败语义:任何一次 MGET 失败只让对应字段按"离线 / 未托管 / 不在战斗 / 0"处理并记日志,
 // 不让 RPC 失败(照 guild online_status_resolver)。惰性转让用的 SessionLoader 例外:
 // 读失败给 SessionUnknown,规则层据此既不转让队长、也不把人当在线(fail-closed)。
 
 // memberDisplay 视图里一名玩家的运行时展示信息。
 type memberDisplay struct {
 	Online       bool
+	Hosted       bool
 	InBattle     bool
 	Level        uint32
 	ClassId      uint32
@@ -81,10 +84,15 @@ func (p presenceReader) loadDisplay(ctx context.Context, playerIds []uint64) dis
 		return dc
 	}
 	sessions := p.loadSessions(ctx, ids)
+	hosted := p.mget(ctx, ids, redisslot.HostedPresenceKey, "player:hosted_presence")
 	locks := p.mget(ctx, ids, playercontract.BattleLockKey, "battle:lock")
 	displays := p.loadStoreDisplays(ctx, ids)
 	for i, id := range ids {
-		d := memberDisplay{Online: sessions[id] == SessionOnline}
+		online := sessions[id] == SessionOnline
+		d := memberDisplay{Online: online}
+		if !online && hosted != nil {
+			d.Hosted = hosted[i] != ""
+		}
 		if locks != nil {
 			d.InBattle = locks[i] != ""
 		}

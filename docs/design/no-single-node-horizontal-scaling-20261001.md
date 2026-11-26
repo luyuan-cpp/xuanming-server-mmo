@@ -2,7 +2,7 @@
 
 > 用户要求(2026-10-01):**不允许任何服务只有一个节点;同一种服务要能开很多个**。
 > 本文是这件事的总纲:盘点、顺序、每一项的设计与验证口径。每做完一项就在对应小节更新状态。
-> 全部改动遵守 AGENTS.md §10.1:Claude 不跑编译 / 测试,验证命令交给 Codex。
+> 全部改动遵守 AGENTS.md §10.1:Claude 不跑编译 / 测试,验证命令交给 Gemini。
 
 > **2026-10-23 需求扩展**：负责人要求所有实际部署节点具备平滑停机／缩容、水平扩展及灰度／金丝雀发布能力。统一目标、源码现状、差距与验收见 [全类型节点生命周期与发布需求](node-lifecycle-elasticity-release-20261023.md)。本文的“可多开”不等于已通过在线无感维护或渐进发布验收；两版目前均未完成全类型验收。
 
@@ -30,7 +30,7 @@
 
 本机(docker-compose / `start_game.ps1`)不在范围内:开发环境保持单实例,省资源。
 
-> **2026-10-18 增补(B0-1,上表原文保留;已落码,未编译、未测试,待 Codex 验证)**:上表漏了「player_locator 会话对账 leader」(全局单点交接 `docs/handoff/handoff-global-singletons-10m-ccu-20261013.md` 的「相关设计」一节已指出 §1 盘点漏了对账),B0-1 又把它改成了全服单例:
+> **2026-10-18 增补(B0-1,上表原文保留;已落码,未编译、未测试,待 Gemini 验证)**:上表漏了「player_locator 会话对账 leader」(全局单点交接 `docs/handoff/handoff-global-singletons-10m-ccu-20261013.md` 的「相关设计」一节已指出 §1 盘点漏了对账),B0-1 又把它改成了全服单例:
 > - **形态**:player-locator 照常 2 副本、请求由所有副本处理;只有后台的会话对账(处理 gate 整机崩溃留下的 ONLINE 会话)由选出的 leader 做。选主锁是共用会话 Redis 上的 `player_locator:session_reconciler:leader`(`shared/leader`,TTL 30s),今天所有 zone 的 locator 一起竞选,所以**全服一个**;按本文口径属于「有备份、挂一个不停服」,不是「能多开、一起分担」。
 > - **失效处理**:leader 连续 3 拍失败或 3 拍内没有一次成功就主动让位,本进程多等一个 TTL 再竞选,健康副本接手;两个 leader 短暂重叠无害(所有动作走整字节 CAS 或字节守卫 Lua)。
 > - **告警**:`deploy/k8s/player-locator-alerts.yaml`(NoLeader / Stalled 为 critical)。K8s 上要先接 player_locator 的 /metrics 才生效。
@@ -85,12 +85,12 @@
 - **镜像是浮动 tag `apache/kafka:latest`**(既有问题):多 broker 滚动重启时可能拉到不同版本,生产上应钉版本。
   > **2026-10-16 更正**:已钉 `apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`,
   > 四处同值(`deploy/docker-compose.yml` 的 kafka 与 kafka-topic-init、`deploy/k8s/manifests/infra/kafka.yaml`、`deploy/k8s/manifests/infra/kafka-topic-init.yaml`),
-  > 核对与升级步骤见 `deploy/k8s/README.md`「镜像钉版本」。已落码,未编译、未测试,待 Codex 验证。
+  > 核对与升级步骤见 `deploy/k8s/README.md`「镜像钉版本」。已落码,未编译、未测试,待 Gemini 验证。
 - **就绪探针**沿用 `kafka-broker-api-versions.sh`:它会逐个询问集群成员,别的 broker 不在时对那个节点报错但整体以 0 退出。
   这一点依赖工具实现,**上线前必须在 kind 上实测**(见 §2.5 第 3 步)。
 - 本机 docker-compose 仍是单 broker,`KAFKA_TOPIC_REPLICATION_FACTOR` 不设,取默认 1。
 
-### 2.5 验证(交 Codex;工作目录仓库根)
+### 2.5 验证(交 Gemini;工作目录仓库根)
 
 1. 不连集群:
    ```
@@ -130,7 +130,7 @@
 | `kafka:retry:instances:{topic}` | ZSET | 实例登记表,score = 租约到期毫秒,统一取 Redis 的 `TIME`(新) |
 | `kafka:retry:processing:{topic}` | LIST | 旧版共享列表:新版只回收、不写入 |
 
-> **2026-10-17 更正**:上表 `kafka:retry:queue:{topic}`「ready,所有实例共享(不变)」已过时。④ 重试只交给分区属主起,ready 拆成共享「未分拣收件箱」`kafka:retry:queue:{topic}` 与按原始分区的 `kafka:retry:queue:{topic}:p{N}`(LIST,`RetryRouting=owner` 时写入;owner 实例只认领自己持有 claim 的分区,shared 实例每拍兜底排空全部非空的 p*(本 zone 主库冷却时整拍跳过),从 owner 回滚就靠这一点);另增实例模式 HASH `kafka:retry:instance_mode:{topic}` 与认领 / ack 防重记录 `kafka:retry:guard:*`(TTL 5 分钟),认领脚本也改为带 nonce。键表、两种模式、混跑与回滚以 [db-retry-owner-routing.md](db-retry-owner-routing.md) 为准。已落码,未编译、未测试,待 Codex 验证。
+> **2026-10-17 更正**:上表 `kafka:retry:queue:{topic}`「ready,所有实例共享(不变)」已过时。④ 重试只交给分区属主起,ready 拆成共享「未分拣收件箱」`kafka:retry:queue:{topic}` 与按原始分区的 `kafka:retry:queue:{topic}:p{N}`(LIST,`RetryRouting=owner` 时写入;owner 实例只认领自己持有 claim 的分区,shared 实例每拍兜底排空全部非空的 p*(本 zone 主库冷却时整拍跳过),从 owner 回滚就靠这一点);另增实例模式 HASH `kafka:retry:instance_mode:{topic}` 与认领 / ack 防重记录 `kafka:retry:guard:*`(TTL 5 分钟),认领脚本也改为带 nonce。键表、两种模式、混跑与回滚以 [db-retry-owner-routing.md](db-retry-owner-routing.md) 为准。已落码,未编译、未测试,待 Gemini 验证。
 
 - `instanceID` 默认 `<主机名>:<ListenOn 端口>`(K8s 上主机名即 Pod 名;本机多开时端口不同),可用 `Kafka.RetryInstanceId` 覆盖。
   租约 `Kafka.RetryLeaseSeconds` 默认 30(下限 10),续租与回收周期是它的三分之一。
@@ -166,7 +166,7 @@
   zone 多了这是个明显的耦合。改成按 zone 命名需要同步 `tools/merge_zone` 的 `-kafka-group` 默认值、`k8s_zone_rollback.ps1`、
   `dev_tools.ps1`、`stress_summarize.ps1`、`kafka_offset_reset.ps1` 与运行手册,而且要先确认 merge_zone 对「组里没有该 topic 位点」的判定是
   fail-closed 的(否则门禁会静默放行)。**本次没做,单列为后续项。**
-  > **2026-10-16 更新**:已落码,未编译、未测试,待 Codex 验证,见 [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md)。
+  > **2026-10-16 更新**:已落码,未编译、未测试,待 Gemini 验证,见 [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md)。
 - 有效并行度上限 = 分区数(`Kafka.PartitionCnt`,现为 10);不要配 HPA(eager rebalance,成员变化全员暂停)。
 - 连接预算:每实例最多 60 条 MySQL 连接 + 每个额外落点库 8 条;2 副本 × 4 个 zone = 480,已贴近 `max_connections = 500`(见 §6)。
   > **2026-10-12 更正(只读核算,未实测)**:480 = 2 × 4 × 60,只算了 go/db 主池。同一台 MySQL 上的全部客户端要加总:
@@ -183,7 +183,7 @@
   >
   > 修正方向(未落码):先把总账算对,配 `max_connections` 并同步 MySQL Pod 内存(现为 limits 1Gi);给 gateway 显式配 Hikari 池;导出连接池指标;额外落点库池加 `ConnMaxIdleTime`,并把 zone 库池与全局库池的大小拆成两个旋钮。详见 PROGRESS.md 2026-10-12「落点多库连接拓扑」条目。
   >
-  > **2026-10-13 落码说明(G2b;已落码,未编译、未测试,待 Codex 验证;数值 2026-11-12 起为已定值,压测出基线后可调,依据见 `deploy/k8s/README.md`「MySQL 连接总账」状态段)**:上一条的修正方向已按 `docs/handoff/launch-readiness-20261013/spec_G2b.md` 落到代码与部署清单。原文与上面的更正注都不改,口径不一致处以本条为准:
+  > **2026-10-13 落码说明(G2b;已落码,未编译、未测试,待 Gemini 验证;数值 2026-11-12 起为已定值,压测出基线后可调,依据见 `deploy/k8s/README.md`「MySQL 连接总账」状态段)**:上一条的修正方向已按 `docs/handoff/launch-readiness-20261013/spec_G2b.md` 落到代码与部署清单。原文与上面的更正注都不改,口径不一致处以本条为准:
   > - `max_connections` 500 → **1800**,MySQL Pod 内存 requests 512Mi → 1Gi、limits 1Gi → 5Gi(`deploy/k8s/manifests/infra/mysql.yaml`);
   > - Java gateway 显式配 Hikari 池 `maximum-pool-size: 5` / `minimum-idle: 2`(以前没配,按默认值推断每实例恒开约 10 条),K8s ConfigMap 镜像这两个值;
   > - 滚动余量按**每个 Deployment 多 2 个实例**计(maxSurge 的 1 个新 Pod + 1 个仍在优雅退出、连接还没释放的旧 Pod),范围是一个 zone 的 db / data-service / gateway 加全局的 friend、trade。上面写的「每个 zone 还会临时再多 (60+8E)+35」少算了退出中的旧 Pod,也漏了 gateway 与两个全局服务;
@@ -200,7 +200,7 @@
   (读与写本来就多半不在同一个分区),多实例只是多了一个入口。改成只补缺不覆盖(`SETNX`)要先确认 login 的缓存修复路径与回档工具不依赖覆盖,没在本次做。
 - 持锁实例若在拿锁与落库之间停顿超过锁 TTL 且续租失败,醒来仍会把旧版本写进库(随后复核失败,游标不回退)。既有设计,彻底封死需要 MySQL 侧的版本条件写。
 
-### 3.5 验证(交 Codex)
+### 3.5 验证(交 Gemini)
 
 ```
 cd go/db && go build ./... && go vet ./... && go test -count=1 ./internal/kafka/... ./internal/config/...
@@ -250,7 +250,7 @@ pwsh -NoProfile -File tools/scripts/tests/go_services_ports.tests.ps1
 - 未做:唯一键缺失时拒绝启动快照消费者的守卫;C++ 约定的 etcd 键提前到 wrap-up 阶段注销(现在滚动更新有一个靠 READY 过滤兜住的短窗口)。
 - `GET_LOCK` 在 TiDB 上的行为没有实测(迁移在 TiDB 上本来就停在可空唯一键那一步,见 §6)。
 
-### 4.5 验证(交 Codex)
+### 4.5 验证(交 Gemini)
 
 ```
 cd go/data_service && go build ./... && go vet ./... && go test ./...
@@ -286,7 +286,7 @@ kind 上:`zone-up` 后 `data-service-migrate` Job Complete、两个 Pod Ready;`k
   代理 Pod 模板带脚本 ConfigMap 的摘要(脚本一改代理就滚动);`-WaitReady` 额外等 `redis-proxy`。
 - 连接上限(P0-E 的接入前置):`MAXCLIENTS` 写进 redis 的 Pod 模板且与 `redis.yaml` 同值(连接总账只读那一份);代理每副本 `PROXY_MAXCONN=13000`,
   生成期核对 `PROXY_MAXCONN ×(2 + 1)+ 1000 ≤ 40000` —— 让代理先到线,Redis 到线会让代理的健康检查失败、踢掉全部会话。
-- **2026-10-19 补齐**(在 origin `43284eb0b` 的 10-16 接入之上;已落码,**未运行**:契约测试未跑、未在 kind 复测,待 Codex 验证):
+- **2026-10-19 补齐**(在 origin `43284eb0b` 的 10-16 接入之上;已落码,**未运行**:契约测试未跑、未在 kind 复测,待 Gemini 验证):
   - **WAITAOF 副本份数按拓扑,两处同源**:常量 `$script:MappingRedisTopology` 删掉,改为函数 `Get-MappingRedisTopology`(每次从 `Get-RedisTopology` 现取)。
     data-service 的 `RouteStore.WaitAOFNumReplicas` 与 go/db 的 `ServerConfig.RedisClient.WaitAOFNumReplicas` 两处 ConfigMap 都经同一个 `Get-RouteStoreWaitAOFNumReplicas` 渲染:单实例 0、高可用 1。
     go/db 的 `WaitAOFNumLocal` / `WaitAOFTimeoutMs` 仍镜像 `go/db/etc/db.yaml`;`db.yaml` 与 `go/data_service/etc/data_service.yaml` 的 `WaitAOFNumReplicas` 保持 0
@@ -324,21 +324,21 @@ kind 上:`zone-up` 后 `data-service-migrate` Job Complete、两个 Pod Ready;`k
 - 没在真实多节点集群上做过网络分区与整机故障;大数据量下 1 → 3 的全量同步耗时未知(`rollout status` 等待上限 180 秒)。
 - C++ 侧:口令认证已由别的会话补上(P0-A,`redis_manager.cpp` 每条新连接先 AUTH、失败 fail-closed);高可用形态下主切换由代理掐断连接、C++ 走既有重连。
   **残余风险**:代理 Pod 所在机器整机消失时,C++ 那条连接收不到 FIN / RST,原先会一直挂着(该进程的 Redis 读写全部卡住)直到进程重启。
-  Redis 节点所在机器消失不受影响(代理会掐断客户端侧)。**2026-10-16 已补,10-17 Codex 在合并后的 main 上编译 + 单次测试通过**(Windows Debug|x64;
+  Redis 节点所在机器消失不受影响(代理会掐断客户端侧)。**2026-10-16 已补,10-17 Gemini 在合并后的 main 上编译 + 单次测试通过**(Windows Debug|x64;
   `RedisManagerLiveness` 5 例与 `RedisManagerAuth` 10 例全过,未跑 `--gtest_repeat` 稳定性、未在真实多节点集群上演练整机消失):`RedisManager` 加了应用层存活探测 ——
   每 5 秒对已移交给业务的连接发一条 PING,15 秒无应答就摘下连接、走既有重连,最迟约 20 秒判定;契约见 `redis_manager.h` Connect 注释「存活契约」。
   没开 TCP keepalive:连接上有未确认的数据时内核不发 keepalive 探测,恰好覆盖不到这个场景(理由见 `docs/PROGRESS.md` 同日条目)。
   摘下时在途命令以空应答结束,与主切换掐连接相同;把空应答当成业务结论的那几处调用方已由后续修复(PROGRESS「zone Redis 空应答 / ERROR 不再被当成业务结论」条)
   改掉,同样在 10-17 那轮回归里编译测试通过。
 
-### 5.4 验证(交 Codex)
+### 5.4 验证(交 Gemini)
 
 ```
 pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1      # 新增 6 条 Redis 高可用用例,原有 Redis 用例不应受影响
 pwsh -NoProfile -File tools/scripts/tests/redis_maxclients_contract.tests.ps1
 ```
 
-2026-10-19 补齐后(均**未运行**,待 Codex):
+2026-10-19 补齐后(均**未运行**,待 Gemini):
 
 ```
 pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
@@ -456,7 +456,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 
 ## 8. 2026-11-05 第二轮：剩余单点的现状与处理
 
-负责人 2026-11-05 要求把剩下的单点「修复完毕」，并拍板三件事：`mmorpg` 库迁到 TiDB；Loki 的对象存储，外部 S3 兼容存储和集群内存储两种都要支持；按项分批，在同一个会话里依次做（每批不超过 30 个文件，先写设计再落码，编译与测试交 Codex）。
+负责人 2026-11-05 要求把剩下的单点「修复完毕」，并拍板三件事：`mmorpg` 库迁到 TiDB；Loki 的对象存储，外部 S3 兼容存储和集群内存储两种都要支持；按项分批，在同一个会话里依次做（每批不超过 30 个文件，先写设计再落码，编译与测试交 Gemini）。
 
 | 项 | 现状（11-05 核对） | 处理 | 状态 |
 |---|---|---|---|

@@ -323,7 +323,7 @@
 
 前提就是 §3.2 到 §3.4 的规则:没有旁路;写权代次只增不减、在 TiDB 事务里核对;整笔序号整笔比较;同一次存盘的多行同事务;资产与幂等记录同事务、对方只认 TiDB 提交;自动放弃读写权行;移交带令牌。
 
-证明要用真 TiDB 加故障注入(由 Codex 执行,AGENTS §10.1):存盘中途 `kill -9` scene;请求超时后重试;旧存盘晚到;被顶号的 scene 继续写;TiDB 切主;两地同时登录;跨节点交接时回包丢失;停机排空被打断。仓库已有的 L1–L4 一致性测试与混沌测试([数据一致性压测](./data-consistency-stress-testing.md))要在新路径上重跑通过。没有这些运行证据之前,不宣称「已保证」。
+证明要用真 TiDB 加故障注入(由 Gemini 执行,AGENTS §10.1):存盘中途 `kill -9` scene;请求超时后重试;旧存盘晚到;被顶号的 scene 继续写;TiDB 切主;两地同时登录;跨节点交接时回包丢失;停机排空被打断。仓库已有的 L1–L4 一致性测试与混沌测试([数据一致性压测](./data-consistency-stress-testing.md))要在新路径上重跑通过。没有这些运行证据之前,不宣称「已保证」。
 
 ### 5.4 战斗结算与本地模式(2026-10-30 定)
 
@@ -337,7 +337,7 @@
 - 活动局(帮会历练)的结果由 match 发件箱投 Kafka,guild 的超时巡检读 match 的 SQL 记录,不再读 Redis。
 - `battle:lock`、`battle:ctx` 是协调键,留在 Redis(TiDB 决策 §9.3 表 C)。
 
-**`go/match`、guild、启动脚本已落码(2026-10-30,未编译,待 Codex 验证)**:
+**`go/match`、guild、启动脚本已落码(2026-10-30,未编译,待 Gemini 验证)**:
 
 - 本机起 match:`start_game.ps1` 第 3 步跑写者启动目录生成器(`dev_tools -Command sql-boot-catalog-local`,10-31 补,未运行),它用 root 幂等建库建表(match 与 guild 启动时互相核对对方的表,所以 guild 从可选变成必需),`GlobalMatch` 改连本机数据库写进每 boot 配置。开发密钥在 `run/secrets/match-dev.env`(`lib/match_dev_secret.ps1`),battle 与 match 同值。连本地 TiDB 用 `MMORPG_GLOBAL_AUTHORITY_TIDB_HOST` 改入口,同一条命令。
 - **写者授权**:常驻 match 的 `MATCH_MYSQL_PASSWORD` 和写者资格只能来自写者启动目录(`MMORPG_SQL_BOOT_CATALOG`),`db`、`data_service`、`login`、`chat`、`guild`、网关等都一样。本机由上面的命令生成,用法见 `tools/scripts/README.md` 的 start_game.ps1 一节。docker 调试栈在 compose 的一次性注册步骤里发授权(10-31 补,未运行),见同文件 prepare_docker_debug.py 一节。
@@ -498,7 +498,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
   - `mysql_database_table.proto` 三张旧表的 `OptionAutoIncrementKey = "player_id"` 没动:值一直由应用给,B8 随旧表删除。
 - battle_id、challenge_id、team_id 从 snowflake 迁到号段(biz_tag = battle,A7c,已写未编译),match 不再申领 snowflake 槽位,也没有失租强退了。match 不在启动时预领第一段:K8s 上它先于 data-service 部署,预领必失败,而领段结局未知会让这一轮启动的维护排空出不了收据。运行中领段失败过一次也一样,要重启 Pod,与 guild、trade 同口径。依赖单调的写法逐处核过:SQL 都是时间列在前、id 只作并列决胜;ZADD 分数不是 id;Go 里没有解析这些 id 的,C++ `ParseSnowflakeGuid` 只在测试里用。scene_id 不入 SQL 表,保留 snowflake。
 - 依赖单调性的代码(2026-10-30 逐处核实):邮件收件箱、卖家货架、默认浏览、玩家自己的合同与挂单列表、帮会资产唤醒顺序,改成按时间列排序。不用改的:`snapshot_store.go` 的 `id` 只作同秒决胜,打散后同秒次序不代表先后,本来也不靠它;`schema.go` 去重留最小 `id` 只针对唯一键建起来之前的历史自增行;各资产表的 `op_id > ?` 只是稳定翻页,判龄靠时间列;`BrowseCommerceOffers` 按 `commerce_id` 只是稳定翻页,打散后顺序随机,不影响公平;好友推荐按 `player_id` 区间随机取样,打散后分布更均匀。
-- **回退 snowflake 已删**:`Minter` 的回退依赖「两套值域不相交」,打散后不再成立。`FallbackToSnowflake`、`raiseIdSegmentFloor`、2^55 硬编码、`id_segment` 表都已随发号器批删除。login、guild 的 snowflake 节点申领代码 2026-11-12 已清理(未编译,待 Codex 验证):两个服务启动不再申领槽位、不写水位,也没有失槽 fence 退出;login 的 bwmarrin 发号器 `PlayerIDGen` 与依赖、两个服务的 `ClusterId` / `SnowflakeCacheDir` 配置、K8s ConfigMap 里的这几项和 `snowflake-cache` 卷一并删掉。Go 侧申领槽位的只剩 scene_manager(scene_id)。
+- **回退 snowflake 已删**:`Minter` 的回退依赖「两套值域不相交」,打散后不再成立。`FallbackToSnowflake`、`raiseIdSegmentFloor`、2^55 硬编码、`id_segment` 表都已随发号器批删除。login、guild 的 snowflake 节点申领代码 2026-11-12 已清理(未编译,待 Gemini 验证):两个服务启动不再申领槽位、不写水位,也没有失槽 fence 退出;login 的 bwmarrin 发号器 `PlayerIDGen` 与依赖、两个服务的 `ClusterId` / `SnowflakeCacheDir` 配置、K8s ConfigMap 里的这几项和 `snowflake-cache` 卷一并删掉。Go 侧申领槽位的只剩 scene_manager(scene_id)。
 - 用大号跑全链路:dev 现在是小号,打散后所有 ID 都超过 2^53,要验证 Lua、Redis 键、Java 网关都正常。
 - AGENTS §7 第 1 条(SnowFlake 节点隔离、位布局)已同步修订:发号器发的永久 ID 单列一项;2026-11-12 删掉 bwmarrin 一项,全系统只剩两种互不兼容的 ID。
 
@@ -636,7 +636,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
    - 迁移入口 `cmd/migrate` 的 `-storage-id` 必填,只收地域存档库;删「按 ZoneId 迁本区库」。
 4. **部署与本机(第二批)**:`MMORPG_DB_ALLOWED_DATABASES` 只列本地域 K 个存档库,一项 zone 库都不许有;`mysql-init` 只建存档库;db 的 ConfigMap 写新键;连接总账删 `DbHomeMaxOpen`、`ExtraZoneStores`、`DbZoneStoreMaxOpen` 和按逻辑库的 `zone_store`;告警 `DbExtraStorePoolsBeyondPlan` 改成 `DbStorePoolsBeyondPlan`(`pool="store"` 超过 TiDB 档的 K);`db-migrate` Job 只迁 `player_store_*`;本机 `start_game.ps1`、docker 调试栈、`sql_boot_catalog_local`、`deploy/mysql-init/00_init_zone_dbs.sql` 只建 `player_store_1000000_db`。
 5. **不在 A17c**:go/db 的部署形态(每区一个 Deployment、按区注册发现)不变,改成全局要动 C++ 的发现,没有收益;`Placement.AllowStoreFamilies` 保留,家族只剩 `player_store_*`。
-6. **拆批**:第一批 Go(落点包、data_service、go/db 与测试),第二批部署、本机脚本、告警与 PowerShell 契约测试,第三批文档。两批之间主干是能编的:第一批之后旧清单里的 zone 库名会让 go/db、data_service 拒启,所以第二批要紧跟着落,Codex 两批一起验。
+6. **拆批**:第一批 Go(落点包、data_service、go/db 与测试),第二批部署、本机脚本、告警与 PowerShell 契约测试,第三批文档。两批之间主干是能编的:第一批之后旧清单里的 zone 库名会让 go/db、data_service 拒启,所以第二批要紧跟着落,Gemini 两批一起验。
 
 **A17c 落码记录(2026-11-11,三批都写完,未编译,验证命令见 PROGRESS 同日「A17c」条目)**:
 - 第一批 Go:`go/shared/placement` 按上面第 1 条;data_service 的 `RegisterPlayerZone`、角色证明、存档库池、写资格清单都经它拒绝 zone 编号;go/db 启动只装配写资格与逻辑库映射(`InitDBWithWriters` 拒绝空清单、拒绝不是存档库名的写资格、拒绝启动期 DDL),注册表开局一个库都不开,打开路径对 zone 编号和白名单不认的库同样拒绝、记失败节流日志(`reject`),报错如实写出编号;`cmd/migrate` 的 `-storage-id` 必填;指标池类别只剩 `store`;`go/db/etc/db.yaml` 的池键改成 `Placement.Store*`,删 `ServerConfig.Database.MaxOpenConn / MaxIdleConn`。
@@ -707,7 +707,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 - 三档的代码和表结构相同,只是配置不同。MySQL 上生产也至少要主从加备份。
 - **发号不依赖数据库**(§6)是切换后端的前提。
 
-### 9.1 后端档位(2026-10-30 落码,未编译,待 Codex 验证)
+### 9.1 后端档位(2026-10-30 落码,未编译,待 Gemini 验证)
 
 `RequireTiDB` 已删,换成档位 `Backend: tidb | mysql`。不写就是 tidb,其余值启动时拒绝;**`tidb` 和 `mysql` 都能过门禁,和 `Mode` 无关**,原来「生产必须 TiDB」的门禁只剩「档位合法」[C]。
 
@@ -766,7 +766,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 
 ### 9.4 mysql 档要跑的真库回归
 
-本批没有跑过任何一项,全部待 Codex。
+本批没有跑过任何一项,全部待 Gemini。
 
 1. 启动门禁:连主库能起;连 `read_only=1`、`super_read_only=1` 的从库拒绝;`Backend: mysql` 连 TiDB、`Backend: tidb` 连 MySQL 都拒绝;非法值拒绝。运行中把主库置只读,确认复用连接被隔离、新连接被拒绝。
 2. 各服务全套迁移在 MySQL 8.0.29+ 上跑通:data_service `-migrate`、db `cmd/migrate`、guild、trade、friend、mail、rank、chat、match、player_inbox,确认 `/*T! */` 表结构和 CHECK 约束 `chk_route_shard` 生效。
@@ -822,36 +822,36 @@ SLG 补充:
 
 ## 13. 分批计划
 
-每批不超过 30 个手写文件;每批开工前写落码规格并评审;每批落码后由 Codex 编译、测试(AGENTS §10.1);所有批次合计粗估 250~350 个手写文件 [I]。
+每批不超过 30 个手写文件;每批开工前写落码规格并评审;每批落码后由 Gemini 编译、测试(AGENTS §10.1);所有批次合计粗估 250~350 个手写文件 [I]。
 
 **阶段 A:上线前,单个 TiDB 集群**
 
 | 批 | 内容 | 依赖 |
 |---|---|---|
 | A0 | 本文;第 1 批规格:存盘 RPC 协议、写权行与整笔序号、拆行后的表结构、加载与交接 | — |
-| A1 | 写权进 TiDB + 存盘 RPC 服务端(Go)。**代码已写,未编译,待 Codex 验证** | A0 |
-| A2 | 玩家表拆行:proto 源、生成器、建表(生成由 Codex 执行,AGENTS §4)。**代码已写,未编译,待 Codex 验证** | A0 |
-| A3 | C++ 存盘改走新 RPC;关键变化立即存;定时只存脏行。**代码已写,未编译,待 Codex 验证** | A1、A2 |
-| A4 | 加载与交接改 TiDB(login、scene、跨 zone 传送)。**代码已写,未编译,待 Codex 验证** | A1、A2 |
-| A5 | 资产通道、战斗结算、收件箱的判据改 SQL;父快照读方改造(friend、match、login 外观补齐等,TiDB 决策 §9.4 第 7 条)。**代码已写,未编译,待 Codex 验证** | A3、A4 |
-| A6 | 删除旧路径:父快照、子表缓存、存盘意图与补投、Kafka 存盘 topic 与消费者等,按 TiDB 决策 §9.3 逐项。**代码已写,未编译,待 Codex 验证** | A5 |
-| A6b | 别名合服:按区解析函数收口、`LockRoleRoutes` 去掉围栏、删除 `zone_merge_fence`、改造 `merge_zone`。**代码已写,未编译,待 Codex 验证** | A6 |
-| A7 | 发号器改成内存发段 + 两份预留记录(§6.3);发号时打散(调用方接口不变);删除 snowflake 回退;Lua 里 ID 改字符串的审计;单调依赖修正;第二套 etcd 部署与恢复 runbook。**代码已写,未编译,待 Codex 验证** | 无 |
-| A7c | 自增主键改由应用发号;battle、challenge、team 的主键从 snowflake 迁到号段。**代码已写,未编译,待 Codex 验证**。etcd 运维补齐(钉镜像、配额、告警)2026-11-05 已由 P0-C 阶段 2 落码(未运行,[etcd 维护手册](../ops/etcd-maintenance-runbook.md) §8);碎片整理仍是手工。已有集群换镜像会滚动 etcd,C++ etcd 流重建(P0-D)的实跑还缺,有 C++ 节点在跑时放进全栈维护窗口 | A7 |
-| A7b | Kafka 清理:关闭并删除旧单节点 topic,确认后删除 `match-rating-snapshot`、`game-events`,按剩余 topic 重算分区与磁盘预算(§3.5)。**代码已写,未编译,待 Codex 验证** | A6 |
-| A8 | 单行热点清理(§8.1 第 2 条)。**代码已写,未编译,待 Codex 验证** | 合服围栏一项等 §12 第 3 项 |
-| A9 | 后端档位化(§9)。**代码已写,未编译,待 Codex 验证** | — |
-| A10 | 映射直读 TiDB(映射提案 §15、§15.9):删 Redis 副本、对账 leader、就绪标记、水位;go/db 认领前强读路由;建角恒写落点。**代码已写,未编译,待 Codex 验证** | A6 |
-| A11 | 不停服合服(§7.1):只写映射,读时解析;guild、trade、match 的同区判定;工具重写。**代码已写,未编译,待 Codex 验证** | A6b、A10 |
-| A12 | 战斗结算只剩协议 1,匹配本地模式删除(§5.4)。**代码已写,未编译,待 Codex 验证** | A5 |
-| A13 | 收尾:改名、死字段和开关清理、`debug_fetch` 与 `debug_import` 重写、本机写者授权脚本、robot 走地域探测、部署与告警同步。**代码已写,未编译,待 Codex 验证** | A10~A12 |
-| A14 | 玩家态 Redis 协调键集群化:键带 hash tag、C++ 路由层、Go 客户端、人数改成员集合、player_locator 按 slot、登录域、K8s 集群清单与工具([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13)。**代码已写,未编译,待 Codex 验证** | A6、A10 |
+| A1 | 写权进 TiDB + 存盘 RPC 服务端(Go)。**代码已写,未编译,待 Gemini 验证** | A0 |
+| A2 | 玩家表拆行:proto 源、生成器、建表(生成由 Gemini 执行,AGENTS §4)。**代码已写,未编译,待 Gemini 验证** | A0 |
+| A3 | C++ 存盘改走新 RPC;关键变化立即存;定时只存脏行。**代码已写,未编译,待 Gemini 验证** | A1、A2 |
+| A4 | 加载与交接改 TiDB(login、scene、跨 zone 传送)。**代码已写,未编译,待 Gemini 验证** | A1、A2 |
+| A5 | 资产通道、战斗结算、收件箱的判据改 SQL;父快照读方改造(friend、match、login 外观补齐等,TiDB 决策 §9.4 第 7 条)。**代码已写,未编译,待 Gemini 验证** | A3、A4 |
+| A6 | 删除旧路径:父快照、子表缓存、存盘意图与补投、Kafka 存盘 topic 与消费者等,按 TiDB 决策 §9.3 逐项。**代码已写,未编译,待 Gemini 验证** | A5 |
+| A6b | 别名合服:按区解析函数收口、`LockRoleRoutes` 去掉围栏、删除 `zone_merge_fence`、改造 `merge_zone`。**代码已写,未编译,待 Gemini 验证** | A6 |
+| A7 | 发号器改成内存发段 + 两份预留记录(§6.3);发号时打散(调用方接口不变);删除 snowflake 回退;Lua 里 ID 改字符串的审计;单调依赖修正;第二套 etcd 部署与恢复 runbook。**代码已写,未编译,待 Gemini 验证** | 无 |
+| A7c | 自增主键改由应用发号;battle、challenge、team 的主键从 snowflake 迁到号段。**代码已写,未编译,待 Gemini 验证**。etcd 运维补齐(钉镜像、配额、告警)2026-11-05 已由 P0-C 阶段 2 落码(未运行,[etcd 维护手册](../ops/etcd-maintenance-runbook.md) §8);碎片整理仍是手工。已有集群换镜像会滚动 etcd,C++ etcd 流重建(P0-D)的实跑还缺,有 C++ 节点在跑时放进全栈维护窗口 | A7 |
+| A7b | Kafka 清理:关闭并删除旧单节点 topic,确认后删除 `match-rating-snapshot`、`game-events`,按剩余 topic 重算分区与磁盘预算(§3.5)。**代码已写,未编译,待 Gemini 验证** | A6 |
+| A8 | 单行热点清理(§8.1 第 2 条)。**代码已写,未编译,待 Gemini 验证** | 合服围栏一项等 §12 第 3 项 |
+| A9 | 后端档位化(§9)。**代码已写,未编译,待 Gemini 验证** | — |
+| A10 | 映射直读 TiDB(映射提案 §15、§15.9):删 Redis 副本、对账 leader、就绪标记、水位;go/db 认领前强读路由;建角恒写落点。**代码已写,未编译,待 Gemini 验证** | A6 |
+| A11 | 不停服合服(§7.1):只写映射,读时解析;guild、trade、match 的同区判定;工具重写。**代码已写,未编译,待 Gemini 验证** | A6b、A10 |
+| A12 | 战斗结算只剩协议 1,匹配本地模式删除(§5.4)。**代码已写,未编译,待 Gemini 验证** | A5 |
+| A13 | 收尾:改名、死字段和开关清理、`debug_fetch` 与 `debug_import` 重写、本机写者授权脚本、robot 走地域探测、部署与告警同步。**代码已写,未编译,待 Gemini 验证** | A10~A12 |
+| A14 | 玩家态 Redis 协调键集群化:键带 hash tag、C++ 路由层、Go 客户端、人数改成员集合、player_locator 按 slot、登录域、K8s 集群清单与工具([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13)。**代码已写,未编译,待 Gemini 验证** | A6、A10 |
 
-| A15 | 全层水平扩展:逻辑库自治、每库一份闸门、角色护栏、目录哈希分片、不停服搬库、多地域部署([规格](./horizontal-scale-logical-db.md))。**代码已写,未编译,待 Codex 验证** | A14 |
-| A16 | 存档重新分行(存盘规格 §1.1):六行、每行存盘方式、位置只顺带写、旧布局拒绝加载。**第一批代码已写(2026-11-05),未编译,待 Codex 验证** | A2、A3 |
-| A16b | 删 `player_database_1`、退役 kLegacy1(存盘规格 §1.2)。**代码已写(2026-11-06),未编译,待 Codex 验证**;约 45 个文件,按 proto 与库代码、测试与脚本两组审 | A16 |
-| A17 | 存档库和区脱钩(§7.2)。A17a 建号按地域存档库选库、本机与 docker 调试栈切换:**代码已写(2026-11-06),未编译,待 Codex 验证**。A17b K8s 部署参数 `-PlayerStoreShards`、清单恰好是本地域 K 个库、login 按地域渲染、存档库池按库摊开、连接总账与告警、删 login 过渡路径:**代码已写(2026-11-06~10),未编译,待 Codex 验证**。A17c go/db 去掉本区主库、删 zone 存档库家族(落点包、data_service、go/db、部署、本机、告警、契约测试):**代码已写(2026-11-11),未编译,待 Codex 验证** | A15 |
-| A18 | 写者闸门往返收敛(存盘规格 §9 第 1 条):指标(11-10)、事务内闸门读合并(11-11,缺口清单第 20 条)、连接复用不重放会话固定与注册核对(11-12)。**代码已写,未编译,待 Codex 验证**;真库闸门用例与压测对比未跑 | — |
+| A15 | 全层水平扩展:逻辑库自治、每库一份闸门、角色护栏、目录哈希分片、不停服搬库、多地域部署([规格](./horizontal-scale-logical-db.md))。**代码已写,未编译,待 Gemini 验证** | A14 |
+| A16 | 存档重新分行(存盘规格 §1.1):六行、每行存盘方式、位置只顺带写、旧布局拒绝加载。**第一批代码已写(2026-11-05),未编译,待 Gemini 验证** | A2、A3 |
+| A16b | 删 `player_database_1`、退役 kLegacy1(存盘规格 §1.2)。**代码已写(2026-11-06),未编译,待 Gemini 验证**;约 45 个文件,按 proto 与库代码、测试与脚本两组审 | A16 |
+| A17 | 存档库和区脱钩(§7.2)。A17a 建号按地域存档库选库、本机与 docker 调试栈切换:**代码已写(2026-11-06),未编译,待 Gemini 验证**。A17b K8s 部署参数 `-PlayerStoreShards`、清单恰好是本地域 K 个库、login 按地域渲染、存档库池按库摊开、连接总账与告警、删 login 过渡路径:**代码已写(2026-11-06~10),未编译,待 Gemini 验证**。A17c go/db 去掉本区主库、删 zone 存档库家族(落点包、data_service、go/db、部署、本机、告警、契约测试):**代码已写(2026-11-11),未编译,待 Gemini 验证** | A15 |
+| A18 | 写者闸门往返收敛(存盘规格 §9 第 1 条):指标(11-10)、事务内闸门读合并(11-11,缺口清单第 20 条)、连接复用不重放会话固定与注册核对(11-12)。**代码已写,未编译,待 Gemini 验证**;真库闸门用例与压测对比未跑 | — |
 
 **阶段 B:压测**——TiDB 写入与事务数、PD 时间戳吞吐、冷读与热加载 P99、Redis、Kafka 的实际上限,按 AGENTS §6 出对比表。间隔(§4.5)与集群规模(连接总账,§7.2)都已按标准做法定案,压测只用来复核:实测与估算差一个数量级才重开。
 

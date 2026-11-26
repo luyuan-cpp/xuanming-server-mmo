@@ -122,4 +122,14 @@ func TestRankedTierCrossingAndEffectiveDefaultTalisman(t *testing.T) {
 	require.Equal(t, uint32(172000), info.GetTierTianshuCenti())
 	require.Equal(t, uint32(185000), info.GetTierWushuangCenti())
 	require.Equal(t, uint32(6), info.GetMilestoneWinMatches())
+
+	summary := nilStore.toPlayerSeasonSummary(&pb.MatchRankedPlayerSeasonRecord{
+		SeasonId:         1,
+		Qualified:        true,
+		RatingCenti:      162000,
+		CurrentWinStreak: 4,
+		BestWinStreak:    6,
+	}, "s1")
+	require.Equal(t, uint32(4), summary.GetCurrentWinStreak())
+	require.Equal(t, uint32(6), summary.GetBestWinStreak())
 }

@@ -2,7 +2,7 @@
 
 > **状态(2026-11-20,Antigravity)**:已获负责人授权并**已按 §6 落码,未编译、未运行**(AGENTS.md §10.3),验证命令见 `docs/PROGRESS.md` 2026-11-20 条目。
 > **来源**:2026-11-20 在 go/db 上确认并修掉同一类问题(`docs/design/db-task-store-unavailable-deferral.md` 文首「2026-11-20 补」),当时记下 data_service 另开任务。
-> **证据口径**:设计与实现基于静态阅读——go-zero v1.10.0 源码与本仓代码,已做 `gofmt` 与英文日志静态检查;编译、单测交 Codex。
+> **证据口径**:设计与实现基于静态阅读——go-zero v1.10.0 源码与本仓代码,已做 `gofmt` 与英文日志静态检查;编译、单测交 Gemini。
 > **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service 与 go-zero),不加 PARITY 行。
 
 ## 0. 结论
@@ -325,7 +325,7 @@ C4 之后调用方还靠什么:
 
 不涉及:proto、生成产物、C++、Java、数据库表、部署清单的结构。
 
-## 7. 单测(落码时写,交 Codex 跑)
+## 7. 单测(落码时写,交 Gemini 跑)
 
 - `shared/authoritysql`(用包里现成的假拨号器与假驱动):
   - 钩子回错误时不拨号,`Connect` 的错误就是钩子的错误;

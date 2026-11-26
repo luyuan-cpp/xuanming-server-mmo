@@ -155,7 +155,7 @@
 - `node_command_topic.h` 另有会话的未提交改动(观战 topic),本设计不改这个文件。
 - 新增 C++ 源文件只登记 `.vcxproj` 与 `.filters`,CMakeLists 由它生成。
 
-## 7. 验证(交 Codex)
+## 7. 验证(交 Gemini)
 
 - 批 1:`cd go/client_rpc_router && go build ./... && go vet ./... && go test -race ./...`。用例:`TestApertureBalancesEveryTargetExactly`(逐格枚举,每台目标的份额完全相等且大于 0)、`TestApertureSubsetSize`(每台路由服至少两台、确实收窄、R × k < T 时全覆盖)、`TestApertureFallsBackToAllOnUnknownRank`、`TestPeerRank`、`TestPickRandomForTrackStaysInArc`、`TestConnPool*`(注入时钟的空闲回收)、`TestSubsetIdentityNarrowsGlobalTargetsAndFollowsPeers`、`TestBuildRejectsForwardTimeoutNotShorterThanIdleTimeout`;另跑 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(ConfigMap 镜像 `GlobalTargetSubsetSize`)。gate 侧 HRW 的分布用例归批 2。
 - 批 4:`msbuild` 串行 `/m:1` 编 core 与 scene、gate、battle,再编 `rpc_controller_test` 并跑 `--gtest_filter=PrometheusText.*:BroadcastFanoutStats.*:CommandConsumeStats.*:MetricsRegistry.*`;`pwsh -NoProfile -File tools/scripts/tests/node_command_topic_alerts_contract.tests.ps1`;告警语法用 promtool 另验。

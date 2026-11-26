@@ -259,6 +259,38 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchBattleSurrenderAlreadyVoted = 16055;</code>
      */
     kMatchBattleSurrenderAlreadyVoted(16055),
+    /**
+     * <code>kMatchTournamentAlreadySalutedToday = 16056;</code>
+     */
+    kMatchTournamentAlreadySalutedToday(16056),
+    /**
+     * <code>kMatchTournamentNoChampionToSalute = 16057;</code>
+     */
+    kMatchTournamentNoChampionToSalute(16057),
+    /**
+     * <code>kMatchTournamentSpectateCheerCooldown = 16058;</code>
+     */
+    kMatchTournamentSpectateCheerCooldown(16058),
+    /**
+     * <code>kMatchTournamentSpectateCheerInvalid = 16059;</code>
+     */
+    kMatchTournamentSpectateCheerInvalid(16059),
+    /**
+     * <code>kMatchTournamentEmblemInvalid = 16060;</code>
+     */
+    kMatchTournamentEmblemInvalid(16060),
+    /**
+     * <code>kMatchTournamentPredictionClosed = 16061;</code>
+     */
+    kMatchTournamentPredictionClosed(16061),
+    /**
+     * <code>kMatchTournamentPredictionTargetInvalid = 16062;</code>
+     */
+    kMatchTournamentPredictionTargetInvalid(16062),
+    /**
+     * <code>kMatchTournamentWarmupUnavailable = 16063;</code>
+     */
+    kMatchTournamentWarmupUnavailable(16063),
     UNRECOGNIZED(-1),
     ;
 
@@ -499,6 +531,38 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchBattleSurrenderAlreadyVoted = 16055;</code>
      */
     public static final int kMatchBattleSurrenderAlreadyVoted_VALUE = 16055;
+    /**
+     * <code>kMatchTournamentAlreadySalutedToday = 16056;</code>
+     */
+    public static final int kMatchTournamentAlreadySalutedToday_VALUE = 16056;
+    /**
+     * <code>kMatchTournamentNoChampionToSalute = 16057;</code>
+     */
+    public static final int kMatchTournamentNoChampionToSalute_VALUE = 16057;
+    /**
+     * <code>kMatchTournamentSpectateCheerCooldown = 16058;</code>
+     */
+    public static final int kMatchTournamentSpectateCheerCooldown_VALUE = 16058;
+    /**
+     * <code>kMatchTournamentSpectateCheerInvalid = 16059;</code>
+     */
+    public static final int kMatchTournamentSpectateCheerInvalid_VALUE = 16059;
+    /**
+     * <code>kMatchTournamentEmblemInvalid = 16060;</code>
+     */
+    public static final int kMatchTournamentEmblemInvalid_VALUE = 16060;
+    /**
+     * <code>kMatchTournamentPredictionClosed = 16061;</code>
+     */
+    public static final int kMatchTournamentPredictionClosed_VALUE = 16061;
+    /**
+     * <code>kMatchTournamentPredictionTargetInvalid = 16062;</code>
+     */
+    public static final int kMatchTournamentPredictionTargetInvalid_VALUE = 16062;
+    /**
+     * <code>kMatchTournamentWarmupUnavailable = 16063;</code>
+     */
+    public static final int kMatchTournamentWarmupUnavailable_VALUE = 16063;
 
 
     public final int getNumber() {
@@ -582,6 +646,14 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16053: return kMatchBattleSurrenderTooEarly;
         case 16054: return kMatchBattleSurrenderCooldown;
         case 16055: return kMatchBattleSurrenderAlreadyVoted;
+        case 16056: return kMatchTournamentAlreadySalutedToday;
+        case 16057: return kMatchTournamentNoChampionToSalute;
+        case 16058: return kMatchTournamentSpectateCheerCooldown;
+        case 16059: return kMatchTournamentSpectateCheerInvalid;
+        case 16060: return kMatchTournamentEmblemInvalid;
+        case 16061: return kMatchTournamentPredictionClosed;
+        case 16062: return kMatchTournamentPredictionTargetInvalid;
+        case 16063: return kMatchTournamentWarmupUnavailable;
         default: return null;
       }
     }
@@ -647,7 +719,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\302\016\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\215\021\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -694,8 +766,16 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "otAllowed\020\264}\022\"\n\035kMatchBattleSurrenderToo" +
       "Early\020\265}\022\"\n\035kMatchBattleSurrenderCooldow" +
       "n\020\266}\022&\n!kMatchBattleSurrenderAlreadyVote" +
-      "d\020\267}B$\n\016com.game.tableZ\022generated/pb/tab" +
-      "leb\006proto3"
+      "d\020\267}\022(\n#kMatchTournamentAlreadySalutedTo" +
+      "day\020\270}\022\'\n\"kMatchTournamentNoChampionToSa" +
+      "lute\020\271}\022*\n%kMatchTournamentSpectateCheer" +
+      "Cooldown\020\272}\022)\n$kMatchTournamentSpectateC" +
+      "heerInvalid\020\273}\022\"\n\035kMatchTournamentEmblem" +
+      "Invalid\020\274}\022%\n kMatchTournamentPrediction" +
+      "Closed\020\275}\022,\n\'kMatchTournamentPredictionT" +
+      "argetInvalid\020\276}\022&\n!kMatchTournamentWarmu" +
+      "pUnavailable\020\277}B$\n\016com.game.tableZ\022gener" +
+      "ated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

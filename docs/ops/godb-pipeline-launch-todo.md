@@ -3,7 +3,7 @@
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](../design/player-save-direct-commit.md)),go/db 的 Kafka 消费链已删除,本清单作废。现行的验证清单见 `docs/handoff/player-save-direct-commit-20261030/progress.md`。本文只作历史保留。
 
 > **用途**：存盘管线已经落码、但还没有验证或还没有做完的上线前事项。负责人 2026-10-13 的要求是「先实现代码，先不管测试，测试记录到上线待做里面」，所以代码先落，验证全部记在这里。
-> **执行者**：编译、测试、故障注入由 Codex 执行（AGENTS.md §10.1）；部署与集群操作由负责人执行（AGENTS.md §9）。
+> **执行者**：编译、测试、故障注入由 Gemini 执行（AGENTS.md §10.1）；部署与集群操作由负责人执行（AGENTS.md §9）。
 > **维护**：每做完一项，在该项后面写日期、执行者和结果（通过 / 失败 + 证据位置），不要删行。新增事项追加在对应小节末尾。
 > **相关**：交接（原 `docs/handoff/godb-pipeline-handoff-20261013.md`，已清理，见 `ccf2840b2`）、Codex 任务单（原 `docs/handoff/godb-pipeline-codex-tasksheet-20261013.md`，已清理，见 `ccf2840b2`）、[L-04 设计](../design/db-task-store-unavailable-deferral.md)、[条件写设计](../design/db-write-fencing-mysql.md)、[瓶颈文档](../design/db-task-pipeline-bottlenecks.md)。
 
@@ -13,8 +13,8 @@
 
 | # | 事项 | 怎么做 | 状态 |
 |---|---|---|---|
-| 1.1 | 第 0 批（子 shard 打散、login 自锁、位点重置判定、汇总脚本 DB 段）的编译与单测 | Codex 任务单（原 `docs/handoff/godb-pipeline-codex-tasksheet-20261013.md`，已清理，见 `ccf2840b2`） 任务 A | 待 Codex。负责人已自行安装 Go 1.27.2；2026-10-15 同意 Codex 跑测试时联网下载 Go 模块（任务单第 2.1 版 §0.1「同意 2」）|
-| 1.2 | proto2mysql `SaveConditional` 的离线、真库（MySQL 8.4 / TiDB 8.5）、竞态测试 | 同上，任务 B | 待 Codex。负责人已同意拉取两个镜像 |
+| 1.1 | 第 0 批（子 shard 打散、login 自锁、位点重置判定、汇总脚本 DB 段）的编译与单测 | Codex 任务单（原 `docs/handoff/godb-pipeline-codex-tasksheet-20261013.md`，已清理，见 `ccf2840b2`） 任务 A | 待 Gemini。负责人已自行安装 Go 1.27.2；2026-10-15 同意 Codex 跑测试时联网下载 Go 模块（任务单第 2.1 版 §0.1「同意 2」）|
+| 1.2 | proto2mysql `SaveConditional` 的离线、真库（MySQL 8.4 / TiDB 8.5）、竞态测试 | 同上，任务 B | 待 Gemini。负责人已同意拉取两个镜像 |
 | 1.3 | 1.2 全绿后合入 proto2mysql main，不打 tag；go/db 用伪版本钉 main 上那个提交 | 负责人 2026-10-13 的决定 | 等 1.2 |
 
 ---
@@ -70,7 +70,7 @@ go test ./internal/storeerr/... ./internal/logic/pkg/proto_sql/... ./internal/ka
 | 探活不经过连接池 | `pingStore` 有连接器时新建连接 Ping 后关闭；池里只有死连接时不误判；池满时不误判 |
 | 冷却指标收集器 | `NewStoreCooldownCollector` 按 source 输出三类 pool 的序列 |
 
-状态：已写（2026-10-15，随 `de4960bee` 入库；之后 R1 / R2 对其中几个文件的小改随 `e76f6f747` 入库），**未编译、未运行，待 Codex**。命令见 §4.1。文件与用例（按上表顺序）：
+状态：已写（2026-10-15，随 `de4960bee` 入库；之后 R1 / R2 对其中几个文件的小改随 `e76f6f747` 入库），**未编译、未运行，待 Gemini**。命令见 §4.1。文件与用例（按上表顺序）：
 
 | # | 文件 | 用例 |
 |---|---|---|
@@ -142,7 +142,7 @@ go test ./internal/storeerr/... ./internal/logic/pkg/proto_sql/... ./internal/ka
 
 ## 4. G1 治标、停机顺序与测量打点（S4）
 
-代码已落：go/db 部分随 `de4960bee` 入库（之后 R1 语义复核的补修与 R2 对同批文件的改动随 `e76f6f747` 入库）；脚本随 `a7c510d65` / `0f6690604` 入库；`deploy/k8s/manifests/go-svc/db.yaml` 的 `minReadySeconds: 20` 与 `deploy/k8s/db-task-retry-alerts.yaml` 的 `db-task.ordering-lease` 组随 `e76f6f747` 入库。全部**未编译、未测试，待 Codex 验证**。
+代码已落：go/db 部分随 `de4960bee` 入库（之后 R1 语义复核的补修与 R2 对同批文件的改动随 `e76f6f747` 入库）；脚本随 `a7c510d65` / `0f6690604` 入库；`deploy/k8s/manifests/go-svc/db.yaml` 的 `minReadySeconds: 20` 与 `deploy/k8s/db-task-retry-alerts.yaml` 的 `db-task.ordering-lease` 组随 `e76f6f747` 入库。全部**未编译、未测试，待 Gemini 验证**。
 规格：S4 规格（原 `docs/handoff/godb-pipeline-impl-20261015/S4-g1-and-small-items-spec.md`，已清理，见 `ccf2840b2`）；设计与三句语义（不是栅栏 / 只有失租才取消写 SQL / 在途取消后锁留给 TTL）、A3 相对规格的三处偏离见[瓶颈文档](../design/db-task-pipeline-bottlenecks.md) §7「S4 落码」，停机顺序见 §4.4「G6 停机顺序」。§3 表里 Lua `tonumber` 一项即本节的 `luaMarkAppliedEpoch` 十进制串比较。
 
 ### 4.1 编译与单测
@@ -182,7 +182,7 @@ pwsh -NoProfile -NonInteractive -File tools/scripts/tests/k8s_deploy_contract.te
 
 ### 4.2 故障注入
 
-只在本地 compose 或 kind 做，由 Codex 执行。保留：go/db 日志、注入前中后三个时刻的 `/metrics`（`:9160`）、重试三个列表的 LLEN。
+只在本地 compose 或 kind 做，由 Gemini 执行。保留：go/db 日志、注入前中后三个时刻的 `/metrics`（`:9160`）、重试三个列表的 LLEN。
 
 | # | 注入 | 通过标准 |
 |---|---|---|
@@ -208,16 +208,16 @@ pwsh -NoProfile -NonInteractive -File tools/scripts/tests/k8s_deploy_contract.te
 
 - 代码已落，未编译、未测试；4.1–4.3 全部待做。
 - 剩余风险（不在本批修）：② 超时若源于 sarama 自身慢（提交、心跳、LeaveGroup 的网络调用），只受它的 Net 超时与 45s 宽限兜底；`routeToSubShard` 在子 shard 数 ≤1 时阻塞发送没有 `w.ctx` 出口（生产 `SubShardCount: 8` 碰不到，建议单独立项）；本地截止时间依赖进程单调时钟，虚拟机暂停恢复后 SQL 可能抢在看门狗之前发出；margin 30s 要求两个会话锁等待之和 ≤ 25s，TiDB 阶段若按 2.5.7 把 `SessionLockWaitSeconds` 写成 -1，启动只打 ERROR；go-redis 默认 `MaxRetries=3` 时单条 SETNX 重发可能把自己刚设上的锁判成被占（既有问题）；Ctrl+C 辅助进程方案未在本机实测（失败退回强杀）；`Invoke-Stop` 强杀前不核对进程身份，PID 被复用时 `taskkill /T` 的波及面比旧的单 PID 强杀大。
-- 2026-10-17 补（R7 语义复核）：上一条里「go-redis 默认 `MaxRetries=3` 时原样重发」的同类问题，在重试链路上的两处已修：重试认领脚本被重发时会多 POP 一条、把第一次认领到的收据留在本实例 processing 里无人派发；收据 ack 的 `LREM` 被重发时会把另一份字节相同的副本也删掉。现在每次认领 / ack 带随机 nonce，第一次执行写防重记录 `kafka:retry:guard:{claim|ack}:<本实例 processing 键>:<nonce>`（`go/db/internal/kafka/retry_ownership.go` 的 `retryGuardKey`、`retryGuardTTL` = 5 分钟），重发时不再 POP、不再多删；认领结果未知时，下一拍认领之前先用 `retryClaimResolveScript` 把可能已认领的那条原样搬回原 ready（`resolveUnresolvedClaims`），resolve 遇到网络错误时本拍暂停分拣与认领。**剩余风险是防重记录的 TTL**：Redis 卡顿或不可达超过 5 分钟、记录过期之后，旧连接里迟到执行的副本仍可能再 POP 一次（第一次认领到的那条照旧滞留到重启或停机 release）或再删一份。排序锁 `SETNX` 的重发问题不在此列，仍是既有问题。验证见 §9.2。已落码，未编译、未测试，待 Codex 验证。
+- 2026-10-17 补（R7 语义复核）：上一条里「go-redis 默认 `MaxRetries=3` 时原样重发」的同类问题，在重试链路上的两处已修：重试认领脚本被重发时会多 POP 一条、把第一次认领到的收据留在本实例 processing 里无人派发；收据 ack 的 `LREM` 被重发时会把另一份字节相同的副本也删掉。现在每次认领 / ack 带随机 nonce，第一次执行写防重记录 `kafka:retry:guard:{claim|ack}:<本实例 processing 键>:<nonce>`（`go/db/internal/kafka/retry_ownership.go` 的 `retryGuardKey`、`retryGuardTTL` = 5 分钟），重发时不再 POP、不再多删；认领结果未知时，下一拍认领之前先用 `retryClaimResolveScript` 把可能已认领的那条原样搬回原 ready（`resolveUnresolvedClaims`），resolve 遇到网络错误时本拍暂停分拣与认领。**剩余风险是防重记录的 TTL**：Redis 卡顿或不可达超过 5 分钟、记录过期之后，旧连接里迟到执行的副本仍可能再 POP 一次（第一次认领到的那条照旧滞留到重启或停机 release）或再删一份。排序锁 `SETNX` 的重发问题不在此列，仍是既有问题。验证见 §9.2。已落码，未编译、未测试，待 Gemini 验证。
 
 ---
 
 ## 5. ① 读写分区对齐（S3）
 
-代码已落：Go 与 C++ 随 `a7c510d65` / `592d7e718` / `0f6690604` 等快照提交入库；告警文件 `deploy/k8s/db-task-partition-alerts.yaml` 随 `e76f6f747` 入库。**未编译、未测试，待 Codex 验证。**
+代码已落：Go 与 C++ 随 `a7c510d65` / `592d7e718` / `0f6690604` 等快照提交入库；告警文件 `deploy/k8s/db-task-partition-alerts.yaml` 随 `e76f6f747` 入库。**未编译、未测试，待 Gemini 验证。**
 契约、两侧实现、抽样命令、冷读冒烟与行为变化以[分区契约文档](../design/db-task-kafka-partition-contract.md)「分区函数契约」「golden 向量」「滚动对齐步骤与观测」「屏障覆盖范围与剩余缺口」为准。
 
-### 5.1 编译与单测（Codex，Go 1.27.2，环境变量照任务单 §1）
+### 5.1 编译与单测（Gemini，Go 1.27.2，环境变量照任务单 §1）
 
 | 工作目录 | 命令 | 通过标准 |
 |---|---|---|
@@ -237,7 +237,7 @@ C++（仓库根，VS 开发者环境，MSBuild 严格串行 `/m:1`；不以 `gam
 
 golden 表由 Go `crc32`、sarama、librdkafka 三方都通过才算成立；任何一方不一致都以机器结果回报。
 
-### 5.2 本机一区联调（Codex）
+### 5.2 本机一区联调（Gemini）
 
 前置按 AGENTS.md §6.2 第 6 条清空本机 redis、mysql、etcd，删掉 `tools/scripts/.run` 下的 pid 与 log。
 1. 用 `tools/scripts/start_game.ps1` 起服，顺序 db → login → scene；robot 登录测试通过率与基线一致。
@@ -250,7 +250,7 @@ golden 表由 Go `crc32`、sarama、librdkafka 三方都通过才算成立；任
 
 | # | 事项 | 状态 |
 |---|---|---|
-| 5.3.1 | 只读抽样门槛：生产与预发每个 zone 都做，在 login 切换之前；**负责人执行**（Codex 只在本机或指定的 dev 环境）。写的非 ok 为 0、解析失败为 0、抽样里有写；读不符比例记作基线 | 待做 |
+| 5.3.1 | 只读抽样门槛：生产与预发每个 zone 都做，在 login 切换之前；**负责人执行**（Gemini 只在本机或指定的 dev 环境）。写的非 ok 为 0、解析失败为 0、抽样里有写；读不符比例记作基线 | 待做 |
 | 5.3.2 | staging 按生产顺序走一遍并做冷读冒烟（只在 staging 删 Redis 键）；可选用 `KAFKA_INTEGRATION_BROKER` 指向 staging broker 跑一次集成用例 | 待做 |
 | 5.3.3 | 生产 login 逐副本滚动。**前置**：回滚目标提交必须包含 `d5cbb8a8e`（`git merge-base --is-ancestor d5cbb8a8e <commit>`），否则会把 G0 的自锁带回来 | 待做 |
 | 5.3.4 | go/db 观测随下一次例行 go/db 发版上（不单独滚 go/db），上线后至少看 2 个存盘周期 | 待做 |
@@ -264,10 +264,10 @@ golden 表由 Go `crc32`、sarama、librdkafka 三方都通过才算成立；任
 
 ## 6. ③ 消费组按 zone 拆（S2）
 
-代码已落：go/db、`go/shared/kafkautil`、`tools/merge_zone`、`lib/kafka_consumer_groups.ps1`、`kafka_offset_reset.ps1` 等随 `de4960bee` 入库；`k8s_deploy.ps1`（R4）、`dev_tools.ps1`、契约测试、`deploy/k8s/README.md`、`db.yaml` 注解占位与告警组随 `e76f6f747` 入库。Kafka 镜像已四处钉到 `apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`。**未编译、未测试，待 Codex 验证。**
+代码已落：go/db、`go/shared/kafkautil`、`tools/merge_zone`、`lib/kafka_consumer_groups.ps1`、`kafka_offset_reset.ps1` 等随 `de4960bee` 入库；`k8s_deploy.ps1`（R4）、`dev_tools.ps1`、契约测试、`deploy/k8s/README.md`、`db.yaml` 注解占位与告警组随 `e76f6f747` 入库。Kafka 镜像已四处钉到 `apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`。**未编译、未测试，待 Gemini 验证。**
 设计、四种 ConfigMap 形状、决策表与 runbook 以 `docs/design/db-consumer-group-per-zone.md`（本批另行撰写）为准；规格以 S2 修订稿（原 `docs/handoff/godb-pipeline-impl-20261015/S2-consumer-group-per-zone-addendum.md`，已清理，见 `ccf2840b2`） 为准。
 
-### 6.1 编译与单测（Codex）
+### 6.1 编译与单测（Gemini）
 
 | 工作目录 | 命令 | 通过标准 |
 |---|---|---|
@@ -284,7 +284,7 @@ PowerShell（仓库根，PowerShell 7）：逐个执行 `pwsh -NoProfile -NonInt
 
 | # | 内容 | 通过标准 / 去向 |
 |---|---|---|
-| V0 | 上线前（负责人或 Codex，只读）：`kubectl get pod -n mmorpg-infra -l app=kafka -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[0].imageID}{"\n"}{end}'`（`-n` 换成实际的 `-InfraNamespace`）；本机 `docker image inspect apache/kafka:latest --format '{{json .RepoDigests}}'` | 每个 broker 的 imageID、本机 RepoDigests 都含 `sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`；任一不一致按一次 broker 版本升级评估（metadata.version、日志目录兼容、能否回退），由负责人决定是否另开窗口 |
+| V0 | 上线前（负责人或 Gemini，只读）：`kubectl get pod -n mmorpg-infra -l app=kafka -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[0].imageID}{"\n"}{end}'`（`-n` 换成实际的 `-InfraNamespace`）；本机 `docker image inspect apache/kafka:latest --format '{{json .RepoDigests}}'` | 每个 broker 的 imageID、本机 RepoDigests 都含 `sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`；任一不一致按一次 broker 版本升级评估（metadata.version、日志目录兼容、能否回退），由负责人决定是否另开窗口 |
 | V3 只读 | `docker buildx imagetools inspect apache/kafka:4.3.1` 与 `… apache/kafka:latest` | 两条的 Digest 行都等于上面的 digest |
 | V3 拉镜像（**下载，执行前请负责人确认**） | `docker pull` 钉版引用；`docker image inspect <钉版引用> --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}'`；`docker compose -f deploy/docker-compose.yml up -d kafka kafka-topic-init`；`docker exec kafka /opt/kafka/bin/kafka-topics.sh --version` | 入口为 `["/__cacert_entrypoint.sh"]` 与 `["/etc/kafka/docker/run"]`；kafka-topic-init 以 0 退出；版本 4.3.1。本机命名卷可能是更旧版本写的，按 AGENTS.md §6.2 先清再起 |
 | V3 (a)–(j) | 在 4.3.1 上逐条记录原始输出与退出码：(a) Stable 组 `--reset-offsets --execute`；(b) describe 不存在的组；(c) 对不存在的组 `--reset-offsets --to-datetime --execute` 能否建出位点；(d) 组 Stable 但没有成员订阅该 topic 时 `--delete-offsets`；(e) 有成员订阅时的输出（预期含 `GROUP_SUBSCRIBED_TO_TOPIC`）；(f) `--execute` 是否打印 NEW-OFFSET 表；(g) `kafka-get-offsets.sh --time -2 / -1` 的格式；(h) Empty 组无位点时 describe 的输出；(i) 不存在组 describe 的原文；(j) kind 里 `kubectl exec -n mmorpg-infra kafka-0 -c kafka -- /bin/sh -c "KAFKA_HEAP_OPTS='-Xms16m -Xmx64m' /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group <g>"` 能否成功（`k8s_deploy.ps1` 的 `Read-DbGroupTopicFacts` 就用这个形状：经 `/bin/sh -c` 覆盖小堆，防 CLI 继承 broker 大堆把 kafka-0 撑到 OOMKilled） | 回填 `docs/design/db-consumer-group-per-zone.md` §11；与代码假设不符时两边同步补白名单正则（`tools/scripts/lib/kafka_consumer_groups.ps1` 的 `Get-KafkaGroupMissingPatterns` 与 `tools/merge_zone/preflight.go` 的 `consumerGroupMissingPatterns`），原文追加为 `tools/merge_zone/merge_unit_test.go` 与 `tools/scripts/tests/kafka_offset_reset_output_guard.tests.ps1` 的 fixture（lib 是纯函数库，只放正则，不放 fixture）。 |
@@ -319,10 +319,10 @@ PowerShell（仓库根，PowerShell 7）：逐个执行 `pwsh -NoProfile -NonInt
 
 ## 7. scene 发 DBTask 失败后的脏快照（S5a，C++）
 
-代码已落：随 `0f6690604` / `de4960bee` 等快照提交入库；`kafka_producer.cpp`、`redis.cpp`、`db_task_dispatch_test.cpp`、`cross_zone_test.vcxproj` 之后的改动（含别的会话的）随 `e76f6f747` 入库。**未编译、未测试，待 Codex 验证。**
+代码已落：随 `0f6690604` / `de4960bee` 等快照提交入库；`kafka_producer.cpp`、`redis.cpp`、`db_task_dispatch_test.cpp`、`cross_zone_test.vcxproj` 之后的改动（含别的会话的）随 `e76f6f747` 入库。**未编译、未测试，待 Gemini 验证。**
 要点：`cpp/libs/services/scene/player/system/db_task_dispatch_{ledger,system}.{h,cpp}` 按玩家记 DBTask 投递账本；某次存盘的 DBTask 同步被拒或投递回执失败时，该玩家强制重存（快路径 `db_task_dispatch::AllowsDirtySaveSkip` 不再放行），一律按当前内存重新 marshal、绝不重放旧字节；下线收尾经 `PlayerLifecycleSystem::FinishExitOrAwaitDbTaskAck` 等本玩家所有在途 DBTask 的回执（`player_exit::DecideDbTaskGate`，重存上限 `kMaxExitDbTaskResaveRounds` = 3）；生产者经 `KafkaProducer::sendTracked` / `DeliveryTracker` 逐条回执，50ms 的 Pump 定时器在 loop 顶层处理回执，票据超时兜底 `kTicketTimeout` = 330s。设计文档 `docs/design/db-task-delivery-and-retention.md` §A 本批另行撰写。
 
-### 7.1 编译与单测（Codex；仓库根，PowerShell 7 + VS 开发者环境，MSBuild 严格串行 `/m:1`，前一步红了就停下归因）
+### 7.1 编译与单测（Gemini；仓库根，PowerShell 7 + VS 开发者环境，MSBuild 严格串行 `/m:1`，前一步红了就停下归因）
 
 ```powershell
 msbuild cpp\libs\engine\infra\infra.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64
@@ -343,7 +343,7 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 
 通过标准：各工程 0 error，scene 节点链接无 unresolved external；`DeliveryTracker.*`、`DbTaskDispatchLedger.*`、`DbTaskDispatchStats.*`、`ExitDbTaskGate.*`、`DbTaskDispatchEcs.*` 全绿；既有 `ExitPersist*` 与 bag / currency 用例没有新增失败。不以 `game.sln` 为通过标准（主干整体编不过）。失败时保留 msbuild 第一条 error 前后 20 行、gtest 失败用例全文；报错落在别的会话的未提交文件里时单独记录。
 
-### 7.2 故障注入（只在本地 compose 或 kind，由 Codex 执行）
+### 7.2 故障注入（只在本地 compose 或 kind，由 Gemini 执行）
 
 | # | 注入 | 通过标准 |
 |---|---|---|
@@ -372,7 +372,7 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 
 ## 8. db_task 的 retention.bytes 与 Kafka PVC（S5b）
 
-代码已落：Go（R3：`kafkautil.TopicSpec.RetentionBytes`、db / login 的 `KafkaConfig.RetentionBytes`）与部署（R5a：`k8s_deploy.ps1` 盘预算、`kafka.yaml` 的 `__KAFKA_STORAGE_SIZE__` 占位）随 `e76f6f747` 入库。**未编译、未测试，待 Codex 验证。**
+代码已落：Go（R3：`kafkautil.TopicSpec.RetentionBytes`、db / login 的 `KafkaConfig.RetentionBytes`）与部署（R5a：`k8s_deploy.ps1` 盘预算、`kafka.yaml` 的 `__KAFKA_STORAGE_SIZE__` 占位）随 `e76f6f747` 入库。**未编译、未测试，待 Gemini 验证。**
 公式、缺省值表、账本行、扩盘 runbook 与「已存在的 topic 立即改配置」见 `deploy/k8s/README.md`「Kafka 磁盘预算与 db_task retention.bytes」；设计文档 `docs/design/db-task-delivery-and-retention.md` §B 本批另行撰写。
 
 要点（以代码为准）：
@@ -382,7 +382,7 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 - 线上盘 = min(StatefulSet 模板, 各 PVC `status.capacity` 的最小值)（`Get-LiveKafkaStorageGi` / `Get-LiveKafkaPvcMinGi`）；`Apply-Infra` 按 `StorageTemplateGi` 渲染 PVC 模板；显式 `-KafkaStorageGi` 与线上不符时 `Assert-KafkaStorageChangeIsSafe` 按 `Get-KafkaStorageChangeVerdict` 的 expand-refused / shrink-refused / pvc-not-expanded 拒绝，**zone-up 也做这项检查**。
 - zone 数 Z = zones 配置 ∪ `-ZoneId` ∪ 非 DryRun 时线上带 `-NamespacePrefix-` 前缀、不在配置里的 zone namespace。**行为变化**：`-ReleaseProfile` 不是 dev 时 zones 配置缺席直接拒绝部署（Z 不可信）。
 
-### 8.1 编译与单测（Codex）
+### 8.1 编译与单测（Gemini）
 
 | 工作目录 | 命令 | 通过标准 |
 |---|---|---|
@@ -414,7 +414,7 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 
 ## 9. ④ 重试只交给分区属主 + 重试 / 死信 / 毒消息入队 WAITAOF（S1）
 
-> 2026-10-17 新增。状态：**已落码，未编译、未测试，待 Codex 验证。**
+> 2026-10-17 新增。状态：**已落码，未编译、未测试，待 Gemini 验证。**
 
 代码已落：S1 的 go/db 部分（`internal/kafka/retry_routing.go`、`durable_enqueue.go`、`cmd/retry_requeue/main.go` 都首次出现在 `e76f6f747`）、`go/db/etc/db.yaml` 的 `RetryRouting` 与 `WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`、告警 `deploy/k8s/db-task-retry-alerts.yaml` 的 ④ 段已在 HEAD。R7 语义复核的修复截至 2026-10-17 在工作区、未提交：待重搬收据表（`retry_stranded.go`，指标 `db_retry_stranded_receipts`）、认领与收据 ack 的防重（`kafka:retry:guard:*`，见 §4.4 末条）、实例模式 HASH `kafka:retry:instance_mode:{topic}`、消费组错误观测（`consumer_group_errors.go`，指标 `db_consumer_group_errors_total{source}`）、入队未确认时的重新入组退避（`rejoin_backoff.go`）、`retry_requeue` 的 `-zone` 必填与退出码 4 / 5，以及告警 `DbRetryStrandedReceipts`、`DbConsumerGroupHeartbeatErrors`。
 设计与运维以 [db-retry-owner-routing.md](../design/db-retry-owner-routing.md) 为准（本批另行撰写）；规格以 S1 修订稿（原 `docs/handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md`，已清理，见 `ccf2840b2`） 为准，修订稿 §10 只列差异，没写到的照 S1 原规格（原 `docs/handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-spec.md`，已清理，见 `ccf2840b2`）「上线与回滚」；回滚到 S1 之前的镜像按 [发布清单](release-checklist.md) §4「go/db 回滚到 S1(重试只交给分区属主)之前的版本」。
@@ -423,11 +423,11 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 
 | # | 事项 | 执行者 | 状态 |
 |---|---|---|---|
-| 9.1.1 | 复验清单 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） §2「第 12 步」第 3 条「本机双 db 实例」，以及 §5「已知覆盖缺口」第 1、4、7 条（第 7 条由 `TestStop_RetryLoopJoinsWaitGroup` 覆盖）；compose 文件是 `deploy/docker-compose.yml`；结果写回 PROGRESS | Codex | 待做 |
+| 9.1.1 | 复验清单 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） §2「第 12 步」第 3 条「本机双 db 实例」，以及 §5「已知覆盖缺口」第 1、4、7 条（第 7 条由 `TestStop_RetryLoopJoinsWaitGroup` 覆盖）；compose 文件是 `deploy/docker-compose.yml`；结果写回 PROGRESS | Gemini | 待做 |
 | 9.1.2 | 查清并记录各 zone 线上 go/db 的镜像与副本数；发布窗口不与 TiDB Phase 1 任何迁移批次重叠（[TiDB 决策](../design/global-data-layer-tidb-decision.md) D5 修订第 1 条：S1 整体是一个独立发布单元） | 负责人 | 待做 |
 | 9.1.3 | K8s 的 Redis（`redis-0`）`redis_version` ≥ 7.2、`appendonly` 为 `yes`：开启 WAITAOF 时 go/db 启动先探一次，失败拒启。按 `deploy/k8s/manifests/infra/redis.yaml` 的口令注入方式在容器内执行 `INFO server` / `CONFIG GET appendonly`，口令不进命令行与日志 | 负责人 | 待做 |
 
-### 9.2 编译与单测（Codex）
+### 9.2 编译与单测（Gemini）
 
 做法同 §2（临时 worktree，环境变量照任务单 §1）。工作目录 worktree 里的 `go/db`（PowerShell 7）：
 
@@ -456,7 +456,7 @@ $env:GODB_REDIS_ITEST_ADDR='127.0.0.1:6379'; go test -count=1 -v -run 'TestDurab
 - 既有的 retry_routing / retry_ownership / consumer_shutdown / l04 / durable_enqueue 用例没有新增失败；契约测试 0 失败。
 - 失败时保留失败用例名、`-v` 输出的最后 200 行、编译错误前 20 行；红了就停下归因（区分 S1 / R7 与他人改动），不连续重试。
 
-### 9.3 本机端到端（Codex；功能验证，不出性能结论）
+### 9.3 本机端到端（Gemini；功能验证，不出性能结论）
 
 先按 AGENTS.md §6.2 清环境（`redis-cli FLUSHALL`、清空测试库、清 etcd、删 `tools/scripts/.run` 的 pid / log）。
 
@@ -484,7 +484,7 @@ go run ./cmd/verifier -config etc/db.yaml -mode strict -wait 180s
 
 待重搬收据（`db_retry_stranded_receipts`）不做端到端注入：要让 Redis 只拒绝某一次搬移，本机难以确定性构造，以单测 `TestRetryStranded_*` 为准。失败时保留两实例 stdout / stderr、各时刻 metrics 快照、verifier 输出、Redis 键清单。
 
-### 9.4 kind / staging 演练（生产第 1 步；Codex 执行，生产不做任何注入）
+### 9.4 kind / staging 演练（生产第 1 步；Gemini 执行，生产不做任何注入）
 
 | # | 事项 | 通过标准 | 状态 |
 |---|---|---|---|
@@ -502,7 +502,7 @@ go run ./cmd/verifier -config etc/db.yaml -mode strict -wait 180s
 | 9.5.3 | **第 3 步 金丝雀**（建议在该 zone 完成 S2 切组之后）：前提是第 2 步完成、该 zone 每个 Pod 都暴露 `db_retry_routing_mode`；冻结其它 zone 发布；`kubectl -n <zone ns> set env statefulset/db DB_RETRY_ROUTING=owner` + `rollout status`。只被动观察：各 Pod `db_owned_partitions` 之和 = PartitionCnt；executed_nonowner = 0；forwarded 之后共享收件箱 1–2 拍归零；requeued_revoked 只在再平衡时刻出现；`db_ordering_lock_busy_total{origin="retry"}` 接近 0；死信速率不高于基线；没有 "processing receipt not found"。需要积压时只对合成测试玩家持带 TTL 的排序锁。回滚：`set env statefulset/db DB_RETRY_ROUTING-`（触发滚动），shared 实例自动排空 p* | 待做 |
 | 9.5.4 | **第 4 步 全量**：`db.yaml` 改 `RetryRouting: owner` → zone-up → `kubectl -n <zone ns> rollout restart statefulset/db` + `rollout status`（只改 ConfigMap 不会滚动）→ 去掉金丝雀 env（`set env … DB_RETRY_ROUTING-`）。验收：每个 Pod 启动日志 `retry routing: mode=owner source=config`；24 小时内 executed_nonowner = 0、死信速率不升、p* 无长期积压、lag = 0、DbDurableEnqueueNotConfirmed 不响。回滚：改回 shared → zone-up → rollout restart + status | 待做 |
 | 9.5.5 | **回滚到 S1 之前的镜像**：按发布清单 §4 那一条：切 shared 并等滚动完成 → 三项人工核对 → `go run ./cmd/retry_requeue -f etc/db.yaml -zone <z> -check` 退出码 0（3 / 4 / 5 / 1 的处置见该条）→ 认准 revision 回滚；已经回滚的立即搬回（DbRetryPartitionedStranded 约 10 分钟内响） | 每次回滚 |
-| 9.5.6 | redis-ha 接入时 go/db 的 `WaitAOFNumReplicas`：**不再手改 db.yaml**（保持 0，给本机 compose 单实例；写 1 本机 go/db 的启动探针等不到副本而拒启）。取值来源：K8s 上 db ConfigMap 的这一项由 `tools/scripts/k8s_deploy.ps1` 按共享 Redis 形态渲染（`Get-MappingRedisTopology` → `Get-RouteStoreWaitAOFNumReplicas`，与 data-service 的 `RouteStore.WaitAOFNumReplicas` 同一个函数：单实例 0、redis-ha 1；形态由 `-RedisReplicas` 与档位决定，zone 写路径没给参数时跟随线上 `statefulset/redis` 副本数），`WaitAOFNumLocal` / `WaitAOFTimeoutMs` 仍镜像 db.yaml。剩下的运维动作：单实例切到 redis-ha 后对每个 zone 重跑 zone-up，再 `rollout restart statefulset/db`（data-service 同样要 `rollout restart statefulset/data-service`；只改 ConfigMap 不会滚动），并重新评估 WAITAOF 的可用性代价（副本不可用时确认恒不足，见 9.6；切主后几秒内新主没有从时确认失败、刚启动的 go/db 被探针拒启） | 部署侧已落码（2026-10-19，未运行，待 Codex 验证）；切换演练与可用性复评视 redis-ha 进度 |
+| 9.5.6 | redis-ha 接入时 go/db 的 `WaitAOFNumReplicas`：**不再手改 db.yaml**（保持 0，给本机 compose 单实例；写 1 本机 go/db 的启动探针等不到副本而拒启）。取值来源：K8s 上 db ConfigMap 的这一项由 `tools/scripts/k8s_deploy.ps1` 按共享 Redis 形态渲染（`Get-MappingRedisTopology` → `Get-RouteStoreWaitAOFNumReplicas`，与 data-service 的 `RouteStore.WaitAOFNumReplicas` 同一个函数：单实例 0、redis-ha 1；形态由 `-RedisReplicas` 与档位决定，zone 写路径没给参数时跟随线上 `statefulset/redis` 副本数），`WaitAOFNumLocal` / `WaitAOFTimeoutMs` 仍镜像 db.yaml。剩下的运维动作：单实例切到 redis-ha 后对每个 zone 重跑 zone-up，再 `rollout restart statefulset/db`（data-service 同样要 `rollout restart statefulset/data-service`；只改 ConfigMap 不会滚动），并重新评估 WAITAOF 的可用性代价（副本不可用时确认恒不足，见 9.6；切主后几秒内新主没有从时确认失败、刚启动的 go/db 被探针拒启） | 部署侧已落码（2026-10-19，未运行，待 Gemini 验证）；切换演练与可用性复评视 redis-ha 进度 |
 | 9.5.7 | Java 仓 `PARITY.md` 登记「不适用」（Java 没有 Kafka 存盘链与重试队列），由主会话统一登记 | 待做 |
 
 ### 9.6 状态
@@ -521,10 +521,10 @@ go run ./cmd/verifier -config etc/db.yaml -mode strict -wait 180s
 
 ## 10. task:result 读回执通知按 login 实例分频道（B0-3 第 2 批，2026-10-18 登记）
 
-go/db 按 `DBTask.reply_instance` 只 PUBLISH 一次：合法发发起方 login 的实例频道 `task:result:notify:<id>`，为空或不合法回落全服旧频道；新指标 `db_task_result_notify_total{target,result}`。改动清单、上线顺序与交 Codex 的权威验证命令见规格（原 `docs/handoff/launch-readiness-20261013/spec_B0-3_task_result_channel.md`，已清理，见 `ccf2840b2`）文末「# 第 2 批交付（2026-10-18）」。代码在工作区，**未编译、未测试，待 Codex 验证**。
+go/db 按 `DBTask.reply_instance` 只 PUBLISH 一次：合法发发起方 login 的实例频道 `task:result:notify:<id>`，为空或不合法回落全服旧频道；新指标 `db_task_result_notify_total{target,result}`。改动清单、上线顺序与交 Gemini 的权威验证命令见规格（原 `docs/handoff/launch-readiness-20261013/spec_B0-3_task_result_channel.md`，已清理，见 `ccf2840b2`）文末「# 第 2 批交付（2026-10-18）」。代码在工作区，**未编译、未测试，待 Gemini 验证**。
 
 | # | 事项 | 状态 |
 |---|---|---|
-| 10.1 | 编译、单测与修复前红证据：按规格「第 2 批交付」的验证命令执行（Codex）；L1 的 db 套件本批新加了 `./internal/metrics/...`，先确认它稳定为绿 | 待做 |
+| 10.1 | 编译、单测与修复前红证据：按规格「第 2 批交付」的验证命令执行（Gemini）；L1 的 db 套件本批新加了 `./internal/metrics/...`，先确认它稳定为绿 | 待做 |
 | 10.2 | 上线顺序：先全部 zone 的 go/db（行为不变，读回执全部计 `target="legacy_unset"`，先确认新序列 9 条都已采集到），再按 zone 金丝雀 login。金丝雀观察：`db_task_result_notify_total{target="instance"}` 里 `no_receiver` 占比约为 0；login 的 `login_task_result_delivery_total{outcome=~"salvaged\|timed_out\|result_missing"}` 不上升；entergame 的 preload 失败率不变。三项都正常再全量。回滚：任一侧单独回滚即可，无数据迁移（2026-10-18 更正：「先全部 zone 的 go/db、行为不变」只在该 zone 的 login 还是第 1 批之前的版本时成立。第 1 批 login 已在 `e7bb46070`，可能已部署或与 go/db 同批发版；那样一次升全部 zone 的 go/db 会让这些 zone 同时切到实例频道，绕开 login 金丝雀，且告警尚未 apply。动手前逐 zone 只读核对：login `:9101` 上已有 `login_task_result_delivery_total` 序列，或 task:result 所用 Redis 上 `PUBSUB CHANNELS 'task:result:notify:*'` 非空，即按「已是第 1 批」处理，改为按 zone 金丝雀 go/db：先上一个 zone，看同样三项，正常再逐 zone 推开。同一 zone 的 go/db 与 login 不要在同一次发版里同时升。观察期间 `PUBSUB NUMPAT` 应为 0：PUBLISH 的订阅者数含模式订阅，开着 `PSUBSCRIBE task:result:notify:*` 会把 no_receiver 压成 0。详见规格「第 2 批交付 / 上线顺序」第 0 步。） | 待做 |
 | 10.3 | 告警：go/db 与 login **全量升级之后**再 `kubectl apply -n observability -f deploy/k8s/task-result-notify-alerts.yaml`（独立文件，不与 2.5.2 / 4.3.1 / 9.5.1 的 `db-task-retry-alerts.yaml` 同批；全量之前 `DbTaskResultNotifyLegacyFallback` 会在金丝雀 zone 响）。阈值不再定值：这份告警文件已随 go/db 消费链删除（见文首，2026-11-12 核对仓库里已没有它）。回滚 `kubectl delete -n observability -f` 同一文件；负责人执行 | 待做 |

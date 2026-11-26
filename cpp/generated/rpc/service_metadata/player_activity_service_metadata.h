@@ -22,3 +22,19 @@ constexpr uint32_t SceneActivityClientPlayerStartFestivalBeastChallengeIndex = 3
 constexpr uint32_t SceneActivityClientPlayerClaimFestivalBeastRewardMessageId = 478;
 constexpr uint32_t SceneActivityClientPlayerClaimFestivalBeastRewardIndex = 4;
 #define SceneActivityClientPlayerClaimFestivalBeastRewardMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(4)
+
+constexpr uint32_t SceneActivityClientPlayerGetTravelPassStateMessageId = 526;
+constexpr uint32_t SceneActivityClientPlayerGetTravelPassStateIndex = 5;
+#define SceneActivityClientPlayerGetTravelPassStateMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(5)
+
+constexpr uint32_t SceneActivityClientPlayerUnlockTravelPassPremiumMessageId = 527;
+constexpr uint32_t SceneActivityClientPlayerUnlockTravelPassPremiumIndex = 6;
+#define SceneActivityClientPlayerUnlockTravelPassPremiumMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(6)
+
+constexpr uint32_t SceneActivityClientPlayerClaimTravelPassRewardMessageId = 528;
+constexpr uint32_t SceneActivityClientPlayerClaimTravelPassRewardIndex = 7;
+#define SceneActivityClientPlayerClaimTravelPassRewardMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(7)
+
+constexpr uint32_t SceneActivityClientPlayerEquipTravelPassCosmeticMessageId = 529;
+constexpr uint32_t SceneActivityClientPlayerEquipTravelPassCosmeticIndex = 8;
+#define SceneActivityClientPlayerEquipTravelPassCosmeticMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(8)

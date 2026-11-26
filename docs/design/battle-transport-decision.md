@@ -3,7 +3,7 @@
 **Created:** 2026-09-05
 **状态:** 架构定谳(结论已拍板;实现进度以 [turn-based-battle-server.md](./turn-based-battle-server.md) 为准,本文不记录完成度)
 **关联:** [turn-based-battle-server.md](./turn-based-battle-server.md)(D2/D6 原始决策)、[moba-battle-target-architecture.md](../notes/moba/moba-battle-target-architecture.md)(会话制目标形态)、[gRPC 传输设计 §3.1](./grpc-muduo-transport.md#node-grpc-endpoints)(双端口与控制调用取舍)、[ARCH.md](./ARCH.md) §6
-**2026-09-29 更新:** 直连收缩(turn-based §22 D65–D75)与 K8s 集群外入口(D76–D93,全文见 [k8s-client-entry.md](./k8s-client-entry.md))已落码。§2.1、§3.1、§3.3、§4、§6 在原文旁加了现状标注,原文未删;§8 按 5 路对抗核验逐条订正,并改写为落码后的口径,订正明细见 §8.7(含改写稿的二次核验)。以上改动均**未编译、未测试、未上集群,待 Codex 验证**。
+**2026-09-29 更新:** 直连收缩(turn-based §22 D65–D75)与 K8s 集群外入口(D76–D93,全文见 [k8s-client-entry.md](./k8s-client-entry.md))已落码。§2.1、§3.1、§3.3、§4、§6 在原文旁加了现状标注,原文未删;§8 按 5 路对抗核验逐条订正,并改写为落码后的口径,订正明细见 §8.7(含改写稿的二次核验)。以上改动均**未编译、未测试、未上集群,待 Gemini 验证**。
 
 > **一句话:按平面拆传输,不按节点选传输。客户端面 muduo TCP 直连,Go→battle 控制面 gRPC,battle 保持 C++。**
 > 当前是回合制,这个结论对回合制成立;将来做实时对局,只换客户端面(KCP),控制面不变。
@@ -57,7 +57,7 @@
 
 > (2026-09-29 更正)本节行号按 2026-09-05 的代码。现行位置见 §8.6 行号漂移表。其中 `battle_client_player_service.cpp` 已随收缩删除(D66);gate 中继路径的成本描述的是收缩前旧模式的做法,现在两种模式都不再中继战斗。
 >
-> (2026-10-16 更正,代码未编译、待 Codex 验证)下面「线程」「阻塞桥」「应答轮询」三条已随 C++ gRPC 迁到 muduo 驱动而不再成立,只作历史保留:第 3 批起生成客户端走 `muduo_grpc::Channel`,CQ 与 5ms 轮询删除;第 4 批起 battle / scene 的 gRPC 服务端是 `muduo_grpc::Server`,跑在节点 EventLoop 上,没有 EventEngine / poller / 关机线程,`GRPC_SERVER_MAX_POLLERS` 已退役,handler 在 loop 上同步执行、不再 `runInLoop` + `promise/future`,CreateBattle 的 Agones 许可改走 `AcquireAllocationPermitAsync`(见 [grpc-muduo-transport.md](grpc-muduo-transport.md) §14、§15)。「端口派生」「版本锁步」两条仍然成立。本文的取舍结论没有因此重新评估。
+> (2026-10-16 更正,代码未编译、待 Gemini 验证)下面「线程」「阻塞桥」「应答轮询」三条已随 C++ gRPC 迁到 muduo 驱动而不再成立,只作历史保留:第 3 批起生成客户端走 `muduo_grpc::Channel`,CQ 与 5ms 轮询删除;第 4 批起 battle / scene 的 gRPC 服务端是 `muduo_grpc::Server`,跑在节点 EventLoop 上,没有 EventEngine / poller / 关机线程,`GRPC_SERVER_MAX_POLLERS` 已退役,handler 在 loop 上同步执行、不再 `runInLoop` + `promise/future`,CreateBattle 的 Agones 许可改走 `AcquireAllocationPermitAsync`(见 [grpc-muduo-transport.md](grpc-muduo-transport.md) §14、§15)。「端口派生」「版本锁步」两条仍然成立。本文的取舍结论没有因此重新评估。
 
 - **线程**:EventEngine 池 `Clamp(cores, 4, 16)` 起手(20 核 = 17 条),仅是下限,backlog 时 Lifeguard 还会加;sync server 另有 poller 1..8 条(`node.cpp:625-645`,env `GRPC_SERVER_MAX_POLLERS`);再加 iomgr timer 线程。
 - **阻塞桥**:每个 gRPC handler 在 poller 线程上 `runInLoop` + `promise/future` 等 muduo loop(`battle_client_player_service.cpp:71-79`、`battle_node.cpp:29-37`)。上限 8 个在途调用;scene 在 2 poller 时撞过 500ms 悬崖(`node.cpp:627-633` 注释)。
@@ -103,7 +103,7 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
 
 含义:不套 ClusterIP / Ingress / Mesh;`battle_id → 落点` 路由表进 Redis/etcd;换版只能排空不能滚动;扩缩容按房间数装箱不按 CPU。
 
-> **暴露方式已定案并落码(2026-09-29,D76–D93;未编译、未测试、未上集群,待 Codex 验证)。** 上表 gate、battle 两行的原写法保留,现行口径如下:
+> **暴露方式已定案并落码(2026-09-29,D76–D93;未编译、未测试、未上集群,待 Gemini 验证)。** 上表 gate、battle 两行的原写法保留,现行口径如下:
 >
 > 下表「现行」一列是**集群外形态**,不是 K8s 默认形态:gate 行只在 `-ClientEntryMode external` 时成立,battle 行只在 `external` + `-BattleOrchestrator agones`(生产推荐)时成立。默认形态见表后第 1 条。
 >
@@ -128,7 +128,7 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
 ## 6. 对既有决策的修订与过渡路径
 
 - **D6 修订**:「上行走 gate→gRPC,下行走 Kafka」定为**过渡形态**,只为 Unity 第二连接未落地前保通。第二连接落地后,同批删除:gate 中继的 `BattleClientPlayer` gRPC 路径、Kafka `gate-{id}` S2C 回落、gate 里的 battle 专属代码(白名单项、绑定优先规则、`battle_binding_helper.cpp`、`ClearBattleRecord`、OnNodeRemove 分支)。最终 battle 只有两条客户端路径:直连 TCP 上行 + 直连 TCP 下行。
-  - **(2026-09-29 标注)已执行**,见 turn-based §22 D65–D68、D72、D73(未编译、未测试,待 Codex 验证)。
+  - **(2026-09-29 标注)已执行**,见 turn-based §22 D65–D68、D72、D73(未编译、未测试,待 Gemini 验证)。
     - 删码门槛「K8s 路由模式 battle-smoke 先跑通」由用户 2026-09-29 豁免,改为事后补验(D65)。
     - 已删:gate 中继的 `BattleClientPlayer` gRPC 路径;battle 侧的 `BattleClientPlayerGrpcImpl`;gate 的白名单项、`battle_binding_helper.{h,cpp}`、`ClearBattleRecord` 的两个调用点、`OnNodeRemove` 的 battle 分支(D66);Kafka Bind/Unbind 契约(D67);scene 重连时重发 Bind 的逻辑,现在只推重连提示(D72)。
     - 与原文的出入 ①:「Kafka `gate-{id}` S2C 回落」**只删了战斗帧这一类**。`NotifyBattleAssigned` / `NotifyBattleStart` 两条大厅公告在没有活直连时仍经 Kafka→gate 下发(D68 `PushLobbyAnnouncement`)。scene 的 `NotifyBattleReconnect` 和结算 `NotifyBattleEnd` 本来就是 scene 的大厅下行。所以「最终只有两条客户端路径」应读作「战斗上行与战斗帧只走直连;开局前的两条公告可以经大厅」。
@@ -149,7 +149,7 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
 
 > 起因:用户 2026-09-29 提问「为什么我的 battle 节点不经过 gate,现在客户端有几条连接,为什么这么设计」。
 > 依据:四路静态调研,再经 5 路对抗核验逐条订正(订正明细见 §8.7)。没有读客户端仓(AGENTS §9),Unity 侧只转述 turn-based §22 D74;客户端行为一律以 robot 为准。
-> **口径(2026-09-29 改写)**:本节按收缩(turn-based §22 D65–D75)与集群外入口(D76–D93)落码后的代码写。行号以 2026-09-29 工作树为准(HEAD `9c9c012b7` + 未提交改动)。这些改动**未编译、未测试、未上集群,待 Codex 验证**。
+> **口径(2026-09-29 改写)**:本节按收缩(turn-based §22 D65–D75)与集群外入口(D76–D93)落码后的代码写。行号以 2026-09-29 工作树为准(HEAD `9c9c012b7` + 未提交改动)。这些改动**未编译、未测试、未上集群,待 Gemini 验证**。
 > 本节只回答「是什么、为什么」。各环境实际走到哪一步,见 [turn-based-battle-server.md](./turn-based-battle-server.md) §21(收缩前快照)与 §22(收缩落码)。
 
 ### 8.1 客户端有几条连接

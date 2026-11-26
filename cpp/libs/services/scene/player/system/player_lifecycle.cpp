@@ -3684,8 +3684,14 @@ void PlayerLifecycleSystem::ResumeConnectionLostHold(entt::entity player, Sessio
 		std::chrono::duration_cast<std::chrono::milliseconds>(connection_lost_hold::Clock::now() - held->lostAt).count();
 	const SessionId lostSessionId = held->sessionId;
 	const uint64_t lostLoginGeneration = held->loginGeneration;
+	const bool wasHosted = held->hostingStarted;
 	// held 指针此后悬空(remove 可能 swap-and-pop 搬动别的实体的组件),上面已把要用的字段抄出来。
 	tlsEcs.actorRegistry.remove<PlayerConnectionLostComp>(player);
+	if (wasHosted)
+	{
+		// 托管会话结束:封存收获简报并置待确认,重连后由 GetAfkPass 稳定下发。
+		AfkPassSystem::OnHostingEnded(player, TimeSystem::NowSecondsUTC(), /*requestSave=*/true);
+	}
 
 	const auto *guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
 	auto &counters = tlsConnectionLostHoldCounters;
@@ -4169,6 +4175,8 @@ void PlayerLifecycleSystem::ExpireConnectionLostHolds(connection_lost_hold::Cloc
 		++counters.expired;
 		if (hosted)
 		{
+			// 月卡到期退出前封存收获简报,随下面的退出存盘一起落库,下次登录仍能看到完整托管收获。
+			AfkPassSystem::OnHostingEnded(entity, nowUnixSec, /*requestSave=*/false);
 			LOG_INFO << "[ConnectionLostHold] offline hosting of player " << playerId
 					 << " ended (AFK pass expired or could not be confirmed); exiting as client disconnect"
 					 << " (lost_session=" << lostSessionId << " expired_total=" << counters.expired << ")";

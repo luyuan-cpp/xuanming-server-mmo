@@ -66,3 +66,11 @@ constexpr uint32_t BattleClientPlayerUpdateBattlePrepIndex = 14;
 constexpr uint32_t BattleClientPlayerNotifyBattlePrepUpdateMessageId = 505;
 constexpr uint32_t BattleClientPlayerNotifyBattlePrepUpdateIndex = 15;
 #define BattleClientPlayerNotifyBattlePrepUpdateMethod  ::BattleClientPlayer_Stub::descriptor()->method(15)
+
+constexpr uint32_t BattleClientPlayerSendBattlePingMessageId = 532;
+constexpr uint32_t BattleClientPlayerSendBattlePingIndex = 16;
+#define BattleClientPlayerSendBattlePingMethod  ::BattleClientPlayer_Stub::descriptor()->method(16)
+
+constexpr uint32_t BattleClientPlayerNotifyBattlePingMessageId = 533;
+constexpr uint32_t BattleClientPlayerNotifyBattlePingIndex = 17;
+#define BattleClientPlayerNotifyBattlePingMethod  ::BattleClientPlayer_Stub::descriptor()->method(17)

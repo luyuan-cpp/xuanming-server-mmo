@@ -136,6 +136,52 @@ func (s *GuildServer) NotifyGuildChanged(context.Context, *pb.GuildChangedS2C) (
 	return &base.Empty{}, nil
 }
 
+// ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ─────────────────────────────
+
+func (s *GuildServer) GetGuildWarOverview(ctx context.Context, req *pb.GetGuildWarOverviewRequest) (*pb.GetGuildWarOverviewResponse, error) {
+	return s.logic.GetGuildWarOverview(ctx, req)
+}
+
+func (s *GuildServer) SetGuildWarStance(ctx context.Context, req *pb.SetGuildWarStanceRequest) (*pb.SetGuildWarStanceResponse, error) {
+	return s.logic.SetGuildWarStance(ctx, req)
+}
+
+func (s *GuildServer) RegisterGuildWarGarrison(ctx context.Context, req *pb.RegisterGuildWarGarrisonRequest) (*pb.RegisterGuildWarGarrisonResponse, error) {
+	return s.logic.RegisterGuildWarGarrison(ctx, req)
+}
+
+func (s *GuildServer) StartGuildWarBattle(ctx context.Context, req *pb.StartGuildWarBattleRequest) (*pb.StartGuildWarBattleResponse, error) {
+	return s.logic.StartGuildWarBattle(ctx, req)
+}
+
+func (s *GuildServer) ClaimGuildWarMilestone(ctx context.Context, req *pb.ClaimGuildWarMilestoneRequest) (*pb.ClaimGuildWarMilestoneResponse, error) {
+	return s.logic.ClaimGuildWarMilestone(ctx, req)
+}
+
+func (s *GuildServer) ClaimGuildWarDividend(ctx context.Context, req *pb.ClaimGuildWarDividendRequest) (*pb.ClaimGuildWarDividendResponse, error) {
+	return s.logic.ClaimGuildWarDividend(ctx, req)
+}
+
+func (s *GuildServer) PostGuildWarBounty(ctx context.Context, req *pb.PostGuildWarBountyRequest) (*pb.PostGuildWarBountyResponse, error) {
+	return s.logic.PostGuildWarBounty(ctx, req)
+}
+
+func (s *GuildServer) TrackGuildWarBounty(ctx context.Context, req *pb.TrackGuildWarBountyRequest) (*pb.TrackGuildWarBountyResponse, error) {
+	return s.logic.TrackGuildWarBounty(ctx, req)
+}
+
+func (s *GuildServer) GetGuildWarBattleResult(ctx context.Context, req *pb.GetGuildWarBattleResultRequest) (*pb.GetGuildWarBattleResultResponse, error) {
+	return s.logic.GetGuildWarBattleResult(ctx, req)
+}
+
+func (s *GuildServer) InspectFieldWarTargets(ctx context.Context, req *pb.InspectFieldWarTargetsRequest) (*pb.InspectFieldWarTargetsResponse, error) {
+	return s.logic.InspectFieldWarTargets(ctx, req)
+}
+
+func (s *GuildServer) NotifyGuildWarAlert(context.Context, *pb.GuildWarAlertS2C) (*base.Empty, error) {
+	return &base.Empty{}, nil
+}
+
 // ── Ranking ───────────────────────────────────────────────────
 
 func (s *GuildServer) UpdateGuildScore(ctx context.Context, req *pb.UpdateGuildScoreRequest) (*pb.UpdateGuildScoreResponse, error) {

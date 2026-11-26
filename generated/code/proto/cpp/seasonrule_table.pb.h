@@ -230,6 +230,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
   enum : int {
     kNameFieldNumber = 2,
     kDescFieldNumber = 15,
+    kHonorTitleNameFieldNumber = 16,
+    kHonorBadgeIconKeyFieldNumber = 17,
     kStartsAtMsFieldNumber = 3,
     kIdFieldNumber = 1,
     kEnabledFieldNumber = 5,
@@ -272,6 +274,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
   const ::std::string& _internal_desc() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
+
+  public:
+  // string honor_title_name = 16;
+  void clear_honor_title_name() ;
+  [[nodiscard]] const ::std::string& honor_title_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_honor_title_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_honor_title_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_honor_title_name();
+  void set_allocated_honor_title_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_honor_title_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_honor_title_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_honor_title_name();
+
+  public:
+  // string honor_badge_icon_key = 17;
+  void clear_honor_badge_icon_key() ;
+  [[nodiscard]] const ::std::string& honor_badge_icon_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_honor_badge_icon_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_honor_badge_icon_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_honor_badge_icon_key();
+  void set_allocated_honor_badge_icon_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_honor_badge_icon_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_honor_badge_icon_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_honor_badge_icon_key();
 
   public:
   // uint64 starts_at_ms = 3;
@@ -408,8 +440,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 40,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 84,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -439,6 +471,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr desc_;
+    ::google::protobuf::internal::ArenaStringPtr honor_title_name_;
+    ::google::protobuf::internal::ArenaStringPtr honor_badge_icon_key_;
     ::uint64_t starts_at_ms_;
     ::uint32_t id_;
     bool enabled_;
@@ -690,7 +724,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTableData final : public 
 inline void SeasonRuleTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t SeasonRuleTable::id() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.id)
@@ -698,7 +732,7 @@ inline ::uint32_t SeasonRuleTable::id() const {
 }
 inline void SeasonRuleTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.id)
 }
 inline ::uint32_t SeasonRuleTable::_internal_id() const {
@@ -778,7 +812,7 @@ inline void SeasonRuleTable::set_allocated_name(::std::string* PROTOBUF_NULLABLE
 inline void SeasonRuleTable::clear_starts_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.starts_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t SeasonRuleTable::starts_at_ms() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.starts_at_ms)
@@ -786,7 +820,7 @@ inline ::uint64_t SeasonRuleTable::starts_at_ms() const {
 }
 inline void SeasonRuleTable::set_starts_at_ms(::uint64_t value) {
   _internal_set_starts_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.starts_at_ms)
 }
 inline ::uint64_t SeasonRuleTable::_internal_starts_at_ms() const {
@@ -802,7 +836,7 @@ inline void SeasonRuleTable::_internal_set_starts_at_ms(::uint64_t value) {
 inline void SeasonRuleTable::clear_ends_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ends_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t SeasonRuleTable::ends_at_ms() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.ends_at_ms)
@@ -810,7 +844,7 @@ inline ::uint64_t SeasonRuleTable::ends_at_ms() const {
 }
 inline void SeasonRuleTable::set_ends_at_ms(::uint64_t value) {
   _internal_set_ends_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.ends_at_ms)
 }
 inline ::uint64_t SeasonRuleTable::_internal_ends_at_ms() const {
@@ -826,7 +860,7 @@ inline void SeasonRuleTable::_internal_set_ends_at_ms(::uint64_t value) {
 inline void SeasonRuleTable::clear_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline bool SeasonRuleTable::enabled() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.enabled)
@@ -834,7 +868,7 @@ inline bool SeasonRuleTable::enabled() const {
 }
 inline void SeasonRuleTable::set_enabled(bool value) {
   _internal_set_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.enabled)
 }
 inline bool SeasonRuleTable::_internal_enabled() const {
@@ -850,7 +884,7 @@ inline void SeasonRuleTable::_internal_set_enabled(bool value) {
 inline void SeasonRuleTable::clear_seal_max_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seal_max_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SeasonRuleTable::seal_max_points() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.seal_max_points)
@@ -858,7 +892,7 @@ inline ::uint32_t SeasonRuleTable::seal_max_points() const {
 }
 inline void SeasonRuleTable::set_seal_max_points(::uint32_t value) {
   _internal_set_seal_max_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.seal_max_points)
 }
 inline ::uint32_t SeasonRuleTable::_internal_seal_max_points() const {
@@ -874,7 +908,7 @@ inline void SeasonRuleTable::_internal_set_seal_max_points(::uint32_t value) {
 inline void SeasonRuleTable::clear_pve_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pve_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SeasonRuleTable::pve_win_points() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.pve_win_points)
@@ -882,7 +916,7 @@ inline ::uint32_t SeasonRuleTable::pve_win_points() const {
 }
 inline void SeasonRuleTable::set_pve_win_points(::uint32_t value) {
   _internal_set_pve_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.pve_win_points)
 }
 inline ::uint32_t SeasonRuleTable::_internal_pve_win_points() const {
@@ -898,7 +932,7 @@ inline void SeasonRuleTable::_internal_set_pve_win_points(::uint32_t value) {
 inline void SeasonRuleTable::clear_pvp_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t SeasonRuleTable::pvp_win_points() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.pvp_win_points)
@@ -906,7 +940,7 @@ inline ::uint32_t SeasonRuleTable::pvp_win_points() const {
 }
 inline void SeasonRuleTable::set_pvp_win_points(::uint32_t value) {
   _internal_set_pvp_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.pvp_win_points)
 }
 inline ::uint32_t SeasonRuleTable::_internal_pvp_win_points() const {
@@ -922,7 +956,7 @@ inline void SeasonRuleTable::_internal_set_pvp_win_points(::uint32_t value) {
 inline void SeasonRuleTable::clear_pvp_other_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_other_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t SeasonRuleTable::pvp_other_points() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.pvp_other_points)
@@ -930,7 +964,7 @@ inline ::uint32_t SeasonRuleTable::pvp_other_points() const {
 }
 inline void SeasonRuleTable::set_pvp_other_points(::uint32_t value) {
   _internal_set_pvp_other_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.pvp_other_points)
 }
 inline ::uint32_t SeasonRuleTable::_internal_pvp_other_points() const {
@@ -946,7 +980,7 @@ inline void SeasonRuleTable::_internal_set_pvp_other_points(::uint32_t value) {
 inline void SeasonRuleTable::clear_max_health_bps_cap() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_bps_cap_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t SeasonRuleTable::max_health_bps_cap() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.max_health_bps_cap)
@@ -954,7 +988,7 @@ inline ::uint32_t SeasonRuleTable::max_health_bps_cap() const {
 }
 inline void SeasonRuleTable::set_max_health_bps_cap(::uint32_t value) {
   _internal_set_max_health_bps_cap(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.max_health_bps_cap)
 }
 inline ::uint32_t SeasonRuleTable::_internal_max_health_bps_cap() const {
@@ -970,7 +1004,7 @@ inline void SeasonRuleTable::_internal_set_max_health_bps_cap(::uint32_t value) 
 inline void SeasonRuleTable::clear_defense_bps_cap() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.defense_bps_cap_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t SeasonRuleTable::defense_bps_cap() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.defense_bps_cap)
@@ -978,7 +1012,7 @@ inline ::uint32_t SeasonRuleTable::defense_bps_cap() const {
 }
 inline void SeasonRuleTable::set_defense_bps_cap(::uint32_t value) {
   _internal_set_defense_bps_cap(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.defense_bps_cap)
 }
 inline ::uint32_t SeasonRuleTable::_internal_defense_bps_cap() const {
@@ -994,7 +1028,7 @@ inline void SeasonRuleTable::_internal_set_defense_bps_cap(::uint32_t value) {
 inline void SeasonRuleTable::clear_catchup_currency_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_currency_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t SeasonRuleTable::catchup_currency_type() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.catchup_currency_type)
@@ -1002,7 +1036,7 @@ inline ::uint32_t SeasonRuleTable::catchup_currency_type() const {
 }
 inline void SeasonRuleTable::set_catchup_currency_type(::uint32_t value) {
   _internal_set_catchup_currency_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.catchup_currency_type)
 }
 inline ::uint32_t SeasonRuleTable::_internal_catchup_currency_type() const {
@@ -1018,7 +1052,7 @@ inline void SeasonRuleTable::_internal_set_catchup_currency_type(::uint32_t valu
 inline void SeasonRuleTable::clear_catchup_price_per_point() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_price_per_point_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t SeasonRuleTable::catchup_price_per_point() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.catchup_price_per_point)
@@ -1026,7 +1060,7 @@ inline ::uint64_t SeasonRuleTable::catchup_price_per_point() const {
 }
 inline void SeasonRuleTable::set_catchup_price_per_point(::uint64_t value) {
   _internal_set_catchup_price_per_point(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.catchup_price_per_point)
 }
 inline ::uint64_t SeasonRuleTable::_internal_catchup_price_per_point() const {
@@ -1042,7 +1076,7 @@ inline void SeasonRuleTable::_internal_set_catchup_price_per_point(::uint64_t va
 inline void SeasonRuleTable::clear_default_seal_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.default_seal_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t SeasonRuleTable::default_seal_id() const {
   // @@protoc_insertion_point(field_get:SeasonRuleTable.default_seal_id)
@@ -1050,7 +1084,7 @@ inline ::uint32_t SeasonRuleTable::default_seal_id() const {
 }
 inline void SeasonRuleTable::set_default_seal_id(::uint32_t value) {
   _internal_set_default_seal_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:SeasonRuleTable.default_seal_id)
 }
 inline ::uint32_t SeasonRuleTable::_internal_default_seal_id() const {
@@ -1124,6 +1158,134 @@ inline void SeasonRuleTable::set_allocated_desc(::std::string* PROTOBUF_NULLABLE
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SeasonRuleTable.desc)
+}
+
+// string honor_title_name = 16;
+inline void SeasonRuleTable::clear_honor_title_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_title_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SeasonRuleTable::honor_title_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonRuleTable.honor_title_name)
+  return _internal_honor_title_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonRuleTable::set_honor_title_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.honor_title_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonRuleTable.honor_title_name)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonRuleTable::mutable_honor_title_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_honor_title_name();
+  // @@protoc_insertion_point(field_mutable:SeasonRuleTable.honor_title_name)
+  return _s;
+}
+inline const ::std::string& SeasonRuleTable::_internal_honor_title_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_title_name_.Get();
+}
+inline void SeasonRuleTable::_internal_set_honor_title_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_title_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonRuleTable::_internal_mutable_honor_title_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.honor_title_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonRuleTable::release_honor_title_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonRuleTable.honor_title_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.honor_title_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.honor_title_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonRuleTable::set_allocated_honor_title_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.honor_title_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.honor_title_name_.IsDefault()) {
+    _impl_.honor_title_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonRuleTable.honor_title_name)
+}
+
+// string honor_badge_icon_key = 17;
+inline void SeasonRuleTable::clear_honor_badge_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_badge_icon_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& SeasonRuleTable::honor_badge_icon_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonRuleTable.honor_badge_icon_key)
+  return _internal_honor_badge_icon_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonRuleTable::set_honor_badge_icon_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.honor_badge_icon_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonRuleTable.honor_badge_icon_key)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonRuleTable::mutable_honor_badge_icon_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_honor_badge_icon_key();
+  // @@protoc_insertion_point(field_mutable:SeasonRuleTable.honor_badge_icon_key)
+  return _s;
+}
+inline const ::std::string& SeasonRuleTable::_internal_honor_badge_icon_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_badge_icon_key_.Get();
+}
+inline void SeasonRuleTable::_internal_set_honor_badge_icon_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_badge_icon_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonRuleTable::_internal_mutable_honor_badge_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.honor_badge_icon_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonRuleTable::release_honor_badge_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonRuleTable.honor_badge_icon_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.honor_badge_icon_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.honor_badge_icon_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonRuleTable::set_allocated_honor_badge_icon_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.honor_badge_icon_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.honor_badge_icon_key_.IsDefault()) {
+    _impl_.honor_badge_icon_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonRuleTable.honor_badge_icon_key)
 }
 
 // -------------------------------------------------------------------

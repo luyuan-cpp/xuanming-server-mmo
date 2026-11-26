@@ -97,7 +97,7 @@
 ### 0.6 相对组件初稿的更正（复核吸收）
 
 1. **etcd 的规模变量**：全前缀 Range 和 watch 扇出的成本随**全服 C++ 进程总数 N_cpp 的平方**增长，不随 Z² 增长（发现前缀不带 zone：`etcd_helper.cpp:33-41`、`service_discovery_manager.cpp:16`、`:27-33`）。所以「拉大单 zone 容量、少开 zone」对这两项无效。
-2. **SM 数据面速率**：「R19 单实例约 73/s」是 EnterGame 的速率，不是 EnterScene 的。机器人切场景只带 `scene_config_id`（`robot_ai.go:207-209`），scene_id=0 不会触发「已在当前场景」的拒绝（`player_scene_handler.cpp:106-115`）。推断 R19 时 SM 的 EnterScene 约为 45k×3%/s ≈ 1,350/s，待 Codex 从 `t*m_sm.txt` 核实。
+2. **SM 数据面速率**：「R19 单实例约 73/s」是 EnterGame 的速率，不是 EnterScene 的。机器人切场景只带 `scene_config_id`（`robot_ai.go:207-209`），scene_id=0 不会触发「已在当前场景」的拒绝（`player_scene_handler.cpp:106-115`）。推断 R19 时 SM 的 EnterScene 约为 45k×3%/s ≈ 1,350/s，待 Gemini 从 `t*m_sm.txt` 核实。
 3. **Redis 核心合计漏了两项**：
    - 切场景：每次约 10 条命令，即 10×λ_sw。
    - SM 负载刷新：每个副本都读，`load_reporter.go:231-233` 的读不门控，`:240` 只对写按 `isLeader` 门控（本次抽查）。
@@ -422,7 +422,7 @@
      - （2026-10-16 状态，B0-5）已落码，未编译、未测试：fullSync 里两处全库 SCAN（另一处是孤儿清理的 `SCAN world_channels:zone:*`）都换成了登记集合 `scene_manager:zones` + 期望数 Hash 点查；有历史数据的长期环境升级时按 docs/ops/scene-node-role-split.md §6.1 一次性补登记；见 PROGRESS 同日条目。
    - friend 在线目录的 SCAN（`online_directory.go:23-26`）改走索引。
    - 显式设置 go-redis / go-zero 的 PoolSize 和 Redis 的 maxclients，按 Z 记总账。
-     - （2026-10-15 补，P0-E）maxclients 与总账已落码、未经 Codex 验证：`redis.yaml` 显式 `MAXCLIENTS=40000`，总账在 `tools/scripts/k8s_deploy.ps1`「Redis 连接总账」（C++ 每进程一条，G 按 2 记，待实测），§2.5「连接数」一行的现有上限以它为准；PoolSize 仍未做。按用途拆分后，每个拆出的实例都要显式 `--maxclients`，并按用途重算总账。
+     - （2026-10-15 补，P0-E）maxclients 与总账已落码、未经 Gemini 验证：`redis.yaml` 显式 `MAXCLIENTS=40000`，总账在 `tools/scripts/k8s_deploy.ps1`「Redis 连接总账」（C++ 每进程一条，G 按 2 记，待实测），§2.5「连接数」一行的现有上限以它为准；PoolSize 仍未做。按用途拆分后，每个拆出的实例都要显式 `--maxclients`，并按用途重算总账。
 5. **task:result 按 login 实例分频道**：直接用 SPUBLISH 形态，便于日后上集群。
    - **2026-10-18 更正（负责人 10-17 认可的偏离）**：分频道先用 PUBLISH/SUBSCRIBE，SPUBLISH/SSUBSCRIBE 推迟到上 Redis Cluster 那批，即 A6 路线 C 的「Pub/Sub 改成 SPUBLISH」。
      - 理由：① 现在 K8s 上是 Redis 7.2 单主，单主下两者的投递语义和成本等价；② miniredis（v2.35~v2.37）不支持 S 系命令，现在就用 SPUBLISH 的话，go/db 和 login 的发布、订阅用例都得改用 hook 拦截或真 Redis；③ 切集群本来就要 go/db 与 login 全服同一拍切换（G4a §5.6），届时一起改命令即可。
@@ -649,9 +649,9 @@
 **现在仍然可以改**：
 
 - `go/shared/placement/route.go`、`route_store*.go` 在工作区是未跟踪文件（本次 `git status` 抽查）。第 1a 批没提交、没编译（`PROGRESS.md` 2026-10-12「第 1a 批落码」条）。
-- 改之前必须确认：没有任何环境（包括 Codex 本机、kind、staging）用工作区代码跑过 data_service 的 `-migrate`。原因是 MigrateSchema 在 redis 模式下也会建表，一旦建出 player_route 就改不了了。
+- 改之前必须确认：没有任何环境（包括 Gemini 本机、kind、staging）用工作区代码跑过 data_service 的 `-migrate`。原因是 MigrateSchema 在 redis 模式下也会建表，一旦建出 player_route 就改不了了。
 
-> **状态注（2026-10-13）**：已按 64 落码，**未编译、未测试**（AGENTS.md §10.1，待 Codex 验证）。
+> **状态注（2026-10-13）**：已按 64 落码，**未编译、未测试**（AGENTS.md §10.1，待 Gemini 验证）。
 > - 上面「工作区未跟踪、没提交」的说法已过时：R=16 的版本已随提交 `d5cbb8a8e` 提交并推送。所以任何跑过那一版迁移、或用那一版启动过 data_service 的库，都可能已经按 `% 16` 建了 player_route。这种表迁移和建池探针都不会报错（形状守卫只查列名与主键；探针行对 `% 16` 与 `% 64` 同样违例），要人工 `SHOW CREATE TABLE player_route` 核对，是 `% 16` 就确认无数据后 DROP 全部五张路由表再迁移。
 > - 落码内容：`RouteRowShards` 与 `chk_route_shard` 改为 64；`route_tidb.go` 里 idx_route_home / idx_route_storage 每个 zone / 落点值切 8 个点（片 0、8、…、56），行数据与 idx_route_updated 仍是每片一段（各 63 个切点）；服务 yaml 的 `RouteStore.FenceShards` 改为 16（MySQL 档）。
 > - 下面「连带修正」里只做了 FenceShards 的 MySQL 档，以及把 `route_meta CACHE`、EVALSHA 两条写进提案；zone_merge_fence 细切、WAITAOF 两条没动。
@@ -752,7 +752,7 @@
 
 ---
 
-## 5. 验证路径（按 AGENTS §6 分阶段，由 Codex 执行）
+## 5. 验证路径（按 AGENTS §6 分阶段，由 Gemini 执行）
 
 **每个阶段都按 §6.2 执行**：
 

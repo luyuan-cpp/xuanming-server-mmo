@@ -4,7 +4,7 @@
 
 > **状态**:设计 v3(2026-10-19)。v2 已并入两面对抗复核 28 条(§6.1、§6.2,原文见附录 A)与「维护围栏」「三个小项」两路代码核实(落点见附录 B);v3 先按「上线前范围」收窄(§6.3,删掉的内容连同补做的触发条件移入 §8「上线后再补」),再逐条处理复查轮 11 条意见(§6.4)。**未落码**。
 > **规模**:收窄并处理复查意见之后,总文件数 **109**(新增 58、修改 51、删除 0;另有 Java 仓 `PARITY.md` 1 个不计入本仓),比 v2 的 125 少 16,比负责人 2026-10-19 授权的 73 多 36。减少:merge_zone 围栏配套整组移出(−10)、guildcheck 改为 shared 实现加 data_service 薄转发包(−5)、去掉没有第二个使用方的 shared/playercache(−2)、拓扑清单样例内联进测试(−2);增加:P3 与 save_barrier_restore 共用 schema_gen 规则(+2)、混版本持久字段保护设计登记本工具这个写入方(+1)。批次仍为 B1→B6 九批。规模仍超授权,按 AGENTS §10.2 须负责人确认后再开 B1(§7)。
-> 全文为静态阅读结论:没有编译、没有运行任何测试,待 Codex 验证。代码与文档冲突时以代码为准;引用行号以 2026-10-19 工作区(HEAD c63b22dca)为准,落码时按锚点文字定位。
+> 全文为静态阅读结论:没有编译、没有运行任何测试,待 Gemini 验证。代码与文档冲突时以代码为准;引用行号以 2026-10-19 工作区(HEAD c63b22dca)为准,落码时按锚点文字定位。
 >
 > **适用范围(上线前收窄)**:负责人 2026-10-18 确认项目尚未上线(见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md) 文末「上线状态」):没有存量 zone,没有在跑的旧版 go/db / scene / login,首次上线以「go/db dual + scene / login 严格提交屏障」整批起步。所以本工具**只支持 strict 协议**:legacy 在 ps1 入口与工具入口都拒绝;只为新旧版本并存、旧镜像、旧二进制服务的校验不做;防并发运维只保留回档自身的 fail-closed 复核,不改 merge_zone。删掉的内容与补做的触发条件见 §8。
 >
@@ -528,7 +528,7 @@ c_prime 为空(未铸造)的玩家:owner 与 applied 恒为缺失,终态是 P2 �
 
 **文件归属**(复查 [6]):截至 2026-10-19 HEAD c63b22dca(v2 写的 e611b5d8d 与复查意见写的 85a457a55 都已过时),本设计要改的文件里有他人未提交改动的是:`tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(B3 C13),`docs/design/db-retry-owner-routing.md`、`docs/design/shared-redis-split-by-purpose.md`、`docs/design/mixed-version-persist-field-protection.md`、`docs/ops/godb-pipeline-launch-todo.md`、`docs/ops/merge-zone-runbook.md`、`docs/PROGRESS.md`(B6;PROGRESS 是 union 合并,只追加)。这些文件动手前先与持有方协调,持有方未合入时只做本项最小增量、不覆盖对方改动;B3 的 C13 可单独顺延。其余文件工作区干净。每批动手前仍按当时 HEAD 重新 `git status` / `git diff` 核对,只做本项最小增量。
 
-Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=https://goproxy.cn,direct`;真库用例自起一次性容器(Redis ≥7.2 且 `appendonly yes`、MySQL 8.x、TiDB 用 `deploy/docker-compose.tidb.yml`),不借用 codex-* 容器;任何 SKIP 不算通过;失败保留 `go test -v` 首个失败用例输出、ps1 的全部 [FAIL] 行、MSBuild 首个错误与真库容器日志,不改断言、不跳过测试、不连续自动重试。
+Gemini 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=https://goproxy.cn,direct`;真库用例自起一次性容器(Redis ≥7.2 且 `appendonly yes`、MySQL 8.x、TiDB 用 `deploy/docker-compose.tidb.yml`),不借用 codex-* 容器;任何 SKIP 不算通过;失败保留 `go test -v` 首个失败用例输出、ps1 的全部 [FAIL] 行、MSBuild 首个错误与真库容器日志,不改断言、不跳过测试、不连续自动重试。
 
 ### B1 共享导出、纯函数与 guildcheck 迁移(行为不变;依赖:无;14 个:新增 10、修改 4)
 
@@ -549,7 +549,7 @@ Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=http
 | go/db/internal/saveoutbox/keys_export.go | 新增 | go/db | `PendingIndexKey`、`BucketOf` |
 | go/db/internal/saveoutbox/keys_export_test.go | 新增 | go/db | 钉字面量与 `pid%BucketCount` |
 
-**交 Codex 的验证**
+**交 Gemini 的验证**
 
 - 工作目录 `go/shared`:`go vet ./scenenode/ ./guildcheck/`;`go test -count=1 ./scenenode/ ./guildcheck/`(`GOFLAGS=-mod=readonly` 下必须不报缺依赖)。
 - `go/data_service`:`go vet ./...`;`go test -count=1 ./internal/guildcheck/ ./internal/logic/... ./internal/server/... ./internal/svc/...`(guildcheck 原有用例经转发包原样全绿)。
@@ -591,7 +591,7 @@ Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=http
 
 本批实现 preflight、fence、release、stopped 四个模式(经包内接口;CLI 有接线闸)。清单的键名与字段只在 ledger.go 定义一份,fenceAcquireScript / fenceReleaseScript 与 preflight 的续跑判断都经它读写。
 
-**交 Codex 的验证**(工作目录 `go/db`)
+**交 Gemini 的验证**(工作目录 `go/db`)
 
 - `gofmt -l ./internal/zonerollback ./cmd/zone_rollback_discard` 无输出;`go vet ./internal/zonerollback/... ./cmd/zone_rollback_discard/...`。
 - `go test -count=1 -race ./internal/zonerollback/... ./cmd/zone_rollback_discard/...`。
@@ -613,7 +613,7 @@ Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=http
 | go/db/internal/zonerollback/inventory.go | inventory 模式(含 schema 校验、H / P 复核、#5 见证窗口、确认模板、计划与持久副本;strict 预检在 B2d 补) |
 | go/db/internal/zonerollback/inventory_test.go | |
 
-**交 Codex 的验证**(工作目录 `go/db`)
+**交 Gemini 的验证**(工作目录 `go/db`)
 
 - `gofmt -l ./internal/zonerollback` 无输出;`go vet ./internal/zonerollback/...`。
 - `go test -count=1 -race -run 'Classify|Raise|Plan|AssetGate|Inventory' ./internal/zonerollback/`;再整包 `go test -count=1 ./internal/zonerollback/... ./cmd/zone_rollback_discard/...`。
@@ -636,7 +636,7 @@ Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=http
 
 完成后 CLI 仍被接线闸拒绝,不可用于回档;本批只经包内接口与真库用例验证。
 
-**交 Codex 的验证**(工作目录 `go/db`)
+**交 Gemini 的验证**(工作目录 `go/db`)
 
 - `gofmt -l ./internal/zonerollback` 无输出;`go vet ./internal/zonerollback/...`。
 - `go test -count=1 -race -run 'Ledger|Quarantine|Purge|Verify' ./internal/zonerollback/`;再整包。
@@ -660,7 +660,7 @@ Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=http
 | tools/scripts/k8s_zone_rollback.ps1 | 修改(B3 已计) | 删 :1914 一带 B3 保留的 strict 入口拒绝 |
 | tools/scripts/tests/k8s_zone_rollback_discard.tests.ps1 | 修改(B3 已计) | 断言改为 strict 不在入口被拒、legacy 仍被拒 |
 
-**交 Codex 的验证**
+**交 Gemini 的验证**
 
 - 工作目录 `go/db`:`gofmt -l`、`go vet` 同上;`go test -count=1 -race -run 'Strict' ./internal/zonerollback/`;`go test -count=1 -run 'SchemaGen' ./internal/barrierrestore/`;再整包 `go test -count=1 ./internal/zonerollback/... ./internal/barrierrestore/... ./cmd/zone_rollback_discard/...`。
 - 真库:MySQL 一遍(`ZONE_ROLLBACK_IT_DSN` 指 MySQL),TiDB 一遍(另加 `$env:ZONE_ROLLBACK_IT_REQUIRE_TIDB='1'`,DSN 指 docker-compose.tidb.yml 起的 TiDB),`go test -count=1 -v -run 'StrictIntegration|Integration' ./internal/zonerollback/`;barrierrestore 的真库用例照其现有环境变量再跑一遍,确认导出后无回归。
@@ -681,7 +681,7 @@ Codex 公共环境:`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=http
 
 merge_zone 不改(v2 的 10 个文件移到 §8 第 5 条)。
 
-**交 Codex 的验证**
+**交 Gemini 的验证**
 
 - 仓库根逐个执行 `pwsh -NoProfile -NonInteractive -File tools/scripts/tests/<名>.tests.ps1`,名字为 `k8s_zone_rollback_discard`、`k8s_zone_rollback_gate_router_mode`(PATH 上要有 git)、`kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、`k8s_deploy_contract`、`dev_tools_merge_zone_contract`;期望 fail=0。
 - dry-run 冒烟:`pwsh -File tools/scripts/k8s_zone_rollback.ps1 -ZoneName test1 -ZoneId 101 -TargetTime "2026-05-15T14:23:00Z" -NodeImage ghcr.io/luyuancpp/mmorpg-node:<40 位 sha>`(不带 -BarrierProtocol);期望输出含 0g 的 `-mode fence`、6b 的 `-mode release`、Step 7 的 `-mode release`,打印的每一次工具调用都带 `-expect-run-id`,Step 5 之后的单步命令带 `-archive-dir`,打印的 deploy-facts 为 Schema 3。再分别加 `-BarrierProtocol strict` 与 `-BarrierProtocol legacy` 各跑一次,期望都在入口拒绝(strict 的文案指向 R9 B2d,legacy 的文案指向本设计 §8)。
@@ -707,7 +707,7 @@ merge_zone 不改(v2 的 10 个文件移到 §8 第 5 条)。
 | go/db/internal/metrics/metrics_test.go | 修改 | go/db | 预建序列(照 `TestRetryRoutingSeriesPrecreated`) |
 | deploy/k8s/db-task-retry-alerts.yaml | 修改 | 部署 | 两条新规则与 `DbTaskDeadLetterAdded` 描述 |
 
-**交 Codex 的验证**(工作目录 `go/db`)
+**交 Gemini 的验证**(工作目录 `go/db`)
 
 - `go vet ./internal/kafka/ ./internal/metrics/`。
 - `go test -count=1 -race -run 'DeadDedup|DurableEnqueue|PoisonMessage|OrderingConflict|DeadLetterRetry|MoveClaimedRetryToDead|Stranded|ForwardRetry|RequeuePartition|RejoinBackoff' ./internal/kafka/`;再整包 `go test -count=1 ./internal/kafka/ ./internal/metrics/`。
@@ -728,7 +728,7 @@ merge_zone 不改(v2 的 10 个文件移到 §8 第 5 条)。
 | go/db/internal/kafka/producer_partition_audit_test.go | go/db | op=other 且 verdict=ok 也打一条;额度共用 |
 | deploy/k8s/db-task-partition-alerts.yaml | 部署 | `DbTaskUnknownOp`;文件头 :5-8 |
 
-**交 Codex 的验证**
+**交 Gemini 的验证**
 
 - 仓库根:`pwsh -File tools/scripts/dev_tools.ps1 -Command cpp-node-stop`;`msbuild cpp\tests\cross_zone_test\cross_zone_test.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`(必须 /m:1,否则报假的 C1041 / LNK1104);`.\build\cpp\tests\cross_zone_test.exe --gtest_filter=SaveSeq*:LastPersistedSnapshot*:DbTaskDispatch*`。
 - `go/db`:`go test -count=1 -run 'ProducerPartition' ./internal/kafka/`。
@@ -758,7 +758,7 @@ merge_zone 不改(v2 的 10 个文件移到 §8 第 5 条)。
 | docs/PROGRESS.md | 追加条目,注明 Java 不适用 |
 | (Java 仓)D:/luyuan/xuanming-server-mmo/PARITY.md | 追加「不适用」一行 |
 
-**交 Codex 的验证**
+**交 Gemini 的验证**
 
 - 仓库根:`python tools/scripts/gen_docs_index.py --check`(只比对、不整段重写);人工核对 zone_data_rollback 三语版「2026-10-19 修订」一节的条目一一对应。
 - 有 promtool 时 `promtool check rules deploy/k8s/scene-manager-alerts.yaml deploy/k8s/owner-epoch-alerts.yaml`。
@@ -767,7 +767,7 @@ merge_zone 不改(v2 的 10 个文件移到 §8 第 5 条)。
 
 ## 4. 测试用例(按批)
 
-Claude 不执行任何构建或测试(AGENTS §10.1),以下用例由落码批实现、交 Codex 运行。
+Claude 不执行任何构建或测试(AGENTS §10.1),以下用例由落码批实现、交 Gemini 运行。
 
 **B1**
 
@@ -1033,7 +1033,7 @@ R9 之外的后续立项(不阻塞 R9,记录备查):trade 回档分歧闸(trade 
 1. **[high] 工具压在全服共用的单实例 Redis 上(所有 zone 的同步登录路径都走它),设计里没有任何限速、在途上限或按延迟退避;全键空间 SCAN 重复跑十几遍。**
    - 场景：purge 时 16 个 worker(上限 64)各推一批 200 段 Lua,每段在 Lua 里做 sha1hex(DUMP 父快照);同时用 pipeline 批量取 DUMP,父快照每人几十 KB,经端口转发慢慢读回。Redis 主线程被占满,回包堆在服务端输出缓冲里(没设 maxmemory,也没设 limits)。后果:其它所有 zone 的 login 拿锁 / EnterGame 超时(EnterLookupTimeout 1.5s),scene_manager 选主锁抖动;最坏情况 Redis Pod 被 OOMKill,全服掉线。SCAN 一次要扫整个实例的键空间(MATCH 在服务端过滤),每名玩家约 30 个键:9 张表缓存、9 个 consumer:applied、PlayerAllData、owner_epoch、location 等。几个 zone 同时回档,负载成倍叠加。
    - 证据：deploy/k8s/manifests/infra/redis.yaml 文件头写明:共享 Redis 在同步登录路径上、仍是单实例;:173-175 不设 maxmemory、保持 noeviction;没有 client-output-buffer-limit 和 lazyfree 配置。tools/scripts/k8s_deploy.ps1 的 Redis 连接总账注释:所有 zone 共连 infra namespace 里同一个 Redis。设计 §7:-workers 缺省 16、上限 64,pipeline 每批 200,SCAN COUNT 1000。§4 P2a 用 pipeline 读 DUMP+PTTL,P2c 在 Lua 内做 sha1hex(DUMP)。全量 SCAN 次数:fence 的 H 遍加排空后全量确认、stopped 的 H/M、inventory 的 M/H/P 三遍、purge 原样重跑 inventory 再加 P1、verify 重跑归类再加 consumer:applied:<topic>:*,合计 12 次以上。
-   - 改法：(1) 加全局令牌桶 -redis-ops-per-sec,缺省取保守值;加在途字节上限 -max-inflight-bytes,如 8MiB,按 STRLEN/MEMORY USAGE 分批。Redis 阶段 worker 缺省 4、上限 8,并显式设 go-redis PoolSize=workers+2(不设则默认 10×GOMAXPROCS)。(2) 自适应退避:每批测 PING RTT 或本批 p99,超阈值就暂停并加倍等待。(3) SCAN COUNT 降到 500,页间 sleep。(4) 砍掉重复的全量 SCAN。围栏立起后 home=Z 集合只减不增(前提是另一条 backfill 漏洞修好),stopped 落一份 H 集合快照(64 分片 NDJSON,SHA 记进清单);inventory 和 purge 读快照并逐人 MGET 复核,只在 verify 末尾做一次全量 SCAN 兜底。P1 重试族按已知键名直接枚举:ready、p0..p{N-1}、legacy processing、instances 里登记的实例;只保留一次 processing 前缀 SCAN 兜孤儿。(5) ps1 第 0 步统计 merge:in_progress:* 里值以 zone_rollback_discard: 开头的个数,超过 N 就拒绝。这是准入控制,不是正确性锁。(6) 验收由 Codex 在压测环境测:purge 期间其它 zone 的 entergame p99 退化不超过约定阈值。
+   - 改法：(1) 加全局令牌桶 -redis-ops-per-sec,缺省取保守值;加在途字节上限 -max-inflight-bytes,如 8MiB,按 STRLEN/MEMORY USAGE 分批。Redis 阶段 worker 缺省 4、上限 8,并显式设 go-redis PoolSize=workers+2(不设则默认 10×GOMAXPROCS)。(2) 自适应退避:每批测 PING RTT 或本批 p99,超阈值就暂停并加倍等待。(3) SCAN COUNT 降到 500,页间 sleep。(4) 砍掉重复的全量 SCAN。围栏立起后 home=Z 集合只减不增(前提是另一条 backfill 漏洞修好),stopped 落一份 H 集合快照(64 分片 NDJSON,SHA 记进清单);inventory 和 purge 读快照并逐人 MGET 复核,只在 verify 末尾做一次全量 SCAN 兜底。P1 重试族按已知键名直接枚举:ready、p0..p{N-1}、legacy processing、instances 里登记的实例;只保留一次 processing 前缀 SCAN 兜孤儿。(5) ps1 第 0 步统计 merge:in_progress:* 里值以 zone_rollback_discard: 开头的个数,超过 N 就拒绝。这是准入控制,不是正确性锁。(6) 验收由 Gemini 在压测环境测:purge 期间其它 zone 的 entergame p99 退化不超过约定阈值。
 2. **[high] 父快照常驻、没有 TTL,所以「删除前把 DUMP 归档到报告目录」实际上是把整个 zone 的玩家数据全量导出,经端口转发写到操作者本机。**
    - 场景：一个 50 万玩家的 zone,父快照每人约 40KB:原始约 20GB,base64 后约 27GB。经 kubectl port-forward(单流、容易断)要传几个小时。中途一断就退出 1,重跑又要先重跑 inventory 的全部判定(见另条)。本机磁盘写满时 fsync 失败,purge 停在半途。玩家资产明文散落在笔记本上。
    - 证据：go/login/internal/logic/pkg/dataloader/new_player_seed.go:70 注释:scene 首次存盘的裸 SET 会去掉 TTL。sync_loader.go:138 的 playerAllDataParentTTL=24h 只在冷读组装时生效。k8s_zone_rollback.ps1 契约 :159 写明 -RedisHost 可以是端口转发;报告目录是 run/logs/zone-rollback/<rid>/。设计 §4 P2a/b:对每个已处理玩家 DUMP 父快照、asset_sql_commit、save_barrier,base64 写进 purge-archive-p<N>-s<NN>.ndjson。
@@ -1085,7 +1085,7 @@ R9 之外的后续立项(不阻塞 R9,记录备查):trade 回档分歧闸(trade 
 14. **[low] 重开之后的冷读洪峰没有真正的节流:zone 令牌桶缺省值很高,登录排队又还没放开。**
    - 场景：6b 撤围栏的一瞬间,排队重试的玩家以最高 2000/s(burst 5000)涌入。#7 删了全部缓存,每人一次 9 表冷读,经 go/db Z 打到 1 核的共享 MySQL,其它 zone 的落库跟着排队。
    - 证据：tools/scripts/k8s_deploy.ps1 削峰档位:ZoneDefaultRps=2000、ZoneDefaultBurst=5000,标注 pending stress-test validation;$script:LoginQueueMergeGateCleared=$false,登录排队不可用。mysql.yaml 注释「1 核仍是开服硬瓶颈」。设计 #7:范围内玩家一律删缓存、首登冷读。
-   - 改法：ps1 Step 6 给回档 zone 传显式的低档 zone rps,作为重开档位,具体数值由 Codex 压测给出。Step 7 观察 MySQL 负载和 Kafka lag 后再逐级调高。没有压测数据之前,不写「冷读洪峰由令牌桶承接」。
+   - 改法：ps1 Step 6 给回档 zone 传显式的低档 zone rps,作为重开档位,具体数值由 Gemini 压测给出。Step 7 观察 MySQL 负载和 Kafka lag 后再逐级调高。没有压测数据之前,不写「冷读洪峰由令牌桶承接」。
 
 ## 附录 B 两路代码核实结论并入索引
 

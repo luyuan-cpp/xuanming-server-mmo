@@ -1,7 +1,7 @@
 # gate / battle 集群外客户端入口(D76–D93)
 
 - **日期**:2026-09-29。
-- **状态**:代码、脚本、测试已全部落盘;**未编译、未测试、未上集群,待 Codex 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。
+- **状态**:代码、脚本、测试已全部落盘;**未编译、未测试、未上集群,待 Gemini 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。
 - **范围**:让集群外客户端(Unity、宿主机上的 robot)经 K8s 连上三类入口:gate 长连接、battle 每局直连、Java gateway 的 HTTP 接口。
 - **决策编号**:本文 D76–D93。D51–D64 属 [client-access-band-routing.md](client-access-band-routing.md);D65–D75(battle 直连收缩)属 [turn-based-battle-server.md](turn-based-battle-server.md) §22。
 - **事实准绳**:以磁盘代码为准。文中「路径:行号」取自 2026-09-29 写作时的磁盘状态,后续改动会让行号漂移,查找时以符号名为准。
@@ -93,7 +93,7 @@
   1. 建房准入闸(`battle_admission_gate.h`)。SetAfterStart 完成后才打开,停机开始即关闭。
   2. 分配许可,等 Agones allocate 的上限是 allocateWaitTimeout(3s)。
   3. 许可回到 loop 后,复核准入闸。
-  - (2026-10-16 更正,第 4 批,代码未编译、待 Codex 验证)三道现在都在 loop 线程上,写在守护段 `grpc.CreateBattle.guard` 里:第 1 道同步判定;第 2 道改为 `AcquireAllocationPermitAsync(loop, cb)`,HTTP 在 lifecycle worker,结果经 `queueInLoop` 回 loop;第 3 道在许可回调里经 `weak_ptr` 复核闸,通过才 `Proceed()` 进 `HandleCreateBattle`(见 [grpc-muduo-transport.md](grpc-muduo-transport.md) §15.8.4、§15.9)。初稿写的「第 1、2 道在 gRPC 线程上判定,`runInLoop` 之前调 `AcquireAllocationPermitBlocking()`」随第 4 批失效:节点上已没有 gRPC 线程,`AcquireAllocationPermitBlocking` 只给非 EventLoop 线程与测试用。
+  - (2026-10-16 更正,第 4 批,代码未编译、待 Gemini 验证)三道现在都在 loop 线程上,写在守护段 `grpc.CreateBattle.guard` 里:第 1 道同步判定;第 2 道改为 `AcquireAllocationPermitAsync(loop, cb)`,HTTP 在 lifecycle worker,结果经 `queueInLoop` 回 loop;第 3 道在许可回调里经 `weak_ptr` 复核闸,通过才 `Proceed()` 进 `HandleCreateBattle`(见 [grpc-muduo-transport.md](grpc-muduo-transport.md) §15.8.4、§15.9)。初稿写的「第 1、2 道在 gRPC 线程上判定,`runInLoop` 之前调 `AcquireAllocationPermitBlocking()`」随第 4 批失效:节点上已没有 gRPC 线程,`AcquireAllocationPermitBlocking` 只给非 EventLoop 线程与测试用。
 - 任一道不过,即返回 `UNAVAILABLE "battle_not_allocatable"`(第 4 批起由守护段 `call->Reject(...)` 回出,线上字节不变)。三道都通过后,才是 loop 内预签票据(D70),再插表。
 - match 侧(`go/match/internal/logic/gather.go:65`,`isBattleNotAllocatable` 在 `:581`)只认 `codes.Unavailable` 加上消息**精确等于** `battle_not_allocatable` 的组合。命中时不发 DestroyBattle,用 `PickRandomExcept`(`node_watcher.go:317`)按 endpoint 排除已试节点,换一个节点重试**一次**;仍被拒就干净失败,记 `match_gather_total{outcome="not_allocatable"}`。其他 UNAVAILABLE 照旧走 DestroyBattle 兜底。
 - 偏离「CreateBattle 错误走 tip、status 恒 OK」惯例的理由:这是节点级的准入拒绝,发生在业务处理之前;UNAVAILABLE 是 gRPC 标准的「换一台试」语义;客户端看不到这个错误,不值得为它往 Tip.xlsx 发号。
@@ -473,7 +473,7 @@ pwsh -File tools/scripts/k8s_gate_drain.ps1 -ZoneName <zone> -Ordinal <i> -Delet
 
 ## kind 端到端验证
 
-本节标题被 `deploy/k8s/kind-config.yaml`(第 2、9、60 行)与 `deploy/k8s/README.md`(`:259`、`:749`)按原文引用,不要改名;完整清单见文首「引用本文的文件」。执行者是用户或 Codex(AGENTS §10.1);安装 kind、Agones、ingress-nginx 属于「安装工具」,要用户单独授权。本节全部步骤尚未实际跑过。
+本节标题被 `deploy/k8s/kind-config.yaml`(第 2、9、60 行)与 `deploy/k8s/README.md`(`:259`、`:749`)按原文引用,不要改名;完整清单见文首「引用本文的文件」。执行者是用户或 Gemini(AGENTS §10.1);安装 kind、Agones、ingress-nginx 属于「安装工具」,要用户单独授权。本节全部步骤尚未实际跑过。
 
 ### 前置条件
 
@@ -650,7 +650,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 
 **与原稿差异**:原稿 §6 写「第 4 批之后才允许在 K8s 上默认启用 GateRouterMode=1」。实际上 turn-based §22 D75 已把 `k8s_deploy.ps1 -GateRouterMode` 默认改为 "1",代码与脚本同批落地,不再单列第 4 批。集群外部署要在同一个维护窗口里启用 `-ClientEntryMode external`。
 
-### 上线之前:代码验证(由 Codex 执行,Claude 未编译、未测试)
+### 上线之前:代码验证(由 Gemini 执行,Claude 未编译、未测试)
 
 1. **proto 重生**。注意:`cd go && build.bat` 只包装 goctl,**不会**重生 pb 产物。AGENTS.md §4.1 的旧写法要等用户确认后再改,本文不改 AGENTS.md。正确做法(仓库根):
    - 把独立 Protobuf 安装目录 `third_party\protobuf\install_vs2026_dbg\bin` 放到当前子进程 PATH 最前,`protoc --version` 必须是 `libprotoc 35.1`；2026-10-26 起不再使用旧 gRPC SDK 目录。
@@ -723,7 +723,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 
 ### 剩余风险
 
-- **全部未编译、未测试、未上集群。** 本文所有行为都只有静态阅读与评审依据,待 Codex 按「上线之前:代码验证」和「kind 端到端验证」执行后才算有证据。
+- **全部未编译、未测试、未上集群。** 本文所有行为都只有静态阅读与评审依据,待 Gemini 按「上线之前:代码验证」和「kind 端到端验证」执行后才算有证据。
 - **Agones 链路第一次上集群。** 以下几项只能靠阶段 B 验证:
   - GameServer JSON 的真实形状;
   - `allocationOverflow` 在滚动更新下是否作用于旧 GameServerSet(不生效就退化为运维手动 `kubectl label gs`);
@@ -759,7 +759,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 - **match**:换节点重试后,scene 的 `InBattleComp.battle_node_id` 仍记着首选节点(只用于日志,D72);matched ticket TTL 变长,match 在 gather 中途崩溃时,玩家要多等十几秒才能自愈重排。
 - **已知会红的测试(2026-09-30 按磁盘静态核对:清单为空,以下各项均已撤出,第 4 步恢复严格 fail=0)**:
   - ~~`k8s_deploy_contract.tests.ps1` 的 prod 基线,要等 `$ProdEnv` 补上 `MMORPG_GATEWAY_ADMIN_API_KEY`(≥32 位,非占位)才会绿;~~ **(2026-09-29 更正)** 这一条已过时,撤出「已知会红」。`$ProdEnv` 已在 `tools/scripts/tests/k8s_deploy_contract.tests.ps1:551` 补上 `MMORPG_GATEWAY_ADMIN_API_KEY`(43 位,非占位串)。该文件还有两条相关用例:prod 缺口令时拒绝(`:999`),dev 用占位值时告警(`:1011`)。prod 基线应当是绿的,**变红就是真实问题**,不能按预期放过。
-  - **(2026-09-30 撤出)** 以下各项测试属主都已改好(连同下面 `k8s_gate_drain.tests.ps1` 一起随 `bf14e85d9` 提交,未经 Codex 运行):`k8s_zone_rollback_gate_router_mode.tests.ps1` 的两个旧负向用例(原 `:776` 拒绝 `-AllowDisruptiveSwitch`、原 `:820` k8s_image 拒绝 `-RequireClientEndpoint`)已按透传行为改写为正向用例,文件头注释同步;原 `:343` 沙箱已补拷 `lib/k8s_client_entry.ps1`,此前 `k8s_zone_rollback.ps1:227` 在 `Stop` 下 dot-source 它,该文件全部沙箱用例都会在启动时失败,而本清单当时漏了这一条;原 `:363-367` 假 dev_tools 参数表已补 `[switch]$AllowDisruptiveSwitch`;`k8s_deploy_contract.tests.ps1` 原 `:922` 的 sidecar 注解哈希正则已改为带不带引号都认;`k8s_gate_drain.tests.ps1` 已按排空脚本修复(评审 contracts-2,`Wait-GateDrained` 的 `-MarkValue` 改为必填,见 `k8s_gate_drain.ps1:822`)给全部 `Wait-GateDrained` 调用补上 `-MarkValue '1790000000'`,并补齐 contracts-2 的回归用例(以用例名为锚):「TTL 上限:-DrainTtlSeconds 的 ValidateRange 上限与 Get-GateDrainContract.MaxDrainTtlSeconds 相等」、「已有标记早于 TIME - MaxDrainTtlSeconds(例如手工 SET 成 1)」、「轮询:等待中 draining 被改写」,以及两条「主流程 -DeletePod」的同类用例,断言文本与 `k8s_gate_drain.ps1` 的 throw 文案(「不早于 TIME-…」「已被改写」)逐字对应。本节早先一版曾按 `1a896b128` 的测试文件把它判为必红,那是按提交判、未看工作树,口径与其余各项不一,已撤回。这三个文件现在应当 fail=0,**变红就是真实问题**。与 [turn-based-battle-server.md](turn-based-battle-server.md) §22.7 第 7 步一致:那边的已知会红清单为空。
+  - **(2026-09-30 撤出)** 以下各项测试属主都已改好(连同下面 `k8s_gate_drain.tests.ps1` 一起随 `bf14e85d9` 提交,未经 Gemini 运行):`k8s_zone_rollback_gate_router_mode.tests.ps1` 的两个旧负向用例(原 `:776` 拒绝 `-AllowDisruptiveSwitch`、原 `:820` k8s_image 拒绝 `-RequireClientEndpoint`)已按透传行为改写为正向用例,文件头注释同步;原 `:343` 沙箱已补拷 `lib/k8s_client_entry.ps1`,此前 `k8s_zone_rollback.ps1:227` 在 `Stop` 下 dot-source 它,该文件全部沙箱用例都会在启动时失败,而本清单当时漏了这一条;原 `:363-367` 假 dev_tools 参数表已补 `[switch]$AllowDisruptiveSwitch`;`k8s_deploy_contract.tests.ps1` 原 `:922` 的 sidecar 注解哈希正则已改为带不带引号都认;`k8s_gate_drain.tests.ps1` 已按排空脚本修复(评审 contracts-2,`Wait-GateDrained` 的 `-MarkValue` 改为必填,见 `k8s_gate_drain.ps1:822`)给全部 `Wait-GateDrained` 调用补上 `-MarkValue '1790000000'`,并补齐 contracts-2 的回归用例(以用例名为锚):「TTL 上限:-DrainTtlSeconds 的 ValidateRange 上限与 Get-GateDrainContract.MaxDrainTtlSeconds 相等」、「已有标记早于 TIME - MaxDrainTtlSeconds(例如手工 SET 成 1)」、「轮询:等待中 draining 被改写」,以及两条「主流程 -DeletePod」的同类用例,断言文本与 `k8s_gate_drain.ps1` 的 throw 文案(「不早于 TIME-…」「已被改写」)逐字对应。本节早先一版曾按 `1a896b128` 的测试文件把它判为必红,那是按提交判、未看工作树,口径与其余各项不一,已撤回。这三个文件现在应当 fail=0,**变红就是真实问题**。与 [turn-based-battle-server.md](turn-based-battle-server.md) §22.7 第 7 步一致:那边的已知会红清单为空。
 - **共用工作树**:proto 全量重生与 robot `go mod vendor` 会把其他会话在途的改动带进同一份 diff,提交时按路径分拣。
 
 ### 明确不做

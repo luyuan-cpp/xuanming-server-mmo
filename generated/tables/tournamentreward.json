@@ -147,6 +147,48 @@
    "max_rank": 0,
    "min_rank": 0,
    "tier_kind": 7
+  },
+  {
+   "badge_code": "badge_tournament_third_place",
+   "desc": "季军争夺战第3名专属奖励(绑定自用)",
+   "gold_amount": 65000,
+   "id": 8,
+   "item_counts": [
+    18,
+    18,
+    35
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "恭喜阁下在群仙问道赛季军争夺战中力克群雄斩获季军！特赐绑定修炼物资与季军荣耀。",
+   "mail_title": "群仙问道赛·季军嘉奖",
+   "max_rank": 3,
+   "min_rank": 3,
+   "tier_kind": 8,
+   "title_code": "tournament_third_place"
+  },
+  {
+   "badge_code": "badge_tournament_oracle",
+   "desc": "免费神机竞猜命中达标奖励(绑定自用)",
+   "gold_amount": 12000,
+   "id": 9,
+   "item_counts": [
+    6,
+    10
+   ],
+   "item_ids": [
+    3406,
+    20
+   ],
+   "mail_body": "恭喜道友在群仙问道赛神机竞猜中料事如神达到领奖门槛！特赐绑定修炼物资与慧眼识仙称号。",
+   "mail_title": "群仙问道赛·神机慧眼礼",
+   "max_rank": 0,
+   "min_rank": 0,
+   "tier_kind": 9,
+   "title_code": "tournament_oracle"
   }
  ]
 }

@@ -8,8 +8,8 @@
 > **关联**: 2026-05-08 [open-server-rate-limit-design.md](./open-server-rate-limit-design.md)(Bucket4j 限流);本文是其**互补层**,不是替代
 > **修订**: 2026-10-12 G1b — 出队 leader 锁改为每 zone 一把(§7.1)
 > **修订**: 2026-10-13 G4b-G — 在途占位改为逐个到期的 ZSET,交票后保留 15s(§5「在途占位的生命周期」)
-> **修订**: 2026-10-15 — 负责人按「最标准」拍板:交票后宽限 15s → 20s;在途占位键的整键 TTL 改为只延长不缩短;真实 Redis 首跑定为打开排队前的硬门槛(§5「在途占位的生命周期」、§14 第 8 条)。出队每个非空拍只取一次 gate 候选、批内按本拍已分人数轮转(§5 Dispatcher Loop)。均已落码,**未编译、未测试**,待 Codex 验证
-> **修订**: 2026-10-18 — 出队改为「`ZRANGE` + 每条一段先判在队的放行脚本」,条目在放行写成之前不离开队列(写满、出错、取消、强杀都不丢人);`Lookup` 没取到放行槽之后的读状态合成一段脚本并续空闲 TTL,`zone` 取自令牌;`QueueEntryTTL` 改为空闲 TTL,排队令牌固定 24h;新增过期原因 `queue_gone`;本版本与从它回滚都必须在 `Queue.Enabled=false` 下滚完(§5 决策树后的 2026-10-18 更正,其余各处的 10-18 注指向它)。`loginqueue` 包已落码,**未编译、未测试**,待 Codex 验证
+> **修订**: 2026-10-15 — 负责人按「最标准」拍板:交票后宽限 15s → 20s;在途占位键的整键 TTL 改为只延长不缩短;真实 Redis 首跑定为打开排队前的硬门槛(§5「在途占位的生命周期」、§14 第 8 条)。出队每个非空拍只取一次 gate 候选、批内按本拍已分人数轮转(§5 Dispatcher Loop)。均已落码,**未编译、未测试**,待 Gemini 验证
+> **修订**: 2026-10-18 — 出队改为「`ZRANGE` + 每条一段先判在队的放行脚本」,条目在放行写成之前不离开队列(写满、出错、取消、强杀都不丢人);`Lookup` 没取到放行槽之后的读状态合成一段脚本并续空闲 TTL,`zone` 取自令牌;`QueueEntryTTL` 改为空闲 TTL,排队令牌固定 24h;新增过期原因 `queue_gone`;本版本与从它回滚都必须在 `Queue.Enabled=false` 下滚完(§5 决策树后的 2026-10-18 更正,其余各处的 10-18 注指向它)。`loginqueue` 包已落码,**未编译、未测试**,待 Gemini 验证
 
 ---
 
@@ -85,7 +85,7 @@ Client ── POST ───►│ /api/assign-gate                             
 
 > **(2026-10-15 更正,上图 AssignGate 第 4 步;原文保留)** 第 4 步「FreeSlots>0 且队列空 → 直接签 gate token」漏了占位:签票之前先调 `TryReserveFastPathSlot`(`go/login/internal/logic/loginpregate/assigngatelogic.go:110-129`;脚本与函数见 `go/login/internal/logic/pkg/loginqueue/queue.go:563-593`),一段 Lua 先清掉 `admitted:zset:{q:<z>}` 里已到期的成员,未到期成员数 < `budget`(= `capacity − online`,注意不是 `free`)才写入成员 `fast:<uuid>`、分数 = 现在 + 交票宽限 20s(`defaultHandoffGrace`),并按「只增不减」续整键 TTL;返回 1 才签票。占不到(名额被并发请求占满)或脚本出错(Redis 抖动,fail-closed)都改走第 5 步入队,不签票。这个占位不撤,20s 后按分数自然到期,期间与排队路径的在途占位一起计入 `FreeSlots` 的 `admitted_inflight`,所以快速通道同样受容量约束,不是旁路。第 3 步(`Queue.Enabled=false`)与第 2 步(重连豁免)才是真正「直接签票」,不读不写任何排队键。占位的生命周期见 §5「在途占位的生命周期」表的「快速通道占位」一行。
 
-> **(2026-10-18 更正,上图 Dispatcher 框、AssignGate 第 1 步与键表;原文保留;已落码,未编译、未测试,待 Codex 验证)**
+> **(2026-10-18 更正,上图 Dispatcher 框、AssignGate 第 1 步与键表;原文保留;已落码,未编译、未测试,待 Gemini 验证)**
 > - Dispatcher 框「ZPOPMIN free 个 → 签 gate token → SET admit:{queueId}」改读:`ZRANGE` 读出前 `batch` 个候选(只读,条目仍在队列)→ 逐条挑 gate → 每条一段 `admitEntryScript`(2026-11-06 起第一条单发探路,之后每块至多 128 条放进一个 pipeline,见下文「一、出队」)。脚本先判成员仍在队列,再在同一段里写 meta 的 `admitted_at`、放行槽与在途占位,最后 `ZREM` 成员。gate 票仍在取走时才签。
 > - AssignGate 第 1 步与 QueryQueueStatus 的「验签 + Lookup」:`Lookup` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账。
 > - 键表 `queue:meta:{queueId}` 与 `queue:token:{token}` 的「TTL=1h」改读**空闲 TTL**:入队时设 `QueueEntryTTL`;之后每次排队中的查询,剩余 TTL 不足 `QueueEntryTTL` 时续到 1.25 倍。所以条目空闲(自最后一次成功的排队中查询或入队起算)至少 `QueueEntryTTL`、至多 1.25 倍才过期;放行之后不再续期。
@@ -94,7 +94,7 @@ Client ── POST ───►│ /api/assign-gate                             
 > - 排队令牌的签名过期固定为 24h(`loginqueue.queueTokenMaxAge`),不再等于 `QueueEntryTTL`(§6)。
 > - 推导与残余风险见 §5 决策树后的 2026-10-18 更正。
 
-> **(2026-11-12 更正,键形与句柄;全部 Redis 上 Cluster 第 4 批,[设计](redis-cluster-all-domains-20261110.md) §4.3;已落码,未编译、未测试,待 Codex 验证)**
+> **(2026-11-12 更正,键形与句柄;全部 Redis 上 Cluster 第 4 批,[设计](redis-cluster-all-domains-20261110.md) §4.3;已落码,未编译、未测试,待 Gemini 验证)**
 > 排队族的五把键与放行锁都带本 zone 的 hash tag `{q:<zone>}`,一个 zone 的这些键在 Redis Cluster 上同槽,入队的 MULTI、`lookupScript`、`admitEntryScript` 都能在集群上执行;不同 zone 散到不同槽。本文其余各处的旧键名按下表读(上图键表也按它读):
 >
 > | 旧键名 | 现键名 |
@@ -207,7 +207,7 @@ service LoginPreGate {
      └─ 其余 → 排到队尾,status=QUEUEING + queue_token + rank
 ```
 
-上面是 2026-11-20 起的现行决策树(已落码,未编译、未测试,待 Codex 验证)。相对此前的版本改了六处,都是把登记过的「以后再修」和复查发现的问题一次改掉:
+上面是 2026-11-20 起的现行决策树(已落码,未编译、未测试,待 Gemini 验证)。相对此前的版本改了六处,都是把登记过的「以后再修」和复查发现的问题一次改掉:
 
 - **一个账号一个条目(第 7 步)。** 此前每次不带令牌的 AssignGate 都新建一个条目:丢了令牌的客户端(回包丢失、换设备、重装)掉到队尾,原条目成了白占名额的孤儿;同一个账号也可以反复入队占位。现在条目号由账号推出(`loginqueue.queueIDForAccount`,对 zone 与账号做 HMAC,不带出账号原文),同一账号再次入队得到同一个条目,位置不变。旧令牌照样有效,两台设备同时轮询时先取到放行槽的那台进。匿名分配没有账号可认,仍然每次新建。入队改为一段脚本(`enqueueScript`),一次往返里判状态、写条目、登记令牌、读名次与总数(此前是一个 MULTI 加两次读)。
 - **队列有上限(第 7 步)。** 一个 zone 的排队键都在同一个 Redis 主节点上,这个主节点还放着别的 zone 的排队键和控制域的其它键,策略是 noeviction。队列无界时,把它写满的后果是这个主节点上所有写入一起被拒。`Queue.MaxQueueLength` 缺省 1000000,取自单 zone 排队容量分析的上界([全部 Redis 上 Cluster](./redis-cluster-all-domains-20261110.md) §6.2);超出的请求回 `QUEUE_FULL`,网关把它映射成前置限流那种重试提示(code=100、`queue_source="ratelimit"`),客户端不用改。已经在排的账号再入队不受上限影响。
@@ -218,7 +218,7 @@ service LoginPreGate {
 
 dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop」。
 
-> **(2026-11-12 鉴权一步的来由;上面的决策树已按它改写,§4 的 `AssignGateRequest.account` 与 §9 的旧说法按本段读;已落码,未编译、未测试,待 Codex 验证)**
+> **(2026-11-12 鉴权一步的来由;上面的决策树已按它改写,§4 的 `AssignGateRequest.account` 与 §9 的旧说法按本段读;已落码,未编译、未测试,待 Gemini 验证)**
 > 原来的第 2 步用请求里客户端**自报**的 `account` 判「已有在线会话、免排队」,也拿它当排队身份:报出别人的账号名就能插队、冒用排队身份;
 > 第三方登录的客户端又不知道自己的账号名(`wx_<unionid>` 等由服务端算出),合法的免排队反而用不上。改为:
 > - **协议**:`AssignGateRequest` 删掉字段 3 `account`(`reserved 3; reserved "account";`),新增字段 5 `access_token`(`/api/login` 签发的那一个)。
@@ -236,7 +236,7 @@ dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop�
 >   「登录已失效,请重新登录」,不重试(断线重连按失败结束)。
 >   robot 用上一轮拿到的令牌分配 gate,收到 401 丢掉令牌改匿名重试一次(只在旧路径开着时成功)。
 
-> **(2026-10-15 更正,上图第 1 步「未命中 → status=QUEUEING + 当前 rank」;原文保留;已落码,未编译、未测试,待 Codex 验证)** 负责人 2026-10-15 按「最标准」定:放行之后客户端拿到确定的终态,不再停在名次 0。此前「未命中」一律回 QUEUEING,放行槽没人来取、按 `AdmitTTL` 过期之后再查,或已经取走过一次之后再查(回包丢失后重试、go-redis 超时重发 `GETDEL`),ZRANK 都落空,回「排队中、名次 0」,客户端一直轮询到 meta 按 `QueueEntryTTL`(1h)过期(§14 第 6 条)。现行判定(`go/login/internal/logic/pkg/loginqueue/queue.go` 的 `Lookup`,`:282` 起):
+> **(2026-10-15 更正,上图第 1 步「未命中 → status=QUEUEING + 当前 rank」;原文保留;已落码,未编译、未测试,待 Gemini 验证)** 负责人 2026-10-15 按「最标准」定:放行之后客户端拿到确定的终态,不再停在名次 0。此前「未命中」一律回 QUEUEING,放行槽没人来取、按 `AdmitTTL` 过期之后再查,或已经取走过一次之后再查(回包丢失后重试、go-redis 超时重发 `GETDEL`),ZRANK 都落空,回「排队中、名次 0」,客户端一直轮询到 meta 按 `QueueEntryTTL`(1h)过期(§14 第 6 条)。现行判定(`go/login/internal/logic/pkg/loginqueue/queue.go` 的 `Lookup`,`:282` 起):
 >
 > - dispatcher 放行时在写放行槽的同一个 MULTI 里给 meta 记 `admitted_at`(放行时刻 unix 毫秒,`markAdmittedScript`,`queue.go:603`;只在 meta 还在时写,不凭空建出没有 TTL 的 meta;`HSET` 不改 meta 的 TTL)。MULTI 里各命令对其它客户端同时可见,所以「看得到 `admitted_at`」⇒「放行槽也已写过」。
 > - `Lookup` 先 `GETDEL` 放行槽,取到即签票回 ADMITTED(不变)。取不到时一次 `HMGET meta zone_id admitted_at`(替换原来的 `HGET zone_id`,往返数不变)。
@@ -246,7 +246,7 @@ dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop�
 >
 > 仍会停在名次 0 的只剩 `PopAdmit` 在写放行槽之前丢掉的条目(`pickFn` 返回 `(nil, nil)`、Marshal 失败、写放行槽的 MULTI 失败,§14 第 7 条),这类条目没有 `admitted_at`,与在途窗口无法区分。回包丢失时那张 gate 票仍找不回来,客户端收到 410 后从队尾重新排;Java 版对取走后再查同样回 410,另给取走加了请求号,让 go-redis 超时重发能拿回同一张票(`spec_G4b-G.md` §5.8 第 4 条),本仓库没有做。`queue:meta:{queueId}` 的字段因此多一个 `admitted_at`(§3 键表未列)。
 >
-> **(2026-10-15 补注,上面第 1 条与末段;原文保留;已落码,未编译、未测试,待 Codex 验证)** 同日复查后,`PopAdmit` 写放行的方式又改了一次:
+> **(2026-10-15 补注,上面第 1 条与末段;原文保留;已落码,未编译、未测试,待 Gemini 验证)** 同日复查后,`PopAdmit` 写放行的方式又改了一次:
 >
 > - 放行槽、`admitted_at`、在途占位改由一段脚本 `admitEntryScript` 写(`Script.Run`,即 `EVALSHA`,遇到 `NOSCRIPT` 回退 `EVAL`),不再是 MULTI{`SET`, `markAdmittedScript`, `admittedHoldScript`};`markAdmittedScript` 已删除。三者对其它客户端仍同时可见,「看得到 `admitted_at`」⇒「放行槽也已写过」照旧成立,上面 `Lookup` 的判定顺序不变。
 > - 脚本先做两道只读判定:**meta 不在**(条目在队里待满 `QueueEntryTTL`,token 索引与排队令牌同时失效,再没人取得到)→ 整条丢弃,不写放行槽、不占名额、不计入放行数,每批一行 INFO(`reason=meta_gone`);**`admitted_at` 已在** → 什么都不写、计入放行数。第二道是改成单条命令的必要配套:go-redis 对单条命令在读超时 / 连接断开后会自动重发,原来的 MULTI 读失败不重发;不加这道,重发会写出第二个放行槽、签出第二张 gate 票。
@@ -255,7 +255,7 @@ dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop�
 >
 > 末段「仍会停在名次 0」的路径因此变为:取消之后写入超出 3s 预算、Redis 出错(含 noeviction 写满)、进程被强杀、`pickFn` 返回 `(nil, nil)`、Marshal 失败;「写放行槽的 MULTI 失败」一项改读「放行脚本执行失败」。详见 §14 第 7、8 条补注。
 
-> **(2026-10-18 更正,上图第 1 步与上面两条 10-15 注;原文保留;`loginqueue` 包已落码,未编译、未测试,待 Codex 验证)** 本条是 10-18 改造的完整说明,文中其余 10-18 注都指向这里。方向是评审后定稿的规格,不改 proto、不新增 tip 码、不新增配置键,客户端契约不变:排队令牌照旧不透明,EXPIRED 照旧映射为 410。
+> **(2026-10-18 更正,上图第 1 步与上面两条 10-15 注;原文保留;`loginqueue` 包已落码,未编译、未测试,待 Gemini 验证)** 本条是 10-18 改造的完整说明,文中其余 10-18 注都指向这里。方向是评审后定稿的规格,不改 proto、不新增 tip 码、不新增配置键,客户端契约不变:排队令牌照旧不透明,EXPIRED 照旧映射为 410。
 >
 > 本次修掉两个缺陷:
 > - **D1:写满或出错就丢人。** noeviction 写满时 `ZPOPMIN` 照常弹出,放行脚本却被拒,几拍之内整条队列被弹空,所有人停在名次 0,直到 meta 过期(§14 第 7 条)。脚本出错、进程被强杀、`pickFn` 回 `(nil, nil)`、Marshal 失败,也都会丢条目。
@@ -353,7 +353,7 @@ dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop�
 >
 > **六、后续可选项**:评审 #11 / #20 提议把第一次 `GETDEL` 并进读状态脚本,往返 3 → 2,同时可退役测试注入点 `afterAdmitMiss`。这是等价简化,不是缺陷修复;本次保留「`GETDEL` → 注入点 → 读状态脚本 → 必要时二次 `GETDEL`」的结构。
 >
-> **七、用例**(待 Codex 执行,`queue_test.go` / `dispatcher_test.go`)
+> **七、用例**(待 Gemini 执行,`queue_test.go` / `dispatcher_test.go`)
 > - 写满与出错:`TestPopAdmit_OOMOnAdmitScript_EntriesStayQueued`、`TestPopAdmit_ScriptErrorStopsBatch_PartialWriteCleanedAsAlready`、`TestPopAdmit_PickFailure_EntryNeverLeavesQueue`、`TestPopAdmit_CtxCanceledMidBatch_RestStayQueued`、`TestDispatchOnce_PartialBatchError_CountsAdmittedAndLogsOnce`、`TestDispatchOnce_CanceledDuringPopAdmit_NoErrorLog`。
 > - 只写一次与毒丸:`TestPopAdmit_OverlappingLeaders_SameEntryAdmittedOnce`、`TestPopAdmit_MetaNotHash_CleanedWithoutStallingZone`、`TestPopAdmit_EmptyMemberAtHead_Removed`。
 > - 空闲 TTL:`TestPoll_ContinuousPollingOutlivesEntryTTL`、`TestPoll_RenewalIsLazy_OnlyBelowEntryTTL`、`TestPoll_IdleBeyondIdleTTL_Expires`、`TestPoll_NoRenewalAfterAdmit`。
@@ -363,7 +363,7 @@ dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop�
 >
 > **八、Java 版**:待做,由主会话在 Java 仓库 `PARITY.md` 登记。
 
-> **(2026-11-11 更正,上面「二、查询」第 3 步「`GETDEL` 取到」与「`admit_window_passed`」两支、「一、出队」的「重叠 leader / 多副本」一条、「五、残余风险」第 1 条;原文保留;已落码,未编译、未测试,待 Codex 验证。对应 [infra-reconnect-overview.md](infra-reconnect-overview.md) §4.1 R7、R8)**
+> **(2026-11-11 更正,上面「二、查询」第 3 步「`GETDEL` 取到」与「`admit_window_passed`」两支、「一、出队」的「重叠 leader / 多副本」一条、「五、残余风险」第 1 条;原文保留;已落码,未编译、未测试,待 Gemini 验证。对应 [infra-reconnect-overview.md](infra-reconnect-overview.md) §4.1 R7、R8)**
 >
 > - **重取窗口(R8)。** `lookupScript` 取走放行槽时,在同一段里把放行槽 JSON 与重取截止(取走时刻 + 交票后宽限 G,login 进程时钟)写进 meta,字段 `taken_slot`、`retake_until`。meta 是 hash 时才写,`HSET` 不改 TTL。之后放行槽不在、meta 有 `admitted_at` 时:截止之前回「重取」,同一个槽现签一张新票、ADMITTED,占位改为 `now + G`;过了截止才回 EXPIRED(`admit_window_passed`)。
 >   - 为什么:取走那次的回包丢了(go-redis 读超时后重发同一条 `EVALSHA`、客户端重试),旧版第二次只能拿到 `admit_window_passed`,排到号的玩家拿不到票、从队尾重排。取走时签票失败(`signFn` 报错)同样能在窗口里重试。
@@ -390,7 +390,7 @@ admitted_inflight = 清掉过期成员后的 ZCARD admitted:zset:{q:<z>}
 free         = max(0, capacity - online - admitted_inflight)
 ```
 
-**区容量按 gate 承载封顶(2026-11-10 起;已落码,未编译、未测试,待 Codex 验证)**。代码在 `go/login/internal/logic/pkg/loginqueue/capacity.go`
+**区容量按 gate 承载封顶(2026-11-10 起;已落码,未编译、未测试,待 Gemini 验证)**。代码在 `go/login/internal/logic/pkg/loginqueue/capacity.go`
 的 `capByGates`,规则在 `go/shared/gatepick/capacity.go`。快速通道的 `FreeSlots` 与 dispatcher 的 `freeSlotsFromCandidates` 走同一处,
 快速通道的占位预算 `capacity − online` 也用封顶之后的值。
 
@@ -733,7 +733,7 @@ Queue:
 > - **发布约束。** 本版本以及从它回滚,都必须在 `Enabled=false` 下滚完。`go/login/etc/login.yaml` 的 `Queue` 段与 `config.go` 的 `QueueConf` 注释已写同样的补注。
 > - **K8s。** 镜像原样带过 `QueueEntryTTL` 的值,不受影响。
 
-**K8s 上的取值(G4b,2026-10-14;已落码,未编译、未测试,待 Codex 验证)**:`tools/scripts/k8s_deploy.ps1` 按 `-LoginQueue auto|on|off` 决定 login ConfigMap 写不写本段。
+**K8s 上的取值(G4b,2026-10-14;已落码,未编译、未测试,待 Gemini 验证)**:`tools/scripts/k8s_deploy.ps1` 按 `-LoginQueue auto|on|off` 决定 login ConfigMap 写不写本段。
 缺省 `auto` 跟随 `-ReleaseProfile`:dev 不写(go-zero 零值 `Enabled=false`,产物与 G4b 之前逐字相同),staging / prod 写。写的时候:
 
 - `Enabled: true`;`DispatchInterval` / `AdmitTTL` / `QueueEntryTTL` / `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL` 从 `go/login/etc/login.yaml` 原样镜像。
@@ -829,11 +829,11 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
 4a. **客户端显示预计等待时间(ETA)**:不做(2026-11-20 定案)。放行速率取决于在线玩家什么时候离开,不是一个稳定的速率:区满、没人下线时等待没有上界,估出来的时间会大幅跳动。服务端只给名次与总数,这两个数是准的。
 5. ~~**多 zone 公平性**:dispatcher 按 `activeZones` 顺序遍历,极端情况下前面 zone 抢光 admit 批次。~~ 已由 §7.1 消解:每个 zone 有独立的 leader,不存在 zone 之间互相抢批次。
 6. **取走后再轮询回「排队中、名次 0」**(2026-10-13 登记,G4b-G 不含):同一令牌取走之后再轮询,meta 与 token 索引还在、ZRANK 落空,回 QUEUEING、rank 0,直到 1h 过期;回包丢失时这张 gate 票找不回来。Java 版回 410。这是 `PARITY.md`「登录排队」行 ③ 的另一句(`spec_G4b-G.md` §5.8 第 1 条)。
-   - **(2026-10-15 更正:已修;已落码,未编译、未测试,待 Codex 验证)** 取走之后再查,以及放行槽没人来取、按 `AdmitTTL` 过期之后再查,都回 EXPIRED(gateway 410,原因 `admit_window_passed`),判据是 meta 里的 `admitted_at`,见 §5 决策树后的更正。回包丢失时 gate 票仍找不回来,客户端从队尾重新排。PopAdmit 写放行槽之前丢掉的条目仍停在名次 0 直到 meta 过期(第 7 条)。
+   - **(2026-10-15 更正:已修;已落码,未编译、未测试,待 Gemini 验证)** 取走之后再查,以及放行槽没人来取、按 `AdmitTTL` 过期之后再查,都回 EXPIRED(gateway 410,原因 `admit_window_passed`),判据是 meta 里的 `admitted_at`,见 §5 决策树后的更正。回包丢失时 gate 票仍找不回来,客户端从队尾重新排。PopAdmit 写放行槽之前丢掉的条目仍停在名次 0 直到 meta 过期(第 7 条)。
 7. **`PopAdmit` 不是单段 Lua**(2026-10-13 登记,既有):「FreeSlots 读占位数 → ZPOPMIN → 逐条写占位」是多次往返,一批把队列弹空之后、占位逐条写完之前,快速通道看到「队列空、占位还没写全」可以再占进来,任一时刻在途 ≤ 2 ×(capacity − online)。`pickFn` 返回 `(nil, nil)`、Marshal 失败、MULTI 失败时条目丢失(G1b 规格 §4.5 第 1 条)。Java 版把弹出、算空位、写占位放在一段 Lua 里(`spec_G4b-G.md` §5.4、§5.8 第 2 条)。
-8. **在途占位脚本只有 miniredis 上的证据**(2026-10-15 登记):G4b-G 的计数、快速通道与 `admittedHoldScript` 三段脚本(含 10-15 的条件续期、MULTI 里的 `EVAL`)只有 miniredis 单测覆盖(单测本身也还待 Codex 执行),没有任何真实 Redis 上的运行证据。负责人 2026-10-15 定为**硬门槛**:G4b-2 打开排队之前,`spec_G4b-G.md` §8.4 的最小冒烟必须在真实 Redis 7.x 上跑通并记进 `docs/PROGRESS.md`,否则任何环境都不打开排队(`spec_G4b.md` §7 合入门槛)。
+8. **在途占位脚本只有 miniredis 上的证据**(2026-10-15 登记):G4b-G 的计数、快速通道与 `admittedHoldScript` 三段脚本(含 10-15 的条件续期、MULTI 里的 `EVAL`)只有 miniredis 单测覆盖(单测本身也还待 Gemini 执行),没有任何真实 Redis 上的运行证据。负责人 2026-10-15 定为**硬门槛**:G4b-2 打开排队之前,`spec_G4b-G.md` §8.4 的最小冒烟必须在真实 Redis 7.x 上跑通并记进 `docs/PROGRESS.md`,否则任何环境都不打开排队(`spec_G4b.md` §7 合入门槛)。
    - **(2026-10-15 补注,第 7、8 条;已落码,未编译、未测试)** 第 7 条:写放行改为单段脚本 `admitEntryScript`(见 §5 决策树后的补注),弹出之后的写入用 `WithoutCancel`,看到取消之后再给 3s 预算(没有取消时不截断),停服或丢租约不再丢整批;写入出错每批一行 ERROR。弹出本身仍不在这段脚本里,本条「不是单段 Lua」的其余结论(快速通道可再占进来、在途 ≤ 2×)不变。仍丢条目的路径:取消之后超出预算、Redis 出错、强杀、`pickFn` 回 `(nil, nil)`、Marshal 失败。其中 **noeviction 写满**会让每拍弹出的整批全部写失败、几拍之内把队列弹空、所有人停在名次 0 约 1h:`ZPOPMIN` 不带 DENYOOM 照常成功,写入脚本被拒。根治要把弹出与写入合成一段 Lua、用 `#!lua` 声明 flags 且不带 `allow-oom`(Redis ≥ 7,miniredis 不支持,只能在真实 Redis 上验证),**待负责人定**;上线前至少给 redis-queue 配内存水位告警。另:锁续期单次失败不会触发丢租约(`onLost` 只在超过 fence 窗口或属主已换人时调用)。第 8 条:真实 Redis 冒烟改为覆盖 `admitEntryScript`(直接 `EVALSHA` / `EVAL`,不再是 MULTI 里的 `EVAL`)。
-   - **(2026-10-18 更正,第 6、7、8 条及上一条补注;原文保留;已落码,未编译、未测试,待 Codex 验证)** 完整说明见 §5 决策树后的 2026-10-18 更正。
+   - **(2026-10-18 更正,第 6、7、8 条及上一条补注;原文保留;已落码,未编译、未测试,待 Gemini 验证)** 完整说明见 §5 决策树后的 2026-10-18 更正。
      - **第 7 条已修。** 出队改为「`ZRANGE` + 每条一段先判在队的 `admitEntryScript`」,条目在放行写成之前不离开队列。本条与上一条补注列出的丢条目路径全部消除:`pickFn` 回 `(nil, nil)`、Marshal 失败、脚本出错、取消之后超出预算、写满、强杀。第 6 条更正末句「PopAdmit 写放行槽之前丢掉的条目仍停在名次 0」随之作废。
      - **「根治要用 `#!lua` 声明 flags」的前提作废。** 兼容模式(脚本无 shebang)下,写满时脚本照常开跑。只有当第一条写是 DENYOOM 命令、且之前没执行过任何写时,脚本才在那条写上被拒;一旦执行过任何写,后续命令不再受 maxmemory 约束。
        - 放行脚本据此把 `HSET`(DENYOOM)排成写段第一条,它之前只有只读命令。写满时整段被拒、什么都没写、条目留在队列,本身就是 fail-closed,不需要把弹出与写入合成「一段 Lua 出整批」。
@@ -847,12 +847,12 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
        - 毒丸 meta。
        - RESP3 下的各 `Poll` 分支。
 9. **排队超过 `QueueEntryTTL` 会被弹回队尾**(2026-10-15 登记,既有,**待负责人定**):meta、token 索引、排队令牌只在 `Enqueue` 时设一次 `QueueEntryTTL`(1h),等待中不续期。等待超过 1h 的玩家下一次查询回 EXPIRED(handler 在 `Lookup` 之前先校验排队令牌的 HMAC 过期时刻,令牌与 meta 同时到期,所以原因通常是 `ttl`,只有令牌按秒取整多出的不到 1s 内才是 `meta_gone`;监控看 `login_queue_expired_total{reason="ttl"}`),丢 token 从队尾重排;他原来的队列成员留在 ZSET 里,轮到时被 `admitEntryScript` 按 meta 不在丢弃(不再白占名额)。开服首日若等待可能超过 1h,要么调大 `QueueEntryTTL`,要么在查询时续期 meta / token 索引 / 令牌(需同步改令牌过期语义,Java 版对齐),由负责人决定。
-   - **(2026-10-18 更正:已修,空闲 TTL + 24h 令牌;原文保留;已落码,未编译、未测试,待 Codex 验证)** 做法见 §5 决策树后的 2026-10-18 更正「三、空闲 TTL 与令牌」。
+   - **(2026-10-18 更正:已修,空闲 TTL + 24h 令牌;原文保留;已落码,未编译、未测试,待 Gemini 验证)** 做法见 §5 决策树后的 2026-10-18 更正「三、空闲 TTL 与令牌」。
      - **怎么修的。** 排队中的查询在剩余 TTL 不足 `QueueEntryTTL` 时,把 meta、token 索引与队列键续到 1.25 倍。排队令牌的签名过期与 `QueueEntryTTL` 脱钩,固定 24h。
      - **效果。** 持续轮询的人不会因为等满 `QueueEntryTTL` 被弹回队尾(`TestPoll_ContinuousPollingOutlivesEntryTTL`:轮询 2h 仍在排队并被放行)。空闲超过 `QueueEntryTTL`(至多 1.25 倍)的条目回 EXPIRED,原因记 `meta_gone`(此前通常记 `ttl`);`ttl` 只在令牌超过 24h 时出现。
      - **孤儿条目。** 不再轮询的条目,轮到时由放行脚本的 META_GONE 分支 `ZREM`。
      - **Java 版。** 上文「需同步改令牌过期语义,Java 版对齐」:本仓库已改,Java 版待做(由主会话在 `PARITY.md` 登记)。
-10. **放行速率约等于 1 / Redis 往返,轮询每次三次往返**(2026-11-05 全链路水平扩展盘点第 14 条)。**2026-11-06 已落码,未编译、未测试,待 Codex 验证**,做法见 §5 决策树后 2026-10-18 更正里「一、出队」的「按块发」与「二、查询」的判定顺序:
+10. **放行速率约等于 1 / Redis 往返,轮询每次三次往返**(2026-11-05 全链路水平扩展盘点第 14 条)。**2026-11-06 已落码,未编译、未测试,待 Gemini 验证**,做法见 §5 决策树后 2026-10-18 更正里「一、出队」的「按块发」与「二、查询」的判定顺序:
    - 放行:第一条单发探路,之后每块至多 128 条放进一个 pipeline,一块一次往返;每条仍是独立的一段 `admitEntryScript`,写满与部分写入的语义逐条不变。
    - 轮询:token 核对、取放行槽、读状态与续期合成一段 `lookupScript`,排队中一次轮询从三次往返降到一次。
    - 排队所在的 Redis:2026-11-12 起排队进控制集群 `redis-control`,同一 zone 的排队键共用 `{q:<z>}`(全部 Redis 上 Cluster 第 4 批)。原来的 `-RedisSplit queue` 与按 zone 组的 `redis-queue-g<N>` 已随第 6b 批退役。单 zone 排队的容量边界与定案(不拆分片、按名次拉长 `RetryAfterMs`)见 [redis-cluster-all-domains-20261110.md](redis-cluster-all-domains-20261110.md) §6.2。
@@ -873,7 +873,7 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
 
 **关闭排队(秒级回滚)**:`login.yaml` 改 `Queue.Enabled: false`,所有玩家立刻走 fast path。
 
-**K8s 上关闭排队(G4b 止血,2026-10-14;已落码,未编译、未测试,待 Codex 验证)**:不要手改 ConfigMap(进程只在启动时读,Pod 模板不变就不会滚动),也不要 `kubectl rollout undo`
+**K8s 上关闭排队(G4b 止血,2026-10-14;已落码,未编译、未测试,待 Gemini 验证)**:不要手改 ConfigMap(进程只在启动时读,Pod 模板不变就不会滚动),也不要 `kubectl rollout undo`
 (它只退 Pod 模板、不退 ConfigMap,排队照旧开着)。直接调 `k8s_deploy.ps1` 重跑该 zone 的部署,其余参数与上一次部署一致,加上 `-LoginQueue off`:
 
 ```powershell

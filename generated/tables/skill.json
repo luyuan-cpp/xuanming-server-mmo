@@ -6690,6 +6690,142 @@
     1
    ],
    "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.85,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "【玄脉之季免费】物理攻击敌方最多3个目标并附加2回合破甲（防御-15%）；第二季预埋模板。",
+   "effect": [
+    150010,
+    150011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15101,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "玄脉破军",
+   "pet_max_targets": 1,
+   "prototype_code": "SS201",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "【玄脉之季免费】法术攻击敌方最多3个目标并附加2回合破阵减防（防御-15%）；第二季预埋模板。",
+   "effect": [
+    150020,
+    150021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15102,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "玄脉天罚",
+   "pet_max_targets": 1,
+   "prototype_code": "SS202",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【玄脉之季免费】为友方最多3个目标施加2回合护盾，短冷却保人；第二季预埋模板。",
+   "effect": [
+    150030
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15103,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "玄脉灵幕",
+   "pet_max_targets": 1,
+   "prototype_code": "SS203",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【玄脉之季免费】为友方最多3个目标提升2回合双攻势能（+15%）；第二季预埋模板。",
+   "effect": [
+    150040
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15104,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "玄脉归元",
+   "pet_max_targets": 1,
+   "prototype_code": "SS204",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
   }
  ]
 }

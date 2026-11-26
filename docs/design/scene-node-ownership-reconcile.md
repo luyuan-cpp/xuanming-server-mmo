@@ -1,6 +1,6 @@
 # scene 节点的场景归属对账(缺口清单第 33 条)
 
-状态:**已落码,未编译、未测试,待 Codex 验证(§10)。** 2026-11-06 初版(节点回来之后对账);2026-11-10 补完三项残余:
+状态:**已落码,未编译、未测试,待 Gemini 验证(§10)。** 2026-11-06 初版(节点回来之后对账);2026-11-10 补完三项残余:
 与 etcd 失联期间也按映射收敛(§4.5)、节点号被新进程接走时全部排空(§4.6)、开始排空按住户预算限速(§4.7),加了告警(§8)。
 Java 版只登记待做(§11)。
 
@@ -352,7 +352,7 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
    时改成按槽分批,持有者键单独读。
 6. **排空期间每轮重调一次 DestroyScene**,`BeginSceneDrain` 每次打一行 WARN;与 scene_manager 重发 DestroyScene 的频率同量级。
 7. **断线保留中的玩家会被直接退出**(只存盘不改派):与频道缩容排空同一口径。短重连时 scene_manager 按 location 回到同号场景的新属主。
-8. **告警规则没有过 promtool,也没有装进任何集群**:交 Codex,§10 第 7 步(promtool)与第 7a 步(本机 dev 集群)。
+8. **告警规则没有过 promtool,也没有装进任何集群**:交 Gemini,§10 第 7 步(promtool)与第 7a 步(本机 dev 集群)。
 9. **水位丢了的那一轮认不出倒退**(接受;有手工退路,2026-11-11 定):没有水位的那一轮只建立水位。水位刚丢、etcd 又恰在这一轮之前倒退,
    这次倒退认不出来:旧记录里修订号大于新登记的,要等过期(不再续期,最长一天)才让位,期间这些号认不出顶替。只少一层识别,不会误判排空。
    - **为什么接受**:水位只在控制域丢数据时才会没有。整个实例丢数据(被清空、换成空实例)时,持有者记录跟着一起没了,没有残留可防;
@@ -384,7 +384,7 @@ scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_tot
 - 告警 `deploy/k8s/scene-ownership-alerts.yaml`;安装说明 `deploy/k8s/README.md`;处置 `docs/ops/scene-node-role-split.md`。
   `deploy/k8s/scene-manager-alerts.yaml` 加 `SceneManagerEtcdRevisionRegressed`,处置 `docs/ops/etcd-maintenance-runbook.md` §7a。
 
-**给 Codex**:仓库根执行,MSBuild 串行 `/m:1`,失败不连续重试,保留第一条 `error C` / `LNK` 原文。同一工作区里还有别的会话在改
+**给 Gemini**:仓库根执行,MSBuild 串行 `/m:1`,失败不连续重试,保留第一条 `error C` / `LNK` 原文。同一工作区里还有别的会话在改
 `scene_lifecycle`、两个 CreateScene / DestroyScene 入口与 `go/scene_manager`,编译错误先按文件归属分清。
 
 1. `msbuild cpp/libs/services/scene/scene.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64`

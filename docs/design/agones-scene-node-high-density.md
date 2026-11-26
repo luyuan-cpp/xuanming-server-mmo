@@ -7,7 +7,7 @@
 
 > **2026-09-29 更新(集群外入口 D81–D85)**:C++ 生命周期代码已从 `cpp/nodes/scene/agones/` 下沉到 `cpp/libs/engine/infra/agones/` 并泛化,
 > 类名改为 `GameServerLifecycle` / `AllocationPermit`,battle 也接入(Fleet `portPolicy: Dynamic`、排空标签、EventLoop 心跳)。
-> 下文凡提到旧路径 / 旧类名的地方均按 §12 的对照表理解;scene 只做了机械改名,行为不变。**本轮改动未编译、未测试、未上集群,待 Codex 验证。**
+> 下文凡提到旧路径 / 旧类名的地方均按 §12 的对照表理解;scene 只做了机械改名,行为不变。**本轮改动未编译、未测试、未上集群,待 Gemini 验证。**
 
 ## 1. 为什么是 1 GameServer = 1 Scene Node,而不是 1 Scene
 
@@ -114,7 +114,7 @@ Ready
 里没有错误字段(`proto/scene/scene.proto`),非 OK 的 gRPC 状态是唯一能让
 SceneManager 知道"这次失败了、该回滚"的诚实手段。
 
-> 2026-10-16(第 4 批,代码未编译,待 Codex 验证):gRPC 服务端改为跑在 EventLoop 上的 `muduo_grpc::Server`,
+> 2026-10-16(第 4 批,代码未编译,待 Gemini 验证):gRPC 服务端改为跑在 EventLoop 上的 `muduo_grpc::Server`,
 > 许可改在守护段 `grpc.CreateScene.guard` 里用 `AcquireAllocationPermitAsync(loop, cb)` 取,结果经 `queueInLoop`
 > 回到 loop 后才 `Proceed()`;「先许可、后建实体」这条约束不变(见 [grpc-muduo-transport.md](grpc-muduo-transport.md)
 > §15.8.4、§15.9)。第 4 批之前的写法是在 gRPC 线程上、`runInLoop` **之前**调 `AcquireCreatePermitBlocking()`
@@ -405,7 +405,7 @@ zlib、hiredis、yaml-cpp 也必须按 `/MDd` 构建；Debug 的 `/WHOLEARCHIVE`
 
 ## 12. 2026-09-29:代码下沉 infra、泛化为 GameServerLifecycle,battle 接入(集群外入口 D81–D85)
 
-决策原文见 `docs/design/k8s-client-entry.md`(D76–D93,battle 相关为 D81–D86 与「battle Fleet health 预算与就绪判据」)。本节只记与本文相关的代码事实。**全部未编译、未测试、未上集群,待 Codex 验证。**
+决策原文见 `docs/design/k8s-client-entry.md`(D76–D93,battle 相关为 D81–D86 与「battle Fleet health 预算与就绪判据」)。本节只记与本文相关的代码事实。**全部未编译、未测试、未上集群,待 Gemini 验证。**
 
 ### 12.1 位置与改名(D85,scene 只做机械改名,不复制第二份状态机)
 
@@ -474,7 +474,7 @@ zlib、hiredis、yaml-cpp 也必须按 `/MDd` 构建；Debug 的 `/WHOLEARCHIVE`
 | `cpp/nodes/battle/main.cpp` | battle 的 THooks 地址来源工厂、lifecycle 启动选项、心跳、停机顺序 |
 | `cpp/nodes/battle/battle_room_table.h` / `battle_admission_gate.h` | 房间表(增删恰好回调一次)与进程级准入闸,各有独立 gtest(`cpp/nodes/battle/tests/`,不进 vcxproj,编译命令见文件头) |
 
-### 12.7 验证交接(Codex,仓库根,MSBuild 必须串行 `/m:1`)
+### 12.7 验证交接(Gemini,仓库根,MSBuild 必须串行 `/m:1`)
 
 - 前置:WP2 的 proto 重生(`NodeInfo.client_endpoint`);命令见 `docs/design/k8s-client-entry.md`,不是 `cd go && build.bat`。
 - `msbuild` 依次 core → infra → scene → battle → `cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj`(`/p:Configuration=Debug /p:Platform=x64 /m:1`),

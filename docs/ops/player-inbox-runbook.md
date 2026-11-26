@@ -5,7 +5,7 @@
 > 2026-10-18 第 C 批复核修复:写前门禁加线上交叉核对与来源核对(§2.1),回滚只回退镜像、不检出旧 commit 重跑(§2、§11),
 > scene 日志的 LogQL 选择器改为 sidecar 真有的标签(§2.1、§5),账本校验口径写明收件箱多查 request_id 为 0(§5.2、§10.4)。
 > 2026-11-05 第二轮审计 r2-inbox#1:§2.1 写明关消费会停掉全球结算,§11 第 2、3 步把不能作废的 Battle 结算域单独处理。只改手册。
-> **全部未编译、未测试、未在任何环境演练**,待 Codex 验证(§15)。本手册以代码为准:代码行为变了,要回来同步这里。
+> **全部未编译、未测试、未在任何环境演练**,待 Gemini 验证(§15)。本手册以代码为准:代码行为变了,要回来同步这里。
 > **依据**:`docs/design/player-inbox-service.md`(下称「设计」)v1.0,尤其 §1.4、§1.6、§7.8、§8、§9、§11.7;
 > 计数器倒退的通用处置见 `docs/design/db-write-fencing-mysql.md`(下称「围栏设计」)v0.4 §9.1。
 > **部署接线**:`deploy/k8s/README.md`「玩家收件箱 player-inbox」;告警 `deploy/k8s/player-inbox-alerts.yaml`;合服审计见 `docs/ops/merge-zone-runbook.md`。
@@ -887,7 +887,7 @@ SHOW TABLE mmorpg_player_inbox.player_inbox_item INDEX `uk_player_inbox_item` RE
 
 ---
 
-## 15. 验证(交 Codex,未运行)
+## 15. 验证(交 Gemini,未运行)
 
 在仓库根目录:
 

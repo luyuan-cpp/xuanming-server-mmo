@@ -47,6 +47,10 @@ service ClientPlayerTeam {
 
   // 队员确认本人在本队排位中的人物与宝宝预设(仅追加在末尾,不改变既有方法号)。
   rpc ConfirmRankedPreset(ConfirmRankedPresetRequest) returns (TeamResponse) {}
+  // 队长切换跑图五行跟随队形(仅追加在末尾,不改变既有方法号)。
+  rpc SetTeamFormation(SetTeamFormationRequest) returns (TeamResponse) {}
+  // 队长一键召集队员归队(仅追加在末尾,受团队级服务端冷却约束)。
+  rpc RecallTeamMembers(RecallTeamMembersRequest) returns (TeamResponse) {}
 }
 
 // ---------------- 请求 ----------------
@@ -138,6 +142,24 @@ message ConfirmRankedPresetRequest {
   string request_id = 5;
 }
 
+// 跑图组队跟随阵型样式:默认 0 为长蛇纵队(与既有行为完全一致)。
+enum TeamFollowFormationStyle {
+  TEAM_FOLLOW_FORMATION_COLUMN = 0;   // 长蛇纵队
+  TEAM_FOLLOW_FORMATION_ECHELON = 1;  // 雁行两翼
+  TEAM_FOLLOW_FORMATION_WUXING = 2;   // 五行聚阵
+}
+
+message SetTeamFormationRequest {
+  uint64 expected_team_id = 1;
+  TeamFollowFormationStyle formation = 2;
+  string request_id = 3;
+}
+
+message RecallTeamMembersRequest {
+  uint64 expected_team_id = 1;
+  string request_id = 2;
+}
+
 // ---------------- 回包 / 显示层视图(AGENTS §11.6:在线态只出现在这里) ----------------
 
 message TeamResponse {
@@ -187,6 +209,7 @@ message TeamMemberView {
   uint32 ranked_pet_preset_id = 13;       // 该队员确认的排位宝宝预设
   uint32 ranked_rule_version = 14;        // 确认时的排位规则版本
   bool ranked_preset_confirmed = 15;      // 是否已按当前名单与当前规则版本完成确认
+  bool is_hosted = 16;                    // 读时由 player:hosted:{<id>} 算:仅在不在线且处于离线托管中时为 true
 }
 
 message TeamApplicationView {
@@ -241,6 +264,8 @@ message TeamView {
   bool ranked_presets_all_confirmed = 19;
   uint32 ranked_season_id = 20;
   uint32 ranked_rule_version = 21;
+  // 跑图跟随队形样式(存储于 TeamRecord,跨场景 / 跨节点保持一致)。
+  TeamFollowFormationStyle follow_formation = 22;
 }
 
 enum TeamChangeReason {
@@ -262,6 +287,7 @@ enum TeamChangeReason {
   TEAM_CHANGE_REASON_MATCH_QUEUED = 15;              // 整队进队列等补位;actor_id = 队长
   TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED = 16;      // 整队退出补位队列;actor_id = 主动取消者(0 = 系统撤单,原因在 tip)
   TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED = 17;   // 队员确认排位预设;actor_id = 确认者
+  TEAM_CHANGE_REASON_FORMATION_CHANGED = 18;         // 队长切换跑图跟随队形;actor_id = 队长
 }
 
 message TeamSnapshotS2C {
@@ -280,6 +306,7 @@ enum TeamEventType {
   TEAM_EVENT_TYPE_UNSPECIFIED = 0;
   TEAM_EVENT_TYPE_APPLICATION_REJECTED = 1;  // 发给被拒申请人(他不在队里,收不到视图)
   TEAM_EVENT_TYPE_INVITE_REVOKED = 2;        // 发给被邀请人:队伍解散/满员导致邀请失效
+  TEAM_EVENT_TYPE_LEADER_RECALL = 3;         // 发给在线队员:队长发起一键召集归队(actor_id = 队长)
 }
 
 // 轻量提示:只给"没有视图可推"的接收者,不带状态,客户端只弹 toast。
@@ -306,6 +333,8 @@ message TeamRecord {
   string match_lock_token = 9;                     // 非空 = 开战锁持有者(uuid)
   uint64 match_lock_expire_at_ms = 10;             // SQL权威中token非空且本值0为持久launch锁，仅确证终态可释放；旧Redis锁仍按正数截止。
   repeated uint64 match_lock_roster = 11;          // 集合语义:加锁时的开战名单;锁有效期间必等于 members 的 player_id 集合
+  TeamFollowFormationStyle follow_formation = 12;  // 跑图跟随队形样式(默认 0 = 长蛇纵队)
+  uint64 last_recall_at_ms = 13;                   // 最近一次队长一键召集时刻(SQL 时钟毫秒,跨副本一致限流)
 }
 
 message TeamMemberRecord {

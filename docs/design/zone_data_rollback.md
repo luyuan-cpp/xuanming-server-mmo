@@ -276,7 +276,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
 **仍未解决(已登记为独立任务,本批不做)**:Step 6 的 `GoSvcTag` / `JavaSvcTag` 取当前工作树的 sha,不是回滚目标版本;`OpsProfile`、`GateReplicas`、
 `SceneReplicas` 等不透传;`-ReleaseProfile` 留空仍按 dev 档部署,只有摘要行提醒,没有与集群核对。
 
-**验证状态**:以上全部**未运行**(未编译、未测试,待 Codex 验证)。Codex 在仓库根执行
+**验证状态**:以上全部**未运行**(未编译、未测试,待 Gemini 验证)。Gemini 在仓库根执行
 `pwsh -NoProfile -File tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1`(需要 PATH 上有 git),再跑 `k8s_deploy_contract.tests.ps1`、
 `k8s_client_entry_contract.tests.ps1`、`dev_tools_merge_zone_contract.tests.ps1`,通过标准 `fail=0`,失败时保留全部 `[FAIL]` 行。
 DryRun 冒烟:`pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-rollback -ZoneName e2e -ZoneId 101 -RollbackTargetTime 2026-05-15T14:23:00Z -NodeImage registry.invalid/test/mmorpg-node:0123456789ab -KubeContext kind-mmorpg -LoginDevPasswordAuth`,
@@ -284,7 +284,7 @@ DryRun 冒烟:`pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-rollback
 
 ### 2026-10-15 修订:存盘消费组按 zone 拆分后的 Kafka 步骤(删 Step 2、第 0 步 c / d、Step 5 退役 legacy 位点、Step 6 落到 final(Z))
 
-**状态:已落码,未编译、未测试,待 Codex 验证。** 本节按 2026-10-16 工作区的代码写(`tools/scripts/k8s_zone_rollback.ps1`、`tools/scripts/kafka_offset_reset.ps1`、
+**状态:已落码,未编译、未测试,待 Gemini 验证。** 本节按 2026-10-16 工作区的代码写(`tools/scripts/k8s_zone_rollback.ps1`、`tools/scripts/kafka_offset_reset.ps1`、
 `tools/scripts/lib/kafka_consumer_groups.ps1`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/dev_tools.ps1`),与规格不一致处以代码为准,见本节末尾。
 设计见 [db-consumer-group-per-zone.md](./db-consumer-group-per-zone.md)(§5 收尾、§6 回档、§11 未核实项)。上文「2026-09-29 修订」里「原先的 7 步」
 含 Kafka drain、第 0 步只有两部分,这两处以本节为准(脚本头 `.DESCRIPTION` 已同步改写)。
@@ -331,7 +331,7 @@ DryRun 冒烟:`pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-rollback
    - 否则执行 `kafka-consumer-groups.sh --delete-offsets --group db_rpc_consumer_group --topic db_task_zone_<id>`,输出含 `GROUP_SUBSCRIBED_TO_TOPIC` 即抛出;删完再 describe 一次,仍有数值位点也抛出。
    - 回档是有意回退,这条路不做「新组 ≥ 旧组」检查(那是 `-FinalizeHandoff` 的前置条件)。
 
-- legacy 组即使还有别的 zone 的成员,只要没有成员订阅本 topic,broker 就允许删除。这一点是推断,待 Codex 在钉版的 Kafka 4.3.1 上实测(设计文档 §11 V3(d))。
+- legacy 组即使还有别的 zone 的成员,只要没有成员订阅本 topic,broker 就允许删除。这一点是推断,待 Gemini 在钉版的 Kafka 4.3.1 上实测(设计文档 §11 V3(d))。
 - 仍有订阅者时(本 zone 的 namespace 没删干净、留有 db 实例),Step 5 失败。这时 zone 已停、MySQL 已回档、Redis 已清:清掉残留实例后,**单独重跑脚本打印的那条
   `kafka_offset_reset.ps1` 命令**(带 `-Apply`;重跑时旧组若已没有本 topic 的位点,退役一步打印 `nothing to retire`),再单独跑 Step 6。
 - `-RetireGroup` 必须配 `-Partitions > 0`,不能等于 `-Group`,不能与 `-DeleteAndRecreateTopic` 同用,违反任一条即在入口拒绝。
@@ -367,14 +367,14 @@ DryRun 冒烟:`pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-rollback
 - 原规格只有第 0 步 c;代码按修订稿另加第 0 步 d(Step 5 预演),并要求 `-Partitions` 参与计划覆盖与 `-Apply` 后复核。
 - 原规格风险 8 写「漏删 legacy 位点时由 go/db 的 R7 拦住」;final(Z) 下 go/db 不配 `GroupHandoffFrom`、没有交接闸,实际兜底是 `k8s_deploy.ps1` 显式模式的「两组都有位点即拒绝」。
 
-**未核实项**(待 Codex 在 `apache/kafka:4.3.1` 上实测,设计文档 §11):
+**未核实项**(待 Gemini 在 `apache/kafka:4.3.1` 上实测,设计文档 §11):
 - 对不存在的组执行 `--reset-offsets --to-datetime --execute` 能否建出位点(V3(c));
 - 组 Stable、但无人订阅本 topic 时 `--delete-offsets` 能否成功(V3(d));
 - 不存在组 / Empty 组 describe 的原文,以及 `--execute` 是否打印 NEW-OFFSET 表(V3(b)(f)(h)(i))。
 
 脚本按推定的文案 fail-closed。若 V3(c) 证实建不出位点,回档改动不得发布,交负责人决策。
 
-**Codex 验证**(Claude 未执行):在仓库根逐个执行 `pwsh -NoProfile -NonInteractive -File tools/scripts/tests/<名>.tests.ps1`,名字为
+**Gemini 验证**(Claude 未执行):在仓库根逐个执行 `pwsh -NoProfile -NonInteractive -File tools/scripts/tests/<名>.tests.ps1`,名字为
 `k8s_zone_rollback_gate_router_mode`、`k8s_zone_rollback_flush_guard`、`kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、`dev_tools_merge_zone_contract`、
 `k8s_deploy_contract`、`k8s_client_entry_contract`,通过标准 `fail=0`,失败时保留全部 `[FAIL]` 行。dry-run 冒烟:
 `pwsh -NoProfile -File tools/scripts/k8s_zone_rollback.ps1 -ZoneName t1 -ZoneId 101 -TargetTime 2026-05-15T14:23:00Z -NodeImage ghcr.io/luyuancpp/mmorpg-node:0123456789ab -SkipMySqlPause`,
@@ -383,7 +383,7 @@ Step 6 行含 `-DbConsumerGroup zone`,输出里没有 Step 2 的排空等待。
 
 ### 2026-10-17 修订:R7 复核后的脚本修复与回档的 Kafka 语义(已于 2026-10-17 裁决,落码见下方「2026-10-18 修订」)
 
-**状态:已落码,未编译、未测试,待 Codex 验证。** 本节按 2026-10-17 工作区的 `tools/scripts/k8s_zone_rollback.ps1`、`tools/scripts/kafka_offset_reset.ps1`、`tools/scripts/lib/kafka_consumer_groups.ps1`、
+**状态:已落码,未编译、未测试,待 Gemini 验证。** 本节按 2026-10-17 工作区的 `tools/scripts/k8s_zone_rollback.ps1`、`tools/scripts/kafka_offset_reset.ps1`、`tools/scripts/lib/kafka_consumer_groups.ps1`、
 `tools/scripts/dev_tools.ps1` 写;回档语义一项当时只改了注释,行为没有改。设计细节见 [db-consumer-group-per-zone.md](./db-consumer-group-per-zone.md) §5、§6。
 (2026-10-18 补:下面「回档的 Kafka 语义」一段描述的是**裁决之前**的代码,留作历史;负责人 2026-10-17 选了方案 (A),现行流程以「2026-10-18 修订」为准。)
 
@@ -418,13 +418,13 @@ Step 6 行含 `-DbConsumerGroup zone`,输出里没有 Step 2 的排空等待。
 
 裁决之前,按现有代码执行回档得到的是上面「现状」的混合语义。(2026-10-18:已裁决并落码,见下方「2026-10-18 修订」;上面「两案都要另外核实的一点」在 (A) 下不再相关 —— Step 5 不再按时间戳取位点。)
 
-**Codex 验证**(Claude 未执行):在仓库根逐个执行 `pwsh -NoProfile -File tools/scripts/tests/<名>.tests.ps1`,名字为 `kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、
+**Gemini 验证**(Claude 未执行):在仓库根逐个执行 `pwsh -NoProfile -File tools/scripts/tests/<名>.tests.ps1`,名字为 `kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、
 `k8s_zone_rollback_gate_router_mode`(需要 PATH 上有 git)、`k8s_zone_rollback_flush_guard`、`k8s_deploy_contract`、`k8s_migrate_gate`、`k8s_client_entry_contract`,通过标准 `fail=0`,
 失败时保留全部 `[FAIL]` 行。
 
 ### 2026-10-18 修订:回档语义已裁决 —— 丢弃 TargetTime 之后的写
 
-**状态:已落码(脚本、契约与契约测试),未编译、未测试,待 Codex 验证。** 以 2026-10-18 工作区的 `tools/scripts/k8s_zone_rollback.ps1`(文件头 `.DESCRIPTION` 与「zone_rollback_discard 契约」两段为准)、
+**状态:已落码(脚本、契约与契约测试),未编译、未测试,待 Gemini 验证。** 以 2026-10-18 工作区的 `tools/scripts/k8s_zone_rollback.ps1`(文件头 `.DESCRIPTION` 与「zone_rollback_discard 契约」两段为准)、
 `tools/scripts/lib/kafka_consumer_groups.ps1`、`tools/scripts/kafka_offset_reset.ps1`、`tools/scripts/dev_tools.ps1`、`tools/scripts/k8s_deploy.ps1`(只移走一个函数)与
 `tools/scripts/tests/` 下的 `k8s_zone_rollback_discard` / `k8s_zone_rollback_gate_router_mode` 两套测试及沙箱 `tests/lib/k8s_zone_rollback_sandbox.ps1` 写;本节与代码不一致时以代码为准。
 读 MySQL、写 Redis 的回档工具 `go/db/cmd/zone_rollback_discard` **尚未落地**:在它落地之前 `-Apply` 停在入口校验(要求 `-RollbackDiscardTool`),落地之后 preflight
@@ -514,7 +514,7 @@ Step 6 行含 `-DbConsumerGroup zone`,输出里没有 Step 2 的排空等待。
 - **#6 T 之后合入本 zone 的玩家**:按现有判据会被当成 T 之后建角而清掉,裁决前 preflight 拒绝。
 - 回档工具 `go/db/cmd/zone_rollback_discard` 的落地批次。
 
-**Codex 验证**(Claude 未执行;仓库根,PowerShell 7):
+**Gemini 验证**(Claude 未执行;仓库根,PowerShell 7):
 - 逐个执行 `pwsh -NoProfile -NonInteractive -File tools/scripts/tests/<名>.tests.ps1`,名字为 `k8s_zone_rollback_discard`、`k8s_zone_rollback_gate_router_mode`(需要 PATH 上有 git)、
   `kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、`k8s_deploy_contract`(本批把 `ConvertFrom-LiveDbConsumerGroup` 移进 lib,§③ 节的用例经 lib 取它)、
   `k8s_client_entry_contract`、`k8s_migrate_gate`、`dev_tools_merge_zone_contract`。通过标准:每个以 0 退出、`fail=0`;失败时保留全部 `[FAIL]` 行。
@@ -531,8 +531,8 @@ Step 6 行含 `-DbConsumerGroup zone`,输出里没有 Step 2 的排空等待。
 |--------|------|------|--------|
 | MySQL 定时备份 + binlog 归档 | ✅ **已落地 (2026-05-15)** | `deploy/k8s/manifests/infra/mysql.yaml`(PVC + binlog on)+ `mysql-backup-cronjob.yaml`(每天 03:17 UTC dump + binlog 复制),SOP 见 [`docs/ops/mysql-backup-pitr-runbook.md`](../ops/mysql-backup-pitr-runbook.md) | ~~高~~ |
 | Redis RDB/AOF 定期快照归档 | 未做 | 当前 `--appendonly yes` 保证持久化，但无历史时间点恢复能力。**2026-10-18 更正**：回档不再 FLUSHDB（共享 DB0），改由回档工具只丢弃本 zone 在 TargetTime 之后派生的状态，见上文「2026-10-18 修订」 | 低 |
-| Kafka offset 回档工具 | ✅ **已落地 (2026-05-15)** | `tools/scripts/kafka_offset_reset.ps1`(支持 to-datetime / to-earliest / to-latest / delete-and-recreate-topic 4 种模式,默认 dry-run),注册为 `dev_tools.ps1 -Command kafka-offset-reset`。**2026-10-17 更正**:delete-and-recreate-topic 对 db_task topic 一律拒绝(改走 TopicGeneration 换代),对其它 topic 要求 `-ReplicationFactor` 与现有一致;另有 2026-10-15 起的 FinalizeHandoff 模式,见上文「2026-10-17 修订」(已落码,未编译、未测试,待 Codex 验证) | ~~中~~ |
-| 一键 zone 回档脚本 | ✅ **已落地 (2026-05-15)** | `tools/scripts/k8s_zone_rollback.ps1`(7 步:zone-down / Kafka drain / MySQL PITR 提示暂停 / Redis FLUSHDB / kafka-offset-reset / zone-up / 验证清单),注册为 `dev_tools.ps1 -Command k8s-zone-rollback`,默认 dry-run。**2026-09-29 更正**:现为「第 0 步预检 + 7 步」,见上文「## 3. 整 Zone 灾难恢复级回档」下的「2026-09-29 修订:第 0 步预检与不粘滞的部署参数」(本文有两个「## 3.」标题,指的是前一个)。**2026-10-15 更正**:Step 2(Kafka drain)已删除,第 0 步增加 c(LAG 只读快照)/ d(Step 5 预演),Step 5 重置 zone 组 `db_rpc_consumer_group_z<id>` 并退役 legacy 组在本 topic 上的位点,Step 6 落到 final(Z),见同处「2026-10-15 修订」(已落码,未编译、未测试,待 Codex 验证)。**2026-10-18 更正**:回档语义已裁决为「丢弃 TargetTime 之后的写」,流程改为 第 0 步 a–f → 1 → 1b → 3 PITR → 4a → 5(`-ToLatest`)→ 4b → 5b → 6 → 7,不再 FLUSHDB,读 MySQL / 写 Redis 交给尚未落地的回档工具 `go/db/cmd/zone_rollback_discard`,见上文「2026-10-18 修订」(已落码,未编译、未测试,待 Codex 验证;工具落地之前 `-Apply` 不可执行) | ~~中~~ |
+| Kafka offset 回档工具 | ✅ **已落地 (2026-05-15)** | `tools/scripts/kafka_offset_reset.ps1`(支持 to-datetime / to-earliest / to-latest / delete-and-recreate-topic 4 种模式,默认 dry-run),注册为 `dev_tools.ps1 -Command kafka-offset-reset`。**2026-10-17 更正**:delete-and-recreate-topic 对 db_task topic 一律拒绝(改走 TopicGeneration 换代),对其它 topic 要求 `-ReplicationFactor` 与现有一致;另有 2026-10-15 起的 FinalizeHandoff 模式,见上文「2026-10-17 修订」(已落码,未编译、未测试,待 Gemini 验证) | ~~中~~ |
+| 一键 zone 回档脚本 | ✅ **已落地 (2026-05-15)** | `tools/scripts/k8s_zone_rollback.ps1`(7 步:zone-down / Kafka drain / MySQL PITR 提示暂停 / Redis FLUSHDB / kafka-offset-reset / zone-up / 验证清单),注册为 `dev_tools.ps1 -Command k8s-zone-rollback`,默认 dry-run。**2026-09-29 更正**:现为「第 0 步预检 + 7 步」,见上文「## 3. 整 Zone 灾难恢复级回档」下的「2026-09-29 修订:第 0 步预检与不粘滞的部署参数」(本文有两个「## 3.」标题,指的是前一个)。**2026-10-15 更正**:Step 2(Kafka drain)已删除,第 0 步增加 c(LAG 只读快照)/ d(Step 5 预演),Step 5 重置 zone 组 `db_rpc_consumer_group_z<id>` 并退役 legacy 组在本 topic 上的位点,Step 6 落到 final(Z),见同处「2026-10-15 修订」(已落码,未编译、未测试,待 Gemini 验证)。**2026-10-18 更正**:回档语义已裁决为「丢弃 TargetTime 之后的写」,流程改为 第 0 步 a–f → 1 → 1b → 3 PITR → 4a → 5(`-ToLatest`)→ 4b → 5b → 6 → 7,不再 FLUSHDB,读 MySQL / 写 Redis 交给尚未落地的回档工具 `go/db/cmd/zone_rollback_discard`,见上文「2026-10-18 修订」(已落码,未编译、未测试,待 Gemini 验证;工具落地之前 `-Apply` 不可执行) | ~~中~~ |
 | 备份异地归档(S3/OSS) | 未做 | PVC 只防 pod 重启,不防整个集群 / 机房挂 | 高(生产前必做) |
 | 跨服务离线 epoch 回档栅栏 | 未做（应用级回档 fail-closed） | login/player_locator 阻断新会话，Scene 排空存盘，Kafka/db 携带并校验 epoch | P0（重启应用级回档前） |
 

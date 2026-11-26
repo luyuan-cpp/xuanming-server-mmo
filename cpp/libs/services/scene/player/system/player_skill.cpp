@@ -1055,9 +1055,11 @@ void PlayerSkillSystem::FillBattleSnapshot(entt::entity player, BattlePlayerSnap
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
 	const bool classHasClassSkills = ClassHasClassSkills(classId);
-	const uint32_t activeSeasonId = ActiveSeasonIdNow();
+	const uint64_t snapshotNowMs = TimeSystem::NowMillisecondsUTC();
+	const uint32_t activeSeasonId = PlayerSeasonSystem::ActiveSeasonId(snapshotNowMs);
 	const auto equippedNonActive = CollectEquippedNonActiveSkills(*list, classId, classHasClassSkills, level);
 	snapshot.set_active_season_id(activeSeasonId);
+	snapshot.set_season_weekly_affix_id(PlayerSeasonSystem::ActiveWeeklyAffixId(snapshotNowMs));
 	for (const auto &skill : list->skill_list())
 	{
 		const auto *row = FindSkillRow(skill.skill_table_id());

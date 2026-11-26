@@ -11,26 +11,30 @@
 
 脚本归属见[脚本主说明](../tools/scripts/README.md)；C++ 串行构建与 scene 编译器 PDB 隔离见[C++ 主说明](../cpp/README.md)。
 
-各玩法共用的设计原则见[项目设定](design/project-vision.md)。
+各玩法共用的设计原则见[项目设定](planning/project-vision.md)（完整目录迁移映射见 [planning/MIGRATION-MAP.md](planning/MIGRATION-MAP.md)）。
 
-技能制作策划入口见 [自由技能体系分类总览](design/skill-planning/README.md)：人物/宝宝主动、被动、追击、开场、公用战斗规则、流派搭配及实施清单；同效果合并与最新目标数、持续时间以该目录为准，尚未按新策划落码或改正式表。
+技能制作策划入口见 [自由技能体系分类总览](planning/skill-planning/README.md)：人物/宝宝主动、被动、追击、开场、公用战斗规则、流派搭配及实施清单；同效果合并与最新目标数、持续时间以该目录为准，尚未按新策划落码或改正式表。
 
-[策略技能待定方案](design/skill-planning/strategy-skills.md)另列14个人物、2个宝宝新技能候选；[率土式候选](design/skill-planning/stzb-inspired.md)暂缓，等待负责人研究具体机制后再讨论。
+[策略技能待定方案](planning/skill-planning/strategy-skills.md)另列14个人物、2个宝宝新技能候选；[率土式候选](planning/skill-planning/stzb-inspired.md)暂缓，等待负责人研究具体机制后再讨论。
 
-[宝宝条目点与轻量培养](design/skill-planning/pet-specialties.md)记录已确认的四维基础与人物装备／宝宝来源分工；宝宝输出、障碍、治疗、护盾共用条目点，替代原自选加成。总点数、收益、上限及五档名称／特色方案待定，旧固定自选流程与四专长仅留历史。
+[宝宝条目点与轻量培养](planning/skill-planning/pet-specialties.md)记录已确认的四维基础与人物装备／宝宝来源分工；宝宝输出、障碍、治疗、护盾共用条目点，替代原自选加成。总点数、收益、上限及五档名称／特色方案待定，旧固定自选流程与四专长仅留历史。
 
-[宝宝条目点与 UI 制作交接](design/skill-planning/pet-entries-ui.md)供另一台电脑制作统一预算、各项分配草稿、效果预览与战斗锁定；列出现有接口、新分配契约缺口及验收要求，不借用四维加点接口保存条目点，不写死点数或旧条目槽数。
+[宝宝条目点与 UI 制作交接](planning/skill-planning/pet-entries-ui.md)供另一台电脑制作统一预算、各项分配草稿、效果预览与战斗锁定；列出现有接口、新分配契约缺口及验收要求，不借用四维加点接口保存条目点，不写死点数或旧条目槽数。
 
-[人物治疗、护盾、加点与 UI 交接建议稿](design/skill-planning/character-support-ui.md)供另一台电脑制作人物界面：五块界面、现有接口、演示数据及待确认公式的边界。2026-11-17修正为A40独立主动护盾，已撤回P11过量治疗转盾。
+[人物治疗、护盾、加点与 UI 交接建议稿](planning/skill-planning/character-support-ui.md)供另一台电脑制作人物界面：五块界面、现有接口、演示数据及待确认公式的边界。2026-11-17修正为A40独立主动护盾，已撤回P11过量治疗转盾。
 
 **立即画图入口**：[人物／宝宝 UI 美术交接单](D:/work/image/designs/character-pet-ui-20261117/BRIEF.md)，按用户指定 `D:\work\image\designs` 道家Q版现成图继续制作；先出宝宝条目点主图，页面、布局、示例数据、状态与素材交付已列明，不等待后端或数值定案。
 
 ## 目录约定
 
+> **2026-11-25 目录分拆公告**：`docs/design/` 仅存放**技术/架构/服务端工程设计文档**；全部**玩法策划与数值/经济设计**已迁至 [`planning/`](planning/)，**UI/美术交接单**已迁至 [`planning/ui-handoff/`](planning/ui-handoff/)，旧→新路径对照见 [MIGRATION-MAP.md](planning/MIGRATION-MAP.md)。
+
 | 目录 | 放什么 | 不放什么 |
 |------|--------|----------|
 | [`rules/`](rules/) | 根 `AGENTS.md` 拆出的各章节完整规范（协议配表、位图与删 ID、压测、不变量、命名与权限、AI 协作、工程原则、C++ 运行时与构建命令） | 具体服务的单次设计方案、流水账 |
-| [`design/`](design/) | 架构与各服务的设计决策:为什么这么做、接口与不变量、落码记录 | 压测数据、交接说明、与本项目无关的学习笔记 |
+| [`planning/`](planning/) | 玩法策划、数值/经济/商业化设计、核心循环、赛季/帮战/首领/世界地图策划及成套技能策划（`skill-planning/`） | 底层网络/存储/K8s 技术架构文档 |
+| [`planning/ui-handoff/`](planning/ui-handoff/) | 交付异机 Codex 的纯功能 UI 切图清单（注：只告诉 Codex 做什么 UI，严禁给 GPT 定画风/材质/色号；落盘后须在回复直接提供可复制正文） | 服务端技术设计、代码实现清单或自编画风/色号 |
+| [`design/`](design/) | 技术架构与各服务工程设计决策:为什么这么做、协议/存储/分布式接口与不变量、落码记录 | 玩法策划、UI 美术交接、压测数据、交接说明、与本项目无关的学习笔记 |
 | [`ops/`](ops/) | 运维手册(runbook)、事故复盘、发布检查清单 | 设计推导 |
 | [`stress/`](stress/) | 每一轮压测的复盘,以及作为对比基线的 `prev-summary*.txt` | 压测方法论(那是 `design/` 或 `ops/` 的事) |
 | [`handoff/`](handoff/) | 会话之间的交接说明与小结:做到哪、剩什么、怎么验 | 长期有效的设计(应沉淀回 `design/`) |
@@ -58,26 +62,116 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 <!-- BEGIN GENERATED INDEX: tools/scripts/gen_docs_index.py -->
 
-### 设计文档(`design/`)
+### 策划与玩法设计文档(`planning/`)
+
+#### 上位总纲与全局收口
+
+- [gameplay-unified-design-v1.md](planning/gameplay-unified-design-v1.md) — 《五行奇谈》全局玩法统一收口设计方案与单一事实源总账（V1.1 拍板定稿）
+- [MIGRATION-MAP.md](planning/MIGRATION-MAP.md) — 策划文档与 UI 美术交接路径迁移映射表（2026-11-25）
+- [project-vision.md](planning/project-vision.md) — 项目设定
+
+#### 核心循环、装备与经济商业化
+
+- [activity-travel-pass-and-showcase-v1.md](planning/activity-travel-pass-and-showcase-v1.md) — 《五行奇谈》活动界面拉收入体系：「游历手记（不肝不逼氪双轨）」与体验种草设计（V1）
+- [core-gameplay-loop.md](planning/core-gameplay-loop.md) — 《五行奇谈》核心循环 V1｜有空就玩
+- [equipment-economy-charter.md](planning/equipment-economy-charter.md) — 《五行奇谈》个人开发经济体系、稳物价、官方 7:3 与游戏内防骗设计总纲
+- [equipment-eight-slot-planning.md](planning/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
+- [equipment-quality-and-skill-crafting-v1.md](planning/equipment-quality-and-skill-crafting-v1.md) — 《五行奇谈》V1 装备窄区间品相、率土式永久保值制书与轻量化手艺设计
+- [equipment-recycling-trade-economy-candidate.md](planning/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
+- [equipment-recycling-trade-economy-v1.md](planning/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
+- [equipment-v1-affixes-artifacts.md](planning/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
+- [player-leveling-and-battle-economy-v1.md](planning/player-leveling-and-battle-economy-v1.md) — 《五行奇谈》G1：角色平滑升级曲线与全玩法经验/银两产出闭环设计（V1）
+- [season-pvp-pve-economy-unified-v1.md](planning/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
+- [spirit-shop-and-starter-packs-v1.md](planning/spirit-shop-and-starter-packs-v1.md) — 《五行奇谈》P0 官方灵石百宝阁与绑定/终身限购首套提速包设计（V1）
+
+#### 战斗、首领与限时活动玩法
+
+- [battle-festival-beast-implementation-contract.md](planning/battle-festival-beast-implementation-contract.md) — 「瑞兽迎春」活动实现设计与 UI Codex 独立接口契约
+- [battle-festival-beast-logic-handoff.md](planning/battle-festival-beast-logic-handoff.md) — 瑞兽迎春：Gemini 逻辑实现交接
+- [battle-festival-beast-v1.md](planning/battle-festival-beast-v1.md) — 瑞兽迎春：轻量活动首发 V1
+- [battle-jianghu-grudge-duel-bounty-v1.md](planning/battle-jianghu-grudge-duel-bounty-v1.md) — 《五行奇谈》江湖恩怨、擂台生死状与灵潮劫火悬赏设计（V1）
+- [battle-jianghu-grudge-duel-phase1-implementation-plan.md](planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md) — 江湖恩怨与天墉生死状 · 一期（M1–M3）实施计划
+- [battle-season-one-simple-design.md](planning/battle-season-one-simple-design.md) — 破阵之季 · 首季玩法与 Gemini 逻辑交接
+- [battle-skill-and-pet-cultivation-expansion.md](planning/battle-skill-and-pet-cultivation-expansion.md) — 战斗战法深度与宝宝养成全量扩展设计（扩展包 A+B+C+D）
+- [boss-trial-planning-ui.md](planning/boss-trial-planning-ui.md) — 首领试炼：深度策略玩法 V2、UI 美术规格与双机交接
+- [boss-trial-weekly-wuxing-affix-v1.md](planning/boss-trial-weekly-wuxing-affix-v1.md) — 首领试炼「周常五行词缀」V1 设计文档
+- [turn-battle-presentation.md](planning/turn-battle-presentation.md) — 回合制战斗表现规格(问道 / 梦幻西游式演出)v1
+- [wuxing-gameplay-expansions-v1.md](planning/wuxing-gameplay-expansions-v1.md) — 五行奇谈 · 三大核心玩法扩展统一设计（V1）
+
+#### 论剑、帮战与全服赛季
+
+- [guild-play-v1.md](planning/guild-play-v1.md) — 帮会玩法首发 V1 · 帮会会武与同道历练
+- [guild-play-v2.md](planning/guild-play-v2.md) — 帮会玩法 V2 · 全天无匹配帮战、野外任意异帮直打、江湖追杀令与三灵脉争夺
+- [guild-play-v2-implementation-plan.md](planning/guild-play-v2-implementation-plan.md) — 帮会玩法 V2（全天无匹配帮战、三灵脉争夺与江湖追杀令）实施计划
+- [ranked-play-season-ui-candidate.md](planning/ranked-play-season-ui-candidate.md) — 论剑排位首发 V1 实施规格
+- [ranked-play-v1-implementation.md](planning/ranked-play-v1-implementation.md) — 《论剑排位首发 V1》工程落盘设计
+- [ranked-play-v2-overhaul.md](planning/ranked-play-v2-overhaul.md) — 《论剑 / 人宠会武》V2 玩法体验重做与双服客户端落地设计
+- [ranked-play-v3-tactical-prep.md](planning/ranked-play-v3-tactical-prep.md) — 《论剑 / 人宠会武》V3 扩展设计：战前 15 秒明牌变阵（换赛季印 / 换首发宠）
+- [ranked-play-v4-team-tactics-and-highlights.md](planning/ranked-play-v4-team-tactics-and-highlights.md) — 《论剑 / 人宠会武》V4 扩展设计：队内一键战术标点、本局战术复盘徽记与连胜破势
+- [season-pvp-lunjian-v1-repaired.md](planning/season-pvp-lunjian-v1-repaired.md) — 《论剑 / 人宠会武》PVP 玩法设计体检、修复方案与 UI 补全清单（V1 修复版）
+- [season-skills-and-seal-design.md](planning/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
+- [season-team-tournament-v1.md](planning/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
+- [season-team-tournament-v2.md](planning/season-team-tournament-v2.md) — 《群仙问道赛》全服赛季战队锦标赛 V2 趣味扩展设计案
+- [season-team-tournament-v3.md](planning/season-team-tournament-v3.md) — 《群仙问道赛》V3 全服狂欢与策略扩展设计方案（模块 D / E / F / G）
+- [season-team-tournament-v4.md](planning/season-team-tournament-v4.md) — 《群仙问道赛》V4 策略博弈与长线荣耀扩展设计方案（模块 H / I / J）
+
+#### 长期养成、外观收藏与大世界玩法
+
+- [character-appearance-switch.md](planning/character-appearance-switch.md) — 角色形象永久收藏衣柜、形象卡解锁与 1 小时免费试用设计
+- [character-background-collection-design.md](planning/character-background-collection-design.md) — 《五行奇谈》人物志与角色收藏设计
+- [long-term-progression-v1.md](planning/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
+- [long-term-progression-v2.md](planning/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2.1 终版）
+- [pet-memory-minigame-v1.md](planning/pet-memory-minigame-v1.md) — 灵宠翻牌 V1 设计与双机交接
+- [wardrobe-pet-morph-and-skill-vfx-v1.md](planning/wardrobe-pet-morph-and-skill-vfx-v1.md) — 衣柜扩展：灵宠幻化与技能特效 V1 设计
+- [world-map-play-v1.md](planning/world-map-play-v1.md) — 《五行奇谈》地图顺手拾取首版：野外主动捡，战斗优先
+- [world-map-play-v2.md](planning/world-map-play-v2.md) — 《五行奇谈》世界地图生态、双层潮汐聚人与低人口在场感设计（V2）
+
+#### 成套策划
+
+- [skill-planning/](planning/skill-planning/README.md) — 自由技能体系策划总览
+
+### UI 与美术交接单(`planning/ui-handoff/`)
+
+- [battle-art-prompts.md](planning/ui-handoff/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-festival-beast-ui-handoff.md](planning/ui-handoff/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
+- [battle-season-one-ui-handoff.md](planning/ui-handoff/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
+- [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
+- [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
+- [guild-play-v2-ui-handoff.md](planning/ui-handoff/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
+- [official-passport-ui-handoff.md](planning/ui-handoff/official-passport-ui-handoff.md) — 官方通行证与账号注册 · Unity UI 异机交接
+- [ranked-play-v2-ui-handoff.md](planning/ui-handoff/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
+- [season-team-tournament-v1-ui-handoff.md](planning/ui-handoff/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
+- [season-team-tournament-v2-ui-handoff.md](planning/ui-handoff/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
+- [season-team-tournament-v3-ui-handoff.md](planning/ui-handoff/season-team-tournament-v3-ui-handoff.md) — 《群仙问道赛》V3+V4 增量 UI 需求清单（模块 D / E / F / G / H / I / J）
+- [trial-journal-v2-ui-handoff.md](planning/ui-handoff/trial-journal-v2-ui-handoff.md) — 《五行试炼志 V2》UI 功能需求与作图清单
+
+### 技术与架构设计文档(`design/`)
 
 #### 总览与入门
 
+- [ai-development-pipeline.md](design/ai-development-pipeline.md) — AI 开发流程管线第一版
 - [ARCH.md](design/ARCH.md) — MMO 服务端架构总览 (ARCH.md)
 - [architecture-current-state-vs-gaps-2026-05.md](design/architecture-current-state-vs-gaps-2026-05.md) — 架构现状盘点 vs 缺口清单 (2026-05)
 - [capacity-model-hok-scale.md](design/capacity-model-hok-scale.md) — 容量模型：王者荣耀量级（S1 / S2 / S3）推算
+- [cross-repo-port-comparison-20261123.md](design/cross-repo-port-comparison-20261123.md) — 双仓双向方案对比与移植设计（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
 - [ecs.md](design/ecs.md) — ECS 设计规则 · [EN](design/ecs_en.md) · [中文](design/ecs_zh.md)
 - [ecs-component-access-rules.md](design/ecs-component-access-rules.md) — ECS Component Access Rules
 - [ecs-entt-misuse-audit-20261015.md](design/ecs-entt-misuse-audit-20261015.md) — entt 误用审计（2026-10-15）
+- [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
 - [onboarding.md](design/onboarding.md) — 开发者上手指南 — MMO Server
-- [project-vision.md](design/project-vision.md) — 项目设定
 - [table-api-reference.md](design/table-api-reference.md) — Configuration Table API Reference · [中文](design/table-api-reference-zh.md)
 
 #### 接入层:网关、gate 与登录
 
+- [account-deletion.md](design/account-deletion.md) — 账号注销与 Apple / Google 客户端登录接入
 - [auth-provider-framework.md](design/auth-provider-framework.md) — Auth Provider Framework
 - [client-access-band-routing.md](design/client-access-band-routing.md) — 客户端接入的标准形态，与 gate 按号段整体转发给路由服（client-rpc-router 续篇，D51–D64）
+- [client-request-idempotency.md](design/client-request-idempotency.md) — 客户端请求幂等键：场景服经济操作的去重账本（随存档落盘）
 - [client-request-ordering.md](design/client-request-ordering.md) — 客户端请求按会话保序:路由服水平扩展下的乱序修复(gate 路由 lane)
+- [client-rpc-callback.md](design/client-rpc-callback.md) — 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler
 - [client-rpc-router.md](design/client-rpc-router.md) — 客户端 RPC 路由服(client_rpc_router):gate 唯一的 gRPC 目标
+- [client-scene-request-handoff-hold.md](design/client-scene-request-handoff-hold.md) — 换场景节点期间的玩家消息：客户端请求在 gate 暂存并按序重投（场景 lane）
+- [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计（2026-10-20）
 - [dual-token-authentication.md](design/dual-token-authentication.md) — Dual Token Authentication Design (Access + Refresh)
 - [gate-client-heartbeat.md](design/gate-client-heartbeat.md) — gate 与客户端的连接存活:握手期限、应用层心跳与空闲超时
 - [gate-connection-admission-control.md](design/gate-connection-admission-control.md) — gate 连接准入控制：muduo 无条件 accept 的业界解法与本仓落地 (2026-09-03)
@@ -93,21 +187,31 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [k8s_gate_exposure_guidance.md](design/k8s_gate_exposure_guidance.md) — K8s Gate Exposure Guidance / K8s gate 暴露方式指南 · [EN](design/k8s_gate_exposure_guidance_en.md) · [中文](design/k8s_gate_exposure_guidance_zh.md)
 - [login-node-stateless-no-affinity.md](design/login-node-stateless-no-affinity.md) — Login Node: Stateless, No Session Affinity
 - [login-queue-2026-05.md](design/login-queue-2026-05.md) — Login Queue (AssignGate Real Queue) — 2026-05
+- [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
+- [official-passport-registration.md](design/official-passport-registration.md) — 官方通行证与账号注册接入设计（Casdoor OIDC）
 - [open-server-rate-limit-design.md](design/open-server-rate-limit-design.md) — 开服登录削峰与排队入口
+- [player-connection-lost-hold.md](design/player-connection-lost-hold.md) — 玩家断线保留与短重连回原处
 - [player-locator-gate-session-index.md](design/player-locator-gate-session-index.md) — player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 - [player_login_flow.md](design/player_login_flow.md) — 玩家登录/断线/重连/替换登录/超时清理 — 最终态事件流 · [EN](design/player_login_flow_en.md) · [中文](design/player_login_flow_zh.md)
+- [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷
 - [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — 区服列表：现行 Gateway 接口与静态发布提案
 - [third-party-login-end-to-end-design.md](design/third-party-login-end-to-end-design.md) — QQ / 微信第三方登录端到端联调设计
+- [zone-full-handling.md](design/zone-full-handling.md) — 区服满员处理（保留选区）
 
 #### 场景、AOI 与分线
 
 - [afk-detection-design.md](design/afk-detection-design.md) — AFK (挂机) Detection Design
 - [agones-scene-node-high-density.md](design/agones-scene-node-high-density.md) — Agones 管理 Scene Node(高密度 GameServer)
+- [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外同步
 - [aoi_priority_design.md](design/aoi_priority_design.md) — AOI Priority, Capacity & Visibility Design · [EN](design/aoi_priority_design_en.md) · [中文](design/aoi_priority_design_zh.md)
+- [biyuan-water-palace-scene5-nav-20261123.md](design/biyuan-water-palace-scene5-nav-20261123.md) — 碧渊水宫本体（`biyuan-water-palace` / 场景 5）服务端导航与配表接入设计方案
 - [broadcast-message-size-analysis.md](design/broadcast-message-size-analysis.md) — BroadcastToPlayers 消息体积分析
 - [cross_scene_player_messaging.md](design/cross_scene_player_messaging.md) — Cross-Scene Player Messaging (跨场景玩家消息投递) · [EN](design/cross_scene_player_messaging_en.md) · [中文](design/cross_scene_player_messaging_zh.md)
 - [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene 选区路由设计
+- [minigame-remote-map-streaming-and-scene-gating.md](design/minigame-remote-map-streaming-and-scene-gating.md) — 小游戏与 App 双形态远程地图流式加载、CDN 分发与服务端切图门禁设计
 - [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约
+- [pc-original-static-backgrounds-20261123.md](design/pc-original-static-backgrounds-20261123.md) — 端游原图静态背景服务端核实与双端 ID 对账设计（2026-11-23）
+- [replace-legacy-current-maps-with-qdao-nav-20261124.md](design/replace-legacy-current-maps-with-qdao-nav-20261124.md) — 退役旧版 12.5 GB 三图（`CurrentMaps20261009`）、接通八景岛/月汐湾双端导航与主城临时替代方案
 - [scene-actor-state-sync-and-client-hfsm-boundary.md](design/scene-actor-state-sync-and-client-hfsm-boundary.md) — 主角状态互斥即时同步与客户端 UnityHFSM 接入边界
 - [scene-creation-architecture.md](design/scene-creation-architecture.md) — Scene Creation Architecture
 - [scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) — 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏
@@ -119,90 +223,78 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [scene-node-threading-model.md](design/scene-node-threading-model.md) — Scene Node 线程归属、帧循环与停机
 - [scene-owner-reentry-barrier.md](design/scene-owner-reentry-barrier.md) — 场景所有权：再入屏障与 owner_epoch
 - [scene-switch-release-design.md](design/scene-switch-release-design.md) — SceneManager跨节点切场景释放玩家方案选型
+- [team-follow-server-trail.md](design/team-follow-server-trail.md) — 组队跟随:服务器沿队长轨迹驱动队员(2026-11-06 服务端源码已写;2026-11-10 补入场后补推、客户端已写,补跨节点与离线托管的跨场景跟随;均未编译未测试)
 - [world-channel-autoscale.md](design/world-channel-autoscale.md) — 按人数自动扩缩容:大世界频道 / gate / Scene Node 进程
 - [world-channel-placement-generation.md](design/world-channel-placement-generation.md) — 世界频道的放置代次
 - [world-channel-switch.md](design/world-channel-switch.md) — 玩家主动切线(分线列表 + 选线切换)
 - [world-channel-system.md](design/world-channel-system.md) — 主世界场景分线系统 (Main World Scene Lines)
 
-#### 战斗
+#### 战斗与匹配技术架构
 
-- [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
-- [battle-festival-beast-implementation-contract.md](design/battle-festival-beast-implementation-contract.md) — 「瑞兽迎春」活动实现设计与 UI Codex 独立接口契约
-- [battle-festival-beast-logic-handoff.md](design/battle-festival-beast-logic-handoff.md) — 瑞兽迎春：Gemini 逻辑实现交接
-- [battle-festival-beast-ui-handoff.md](design/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
-- [battle-festival-beast-v1.md](design/battle-festival-beast-v1.md) — 瑞兽迎春：轻量活动首发 V1
 - [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知
 - [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留(两阶段:先预留,再扣减或作废)
-- [battle-jianghu-grudge-duel-bounty-v1.md](design/battle-jianghu-grudge-duel-bounty-v1.md) — 《五行奇谈》江湖恩怨、擂台生死状与灵潮劫火悬赏设计（V1）
 - [battle-overflow-mail.md](design/battle-overflow-mail.md) — 战斗掉落两包都放不下时改投邮件
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复:近期战斗结果
 - [battle-script.md](design/battle-script.md) — 战斗剧本(battle script)
-- [battle-season-one-simple-design.md](design/battle-season-one-simple-design.md) — 破阵之季 · 首季玩法与 Gemini 逻辑交接
-- [battle-season-one-ui-handoff.md](design/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
-- [battle-skill-and-pet-cultivation-expansion.md](design/battle-skill-and-pet-cultivation-expansion.md) — 战斗战法深度与宝宝养成全量扩展设计（扩展包 A+B+C+D）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
+- [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）
+- [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、逐级扩大范围、每池单写者
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
 - [session-extractability-mmo-slg.md](design/session-extractability-mmo-slg.md) — 「战斗抽出去」这套做法能套到哪些玩法:MOBA / MMO / SLG 定谳
 - [team-backfill-matching.md](design/team-backfill-matching.md) — 队伍补位匹配(已组好的队伍进人数档队列凑满 N 人)
 - [turn-based-battle-server.md](design/turn-based-battle-server.md) — 回合制战斗服设计(turn-based battle server)
 - [turn-battle-gap-closure.md](design/turn-battle-gap-closure.md) — 回合制战斗缺口收口 G1–G9(2026-09-17)
-- [turn-battle-presentation.md](design/turn-battle-presentation.md) — 回合制战斗表现规格(问道 / 梦幻西游式演出)v1
 
-#### 玩法系统
+#### 业务服务与后台技术设计
 
 - [activity_maintenance_auto_shift.md](design/activity_maintenance_auto_shift.md) — 活动遇停服自动顺延设计
+- [afk-monthly-card.md](design/afk-monthly-card.md) — 挂机月卡:获得、开通与权益落库
 - [bag-instance-layout-split.md](design/bag-instance-layout-split.md) — 背包:物品实例层 / 容器布局层拆分 (2026-08-27)
 - [bag-rollback-feasibility-analysis.md](design/bag-rollback-feasibility-analysis.md) — Bag 回档可行性分析(per-service rollback)
 - [bag-rule-policy-layering.md](design/bag-rule-policy-layering.md) — 背包:玩法规则的策略化分层 (2026-09-01)
 - [bag-service-srp-refactor.md](design/bag-service-srp-refactor.md) — Bag → BagService SRP Refactor (2026-03-26) · [EN](design/bag-service-srp-refactor_en.md) · [中文](design/bag-service-srp-refactor_zh.md)
 - [character-appearance-identity.md](design/character-appearance-identity.md) — 人物外观身份链
 - [chat-sensitive-word-filter.md](design/chat-sensitive-word-filter.md) — Chat Sensitive-Word Filter — Design (todo.md #68)
+- [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与推送扇出
+- [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
 - [equipment-attributes.md](design/equipment-attributes.md) — 装备属性系统(问道式:基础属性 + 蓝/粉/黄随机属性)
-- [equipment-economy-charter.md](design/equipment-economy-charter.md) — 《五行奇谈》个人开发经济体系、稳物价、官方 7:3 与游戏内防骗设计总纲
 - [equipment-eight-slot-implementation.md](design/equipment-eight-slot-implementation.md) — 八部位装备：代码接入与验证
-- [equipment-eight-slot-planning.md](design/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
 - [equipment-enhance-inlay.md](design/equipment-enhance-inlay.md) — 装备强化与镶嵌(装备属性系统二期)
-- [equipment-quality-and-skill-crafting-v1.md](design/equipment-quality-and-skill-crafting-v1.md) — 《五行奇谈》V1 装备窄区间品相、率土式永久保值制书与轻量化手艺设计
-- [equipment-recycling-trade-economy-candidate.md](design/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
-- [equipment-recycling-trade-economy-v1.md](design/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
-- [equipment-v1-affixes-artifacts.md](design/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
 - [exploit_loss_prevention.md](design/exploit_loss_prevention.md) — Exploit & Loss Prevention Systems (漏洞止损与回收系统) · [EN](design/exploit_loss_prevention_en.md) · [中文](design/exploit_loss_prevention_zh.md)
 - [friend-client-spec-20260920.md](design/friend-client-spec-20260920.md) — friend 客户端任务规格(Unity,2026-09-20)
 - [friend-persistence-architecture.md](design/friend-persistence-architecture.md) — Friend Service Persistence Architecture
 - [friend-port-20260918.md](design/friend-port-20260918.md) — friend:移植为全局服务 + 客户端经路由服可达
 - [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild 存储架构现状与 Actor 历史提案
-- [guild-play-ui-handoff.md](design/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
-- [guild-play-v1.md](design/guild-play-v1.md) — 帮会玩法首发 V1 · 帮会会武与同道历练
-- [guild-play-v2.md](design/guild-play-v2.md) — 帮会玩法 V2 · 全天无匹配帮战、野外任意异帮直打、江湖追杀令与三灵脉争夺
-- [guild-play-v2-implementation-plan.md](design/guild-play-v2-implementation-plan.md) — 帮会玩法 V2（全天无匹配帮战、三灵脉争夺与江湖追杀令）实施计划
-- [guild-play-v2-ui-handoff.md](design/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
 - [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
 - [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — 帮会排行榜架构 · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
+- [jeecg-gm-administration.md](design/jeecg-gm-administration.md) — 独立 JeecgBoot GM 管理系统
 - [jubaozhai-market.md](design/jubaozhai-market.md) — 聚宝斋(玩家间人民币寄售交易)设计 — 2026-09-14
+- [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
 - [leaderboard-system.md](design/leaderboard-system.md) — 排行榜(leaderboard / rank)v1 设计
 - [mail-system.md](design/mail-system.md) — mail(邮件)M1:全局服务 + 系统邮件 / 定向邮件 + 领取短路
+- [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
 - [mystery-merchant.md](design/mystery-merchant.md) — 神秘商人(定时随机落线的折扣 NPC)
 - [payment-recharge.md](design/payment-recharge.md) — 真钱充值设计(苹果 IAP / Google Play / 国内安卓 / 小游戏)
 - [player-attribute-allocation.md](design/player-attribute-allocation.md) — 角色属性加点系统
 - [player-features-ui.md](design/player-features-ui.md) — 背包、任务、活动客户端读取接口
 - [player-pet.md](design/player-pet.md) — 宝宝(宠物)系统 —— 核心线
-- [season-pvp-lunjian-v1-repaired.md](design/season-pvp-lunjian-v1-repaired.md) — 《论剑 / 人宠会武》PVP 玩法设计体检、修复方案与 UI 补全清单（V1 修复版）
-- [season-pvp-pve-economy-unified-v1.md](design/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
-- [season-skills-and-seal-design.md](design/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
-- [season-team-tournament-v1.md](design/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
-- [season-team-tournament-v1-ui-handoff.md](design/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
-- [season-team-tournament-v2.md](design/season-team-tournament-v2.md) — 《群仙问道赛》全服赛季战队锦标赛 V2 趣味扩展设计案
-- [season-team-tournament-v2-ui-handoff.md](design/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
-- [spirit-shop-and-starter-packs-v1.md](design/spirit-shop-and-starter-packs-v1.md) — 《五行奇谈》P0 官方灵石百宝阁与绑定/终身限购首套提速包设计（V1）
+- [rename-and-content-safety.md](design/rename-and-content-safety.md) — 改名(角色 / 帮会)与内容安全
 - [stall-system.md](design/stall-system.md) — 摆摊系统设计(草案)
 - [team-system.md](design/team-system.md) — 组队系统设计(team-in-match)
 
 #### 玩家数据与存储
 
+- [account-role-authority.md](design/account-role-authority.md) — 账号角色目录的全局 SQL 权威
+- [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 - [async-load-disconnect-reconnect-race.md](design/async-load-disconnect-reconnect-race.md) — 异步加载竞态：Redis 加载期间的断线与重连
+- [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
+- [data-consistency-guarantee-map-20261020.md](design/data-consistency-guarantee-map-20261020.md) — 数据一致性等级核对（2026-10-20）
+- [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
+- [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
+- [data-service-breaker-per-logical-db.md](design/data-service-breaker-per-logical-db.md) — data_service 的熔断:服务端从按方法改成按逻辑库,调用方关掉按方法的客户端熔断
 - [data_service_role_and_scope.md](design/data_service_role_and_scope.md) — data_service 定位与边界
 - [db-consumer-group-per-zone.md](design/db-consumer-group-per-zone.md) — go/db 存盘消费组按 zone 拆分与不停服交接
 - [db-retry-owner-routing.md](design/db-retry-owner-routing.md) — go/db 重试只交给分区属主（④）与 Kafka 源入队的落盘确认（WAITAOF）
@@ -215,17 +307,27 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [db_write_behind_dirty_flag_race.md](design/db_write_behind_dirty_flag_race.md) — DB Write-Behind 脏标记方案竞态分析 · [EN](design/db_write_behind_dirty_flag_race_en.md) · [中文](design/db_write_behind_dirty_flag_race_zh.md)
 - [db_zone_isolation.md](design/db_zone_isolation.md) — DB Zone Isolation (2026-04-11)
 - [global-data-layer-tidb-decision.md](design/global-data-layer-tidb-decision.md) — 全区全服数据层 + TiDB 架构决策
+- [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展:逻辑库自治、角色护栏、目录分片、不停服迁移、多地域
 - [landing-recovery-sync-digest.md](design/landing-recovery-sync-digest.md) — 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
+- [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 - [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
+- [player-audit-outbox.md](design/player-audit-outbox.md) — 玩家审计发件箱:审计流水与快照随存盘提交(断线重连 R13)
+- [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展:总体方案
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计
 - [player-route-mapping-durability-proposal.md](design/player-route-mapping-durability-proposal.md) — 玩家归属与落点映射持久化:目录库是唯一真源,读写直连 TiDB(现行设计见 §15、§16;均未编译、未验证)
+- [player-save-direct-commit.md](design/player-save-direct-commit.md) — 存盘直接提交 TiDB:落码规格
 - [player-storage-placement.md](design/player-storage-placement.md) — 玩家存储落点(Placement):归属与存储拆分、单玩家搬库、Phase 2 全局库
 - [player_live_data_export_runbook.md](design/player_live_data_export_runbook.md) — 玩家线上数据下线导出操作记录
 - [proto-compare-dirty-save.md](design/proto-compare-dirty-save.md) — Proto-Compare-Driven Dirty Save — Design (todo.md #204 + #226)
+- [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留
 - [redis-async-client-retry-fix.md](design/redis-async-client-retry-fix.md) — Redis 异步客户端重试、重连与生命周期
+- [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)
+- [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
 - [reliable-player-inbox-20261014.md](design/reliable-player-inbox-20261014.md) — 重要玩家消息：持久收件箱、拉取恢复与迁移围栏（2026-10-14）
 - [tidb-phase1-and-launch-readiness.md](design/tidb-phase1-and-launch-readiness.md) — TiDB Phase 1 设计与实施清单（含开服准备）
+- [writer-roster-exhaustion-20261106.md](design/writer-roster-exhaustion-20261106.md) — 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
+- [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
 
 #### 跨服、合服与回档
 
@@ -248,13 +350,17 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### ID、节点身份与寻址
 
 - [control-plane-topic-partitioning-20260908.md](design/control-plane-topic-partitioning-20260908.md) — 控制面命令 topic:从"一节点一 topic"改为"固定分区 + 按 node_id 取模寻址"
+- [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化与控制域 Redis 按 zone 分片(2026-11-05)
 - [id-routing-session-status-20260909.md](design/id-routing-session-status-20260909.md) — ID / 寻址改造 —— 会话总结与遗留清单(2026-09-09)
+- [linearizable-owner-authority.md](design/linearizable-owner-authority.md) — 线性一致 SQL 玩家归属权威与重连状态机设计（`go/shared/ownerauthority`）
+- [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
 - [node-id-overhaul-changelog-20260908.md](design/node-id-overhaul-changelog-20260908.md) — ID 与寻址身份改造 —— 逐文件改动说明(2026-09-08 最终版)
 - [node-id-overhaul-plan-20260908.md](design/node-id-overhaul-plan-20260908.md) — Node ID / 永久 ID 改造方案(2026-09-08 草案,未落码)
 - [node-id-overhaul-qa-20260908.md](design/node-id-overhaul-qa-20260908.md) — Node ID 改造 —— 问答全记录与改动细节(2026-09-08)
 - [node-lifecycle-elasticity-release-20261023.md](design/node-lifecycle-elasticity-release-20261023.md) — 全类型节点：平滑停机、水平扩展与灰度／金丝雀发布需求
 - [node-removal-grace-period.md](design/node-removal-grace-period.md) — Node Removal Grace Period (Consumer-side)
 - [node_id_conflict_design.md](design/node_id_conflict_design.md) — Node ID 冲突处理设计（重要架构决策） · [EN](design/node_id_conflict_design_en.md) · [中文](design/node_id_conflict_design_zh.md)
+- [region-cell-routing-alignment.md](design/region-cell-routing-alignment.md) — Region → Cell 确定性蜂窝路由对齐设计（`go/shared/cellroute`）
 - [routing-identity-audit-20260908.md](design/routing-identity-audit-20260908.md) — 路由身份(routing node_id)对抗审计 —— 结论与修复清单(2026-09-08)
 - [snowflake-guard-and-node-conflict.md](design/snowflake-guard-and-node-conflict.md) — SnowFlake Guard & Node ID Conflict Handling
 - [snowflake-id-allocation.md](design/snowflake-id-allocation.md) — SnowFlake ID Allocation
@@ -262,6 +368,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 #### 基础设施与中间件
 
+- [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:路由服确定性子集、每类节点只发现自己用到的(2026-11-06)
 - [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪（todo.md #152）
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
@@ -275,14 +382,17 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [muduo-timer-cancellation-hazards.md](design/muduo-timer-cancellation-hazards.md) — muduo 定时器取消语义与野引用
 - [no-single-node-horizontal-scaling-20261001.md](design/no-single-node-horizontal-scaling-20261001.md) — 消除单节点:所有服务都能水平扩展(2026-10-01)
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
+- [rpc-kill-switch.md](design/rpc-kill-switch.md) — RPC 热关停：节点 / 服务 / 方法三级（C++ 与 Go 同一套）
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿,历史稿)
 - [thread-count-monitoring.md](design/thread-count-monitoring.md) — Thread Count Monitoring & Control per Process · [EN](design/thread-count-monitoring_en.md) · [中文](design/thread-count-monitoring_zh.md)
 - [traffic-statistics-design.md](design/traffic-statistics-design.md) — Traffic Statistics Design
 
 #### 协议与配表工具链
 
+- [config-table-hot-reload.md](design/config-table-hot-reload.md) — 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
 - [excel-6row-header-format.md](design/excel-6row-header-format.md) — 配置表格式说明入口（旧六行表头已停用） · [EN](design/excel-6row-header-format_en.md) · [中文](design/excel-6row-header-format_zh.md)
 - [generated-table-header-decoupling-plan.md](design/generated-table-header-decoupling-plan.md) — 交接：mmorpg 导表器生成头文件解耦（①exprtk ②FK声明化 ③muduo）
+- [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
 - [tip-code-axis.md](design/tip-code-axis.md) — tip 码轴：段是发号器的输入
 
 #### 构建、部署与发布
@@ -290,9 +400,12 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [cpp_image_optimization.md](design/cpp_image_optimization.md) — C++ Docker Image Optimization & Split Debug Symbols · [EN](design/cpp_image_optimization_en.md) · [中文](design/cpp_image_optimization_zh.md)
 - [docker_k8s_build_deploy.md](design/docker_k8s_build_deploy.md) — Docker & K8s Build/Deploy Guide (Windows) · [EN](design/docker_k8s_build_deploy_en.md) · [中文](design/docker_k8s_build_deploy_zh.md)
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
+- [gateway-zone-health-publish-20261111.md](design/gateway-zone-health-publish-20261111.md) — 网关区服健康:每 zone 发布汇总记录,网关只读汇总(2026-11-11)
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
+- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
+- [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret(2026-11-10)
 
 #### 测试与机器人
 
@@ -305,86 +418,9 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [xuanming-port-decisions-20260910.md](design/xuanming-port-decisions-20260910.md) — 玄冥移植:开工前决策记录(2026-09-10)
 - [xuanming-port-feasibility-20260902.md](design/xuanming-port-feasibility-20260902.md) — XuanMing-Server → mmorpg/go 移植可行性定谳（2026-09-02）
 
-#### 未分类
-
-- [account-deletion.md](design/account-deletion.md) — 账号注销与 Apple / Google 客户端登录接入
-- [account-role-authority.md](design/account-role-authority.md) — 账号角色目录的全局 SQL 权威
-- [afk-monthly-card.md](design/afk-monthly-card.md) — 挂机月卡:获得、开通与权益落库
-- [ai-development-pipeline.md](design/ai-development-pipeline.md) — AI 开发流程管线第一版
-- [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外同步
-- [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与终局发件箱按玩家分片(2026-11-10)
-- [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
-- [biyuan-water-palace-scene5-nav-20261123.md](design/biyuan-water-palace-scene5-nav-20261123.md) — 碧渊水宫本体（`biyuan-water-palace` / 场景 5）服务端导航与配表接入设计方案
-- [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：深度策略玩法 V2、UI 美术规格与双机交接
-- [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象永久收藏衣柜、形象卡解锁与 1 小时免费试用设计
-- [character-background-collection-design.md](design/character-background-collection-design.md) — 《五行奇谈》人物志与角色收藏设计
-- [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与推送扇出
-- [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
-- [client-request-idempotency.md](design/client-request-idempotency.md) — 客户端请求幂等键：场景服经济操作的去重账本（随存档落盘）
-- [client-rpc-callback.md](design/client-rpc-callback.md) — 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler
-- [client-scene-request-handoff-hold.md](design/client-scene-request-handoff-hold.md) — 换场景节点期间的玩家消息：客户端请求在 gate 暂存并按序重投（场景 lane）
-- [config-table-hot-reload.md](design/config-table-hot-reload.md) — 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
-- [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）
-- [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:路由服确定性子集、每类节点只发现自己用到的(2026-11-06)
-- [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化与控制域 Redis 按 zone 分片(2026-11-05)
-- [core-gameplay-loop.md](design/core-gameplay-loop.md) — 《五行奇谈》核心循环 V1｜有空就玩
-- [cross-repo-port-comparison-20261123.md](design/cross-repo-port-comparison-20261123.md) — 双仓双向方案对比与移植设计（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
-- [data-consistency-guarantee-map-20261020.md](design/data-consistency-guarantee-map-20261020.md) — 数据一致性等级核对（2026-10-20）
-- [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
-- [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
-- [data-service-breaker-per-logical-db.md](design/data-service-breaker-per-logical-db.md) — data_service 的熔断:服务端从按方法改成按逻辑库,调用方关掉按方法的客户端熔断
-- [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计（2026-10-20）
-- [economy-anti-scam-ui-codex-handoff.md](design/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 制作任务书（Codex 美术交付规格）
-- [gameplay-unified-design-v1.md](design/gameplay-unified-design-v1.md) — 《五行奇谈》全局玩法统一收口设计方案（V1 提案）
-- [gateway-zone-health-publish-20261111.md](design/gateway-zone-health-publish-20261111.md) — 网关区服健康:每 zone 发布汇总记录,网关只读汇总(2026-11-11)
-- [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、逐级扩大范围、每池单写者
-- [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展:逻辑库自治、角色护栏、目录分片、不停服迁移、多地域
-- [jeecg-gm-administration.md](design/jeecg-gm-administration.md) — 独立 JeecgBoot GM 管理系统
-- [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
-- [linearizable-owner-authority.md](design/linearizable-owner-authority.md) — 线性一致 SQL 玩家归属权威与重连状态机设计（`go/shared/ownerauthority`）
-- [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
-- [long-term-progression-v1.md](design/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
-- [long-term-progression-v2.md](design/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2.1 终版）
-- [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
-- [minigame-remote-map-streaming-and-scene-gating.md](design/minigame-remote-map-streaming-and-scene-gating.md) — 小游戏与 App 双形态远程地图流式加载、CDN 分发与服务端切图门禁设计
-- [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
-- [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
-- [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
-- [official-passport-registration.md](design/official-passport-registration.md) — 官方通行证与账号注册接入设计（Casdoor OIDC）
-- [official-passport-ui-handoff.md](design/official-passport-ui-handoff.md) — 官方通行证与账号注册 · 道家 Q 版 Unity UI 异机交接
-- [pc-original-static-backgrounds-20261123.md](design/pc-original-static-backgrounds-20261123.md) — 端游原图静态背景服务端核实与双端 ID 对账设计（2026-11-23）
-- [pet-memory-minigame-v1.md](design/pet-memory-minigame-v1.md) — 灵宠翻牌 V1 设计与双机交接
-- [player-audit-outbox.md](design/player-audit-outbox.md) — 玩家审计发件箱:审计流水与快照随存盘提交(断线重连 R13)
-- [player-connection-lost-hold.md](design/player-connection-lost-hold.md) — 玩家断线保留与短重连回原处
-- [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展:总体方案
-- [player-save-direct-commit.md](design/player-save-direct-commit.md) — 存盘直接提交 TiDB:落码规格
-- [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
-- [ranked-play-season-ui-candidate.md](design/ranked-play-season-ui-candidate.md) — 论剑排位首发 V1 实施规格
-- [ranked-play-v1-implementation.md](design/ranked-play-v1-implementation.md) — 《论剑排位首发 V1》工程落盘设计
-- [ranked-play-v2-overhaul.md](design/ranked-play-v2-overhaul.md) — 《论剑 / 人宠会武》V2 玩法体验重做与双服客户端落地设计
-- [ranked-play-v2-ui-handoff.md](design/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
-- [ranked-play-v3-tactical-prep.md](design/ranked-play-v3-tactical-prep.md) — 《论剑 / 人宠会武》V3 扩展设计：战前 15 秒明牌变阵（换赛季印 / 换首发宠）
-- [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷
-- [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留
-- [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)
-- [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
-- [region-cell-routing-alignment.md](design/region-cell-routing-alignment.md) — Region → Cell 确定性蜂窝路由对齐设计（`go/shared/cellroute`）
-- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05）
-- [rename-and-content-safety.md](design/rename-and-content-safety.md) — 改名(角色 / 帮会)与内容安全
-- [replace-legacy-current-maps-with-qdao-nav-20261124.md](design/replace-legacy-current-maps-with-qdao-nav-20261124.md) — 退役旧版 12.5 GB 三图（`CurrentMaps20261009`）、接通八景岛/月汐湾双端导航与主城临时替代方案
-- [rpc-kill-switch.md](design/rpc-kill-switch.md) — RPC 热关停：节点 / 服务 / 方法三级（C++ 与 Go 同一套）
-- [team-follow-server-trail.md](design/team-follow-server-trail.md) — 组队跟随:服务器沿队长轨迹驱动队员(2026-11-06 服务端源码已写;2026-11-10 补入场后补推、客户端已写,补跨节点与离线托管的跨场景跟随;均未编译未测试)
-- [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret(2026-11-10)
-- [world-map-play-v1.md](design/world-map-play-v1.md) — 《五行奇谈》地图顺手拾取首版：野外主动捡，战斗优先
-- [world-map-play-v2.md](design/world-map-play-v2.md) — 《五行奇谈》世界地图生态、双层潮汐聚人与低人口在场感设计（V2）
-- [writer-roster-exhaustion-20261106.md](design/writer-roster-exhaustion-20261106.md) — 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
-- [zone-full-handling.md](design/zone-full-handling.md) — 区服满员处理（保留选区）
-- [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
-
-#### 成套设计
+#### 成套技术设计
 
 - [guild-phase2/](design/guild-phase2/README.md) — 帮会二期设计(管理审批 / 名字 / 资产通道 / 捐献升级商店 / 活动)
-- [skill-planning/](design/skill-planning/README.md) — 自由技能体系策划总览
 
 ### 运维手册与事故复盘(`ops/`)
 
@@ -468,7 +504,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
 - [spectate-tiered-fanout-followup-20261121.md](handoff/spectate-tiered-fanout-followup-20261121.md) — 观战分级扩容（L0 / L1 / L2）：环境受限后续验证交接（2026-11-21）
-- [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Codex)
+- [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Gemini)
 
 ### 笔记(`notes/`)
 

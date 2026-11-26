@@ -58,6 +58,7 @@ type ClientRequestRecord struct {
 	CraftedSkillTableId        uint32 `protobuf:"varint,27,opt,name=crafted_skill_table_id,json=craftedSkillTableId,proto3" json:"crafted_skill_table_id,omitempty"`                      // 技能制书：首次产出的技能表 ID。
 	ScrollCraftRevision        uint64 `protobuf:"varint,28,opt,name=scroll_craft_revision,json=scrollCraftRevision,proto3" json:"scroll_craft_revision,omitempty"`                        // 技能制书/拆页：首次成功后的水位。
 	ScrollBonusFragments       uint32 `protobuf:"varint,29,opt,name=scroll_bonus_fragments,json=scrollBonusFragments,proto3" json:"scroll_bonus_fragments,omitempty"`                     // 技能制书/拆页：首次额外返还或拆解得到的残页数。
+	TravelPassClaimedCount     uint32 `protobuf:"varint,30,opt,name=travel_pass_claimed_count,json=travelPassClaimedCount,proto3" json:"travel_pass_claimed_count,omitempty"`             // 游历手记领奖：首次实际领取的档位轨数。
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -295,6 +296,13 @@ func (x *ClientRequestRecord) GetScrollBonusFragments() uint32 {
 	return 0
 }
 
+func (x *ClientRequestRecord) GetTravelPassClaimedCount() uint32 {
+	if x != nil {
+		return x.TravelPassClaimedCount
+	}
+	return 0
+}
+
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。
 // 来源防重由战斗收件箱的永久消费水位负责；不能用近期结果列表充当去重账本。
 // 合入 A 两阶段模型（docs/design/season-pvp-pve-economy-unified-v1.md）：
@@ -501,7 +509,7 @@ var File_proto_common_component_client_request_ledger_comp_proto protoreflect.Fi
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\xa0\v\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\xdb\v\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -532,7 +540,8 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x15crafted_skill_book_id\x18\x1a \x01(\x04R\x12craftedSkillBookId\x123\n" +
 	"\x16crafted_skill_table_id\x18\x1b \x01(\rR\x13craftedSkillTableId\x122\n" +
 	"\x15scroll_craft_revision\x18\x1c \x01(\x04R\x13scrollCraftRevision\x124\n" +
-	"\x16scroll_bonus_fragments\x18\x1d \x01(\rR\x14scrollBonusFragments\"\xfe\x03\n" +
+	"\x16scroll_bonus_fragments\x18\x1d \x01(\rR\x14scrollBonusFragments\x129\n" +
+	"\x19travel_pass_claimed_count\x18\x1e \x01(\rR\x16travelPassClaimedCount\"\xfe\x03\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +

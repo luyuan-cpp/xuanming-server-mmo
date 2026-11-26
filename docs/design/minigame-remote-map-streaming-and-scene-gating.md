@@ -218,7 +218,7 @@ https://<cdn-host>/maps/<manifest_version>/
    - 确认当前先落地阶段 1–3，还是仅留档设计待当前在途玩法（`PlayMode` / `EquipEnhance`）合并后再开工。
 2. **阶段 1 实施（服务端 + 网关）**：
    - 修改 `java/gateway_node` 的 `HotfixProperties.java`、`HotfixCheckResponse.java`、`HotfixCheckService.java` 及 `HotfixCheckServiceTest.java`，扩展可选 `assetBaseUrl` / `assetManifestVersion` / `assetTier` 与启动校验；
-   - 修改 `data/schema/basescene_table.proto` 与 `data/BaseScene.xlsx` 新增场景开放状态列，跑 `dev.bat gen`（交由低档执行/Codex 会话），在 `go/scene_manager/internal/logic/enterscenelogic.go` 增加开放门禁及对应单测与指标；
+   - 修改 `data/schema/basescene_table.proto` 与 `data/BaseScene.xlsx` 新增场景开放状态列，跑 `dev.bat gen`（交由低档执行/Gemini 会话），在 `go/scene_manager/internal/logic/enterscenelogic.go` 增加开放门禁及对应单测与指标；
    - 更新 `docs/ops/release-checklist.md` §7.1 增加 CDN 域名 ICP 备案与两家平台合法域名登记条目；
    - 更新 `docs/README.md`（跑 `python tools/scripts/gen_docs_index.py`）与 `mmorpg-client/Docs/rules/minigame-and-app-platforms.md` 的跨端索引链接。
 3. **阶段 2 实施（`SceneReady` 双服务端同步）**：

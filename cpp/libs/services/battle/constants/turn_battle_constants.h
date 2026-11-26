@@ -31,7 +31,16 @@ inline constexpr uint32_t kDefaultMaxRounds = 300;
 inline constexpr uint32_t kMatchModePveSolo = 4;
 inline constexpr uint32_t kMatchModePveTeam = 5;
 inline constexpr uint32_t kMatchModePolarity5v5 = 8;
+inline constexpr uint32_t kMatchModeGuildWarPvp = 9;
+inline constexpr uint32_t kMatchModeGuildWarSiege = 10;
 inline constexpr uint32_t kMatchModeSeasonTournament = 11;
+
+// 帮会全天帮战 V2（docs/design/guild-play-v2.md）：
+// 第 12 回合起启用「决胜煞气」：每层增伤 +15%、疗盾 -15%（下限 20%），20 回合打满判平。
+inline constexpr uint32_t kGuildWarDefaultMaxRounds = 20;
+inline constexpr uint32_t kGuildWarEscalationStartRound = 12;
+inline constexpr uint32_t kGuildWarEscalationDamageStepPct = 15;
+inline constexpr uint32_t kGuildWarEscalationSupportStepPct = 15;
 
 // 论剑 / 竞技 PVP V2 体验规则（docs/design/ranked-play-v2-overhaul.md）：
 // 1. 主目标凝锋：竞技 PVP 人物多目标直伤技在目标不足上限时，显式主目标伤害 +20%（恢复 1V1/残局集火博弈）；
@@ -48,6 +57,12 @@ inline constexpr uint32_t kPvpSurrenderUnlockRound = 5;
 inline constexpr uint32_t kPvpSurrenderRejectCooldownRounds = 3;
 inline constexpr uint32_t kPvpSurrenderExpireCooldownRounds = 2;
 inline constexpr uint32_t kPvpSurrenderIdleExcludeRounds = 2;
+// 论剑 V4 队内一键战术标点、本局复盘高光徽记与连胜破势门槛（纯确定性整数规则）。
+inline constexpr uint32_t kMaxBattlePingsPerRound = 2;
+inline constexpr uint32_t kMinWinStreakHighlight = 3;
+inline constexpr uint32_t kClutchComebackMinEscalationStacks = 2;
+inline constexpr uint32_t kClutchComebackLowHpDenominator = 4; // hp * 4 < max_hp (< 25%)
+inline constexpr uint32_t kHighlightControlMinCount = 2;
 
 // 赛季首领试炼与轮换娱乐玩法类型（对应 DungeonTable.boss_trial_kind）
 inline constexpr uint32_t kBossTrialKindNone = 0;
@@ -110,6 +125,7 @@ inline constexpr uint32_t kBossMechanicMomentumGain = 6;      // 蓄势叠加（
 inline constexpr uint32_t kBossMechanicBreakerSunder = 7;     // 破军破甲（value=20）
 inline constexpr uint32_t kBossMechanicRejuvCleanse = 8;      // 困难回春净益（value=清除项数）
 inline constexpr uint32_t kBossMechanicAntiHealDishearten = 9;// 断脉压制气馁（value=15）
+inline constexpr uint32_t kBossMechanicWeeklyAffixTrigger = 10;// 周常五行词缀机制触发（木周回蓝/回血、土周赐盾人数）
 
 // 预告动作种类（对应 BattleTelegraphEntry.intent_kind）
 inline constexpr uint32_t kTelegraphKindSlowCleave = 1;

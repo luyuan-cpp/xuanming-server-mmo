@@ -1,0 +1,21 @@
+{
+ "data": [
+  {
+   "banner_asset_key": "UI/Ugui/TravelPassV1/travel_pass_banner",
+   "config_revision": 1,
+   "description": "零每日打卡、正常打试炼/会武/瑞兽自动涨游历印；免费轨领满绑定实用礼，可先玩满再自愿解锁 ¥18 典藏外观轨，解锁后永不过期。",
+   "enabled": 1,
+   "ends_at_ms": 0,
+   "hard_or_pvp_win_points": 30,
+   "icon_key": "UI/Ugui/TravelPassV1/travel_pass_card_icon",
+   "id": 1,
+   "max_points": 300,
+   "name": "青云游历手记 · 第一期",
+   "premium_currency_type": 1,
+   "premium_price": 180,
+   "pve_win_points": 20,
+   "pvp_qualified_other_points": 15,
+   "starts_at_ms": 0
+  }
+ ]
+}

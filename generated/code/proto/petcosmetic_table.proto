@@ -1,0 +1,27 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PetCosmeticTableOuterClass";
+option java_multiple_files = true;
+
+
+message PetCosmeticTable {
+	uint32 id = 1;
+	string cosmetic_key = 2;
+	string name = 3;
+	uint32 target_pet_table_id = 4;
+	uint32 visual_pet_table_id = 5;
+	string visual_art_key = 6;
+	uint32 enabled = 7;
+	uint32 sort_order = 8;
+	uint64 mall_sku_id = 9;
+	string acquire_hint = 10;
+	string desc = 11;
+}
+
+message PetCosmeticTableData {
+	repeated PetCosmeticTable data = 1;
+}

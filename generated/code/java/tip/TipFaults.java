@@ -90,7 +90,9 @@ public final class TipFaults {
             new Fault(34011, "season_error", "SeasonUnavailable"),
             new Fault(35000, "trial_journal_error", "TrialJournalUnavailable"),
             new Fault(36001, "festival_beast_error", "FestivalBeastConfigInvalid"),
-            new Fault(36013, "festival_beast_error", "FestivalBeastServiceUnavailable")
+            new Fault(36013, "festival_beast_error", "FestivalBeastServiceUnavailable"),
+            new Fault(37000, "spirit_shop_error", "SpiritShopUnavailable"),
+            new Fault(38000, "travel_pass_error", "TravelPassUnavailable")
     );
 
     /** 由 FAULTS 派生,不单独生成第二份字面量。 */

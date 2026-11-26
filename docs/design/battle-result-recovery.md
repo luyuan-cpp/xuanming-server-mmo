@@ -1,6 +1,6 @@
 # 战斗结果重登恢复:近期战斗结果
 
-> **状态**:v1 — 2026-11-05 方案定稿,服务端已落码,**未编译、未测试**,验证按 §10 交 Codex。客户端 §7 于 2026-11-12 落码(`../mmorpg-client`,未生成、未编译),落码时定下的取舍写在 §7 末尾。Java 版待做,已在 Java 仓 `PARITY.md` 登记(§11)。
+> **状态**:v1 — 2026-11-05 方案定稿,服务端已落码,**未编译、未测试**,验证按 §10 交 Gemini。客户端 §7 于 2026-11-12 落码(`../mmorpg-client`,未生成、未编译),落码时定下的取舍写在 §7 末尾。Java 版待做,已在 Java 仓 `PARITY.md` 登记(§11)。
 > **来源**:[断线重连审计 §9.3](disconnect-reconnect-audit-20261020.md#93-战斗结果展示缺少重登恢复)、[缺口清单「待确认」](../handoff/server-gap-audit-20261101.md)。
 > **关系**:结算链路以 [总体方案 §5.4](player-data-tidb-scaling-plan.md#54-战斗结算与本地模式2026-10-30-定) 为准(结算只走 match SQL + player_inbox,scene 的 `ApplyInboxSettlement` 是唯一应用点);组件创建与缺失语义以 [ECS 组件访问规则](ecs-component-access-rules.md) 为准;存档分组见 [存盘直接提交 §1.1](player-save-direct-commit.md#11-字段分组);客户端的落地判定沿用 [落地恢复 §4.3](landing-recovery-sync-digest.md#43-客户端实现mmorpg-client)。
 
@@ -217,10 +217,10 @@ scene 进程没有 Prometheus 端点,计数从结构化日志提取。player_id 
 
 - 经验累计入账已接入；自动升级仍待策划提供升级曲线，不在战果恢复层编造经验阈值。
 - 长历史不在本列表里做,见 §3 对 (b) 的说明。PVP 战报回放由[战报回放](battle-report-replay.md)另做。
-- robot 冒烟场景本轮不写,冒烟步骤见 §10,由 Codex 用改好的客户端或补 robot 场景执行。
+- robot 冒烟场景本轮不写,冒烟步骤见 §10,由 Gemini 用改好的客户端或补 robot 场景执行。
 - Java 版待做(§11)。
 
-## 10. 验证(交 Codex,AGENTS §10.1)
+## 10. 验证(交 Gemini,AGENTS §10.1)
 
 1. **协议生成**:仓库根 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`(生成器源码有变化时先 `-Command proto-gen-build`)。期望:
    - 新增 `cpp/generated/proto/common/component/player_battle_result_comp.pb.{h,cc}`、`cpp/generated/proto/scene/player_battle_result.pb.{h,cc}`,并由生成器登记进 `cpp/generated/proto` 的 vcxproj、filters、CMakeLists;

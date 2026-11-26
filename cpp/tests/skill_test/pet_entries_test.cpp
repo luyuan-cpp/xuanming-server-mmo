@@ -40,7 +40,7 @@ protected:
   p->set_pet_id(id);p->set_pet_table_id(1);p->set_level(60);p->set_health(40);p->set_mana(80);
   tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(60);
  }
- void TearDown()override{if(tlsEcs.actorRegistry.valid(player))tlsEcs.actorRegistry.destroy(player);}
+ void TearDown()override{tlsEcs.playerList.erase(9001u);if(tlsEcs.actorRegistry.valid(player))tlsEcs.actorRegistry.destroy(player);}
  PetInstance& Pet(){return *tlsEcs.actorRegistry.get<PlayerPetComp>(player).mutable_pets(0);}
  SavePetEntriesRequest Request(uint32_t points=2){PetEntriesInfo info;EXPECT_EQ(PetSystem::BuildEntries(player,id,info),kSuccess);SavePetEntriesRequest r;
   r.set_pet_id(id);r.set_state_version(info.state_version());r.set_config_version(info.config_version());r.set_request_id("entry-request-0001");(*r.mutable_target())[503]=points;return r;}
@@ -237,6 +237,7 @@ TEST_F(PetEntriesTest, AscendTierConsumesMaterialAndGoldAtomicallyAndExpandsEntr
  seg.Warm(); seg.OnResponse(0, 600001, 600099);
 
  tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, 9001u);
+ tlsEcs.playerList[9001u] = player;
  auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
  for (auto& bag : bags.bags) bag.SetPlayerGuid(9001u);
  auto& cur = tlsEcs.actorRegistry.emplace<CurrencyComp>(player);

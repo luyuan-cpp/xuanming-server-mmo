@@ -1,7 +1,7 @@
 # gate 排空时把在线玩家迁到同 zone 的其他 gate
 
 > **状态**：设计稿 2026-11-05（Claude）。负责人在问答「gate 重启或灰度、金丝雀发布时 IP 和端口变了怎么办」之后点了「写设计稿」，11-06 点了「按建议落批 A」，§12 四项按本文的建议值执行。
-> - **批 A（login、协议、robot、排空脚本）**：11-06 已落码，落码与本文的差异见 §17。协议生成物已随主干快照提交（`a8af9372d` 等），**仍未编译、未测试**，Codex 验证清单在 `docs/PROGRESS.md` 2026-11-06 同名条目。
+> - **批 A（login、协议、robot、排空脚本）**：11-06 已落码，落码与本文的差异见 §17。协议生成物已随主干快照提交（`a8af9372d` 等），**仍未编译、未测试**，Gemini 验证清单在 `docs/PROGRESS.md` 2026-11-06 同名条目。
 > - **批 B（gate）**：11-10 已落码（负责人要求全部在 main 上做完），**未编译、未测试**，落码记录与验证清单见 §18 与 `docs/PROGRESS.md` 2026-11-10 同名条目。服务端到这里功能完整；迁移开关 `GateDrain.Migrate.Enabled` 当时默认关，11-12 收尾批改为默认开（§12 第 1 条）。
 > - **收尾批（2026-11-12）**：负责人要求「以后修的现在修、不等压测先按标准定」。客户端的跳数清零已落码，`Migrate.Enabled` 改为默认开，速率定为 20，选目标优先不在外出构建上的 gate（§7.3），gate 与 battle 的部署注入构建标识；另加一条守卫用例钉住 login 的 goctl 服务包装必须有 `RequestGateMigration`（包装已重生入库，守卫用例 11-13 为绿，见 §21）。落码记录见 §19。
 > - **收尾批续（2026-11-12）**：把原先留作残余或「以后再做」的几项都做掉：login 在会话记录被旧连接的断线通知改掉时重做进场提交，不再回 3023（§5）；客户端转移途中再收到 124 照跟（§10 第 4 条、§13）；接回时角色不离场、邻居看不到他闪一下（§13）；gate 迁移计数接上 `/metrics`（§8）；排空脚本估算同 zone 剩余容量、模板没变的重启先让 StatefulSet 修订变一次（§6、§7.3）；补 `PushRedirect` 的单测与 robot 迁移冒烟（§11）。落码记录见 §20。
@@ -303,7 +303,7 @@ GateDrain:
 
 ## 11. 测试
 
-单测（按 AGENTS §10.1 由 Codex 执行）：
+单测（按 AGENTS §10.1 由 Gemini 执行）：
 
 - Go login：
   - 许可只发给「排空中、在线数大于阈值、已满 StartAfter、开关开」的 gate，且带实例 uuid；
@@ -377,7 +377,7 @@ GateDrain:
   - [集群外入口](k8s-client-entry.md)「明确不做」里排空超时迁移那一条；
   - [节点生命周期需求](node-lifecycle-elasticity-release-20261023.md) §3 的 gate 一行。
 
-前置：[断线保留](player-connection-lost-hold.md) 与 `resumeSceneOf` 先经 Codex 编译、测试通过。本设计到达这一侧完全依赖它们。
+前置：[断线保留](player-connection-lost-hold.md) 与 `resumeSceneOf` 先经 Gemini 编译、测试通过。本设计到达这一侧完全依赖它们。
 
 ## 15. Java 版
 
@@ -410,11 +410,11 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 | `tools/scripts/k8s_gate_drain.ps1` | 读 `GateDrain.Migrate`，打印迁移开关、速率与按在线数估算的迁移时长；不改变排空流程与预算校验 |
 | 单测 | `config/gate_drain_conf_test.go`、`loginqueue/gatedrain_migrate_test.go`（新）、`svc/gate_migration_test.go`（新）、`svc/gate_command_test.go`、`robot/pkg/redirect_test.go`、`tools/scripts/tests/k8s_gate_drain.tests.ps1` |
 
-生成物没有手改：login 的 goctl 服务包装（`internal/server/clientplayerlogin/clientplayerloginserver.go`）、消息号与事件号表、路由服的路由表、各语言的 pb，都由 Codex 重新生成（AGENTS §3、§4）。
+生成物没有手改：login 的 goctl 服务包装（`internal/server/clientplayerlogin/clientplayerloginserver.go`）、消息号与事件号表、路由服的路由表、各语言的 pb，都由 Gemini 重新生成（AGENTS §3、§4）。
 
 ### 17.2 与上文的差异
 
-- **robot 没有加专门的迁移冒烟场景。** robot 本来就跟随 124；迁移的集成验证按 §11 的步骤手工排空一台 gate，命令写在 Codex 清单里。
+- **robot 没有加专门的迁移冒烟场景。** robot 本来就跟随 124；迁移的集成验证按 §11 的步骤手工排空一台 gate，命令写在 Gemini 清单里。
 - **签票直读排空标记**，不用登录挑 gate 的 1 秒缓存，理由见 §4.4 第 2 条（正文已按落码改写）。
 - **选角界面的连接签票前核对登录态**、**调用方要在本 zone 目录里对得上实例 uuid**，两条都已写进 §4.4 正文。
 
@@ -424,7 +424,7 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 
 ## 18. 批 B 落码记录（2026-11-10，未编译、未测试）
 
-负责人 11-10 要求：全部改动在 main 上做，不开分支；只写服务端代码，客户端、协议生成、编译与冒烟交给 Codex；Java 只登记待做。协议生成物在动手前已随主干快照提交，批 B 没有改 proto。
+负责人 11-10 要求：全部改动在 main 上做，不开分支；只写服务端代码，客户端、协议生成、编译与冒烟交给 Gemini；Java 只登记待做。协议生成物在动手前已随主干快照提交，批 B 没有改 proto。
 
 ### 18.1 改了什么
 
@@ -450,7 +450,7 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 - **gate 只走日志，不出指标**（§8 已改写）：C++ 节点还没有 `/metrics` 出口。
 - **直连模式的迁移请求带轨道 metadata**，与客户端请求的直连转发一致；路由模式由路由服按 `ForwardRequest.release_track` 写同一个键。
 
-### 18.3 验证（交 Codex，AGENTS §10.1）
+### 18.3 验证（交 Gemini，AGENTS §10.1）
 
 步骤与命令写在 `docs/PROGRESS.md` 2026-11-10 同名条目：整解编译、`routing_identity_test` 全量、批 A 的 Go 与脚本测试、robot 单测，以及按 §11 的本地两台 gate 迁移冒烟（`GateDrain.Migrate.Enabled=true`）。没有运行结果之前，本节所有内容都只是静态落码。
 
@@ -476,13 +476,13 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 | `tools/scripts/k8s_deploy.ps1`、`lib/k8s_client_entry.ps1`、`tests/scene_planned_drain_deploy.tests.ps1` | gate 与 battle 的每种编排都注入 `MMORPG_BUILD_LABEL`（`Get-CppBuildLabelEnvLines`、`PodCommon.BuildLabel`）；Deployment 与 StatefulSet 形态再经 downward API 注入 `MMORPG_POD_REVISION`（Fleet 不注入） |
 | `cpp/libs/engine/core/node/system/node/node_planned_drain.h`、`cpp/tests/cross_zone_test/planned_drain_test.cpp` | `ComposeBuildLabel`：`NodeInfo.build` = 构建标识 `@` 工作负载修订（`Node::InitRpcServer` 注册时写入，scene 计划排空批已落码）；用例 `PlannedDrainBuildLabel.*` |
 
-### 19.2 验证（交 Codex）
+### 19.2 验证（交 Gemini）
 
 命令与通过标准在 `docs/PROGRESS.md` 2026-11-12「无感重启收尾批」条目。顺序上先跑 `go/build.ps1` 重生 login 的 goctl 包装，再跑 login 单测；冒烟按 §11 起两台 gate，这次不用再手工打开迁移开关。
 
 ## 20. 收尾批续落码记录（2026-11-12，未编译、未测试）
 
-负责人 11-12：查出来的问题不等以后、现在修；不等压测、先按最标准的定；服务端与客户端代码都写，协议生成、编译与冒烟交给 Codex，Java 只登记待做。本批把 §5、§6、§8、§10、§11、§13 原先留着的项都做掉。与「无感升级和重启方案」会话的分工：§7.3 的构建偏好与修订说明、§12、§19 是那边写的，本批没有重做；§7.3 里排空脚本自动让修订变一次的代码在本批（文件归本功能）。
+负责人 11-12：查出来的问题不等以后、现在修；不等压测、先按最标准的定；服务端与客户端代码都写，协议生成、编译与冒烟交给 Gemini，Java 只登记待做。本批把 §5、§6、§8、§10、§11、§13 原先留着的项都做掉。与「无感升级和重启方案」会话的分工：§7.3 的构建偏好与修订说明、§12、§19 是那边写的，本批没有重做；§7.3 里排空脚本自动让修订变一次的代码在本批（文件归本功能）。
 
 ### 20.1 改了什么
 
@@ -505,7 +505,7 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 
 客户端的改动已进客户端仓 11-12 的提交，没有在 Unity 里跑过。
 
-### 20.2 验证（交 Codex，AGENTS §10.1）
+### 20.2 验证（交 Gemini，AGENTS §10.1）
 
 命令、顺序与通过标准在 `docs/PROGRESS.md` 2026-11-12「gate 排空迁移收尾批续」条目。要点：
 

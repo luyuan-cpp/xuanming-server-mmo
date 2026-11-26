@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "SpiritShopLimitGroupTableOuterClass";
+option java_multiple_files = true;
+
+
+message SpiritShopLimitGroupTable {
+	uint32 id = 1;
+	string name = 2;
+	uint32 reset_kind = 3;
+	uint32 max_weight = 4;
+}
+
+message SpiritShopLimitGroupTableData {
+	repeated SpiritShopLimitGroupTable data = 1;
+}

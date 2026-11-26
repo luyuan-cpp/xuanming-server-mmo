@@ -26,3 +26,11 @@ constexpr uint32_t SceneAppearanceClientPlayerNotifyActorAppearanceChangedIndex 
 constexpr uint32_t SceneAppearanceClientPlayerNotifyAppearanceStateMessageId = 447;
 constexpr uint32_t SceneAppearanceClientPlayerNotifyAppearanceStateIndex = 5;
 #define SceneAppearanceClientPlayerNotifyAppearanceStateMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(5)
+
+constexpr uint32_t SceneAppearanceClientPlayerEquipPetCosmeticMessageId = 530;
+constexpr uint32_t SceneAppearanceClientPlayerEquipPetCosmeticIndex = 6;
+#define SceneAppearanceClientPlayerEquipPetCosmeticMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(6)
+
+constexpr uint32_t SceneAppearanceClientPlayerEquipSkillVfxMessageId = 531;
+constexpr uint32_t SceneAppearanceClientPlayerEquipSkillVfxIndex = 7;
+#define SceneAppearanceClientPlayerEquipSkillVfxMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(7)

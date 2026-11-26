@@ -1,0 +1,2107 @@
+package logic
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+
+	"guild/internal/constants"
+	"guild/internal/data"
+	"guild/internal/war"
+	battlepb "proto/battle"
+	assetpb "proto/common/asset"
+	componentpb "proto/common/component"
+	rollbackpb "proto/common/rollback"
+	kafkapb "proto/contracts/kafka"
+	pb "proto/guild"
+	matchpb "proto/match"
+	scenepb "proto/scene"
+	smpb "proto/scene_manager"
+	"shared/assetop"
+	"shared/currencytype"
+	"shared/gameday"
+	tablepb "shared/generated/pb/table"
+	"shared/generated/table"
+	"shared/redisslot"
+	"shared/serviceauth"
+)
+
+// WarBattleStarter 封装帮战直打开局 RPC（生产为带 serviceauth 签名的 MatchInternal.StartGuildWarBattle）。
+type WarBattleStarter interface {
+	StartGuildWarBattle(ctx context.Context, in *matchpb.StartGuildWarBattleRequest, opts ...grpc.CallOption) (*matchpb.StartGuildWarBattleResponse, error)
+}
+
+type signedWarStarter struct {
+	inner  matchpb.MatchInternalClient
+	secret string
+}
+
+func NewSignedWarStarter(inner matchpb.MatchInternalClient, secret string) (WarBattleStarter, error) {
+	if inner == nil {
+		return nil, errors.New("war battle starter: nil MatchInternalClient")
+	}
+	if _, err := serviceauth.New(map[string]string{"guild": secret}); err != nil {
+		return nil, fmt.Errorf("war battle starter: %w", err)
+	}
+	return &signedWarStarter{inner: inner, secret: secret}, nil
+}
+
+func (s *signedWarStarter) StartGuildWarBattle(ctx context.Context, in *matchpb.StartGuildWarBattleRequest, opts ...grpc.CallOption) (*matchpb.StartGuildWarBattleResponse, error) {
+	if in == nil {
+		return nil, errors.New("war battle starter: nil request")
+	}
+	signed := proto.Clone(in).(*matchpb.StartGuildWarBattleRequest)
+	signed.Auth = nil
+	if err := serviceauth.Sign(matchpb.MatchInternal_StartGuildWarBattle_FullMethodName, signed, "guild", s.secret, uint64(time.Now().UnixMilli())); err != nil {
+		return nil, err
+	}
+	return s.inner.StartGuildWarBattle(ctx, signed, opts...)
+}
+
+// WarDeps 帮会全天帮战 V2 外部依赖，由 guild.go 经 WithWar 一次装配。
+type WarDeps struct {
+	Repo         *data.WarRepo
+	Loop         *assetop.Loop
+	OpIDs        IDMinter
+	BountyIDs    IDMinter
+	Match        WarBattleStarter
+	PlayerRedis  redis.UniversalClient
+	ControlRedis redis.UniversalClient
+	Now          func() time.Time
+	SyncBudget   time.Duration
+	Lease        time.Duration
+	MatchBudget  time.Duration
+}
+
+func WithWar(d WarDeps) Option {
+	return func(l *GuildLogic) {
+		if d.Repo == nil {
+			return
+		}
+		deps := d
+		if deps.Now == nil {
+			deps.Now = time.Now
+		}
+		if deps.SyncBudget <= 0 {
+			deps.SyncBudget = defaultSyncBudget
+		}
+		if deps.Lease <= 0 {
+			deps.Lease = defaultInsertLease
+		}
+		if deps.MatchBudget <= 0 {
+			deps.MatchBudget = 1500 * time.Millisecond
+		}
+		l.war = &deps
+	}
+}
+
+func (l *GuildLogic) warNow() time.Time {
+	if l.war != nil && l.war.Now != nil {
+		return l.war.Now()
+	}
+	return time.Now()
+}
+
+func (l *GuildLogic) warRule() *tablepb.GuildWarRuleTable {
+	r, _ := table.GuildWarRuleTableManagerInstance.FindById(war.RuleRowID)
+	return r
+}
+
+func (l *GuildLogic) warWeekKey(now time.Time) uint32 {
+	return gameday.WeekKey(now)
+}
+
+func (l *GuildLogic) warDayKey(now time.Time) uint32 {
+	return gameday.DayKey(now)
+}
+
+type warBattleSummary struct {
+	AttackerGuildName string   `json:"ag"`
+	DefenderGuildName string   `json:"dg"`
+	AttackerNames     []string `json:"an"`
+	DefenderNames     []string `json:"dn"`
+	AttackerIDs       []uint64 `json:"ai"`
+	DefenderIDs       []uint64 `json:"di"`
+	GoldLeyline       bool     `json:"gl"`
+	RivalryBonus      bool     `json:"rb"`
+}
+
+func buildSilverItemBundle(silver uint64, items ...*assetpb.ItemGrant) ([]byte, error) {
+	b := &assetpb.AssetBundle{}
+	if silver > 0 {
+		b.Currencies = append(b.Currencies, &assetpb.CurrencyAmount{
+			CurrencyType: currencytype.Gold,
+			Amount:       silver,
+		})
+	}
+	for _, it := range items {
+		if it != nil && it.GetConfigId() != 0 && it.GetCount() > 0 {
+			b.Items = append(b.Items, it)
+		}
+	}
+	if len(b.Currencies) == 0 && len(b.Items) == 0 {
+		return nil, nil
+	}
+	return proto.MarshalOptions{Deterministic: true}.Marshal(b)
+}
+
+func (l *GuildLogic) readBattleLockID(ctx context.Context, playerID uint64) uint64 {
+	if l.war == nil || l.war.PlayerRedis == nil || playerID == 0 {
+		return 0
+	}
+	raw, err := l.war.PlayerRedis.Get(ctx, redisslot.BattleLockKey(playerID)).Result()
+	if err != nil {
+		return 0
+	}
+	id, _ := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+	return id
+}
+
+func (l *GuildLogic) resolvePlayerScene(ctx context.Context, zoneID uint32, playerID uint64) (online bool, sceneConfigID uint32, channelNo uint32, sceneID uint64) {
+	if l.war == nil || l.war.PlayerRedis == nil || playerID == 0 {
+		return false, 0, 0, 0
+	}
+	raw, err := l.war.PlayerRedis.Get(ctx, redisslot.LocationKey(playerID)).Bytes()
+	if err != nil || len(raw) == 0 {
+		return false, 0, 0, 0
+	}
+	loc := &smpb.PlayerLocation{}
+	if proto.Unmarshal(raw, loc) != nil || loc.GetSceneId() == 0 {
+		return false, 0, 0, 0
+	}
+	online = true
+	sceneID = loc.GetSceneId()
+	targetZone := loc.GetZoneId()
+	if targetZone == 0 {
+		targetZone = zoneID
+	}
+	if l.war.ControlRedis == nil || targetZone == 0 {
+		return online, 0, 0, sceneID
+	}
+	// 对照分线目录确定精确地图配置号与线号（覆盖 1 天墉城 + 三座灵脉野外图 2/3/5）。
+	for _, confID := range []uint32{1, 2, 3, 5} {
+		dirKey := fmt.Sprintf("world_channel_directory:%s:%d", redisslot.ZoneControlTag(redisslot.ControlFamilySceneControl, targetZone), confID)
+		dirRaw, dirErr := l.war.ControlRedis.Get(ctx, dirKey).Bytes()
+		if dirErr != nil || len(dirRaw) == 0 {
+			continue
+		}
+		dir := &scenepb.SceneChannelDirectory{}
+		if proto.Unmarshal(dirRaw, dir) != nil {
+			continue
+		}
+		for _, ch := range dir.GetChannels() {
+			if ch.GetSceneId() == sceneID {
+				return true, confID, ch.GetChannelNo(), sceneID
+			}
+		}
+	}
+	return online, 0, 0, sceneID
+}
+
+func (l *GuildLogic) resolveRecommendedChannel(ctx context.Context, zoneID, sceneConfigID uint32) (sceneID uint64, channelNo uint32) {
+	if l.war == nil || l.war.ControlRedis == nil || zoneID == 0 || sceneConfigID == 0 {
+		return 0, 0
+	}
+	dirKey := fmt.Sprintf("world_channel_directory:%s:%d", redisslot.ZoneControlTag(redisslot.ControlFamilySceneControl, zoneID), sceneConfigID)
+	dirRaw, err := l.war.ControlRedis.Get(ctx, dirKey).Bytes()
+	if err != nil || len(dirRaw) == 0 {
+		return 0, 0
+	}
+	dir := &scenepb.SceneChannelDirectory{}
+	if proto.Unmarshal(dirRaw, dir) != nil {
+		return 0, 0
+	}
+	for _, ch := range dir.GetChannels() {
+		if ch.GetState() == scenepb.SceneChannelState_SCENE_CHANNEL_STATE_SMOOTH || ch.GetState() == scenepb.SceneChannelState_SCENE_CHANNEL_STATE_BUSY {
+			return ch.GetSceneId(), ch.GetChannelNo()
+		}
+	}
+	if len(dir.GetChannels()) > 0 {
+		return dir.GetChannels()[0].GetSceneId(), dir.GetChannels()[0].GetChannelNo()
+	}
+	return 0, 0
+}
+
+func (l *GuildLogic) syncDeliverWarOp(ctx context.Context, op data.AssetOpRow) pb.GuildAssetOrderStatus {
+	if l.war == nil || l.war.Loop == nil || op.OpID == 0 {
+		return pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_PENDING
+	}
+	budget, ok := syncBudgetFor(ctx, l.war.SyncBudget)
+	if !ok {
+		return pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_PENDING
+	}
+	callCtx, cancel := context.WithTimeout(withSyncDelivery(ctx), budget)
+	defer cancel()
+	ao, err := op.AssetOp()
+	if err != nil {
+		return pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_PENDING
+	}
+	if _, err := l.war.Loop.ProcessOne(callCtx, ao); err != nil {
+		return pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_PENDING
+	}
+	return pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_APPLIED
+}
+
+func (l *GuildLogic) resolveWarPlayerGuildID(ctx context.Context, playerID uint64) (uint64, error) {
+	g, err := l.repo.ResolvePlayerGuild(ctx, playerID)
+	if err != nil || g == nil {
+		return 0, err
+	}
+	return g.GuildID, nil
+}
+
+func (l *GuildLogic) requireWarMember(ctx context.Context) (playerID, guildID uint64, guild *data.GuildData, zoneID uint32, tipID uint32, err error) {
+	who := callerOf(ctx, 0)
+	if err := requireClientSession(who); err != nil {
+		return 0, 0, nil, 0, 0, err
+	}
+	if l.war == nil || l.war.Repo == nil {
+		return 0, 0, nil, 0, constants.ErrWarNotOpen, nil
+	}
+	g, err := l.repo.ResolvePlayerGuild(ctx, who.playerID)
+	if err != nil {
+		return 0, 0, nil, 0, 0, status.Errorf(codes.Internal, "resolve player guild: %v", err)
+	}
+	if g == nil || g.GuildID == 0 {
+		return who.playerID, 0, nil, 0, constants.ErrNotInGuild, nil
+	}
+	z := l.repo.FinalZone(g.ZoneID)
+	if z == 0 {
+		z = g.ZoneID
+	}
+	return who.playerID, g.GuildID, g, z, 0, nil
+}
+
+// ── 1. GetGuildWarOverview ───────────────────────────────────────────────────
+
+func (l *GuildLogic) GetGuildWarOverview(ctx context.Context, _ *pb.GetGuildWarOverviewRequest) (*pb.GetGuildWarOverviewResponse, error) {
+	playerID, guildID, guild, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.GetGuildWarOverviewResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	rule := l.warRule()
+	_ = l.war.Repo.EnsureZoneLeylines(ctx, zoneID, nowMs)
+
+	leylinesRecs, err := l.war.Repo.ListLeylines(ctx, zoneID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list leylines: %v", err)
+	}
+	myState, err := l.war.Repo.GetPlayerWarState(ctx, playerID, zoneID, weekKey)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get player war state: %v", err)
+	}
+	prog, err := l.war.Repo.GetWeeklyProgress(ctx, guildID, weekKey)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get weekly progress: %v", err)
+	}
+	firstWin, _ := l.war.Repo.GetWeeklyProgress(ctx, guildID, 0)
+	myGarrison, _ := l.war.Repo.ListGarrison(ctx, guildID)
+	rivals, _ := l.war.Repo.ListRivals(ctx, guildID, weekKey)
+	rivalSet := make(map[uint64]bool, len(rivals))
+	for _, rg := range rivals {
+		rivalSet[rg] = true
+	}
+
+	goldID, goldEndsAt := war.GoldLeylineForHour(nowMs)
+	maxHP := war.DefaultLeylineMaxBannerHP
+	minMerit := war.DefaultDividendMinMerit
+	divPlayerCap := war.DefaultDividendPlayerWeeklyCap
+	divGuildCap := war.DefaultDividendGuildWeeklyCap
+	bountyPayLimit := war.DefaultBountyDailyPayoutLimit
+	bountyPubLimit := war.DefaultBountyPublicDailyLimit
+	bountyCounterTear := war.DefaultBountyCounterKillTear
+	garrisonCD := war.DefaultGarrisonRefreshCD
+	trackCD := war.DefaultTrackCooldownSec
+	if rule != nil {
+		if rule.GetLeylineMaxBannerHp() > 0 {
+			maxHP = rule.GetLeylineMaxBannerHp()
+		}
+		if rule.GetDividendMinPersonalMerit() > 0 {
+			minMerit = rule.GetDividendMinPersonalMerit()
+		}
+		if rule.GetDividendPlayerWeeklyCap() > 0 {
+			divPlayerCap = rule.GetDividendPlayerWeeklyCap()
+		}
+		if rule.GetDividendGuildWeeklyCap() > 0 {
+			divGuildCap = rule.GetDividendGuildWeeklyCap()
+		}
+		if rule.GetBountyDailyPayoutLimit() > 0 {
+			bountyPayLimit = rule.GetBountyDailyPayoutLimit()
+		}
+		if rule.GetBountyPublicDailyLimit() > 0 {
+			bountyPubLimit = rule.GetBountyPublicDailyLimit()
+		}
+		if rule.GetBountyCounterKillTear() > 0 {
+			bountyCounterTear = rule.GetBountyCounterKillTear()
+		}
+		if rule.GetGarrisonRefreshCooldownSec() > 0 {
+			garrisonCD = rule.GetGarrisonRefreshCooldownSec()
+		}
+		if rule.GetTrackCooldownSec() > 0 {
+			trackCD = rule.GetTrackCooldownSec()
+		}
+	}
+
+	// 汇总本帮可用帮贡。
+	var myContrib uint64
+	for _, m := range guild.Members {
+		if m.PlayerID == playerID {
+			myContrib = m.ContributionBalance
+			break
+		}
+	}
+
+	// 解析相关帮会名与功臣名。
+	guildNameCache := map[uint64]string{guildID: guild.Name}
+	lookupGuildName := func(gid uint64) string {
+		if gid == 0 {
+			return "无主（灵脉守卫）"
+		}
+		if name, ok := guildNameCache[gid]; ok {
+			return name
+		}
+		if g, gErr := l.repo.GetGuild(ctx, gid); gErr == nil && g != nil {
+			guildNameCache[gid] = g.Name
+			return g.Name
+		}
+		return fmt.Sprintf("帮会#%d", gid)
+	}
+
+	var occupiedLeyline uint32
+	leylineViews := make([]*pb.GuildWarLeylineView, 0, len(leylinesRecs))
+	for _, lr := range leylinesRecs {
+		meta, _ := war.LeylineByID(lr.GetLeylineId())
+		if lr.GetOwnerGuildId() == guildID {
+			occupiedLeyline = lr.GetLeylineId()
+		}
+		gCount := uint32(0)
+		if lr.GetOwnerGuildId() != 0 {
+			if slots, sErr := l.war.Repo.ListGarrison(ctx, lr.GetOwnerGuildId()); sErr == nil {
+				gCount = uint32(len(slots))
+			}
+		}
+		recSceneID, recChNo := l.resolveRecommendedChannel(ctx, zoneID, meta.SceneConfigID)
+		leylineViews = append(leylineViews, &pb.GuildWarLeylineView{
+			LeylineId:            lr.GetLeylineId(),
+			Name:                 meta.Name,
+			SceneConfigId:        meta.SceneConfigID,
+			OwnerGuildId:         lr.GetOwnerGuildId(),
+			OwnerGuildName:       lookupGuildName(lr.GetOwnerGuildId()),
+			BannerHp:             lr.GetBannerHp(),
+			BannerMaxHp:          maxHP,
+			ShieldUntilMs:        lr.GetShieldUntilMs(),
+			UnderSiege:           lr.GetLastSiegeAlertMs() > 0 && nowMs < lr.GetLastSiegeAlertMs()+120_000,
+			IsGoldLeyline:        lr.GetLeylineId() == goldID,
+			GarrisonCount:        gCount,
+			RecommendedSceneId:   recSceneID,
+			RecommendedChannelNo: recChNo,
+		})
+	}
+
+	// 本周里程碑宝箱视图（4 档）。
+	milestoneRows := table.GuildWarMilestoneTableManagerInstance.FindAll()
+	milestoneViews := make([]*pb.GuildWarMilestoneView, 0, len(milestoneRows))
+	for _, row := range milestoneRows {
+		bit := uint32(1) << (row.GetId() - 1)
+		claimed := (myState.GetMilestoneClaimedMask() & bit) != 0
+		claimable := !claimed && prog.GetGuildMerit() >= row.GetRequiredGuildMerit() && myState.GetWeeklyMerit() >= minMerit
+		mv := &pb.GuildWarMilestoneView{
+			MilestoneId:        row.GetId(),
+			RequiredMerit:      row.GetRequiredGuildMerit(),
+			GuildMerit:         prog.GetGuildMerit(),
+			Claimed:            claimed,
+			Claimable:          claimable,
+			RewardPreview:      row.GetRewardPreview(),
+			RewardSilver:       row.GetRewardSilver(),
+			RewardContribution: row.GetRewardContribution(),
+		}
+		if row.GetRewardItem1Id() != 0 {
+			mv.RewardItems = append(mv.RewardItems, &pb.GuildRewardItem{ItemId: row.GetRewardItem1Id(), Count: row.GetRewardItem1Count()})
+		}
+		if row.GetRewardItem2Id() != 0 {
+			mv.RewardItems = append(mv.RewardItems, &pb.GuildRewardItem{ItemId: row.GetRewardItem2Id(), Count: row.GetRewardItem2Count()})
+		}
+		milestoneViews = append(milestoneViews, mv)
+	}
+
+	// 分红视图。
+	claimableDiv := uint32(0)
+	if myState.GetWeeklyMerit() >= minMerit && prog.GetDividendPoolCount() > myState.GetDividendClaimedCount() && myState.GetDividendClaimedCount() < divPlayerCap {
+		claimableDiv = prog.GetDividendPoolCount() - myState.GetDividendClaimedCount()
+		if myState.GetDividendClaimedCount()+claimableDiv > divPlayerCap {
+			claimableDiv = divPlayerCap - myState.GetDividendClaimedCount()
+		}
+	}
+
+	// 动态帮旗功臣 + 建帮首胜 + 宿敌。
+	nameIDs := []uint64{}
+	if prog.GetMvp1PlayerId() != 0 {
+		nameIDs = append(nameIDs, prog.GetMvp1PlayerId())
+	}
+	if prog.GetMvp2PlayerId() != 0 {
+		nameIDs = append(nameIDs, prog.GetMvp2PlayerId())
+	}
+	if firstWin != nil {
+		if firstWin.GetFirstWinPlayer1Id() != 0 {
+			nameIDs = append(nameIDs, firstWin.GetFirstWinPlayer1Id())
+		}
+		if firstWin.GetFirstWinPlayer2Id() != 0 {
+			nameIDs = append(nameIDs, firstWin.GetFirstWinPlayer2Id())
+		}
+	}
+
+	openPlayers, _ := l.war.Repo.ListOpenChallengePlayers(ctx, zoneID, 24)
+	streakLeaders, _ := l.war.Repo.ListStreakLeaders(ctx, zoneID, 8)
+	bountiesRecs, _ := l.war.Repo.ListActiveBounties(ctx, zoneID, guildID, nowMs)
+	for _, op := range openPlayers {
+		nameIDs = append(nameIDs, op.GetPlayerId())
+	}
+	for _, sl := range streakLeaders {
+		nameIDs = append(nameIDs, sl.GetPlayerId())
+	}
+	for _, br := range bountiesRecs {
+		nameIDs = append(nameIDs, br.GetTargetPlayerId())
+	}
+	resolvedNames := l.resolveNames(ctx, nameIDs)
+	nameOf := func(pid uint64) string {
+		if pid == 0 {
+			return ""
+		}
+		if n := resolvedNames[pid]; n != "" {
+			return n
+		}
+		return fmt.Sprintf("道友%d", pid)
+	}
+
+	bannerHonor := &pb.GuildWarBannerHonorView{
+		OccupiedLeylineId: occupiedLeyline,
+		RivalGuildIds:     rivals,
+	}
+	for _, rg := range rivals {
+		bannerHonor.RivalGuildNames = append(bannerHonor.RivalGuildNames, lookupGuildName(rg))
+	}
+	if prog.GetMvp1PlayerId() != 0 {
+		bannerHonor.WeeklyMvps = append(bannerHonor.WeeklyMvps, nameOf(prog.GetMvp1PlayerId()))
+	}
+	if prog.GetMvp2PlayerId() != 0 {
+		bannerHonor.WeeklyMvps = append(bannerHonor.WeeklyMvps, nameOf(prog.GetMvp2PlayerId()))
+	}
+	if firstWin != nil && firstWin.GetFirstWinAtMs() > 0 {
+		bannerHonor.FirstWinAtMs = firstWin.GetFirstWinAtMs()
+		if firstWin.GetFirstWinPlayer1Id() != 0 {
+			bannerHonor.FirstWinNames = append(bannerHonor.FirstWinNames, nameOf(firstWin.GetFirstWinPlayer1Id()))
+		}
+		if firstWin.GetFirstWinPlayer2Id() != 0 {
+			bannerHonor.FirstWinNames = append(bannerHonor.FirstWinNames, nameOf(firstWin.GetFirstWinPlayer2Id()))
+		}
+	}
+
+	// 活跃追杀令映射（供在线列表角标）。
+	bountyByTarget := make(map[uint64]*pb.GuildWarBountyRecord, len(bountiesRecs))
+	for _, br := range bountiesRecs {
+		bountyByTarget[br.GetTargetPlayerId()] = br
+	}
+
+	// 在线迎战活人列表（排除同帮、和平免战与离线）。
+	onlineIDs := make([]uint64, 0, len(openPlayers))
+	for _, op := range openPlayers {
+		onlineIDs = append(onlineIDs, op.GetPlayerId())
+	}
+	onlineMap := map[uint64]bool{}
+	if l.onlineResolver != nil && len(onlineIDs) > 0 {
+		onlineMap = l.onlineResolver.BatchResolve(ctx, onlineIDs)
+	}
+	liveTargets := make([]*pb.GuildWarLiveTargetView, 0, len(openPlayers))
+	for _, op := range openPlayers {
+		if op.GetPlayerId() == playerID || op.GetPeaceMode() != 0 {
+			continue
+		}
+		if l.onlineResolver != nil && !onlineMap[op.GetPlayerId()] {
+			continue
+		}
+		tgid, _ := l.resolveWarPlayerGuildID(ctx, op.GetPlayerId())
+		if tgid == 0 || tgid == guildID {
+			continue
+		}
+		bid := l.readBattleLockID(ctx, op.GetPlayerId())
+		var activeBountyID uint64
+		if b := bountyByTarget[op.GetPlayerId()]; b != nil {
+			activeBountyID = b.GetBountyId()
+		}
+		liveTargets = append(liveTargets, &pb.GuildWarLiveTargetView{
+			PlayerId:       op.GetPlayerId(),
+			PlayerName:     nameOf(op.GetPlayerId()),
+			GuildId:        tgid,
+			GuildName:      lookupGuildName(tgid),
+			PartySize:      1,
+			Streak:         op.GetStreakCount(),
+			InBattle:       bid != 0,
+			BattleId:       bid,
+			IsRivalGuild:   rivalSet[tgid],
+			ActiveBountyId: activeBountyID,
+		})
+	}
+
+	// 连胜悬赏条。
+	streakViews := make([]*pb.GuildWarStreakBountyView, 0, len(streakLeaders))
+	for _, sl := range streakLeaders {
+		tgid, _ := l.resolveWarPlayerGuildID(ctx, sl.GetPlayerId())
+		if tgid == 0 || tgid == guildID {
+			continue
+		}
+		jc, js := war.StreakBountyJackpot(sl.GetStreakCount(), sl.GetStreakDistinctCount())
+		if jc == 0 && js == 0 {
+			continue
+		}
+		bid := l.readBattleLockID(ctx, sl.GetPlayerId())
+		streakViews = append(streakViews, &pb.GuildWarStreakBountyView{
+			PlayerId:          sl.GetPlayerId(),
+			PlayerName:        nameOf(sl.GetPlayerId()),
+			GuildId:           tgid,
+			GuildName:         lookupGuildName(tgid),
+			Streak:            sl.GetStreakCount(),
+			BonusContribution: jc,
+			BonusSilver:       js,
+			InBattle:          bid != 0,
+			BattleId:          bid,
+		})
+	}
+
+	// 本帮守旗阵槽位。
+	garrisonViews := make([]*pb.GuildWarGarrisonSlotView, 0, len(myGarrison))
+	for _, gSlot := range myGarrison {
+		garrisonViews = append(garrisonViews, &pb.GuildWarGarrisonSlotView{
+			SlotIndex:    gSlot.GetSlotIndex(),
+			PlayerId:     gSlot.GetPlayerId(),
+			PlayerName:   gSlot.GetPlayerName(),
+			Level:        gSlot.GetLevel(),
+			AppearanceId: gSlot.GetAppearanceId(),
+			PetName:      gSlot.GetPetName(),
+			PetTableId:   gSlot.GetPetTableId(),
+			UpdatedMs:    gSlot.GetUpdatedMs(),
+		})
+	}
+
+	// 追杀令视图。
+	bountyViews := make([]*pb.GuildWarBountyView, 0, len(bountiesRecs))
+	for _, br := range bountiesRecs {
+		tOnline, tSceneConf, tChan, _ := l.resolvePlayerScene(ctx, zoneID, br.GetTargetPlayerId())
+		inSafe := tOnline && war.IsSafeZoneScene(tSceneConf)
+		tState, _ := l.war.Repo.GetPlayerWarState(ctx, br.GetTargetPlayerId(), zoneID, weekKey)
+		canDirect := br.GetStatus() == 2 && tOnline && !inSafe && (tState == nil || tState.GetPeaceMode() == 0)
+		bountyViews = append(bountyViews, &pb.GuildWarBountyView{
+			BountyId:           br.GetBountyId(),
+			TargetPlayerId:     br.GetTargetPlayerId(),
+			TargetName:         nameOf(br.GetTargetPlayerId()),
+			TargetGuildId:      br.GetTargetGuildId(),
+			TargetGuildName:    lookupGuildName(br.GetTargetGuildId()),
+			IssuerGuildId:      br.GetIssuerGuildId(),
+			IssuerGuildName:    lookupGuildName(br.GetIssuerGuildId()),
+			Tier:               pb.GuildWarBountyTier(br.GetTier()),
+			RewardSilver:       br.GetEscrowSilver(),
+			PublicBoard:        br.GetPublicBoard() != 0,
+			Status:             pb.GuildWarBountyStatus(br.GetStatus()),
+			CounterKills:       br.GetCounterKills(),
+			CounterKillsToTear: bountyCounterTear,
+			ExpiresAtMs:        br.GetExpiresAtMs(),
+			LastSceneConfigId:  tSceneConf,
+			LastChannelNo:      tChan,
+			TargetInSafeZone:   inSafe,
+			TargetOnline:       tOnline,
+			NextTrackAtMs:      myState.GetLastTrackMs() + uint64(trackCD)*1000,
+			CanDirectAttack:    canDirect,
+		})
+	}
+
+	// 近 30 场帮战大事记 & 近 24h 帮会仇敌录。
+	recentRecs, _ := l.war.Repo.ListRecentBattles(ctx, guildID, 30)
+	recentLogs := make([]*pb.GuildWarRecentLogView, 0, len(recentRecs))
+	enemies := make([]*pb.GuildWarEnemyView, 0, 12)
+	seenEnemy := map[uint64]bool{}
+	cutoff24h := uint64(0)
+	if nowMs > 24*3600*1000 {
+		cutoff24h = nowMs - 24*3600*1000
+	}
+	for _, br := range recentRecs {
+		var sum warBattleSummary
+		_ = json.Unmarshal(br.GetSummaryPayload(), &sum)
+		selfIn := false
+		for _, id := range sum.AttackerIDs {
+			if id == playerID {
+				selfIn = true
+				break
+			}
+		}
+		if !selfIn {
+			for _, id := range sum.DefenderIDs {
+				if id == playerID {
+					selfIn = true
+					break
+				}
+			}
+		}
+		agName := sum.AttackerGuildName
+		if agName == "" {
+			agName = lookupGuildName(br.GetAttackerGuildId())
+		}
+		dgName := sum.DefenderGuildName
+		if dgName == "" {
+			dgName = lookupGuildName(br.GetDefenderGuildId())
+		}
+		recentLogs = append(recentLogs, &pb.GuildWarRecentLogView{
+			BattleId:          br.GetBattleId(),
+			WarBattleKind:     pb.GuildWarBattleKind(br.GetWarBattleKind()),
+			LeylineId:         br.GetLeylineId(),
+			AttackerGuildName: agName,
+			DefenderGuildName: dgName,
+			AttackerSummary:   strings.Join(sum.AttackerNames, "、"),
+			DefenderSummary:   strings.Join(sum.DefenderNames, "、"),
+			Outcome:           br.GetOutcome(),
+			Rounds:            br.GetTotalRounds(),
+			BannerHpDelta:     int32(br.GetBannerHpAfter()) - int32(br.GetBannerHpBefore()),
+			BountyOutcomeTag:  br.GetBountyOutcomeTag(),
+			SelfParticipated:  selfIn,
+			FinishedAtMs:      br.GetFinishedAtMs(),
+		})
+
+		// 若本帮战败且发生在 24h 内，自动把对方首名击杀者收入仇敌录。
+		if br.GetFinishedAtMs() >= cutoff24h {
+			var killerID, killerGuild uint64
+			var killerName, victimName string
+			if br.GetDefenderGuildId() == guildID && br.GetOutcome() == 1 && len(sum.AttackerIDs) > 0 {
+				killerID, killerGuild = sum.AttackerIDs[0], br.GetAttackerGuildId()
+				if len(sum.AttackerNames) > 0 {
+					killerName = sum.AttackerNames[0]
+				}
+				if len(sum.DefenderNames) > 0 {
+					victimName = sum.DefenderNames[0]
+				}
+			} else if br.GetAttackerGuildId() == guildID && br.GetOutcome() == 2 && len(sum.DefenderIDs) > 0 {
+				killerID, killerGuild = sum.DefenderIDs[0], br.GetDefenderGuildId()
+				if len(sum.DefenderNames) > 0 {
+					killerName = sum.DefenderNames[0]
+				}
+				if len(sum.AttackerNames) > 0 {
+					victimName = sum.AttackerNames[0]
+				}
+			}
+			if killerID != 0 && killerGuild != 0 && killerGuild != guildID && !seenEnemy[killerID] {
+				seenEnemy[killerID] = true
+				canPost := bountyByTarget[killerID] == nil
+				blockedTip := uint32(0)
+				if !canPost {
+					blockedTip = constants.ErrWarBountyAlreadyActive
+				}
+				enemies = append(enemies, &pb.GuildWarEnemyView{
+					PlayerId:      killerID,
+					PlayerName:    killerName,
+					GuildId:       killerGuild,
+					GuildName:     lookupGuildName(killerGuild),
+					VictimName:    victimName,
+					BattleKind:    pb.GuildWarBattleKind(br.GetWarBattleKind()),
+					OccurredAtMs:  br.GetFinishedAtMs(),
+					CanPostBounty: canPost,
+					BlockedTipId:  blockedTip,
+				})
+			}
+		}
+	}
+
+	nextRefresh := uint64(0)
+	if myState.GetLastGarrisonRefreshMs() > 0 {
+		nextRefresh = myState.GetLastGarrisonRefreshMs() + uint64(garrisonCD)*1000
+	}
+	nextTrack := uint64(0)
+	if myState.GetLastTrackMs() > 0 {
+		nextTrack = myState.GetLastTrackMs() + uint64(trackCD)*1000
+	}
+
+	return &pb.GetGuildWarOverviewResponse{
+		ServerTimeMs:       nowMs,
+		WeekKey:            weekKey,
+		GoldLeylineId:      goldID,
+		GoldLeylineEndsAtMs: goldEndsAt,
+		MyStance: &pb.GuildWarStanceView{
+			PeaceMode:             myState.GetPeaceMode() != 0,
+			PeaceReadyAtMs:        myState.GetPeaceReadyAtMs(),
+			OpenChallenge:         myState.GetOpenChallenge() != 0,
+			ProtectUntilMs:        myState.GetProtectUntilMs(),
+			MyStreak:              myState.GetStreakCount(),
+			MyWeeklyMerit:         myState.GetWeeklyMerit(),
+			MyBountyPayoutLimit:   bountyPayLimit,
+			BountyProtectUntilMs:  myState.GetBountyProtectUntilMs(),
+			NextGarrisonRefreshMs: nextRefresh,
+			NextTrackAtMs:         nextTrack,
+		},
+		BannerHonor:            bannerHonor,
+		Leylines:               leylineViews,
+		Milestones:             milestoneViews,
+		Dividend:               &pb.GuildWarDividendView{ClaimableCount: claimableDiv, ClaimedThisWeek: myState.GetDividendClaimedCount(), WeeklyCap: divPlayerCap, GuildProducedThisWeek: prog.GetDividendPoolCount(), GuildWeeklyCap: divGuildCap, MinPersonalMerit: minMerit},
+		StreakBounties:         streakViews,
+		LiveTargets:            liveTargets,
+		GarrisonSlots:          garrisonViews,
+		Enemies:                enemies,
+		Bounties:               bountyViews,
+		RecentLogs:             recentLogs,
+		ActiveBattleId:         l.readBattleLockID(ctx, playerID),
+		ContributionBalance:    myContrib,
+		PublicBountyDailyLimit: bountyPubLimit,
+	}, nil
+}
+
+// ── 2. SetGuildWarStance ─────────────────────────────────────────────────────
+
+func (l *GuildLogic) SetGuildWarStance(ctx context.Context, req *pb.SetGuildWarStanceRequest) (*pb.SetGuildWarStanceResponse, error) {
+	playerID, _, _, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.SetGuildWarStanceResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	cur, err := l.war.Repo.GetPlayerWarState(ctx, playerID, zoneID, weekKey)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get player war state: %v", err)
+	}
+	peace := cur.GetPeaceMode() != 0
+	open := cur.GetOpenChallenge() != 0
+	if req.SetPeaceMode != nil {
+		peace = req.GetSetPeaceMode()
+	}
+	if req.SetOpenChallenge != nil {
+		open = req.GetSetOpenChallenge()
+	}
+	cd := war.DefaultPeaceCooldownSec
+	if rule := l.warRule(); rule != nil && rule.GetPeaceCooldownSec() > 0 {
+		cd = rule.GetPeaceCooldownSec()
+	}
+	updated, err := l.war.Repo.UpsertPlayerStance(ctx, playerID, zoneID, weekKey, peace, open, nowMs, cd)
+	if errors.Is(err, data.ErrWarPeaceCooldown) {
+		return &pb.SetGuildWarStanceResponse{ErrorMessage: tipErr(constants.ErrWarPeaceCooldown, "")}, nil
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "update war stance: %v", err)
+	}
+	return &pb.SetGuildWarStanceResponse{
+		ServerTimeMs: nowMs,
+		MyStance: &pb.GuildWarStanceView{
+			PeaceMode:      updated.GetPeaceMode() != 0,
+			PeaceReadyAtMs: updated.GetPeaceReadyAtMs(),
+			OpenChallenge:  updated.GetOpenChallenge() != 0,
+			ProtectUntilMs: updated.GetProtectUntilMs(),
+			MyStreak:       updated.GetStreakCount(),
+			MyWeeklyMerit:  updated.GetWeeklyMerit(),
+		},
+	}, nil
+}
+
+// ── 3. RegisterGuildWarGarrison ──────────────────────────────────────────────
+
+func (l *GuildLogic) RegisterGuildWarGarrison(ctx context.Context, req *pb.RegisterGuildWarGarrisonRequest) (*pb.RegisterGuildWarGarrisonResponse, error) {
+	playerID, guildID, guild, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.RegisterGuildWarGarrisonResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	rule := l.warRule()
+	maxSlots := war.DefaultGarrisonMaxSlots
+	cdSec := war.DefaultGarrisonRefreshCD
+	if rule != nil {
+		if rule.GetGarrisonMaxSlots() > 0 {
+			maxSlots = rule.GetGarrisonMaxSlots()
+		}
+		if rule.GetGarrisonRefreshCooldownSec() > 0 {
+			cdSec = rule.GetGarrisonRefreshCooldownSec()
+		}
+	}
+
+	targetPID := playerID
+	withdraw := req.GetAction() == 2
+	if req.GetTargetPlayerId() != 0 && req.GetTargetPlayerId() != playerID {
+		// 只有帮主/长老能帮别人下阵。
+		var myRole uint32
+		for _, m := range guild.Members {
+			if m.PlayerID == playerID {
+				myRole = m.Role
+				break
+			}
+		}
+		if constants.Rank(myRole) < constants.RankOfficer {
+			return &pb.RegisterGuildWarGarrisonResponse{ErrorMessage: tipErr(constants.ErrRankTooLow, "")}, nil
+		}
+		targetPID = req.GetTargetPlayerId()
+	}
+
+	names := l.resolveNames(ctx, []uint64{targetPID})
+	pName := names[targetPID]
+	if pName == "" {
+		pName = fmt.Sprintf("守旗弟子%d", targetPID)
+	}
+	// 构造默认守旗快照（待玩家参战或快照刷新时自动携带真实属性，确保 0 秒随时可开打）。
+	snapBytes, _ := proto.Marshal(buildGarrisonSnapshot(targetPID, pName, 60, 1))
+	rec := &pb.GuildWarGarrisonRecord{
+		GuildId:         guildID,
+		PlayerId:        targetPID,
+		PlayerName:      pName,
+		Level:           60,
+		SnapshotPayload: snapBytes,
+	}
+	slots, nextRefresh, err := l.war.Repo.UpsertGarrison(ctx, guildID, targetPID, zoneID, weekKey, withdraw, rec, nowMs, maxSlots, cdSec)
+	switch {
+	case errors.Is(err, data.ErrWarGarrisonFull):
+		return &pb.RegisterGuildWarGarrisonResponse{ErrorMessage: tipErr(constants.ErrWarGarrisonFull, "")}, nil
+	case errors.Is(err, data.ErrWarGarrisonCooldown):
+		return &pb.RegisterGuildWarGarrisonResponse{ErrorMessage: tipErr(constants.ErrWarGarrisonCooldown, "")}, nil
+	case errors.Is(err, data.ErrNotGuildMember):
+		return &pb.RegisterGuildWarGarrisonResponse{ErrorMessage: tipErr(constants.ErrNotInGuild, "")}, nil
+	case err != nil:
+		return nil, status.Errorf(codes.Internal, "upsert garrison: %v", err)
+	}
+	outSlots := make([]*pb.GuildWarGarrisonSlotView, 0, len(slots))
+	for _, s := range slots {
+		outSlots = append(outSlots, &pb.GuildWarGarrisonSlotView{
+			SlotIndex:    s.GetSlotIndex(),
+			PlayerId:     s.GetPlayerId(),
+			PlayerName:   s.GetPlayerName(),
+			Level:        s.GetLevel(),
+			AppearanceId: s.GetAppearanceId(),
+			PetName:      s.GetPetName(),
+			PetTableId:   s.GetPetTableId(),
+			UpdatedMs:    s.GetUpdatedMs(),
+		})
+	}
+	return &pb.RegisterGuildWarGarrisonResponse{
+		GarrisonSlots:  outSlots,
+		NextRefreshAtMs: nextRefresh,
+	}, nil
+}
+
+func buildGarrisonSnapshot(playerID uint64, name string, level, classID uint32) *battlepb.BattlePlayerSnapshot {
+	if level == 0 {
+		level = 50
+	}
+	if classID == 0 {
+		classID = 1
+	}
+	hp := uint64(3200 + level*85)
+	mp := uint64(1200 + level*20)
+	return &battlepb.BattlePlayerSnapshot{
+		PlayerId:       playerID,
+		TeamIndex:      1,
+		PlayerName:     name,
+		Level:          level,
+		ClassId:        classID,
+		MaxHealth:      hp,
+		MaxMana:        mp,
+		PhysicalAttack: uint64(360 + level*14),
+		MagicAttack:    uint64(320 + level*12),
+		Defense:        uint64(220 + level*8),
+		AiControlled:   true,
+		BaseAttributes: &componentpb.BaseAttributesComp{
+			Health:     hp,
+			Mana:       mp,
+			Speed:      uint64(85 + level*2),
+			Strength:   uint64(120 + level*5),
+			Armor:      uint64(100 + level*4),
+			Resistance: uint64(90 + level*3),
+		},
+	}
+}
+
+// ── 4. StartGuildWarBattle ───────────────────────────────────────────────────
+
+func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuildWarBattleRequest) (*pb.StartGuildWarBattleResponse, error) {
+	playerID, guildID, guild, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	if l.war.Match == nil {
+		return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarServiceBusy, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	rule := l.warRule()
+	battleConfigID := uint32(1)
+	if rule != nil && rule.GetBattleConfigId() != 0 {
+		battleConfigID = rule.GetBattleConfigId()
+	}
+	_ = l.war.Repo.EnsureZoneLeylines(ctx, zoneID, nowMs)
+
+	// 本人处于和平免战态时禁止主动发起帮战。
+	myState, err := l.war.Repo.GetPlayerWarState(ctx, playerID, zoneID, weekKey)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get self war state: %v", err)
+	}
+	if myState.GetPeaceMode() != 0 {
+		return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSelfPeaceMode, "")}, nil
+	}
+
+	// 检查本人是否正处于战斗中。
+	if selfBid := l.readBattleLockID(ctx, playerID); selfBid != 0 {
+		return &pb.StartGuildWarBattleResponse{
+			ErrorMessage:     tipErr(constants.ErrWarTargetInBattle, ""),
+			OffenderPlayerId: playerID,
+			OffenderBattleId: selfBid,
+		}, nil
+	}
+
+	kind := req.GetTargetKind()
+	leylineID := req.GetLeylineId()
+	targetPID := req.GetTargetPlayerId()
+	bountyID := req.GetBountyId()
+
+	var matchMode matchpb.MatchMode
+	var warKind pb.GuildWarBattleKind
+	var defenderGuildID uint64
+	var defenderPIDs []uint64
+	var aiSnapshots []*battlepb.BattlePlayerSnapshot
+
+	// 解析目标与模式。
+	switch kind {
+	case pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_BOUNTY:
+		b, bErr := l.war.Repo.GetBounty(ctx, bountyID)
+		if bErr != nil || b == nil || b.GetStatus() != 2 || b.GetExpiresAtMs() <= nowMs {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarBountyNotFound, "")}, nil
+		}
+		targetPID = b.GetTargetPlayerId()
+		defenderGuildID = b.GetTargetGuildId()
+		if defenderGuildID == guildID || targetPID == playerID {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSameGuild, "")}, nil
+		}
+		tOnline, tScene, _, _ := l.resolvePlayerScene(ctx, zoneID, targetPID)
+		if !tOnline {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetOffline, "")}, nil
+		}
+		if war.IsSafeZoneScene(tScene) {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSafeZone, "")}, nil
+		}
+		tState, _ := l.war.Repo.GetPlayerWarState(ctx, targetPID, zoneID, weekKey)
+		if tState != nil && tState.GetPeaceMode() != 0 {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetPeaceMode, "")}, nil
+		}
+		if tState != nil && nowMs < tState.GetProtectUntilMs() {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetProtected, "")}, nil
+		}
+		matchMode = matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP
+		warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT
+		defenderPIDs = []uint64{targetPID}
+
+	case pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_FIELD_PLAYER,
+		pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LIVE_PLAYER:
+		if targetPID == 0 || targetPID == playerID {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrCannotTargetSelf, "")}, nil
+		}
+		tgid, gErr := l.resolveWarPlayerGuildID(ctx, targetPID)
+		if gErr != nil || tgid == 0 {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarBountyInvalidTarget, "")}, nil
+		}
+		if tgid == guildID {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSameGuild, "")}, nil
+		}
+		defenderGuildID = tgid
+		tState, _ := l.war.Repo.GetPlayerWarState(ctx, targetPID, zoneID, weekKey)
+		if tState != nil && tState.GetPeaceMode() != 0 {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetPeaceMode, "")}, nil
+		}
+		if tState != nil && nowMs < tState.GetProtectUntilMs() {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetProtected, "")}, nil
+		}
+		if kind == pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_FIELD_PLAYER {
+			// 野外路上任意异帮直打：双方必须都在非天墉城安全区的同一场景分线。
+			sOnline, sConf, _, sSceneID := l.resolvePlayerScene(ctx, zoneID, playerID)
+			tOnline, tConf, _, tSceneID := l.resolvePlayerScene(ctx, zoneID, targetPID)
+			if !tOnline {
+				return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetOffline, "")}, nil
+			}
+			if !sOnline || war.IsSafeZoneScene(sConf) || war.IsSafeZoneScene(tConf) {
+				return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSafeZone, "")}, nil
+			}
+			if sSceneID != 0 && tSceneID != 0 && sSceneID != tSceneID {
+				return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarTargetOffline, "")}, nil
+			}
+			if meta, ok := war.LeylineByScene(tConf); ok {
+				leylineID = meta.ID
+				warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_LEYLINE_PVP
+			} else {
+				warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_FIELD_ROAD
+			}
+		} else {
+			warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_PANEL_PVP
+		}
+		// 若目标身上挂有进行中的追杀令，自动顺带挂钩结单！
+		if bountyID == 0 {
+			if activeB, _ := l.war.Repo.ActiveBountyByTarget(ctx, targetPID, nowMs); activeB != nil {
+				bountyID = activeB.GetBountyId()
+				warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT
+			}
+		}
+		matchMode = matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP
+		defenderPIDs = []uint64{targetPID}
+
+	case pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_QUICK_AUTO:
+		// 0 秒一键快速开战：优先找挂牌在线异帮活人，无活人秒打金脉/敌帮守旗阵。
+		openPlayers, _ := l.war.Repo.ListOpenChallengePlayers(ctx, zoneID, 20)
+		for _, op := range openPlayers {
+			if op.GetPlayerId() == playerID || op.GetPeaceMode() != 0 || nowMs < op.GetProtectUntilMs() {
+				continue
+			}
+			if l.readBattleLockID(ctx, op.GetPlayerId()) != 0 {
+				continue
+			}
+			tgid, _ := l.resolveWarPlayerGuildID(ctx, op.GetPlayerId())
+			if tgid != 0 && tgid != guildID {
+				targetPID = op.GetPlayerId()
+				defenderGuildID = tgid
+				defenderPIDs = []uint64{targetPID}
+				matchMode = matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP
+				warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_PANEL_PVP
+				break
+			}
+		}
+		if len(defenderPIDs) == 0 {
+			// 无在线活人 → 自动瞄准当期 1.5x 金脉（或第一座非本帮灵脉）0 秒踢馆！
+			if leylineID == 0 {
+				goldID, _ := war.GoldLeylineForHour(nowMs)
+				leylineID = goldID
+			}
+			kind = pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON
+		}
+	}
+
+	if kind == pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON {
+		if leylineID == 0 {
+			leylineID, _ = war.GoldLeylineForHour(nowMs)
+		}
+		if _, ok := war.LeylineByID(leylineID); !ok {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarLeylineNotFound, "")}, nil
+		}
+		leylines, lErr := l.war.Repo.ListLeylines(ctx, zoneID)
+		if lErr != nil {
+			return nil, status.Errorf(codes.Internal, "list leylines: %v", lErr)
+		}
+		var targetLeyline *pb.GuildWarLeylineRecord
+		for _, lr := range leylines {
+			if lr.GetLeylineId() == leylineID {
+				targetLeyline = lr
+				break
+			}
+		}
+		if targetLeyline == nil {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarLeylineNotFound, "")}, nil
+		}
+		if targetLeyline.GetOwnerGuildId() == guildID {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSameGuild, "")}, nil
+		}
+		defenderGuildID = targetLeyline.GetOwnerGuildId()
+		if defenderGuildID != 0 {
+			slots, _ := l.war.Repo.ListGarrison(ctx, defenderGuildID)
+			for _, s := range slots {
+				if len(s.GetSnapshotPayload()) > 0 {
+					snap := &battlepb.BattlePlayerSnapshot{}
+					if proto.Unmarshal(s.GetSnapshotPayload(), snap) == nil && snap.GetPlayerId() != 0 && snap.GetPlayerId() != playerID {
+						snap.TeamIndex = 1
+						snap.AiControlled = true
+						aiSnapshots = append(aiSnapshots, snap)
+						if len(aiSnapshots) >= 3 {
+							break
+						}
+					}
+				}
+			}
+		}
+		if len(aiSnapshots) == 0 {
+			// 无主灵脉或敌帮未登记守旗阵：派出灵脉镇守道兵（保证 365 天 0 秒可开打）。
+			meta, _ := war.LeylineByID(leylineID)
+			aiSnapshots = append(aiSnapshots, buildGarrisonSnapshot(900_000_000+uint64(leylineID), meta.Name+"·灵脉镇守使", 55, 1))
+		}
+		matchMode = matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE
+		warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE
+	}
+
+	// 计算当期金脉与本周宿敌增益。
+	goldID, _ := war.GoldLeylineForHour(nowMs)
+	isGold := leylineID != 0 && leylineID == goldID
+	isRival := false
+	if defenderGuildID != 0 && defenderGuildID != guildID {
+		if rivals, rErr := l.war.Repo.ListRivals(ctx, guildID, weekKey); rErr == nil {
+			for _, rg := range rivals {
+				if rg == defenderGuildID {
+					isRival = true
+					break
+				}
+			}
+		}
+	}
+
+	reqID := req.GetClientRequestId()
+	if reqID == 0 {
+		reqID = uint64(now.UnixNano())
+	}
+	matchReq := &matchpb.StartGuildWarBattleRequest{
+		BattleConfigId:      battleConfigID,
+		MatchMode:           uint32(matchMode),
+		AttackerPlayerIds:   []uint64{playerID},
+		DefenderPlayerIds:   defenderPIDs,
+		AiDefenderSnapshots: aiSnapshots,
+		RequestId:           reqID,
+		ActivityContext: &battlepb.BattleActivityContext{
+			Kind:              battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR,
+			GuildId:           guildID,
+			InitiatorPlayerId: playerID,
+			LaunchRequestId:   reqID,
+			GuildWar: &battlepb.GuildWarBattleContext{
+				WarBattleKind:   uint32(warKind),
+				LeylineId:       leylineID,
+				BountyId:        bountyID,
+				AttackerGuildId: guildID,
+				DefenderGuildId: defenderGuildID,
+				ZoneId:          zoneID,
+				GoldLeylineBonus: isGold,
+				RivalryBonus:    isRival,
+			},
+		},
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, l.war.MatchBudget)
+	defer cancel()
+	resp, mErr := l.war.Match.StartGuildWarBattle(callCtx, matchReq)
+	if mErr != nil {
+		logx.WithContext(ctx).Errorf("[guild] StartGuildWarBattle match RPC failed: %v", mErr)
+		return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarServiceBusy, "")}, nil
+	}
+	if resp.GetReject() != matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_NONE {
+		switch resp.GetReject() {
+		case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE:
+			return &pb.StartGuildWarBattleResponse{
+				ErrorMessage:     tipErr(constants.ErrWarTargetInBattle, ""),
+				OffenderPlayerId: resp.GetOffenderPlayerId(),
+				OffenderBattleId: resp.GetOffenderBattleId(),
+			}, nil
+		case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE:
+			return &pb.StartGuildWarBattleResponse{
+				ErrorMessage:     tipErr(constants.ErrWarTargetOffline, ""),
+				OffenderPlayerId: resp.GetOffenderPlayerId(),
+			}, nil
+		default:
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarServiceBusy, "")}, nil
+		}
+	}
+
+	// 若在攻打敌帮灵脉，异步向防守帮会成员推踢馆警报（非阻断）。
+	if leylineID != 0 && defenderGuildID != 0 && defenderGuildID != guildID {
+		if defGuild, gErr := l.repo.GetGuild(ctx, defenderGuildID); gErr == nil && defGuild != nil {
+			recips := make([]uint64, 0, len(defGuild.Members))
+			for _, m := range defGuild.Members {
+				recips = append(recips, m.PlayerID)
+			}
+			meta, _ := war.LeylineByID(leylineID)
+			l.notifyWarAlert(ctx, &pb.GuildWarAlertS2C{
+				Kind:              pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE,
+				LeylineId:         leylineID,
+				SceneConfigId:     meta.SceneConfigID,
+				AttackerGuildName: guild.Name,
+				DefenderGuildName: defGuild.Name,
+				BattleId:          resp.GetBattleId(),
+			}, recips)
+		}
+	}
+
+	return &pb.StartGuildWarBattleResponse{
+		BattleId:      resp.GetBattleId(),
+		WarBattleKind: warKind,
+	}, nil
+}
+
+// ── 5. ClaimGuildWarMilestone ────────────────────────────────────────────────
+
+func (l *GuildLogic) ClaimGuildWarMilestone(ctx context.Context, req *pb.ClaimGuildWarMilestoneRequest) (*pb.ClaimGuildWarMilestoneResponse, error) {
+	playerID, guildID, _, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	row, ok := table.GuildWarMilestoneTableManagerInstance.FindById(req.GetMilestoneId())
+	if !ok || row == nil {
+		return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(constants.ErrWarMilestoneLocked, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	minMerit := war.DefaultDividendMinMerit
+	if rule := l.warRule(); rule != nil && rule.GetDividendMinPersonalMerit() > 0 {
+		minMerit = rule.GetDividendMinPersonalMerit()
+	}
+
+	var items []*assetpb.ItemGrant
+	if row.GetRewardItem1Id() != 0 {
+		items = append(items, &assetpb.ItemGrant{ConfigId: row.GetRewardItem1Id(), Count: row.GetRewardItem1Count()})
+	}
+	if row.GetRewardItem2Id() != 0 {
+		items = append(items, &assetpb.ItemGrant{ConfigId: row.GetRewardItem2Id(), Count: row.GetRewardItem2Count()})
+	}
+	bundleBytes, err := buildSilverItemBundle(row.GetRewardSilver(), items...)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "marshal milestone reward: %v", err)
+	}
+	var opID uint64
+	if len(bundleBytes) > 0 {
+		if l.war.OpIDs == nil {
+			return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+		opID, err = l.war.OpIDs.Mint(ctx)
+		if err != nil {
+			return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+	}
+
+	opRow, hasOp, err := l.war.Repo.ClaimMilestone(ctx, data.ClaimMilestoneInput{
+		GuildID:          guildID,
+		PlayerID:         playerID,
+		ZoneID:           zoneID,
+		WeekKey:          weekKey,
+		MilestoneID:      row.GetId(),
+		RequiredMerit:    row.GetRequiredGuildMerit(),
+		MinPersonalMerit: minMerit,
+		ContributionGain: row.GetRewardContribution(),
+		OpID:             opID,
+		BundleBytes:      bundleBytes,
+		LeaseUntilMs:     nowMs + uint64(l.war.Lease.Milliseconds()),
+		LeaseToken:       opID,
+		NowMs:            nowMs,
+	})
+	switch {
+	case errors.Is(err, data.ErrWarMilestoneLocked):
+		return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(constants.ErrWarMilestoneLocked, "")}, nil
+	case errors.Is(err, data.ErrWarMilestoneClaimed):
+		return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(constants.ErrWarMilestoneClaimed, "")}, nil
+	case errors.Is(err, assetop.ErrTooManyPending):
+		return &pb.ClaimGuildWarMilestoneResponse{ErrorMessage: tipErr(constants.ErrAssetPending, "")}, nil
+	case err != nil:
+		return nil, status.Errorf(codes.Internal, "claim war milestone: %v", err)
+	}
+	orderStatus := pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_APPLIED
+	if hasOp {
+		orderStatus = l.syncDeliverWarOp(ctx, opRow)
+	}
+	return &pb.ClaimGuildWarMilestoneResponse{
+		AssetOrderStatus: orderStatus,
+		Milestone: &pb.GuildWarMilestoneView{
+			MilestoneId:        row.GetId(),
+			RequiredMerit:      row.GetRequiredGuildMerit(),
+			Claimed:            true,
+			Claimable:          false,
+			RewardPreview:      row.GetRewardPreview(),
+			RewardSilver:       row.GetRewardSilver(),
+			RewardContribution: row.GetRewardContribution(),
+		},
+	}, nil
+}
+
+// ── 6. ClaimGuildWarDividend ─────────────────────────────────────────────────
+
+func (l *GuildLogic) ClaimGuildWarDividend(ctx context.Context, _ *pb.ClaimGuildWarDividendRequest) (*pb.ClaimGuildWarDividendResponse, error) {
+	playerID, guildID, _, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.ClaimGuildWarDividendResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	rule := l.warRule()
+	minMerit := war.DefaultDividendMinMerit
+	guildCap := war.DefaultDividendGuildWeeklyCap
+	playerCap := war.DefaultDividendPlayerWeeklyCap
+	intervalSec := war.DefaultDividendIntervalSec
+	if rule != nil {
+		if rule.GetDividendMinPersonalMerit() > 0 {
+			minMerit = rule.GetDividendMinPersonalMerit()
+		}
+		if rule.GetDividendGuildWeeklyCap() > 0 {
+			guildCap = rule.GetDividendGuildWeeklyCap()
+		}
+		if rule.GetDividendPlayerWeeklyCap() > 0 {
+			playerCap = rule.GetDividendPlayerWeeklyCap()
+		}
+		if rule.GetDividendIntervalSec() > 0 {
+			intervalSec = rule.GetDividendIntervalSec()
+		}
+	}
+	var opID uint64
+	if l.war.OpIDs != nil {
+		opID, err = l.war.OpIDs.Mint(ctx)
+		if err != nil {
+			return &pb.ClaimGuildWarDividendResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+	}
+
+	res, err := l.war.Repo.ClaimDividend(ctx, data.ClaimDividendInput{
+		GuildID:          guildID,
+		PlayerID:         playerID,
+		ZoneID:           zoneID,
+		WeekKey:          weekKey,
+		MinPersonalMerit: minMerit,
+		GuildWeeklyCap:   guildCap,
+		PlayerWeeklyCap:  playerCap,
+		IntervalSec:      intervalSec,
+		SilverPerShare:   war.DefaultDividendSilverPerShare,
+		ContribPerShare:  war.DefaultDividendContribPerShare,
+		OpID:             opID,
+		BuildBundle:      func(silver uint64) ([]byte, error) { return buildSilverItemBundle(silver) },
+		LeaseUntilMs:     nowMs + uint64(l.war.Lease.Milliseconds()),
+		LeaseToken:       opID,
+		NowMs:            nowMs,
+	})
+	switch {
+	case errors.Is(err, data.ErrWarMilestoneLocked):
+		return &pb.ClaimGuildWarDividendResponse{ErrorMessage: tipErr(constants.ErrWarMilestoneLocked, "")}, nil
+	case errors.Is(err, data.ErrWarDividendEmpty):
+		return &pb.ClaimGuildWarDividendResponse{ErrorMessage: tipErr(constants.ErrWarDividendEmpty, "")}, nil
+	case errors.Is(err, data.ErrWriteConflict):
+		return &pb.ClaimGuildWarDividendResponse{ErrorMessage: tipErr(constants.ErrBusyRetry, "")}, nil
+	case err != nil:
+		return nil, status.Errorf(codes.Internal, "claim war dividend: %v", err)
+	}
+	orderStatus := pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_APPLIED
+	if res.HasOp {
+		orderStatus = l.syncDeliverWarOp(ctx, res.Op)
+	}
+	return &pb.ClaimGuildWarDividendResponse{
+		ClaimedCount:     res.SharesClaimed,
+		AssetOrderStatus: orderStatus,
+		Dividend: &pb.GuildWarDividendView{
+			ClaimableCount:   0,
+			WeeklyCap:        playerCap,
+			GuildWeeklyCap:   guildCap,
+			MinPersonalMerit: minMerit,
+		},
+	}, nil
+}
+
+// ── 7. PostGuildWarBounty ────────────────────────────────────────────────────
+
+func (l *GuildLogic) PostGuildWarBounty(ctx context.Context, req *pb.PostGuildWarBountyRequest) (*pb.PostGuildWarBountyResponse, error) {
+	playerID, guildID, _, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	targetPID := req.GetTargetPlayerId()
+	if targetPID == 0 || targetPID == playerID {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyInvalidTarget, "")}, nil
+	}
+	targetGuildID, err := l.resolveWarPlayerGuildID(ctx, targetPID)
+	if err != nil || targetGuildID == 0 {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyInvalidTarget, "")}, nil
+	}
+	if targetGuildID == guildID {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarSameGuild, "")}, nil
+	}
+	rule := l.warRule()
+	spec, ok := war.ResolveBountyTier(rule, req.GetTier())
+	if !ok {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyInvalidTarget, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	dayKey := l.warDayKey(now)
+	ttlSec := war.DefaultBountyTTLSec
+	pubDailyLimit := war.DefaultBountyPublicDailyLimit
+	if rule != nil {
+		if rule.GetBountyTtlSec() > 0 {
+			ttlSec = rule.GetBountyTtlSec()
+		}
+		if rule.GetBountyPublicDailyLimit() > 0 {
+			pubDailyLimit = rule.GetBountyPublicDailyLimit()
+		}
+	}
+
+	bountyID := uint64(now.UnixNano())
+	if l.war.BountyIDs != nil {
+		if id, idErr := l.war.BountyIDs.Mint(ctx); idErr == nil && id != 0 {
+			bountyID = id
+		}
+	}
+	var opID uint64
+	var debitBundle []byte
+	if spec.CostSilver > 0 {
+		if l.war.OpIDs == nil {
+			return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+		opID, err = l.war.OpIDs.Mint(ctx)
+		if err != nil {
+			return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+		debitBundle, err = buildSilverItemBundle(spec.CostSilver)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "marshal bounty debit bundle: %v", err)
+		}
+	}
+
+	rec, opRow, hasOp, err := l.war.Repo.PostBounty(ctx, data.PostBountyInput{
+		BountyID:         bountyID,
+		ZoneID:           zoneID,
+		WeekKey:          weekKey,
+		DayKey:           dayKey,
+		IssuerPlayerID:   playerID,
+		IssuerGuildID:    guildID,
+		TargetPlayerID:   targetPID,
+		TargetGuildID:    targetGuildID,
+		Tier:             req.GetTier(),
+		CostSilver:       spec.CostSilver,
+		CostGuildFunds:   spec.CostGuildFunds,
+		PoolSilver:       spec.PoolSilver,
+		PublicBoard:      req.GetPublicBoard(),
+		PublicDailyLimit: pubDailyLimit,
+		TTLSec:           ttlSec,
+		OpID:             opID,
+		DebitBundle:      debitBundle,
+		LeaseUntilMs:     nowMs + uint64(l.war.Lease.Milliseconds()),
+		LeaseToken:       opID,
+		NowMs:            nowMs,
+	})
+	switch {
+	case errors.Is(err, data.ErrWarBountyActive):
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyAlreadyActive, "")}, nil
+	case errors.Is(err, data.ErrWarBountyLimit):
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyLimit, "")}, nil
+	case errors.Is(err, data.ErrFundsInsufficient):
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrFundsInsufficient, "")}, nil
+	case errors.Is(err, data.ErrRankTooLow):
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrRankTooLow, "")}, nil
+	case errors.Is(err, assetop.ErrTooManyPending):
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrAssetPending, "")}, nil
+	case err != nil:
+		return nil, status.Errorf(codes.Internal, "post war bounty: %v", err)
+	}
+	if hasOp {
+		l.syncDeliverWarOp(ctx, opRow)
+	}
+	return &pb.PostGuildWarBountyResponse{
+		Bounty: &pb.GuildWarBountyView{
+			BountyId:           rec.GetBountyId(),
+			TargetPlayerId:     rec.GetTargetPlayerId(),
+			TargetGuildId:      rec.GetTargetGuildId(),
+			IssuerGuildId:      rec.GetIssuerGuildId(),
+			Tier:               pb.GuildWarBountyTier(rec.GetTier()),
+			RewardSilver:       rec.GetEscrowSilver(),
+			PublicBoard:        rec.GetPublicBoard() != 0,
+			Status:             pb.GuildWarBountyStatus(rec.GetStatus()),
+			CounterKillsToTear: war.DefaultBountyCounterKillTear,
+			ExpiresAtMs:        rec.GetExpiresAtMs(),
+		},
+	}, nil
+}
+
+// ── 8. TrackGuildWarBounty ───────────────────────────────────────────────────
+
+func (l *GuildLogic) TrackGuildWarBounty(ctx context.Context, req *pb.TrackGuildWarBountyRequest) (*pb.TrackGuildWarBountyResponse, error) {
+	playerID, guildID, guild, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.TrackGuildWarBountyResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	b, err := l.war.Repo.GetBounty(ctx, req.GetBountyId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get bounty: %v", err)
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	if b == nil || b.GetStatus() != 2 || b.GetExpiresAtMs() <= nowMs || (b.GetPublicBoard() == 0 && b.GetIssuerGuildId() != guildID) {
+		return &pb.TrackGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyNotFound, "")}, nil
+	}
+	cd := war.DefaultTrackCooldownSec
+	if rule := l.warRule(); rule != nil && rule.GetTrackCooldownSec() > 0 {
+		cd = rule.GetTrackCooldownSec()
+	}
+	nextTrackAt, err := l.war.Repo.MarkTrackCooldown(ctx, playerID, zoneID, l.warWeekKey(now), nowMs, cd)
+	if errors.Is(err, data.ErrWarTrackCooldown) {
+		return &pb.TrackGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarTrackCooldown, "")}, nil
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "mark track cooldown: %v", err)
+	}
+	online, sceneConf, chNo, sceneID := l.resolvePlayerScene(ctx, zoneID, b.GetTargetPlayerId())
+	inSafe := online && war.IsSafeZoneScene(sceneConf)
+	if inSafe {
+		sceneID = 0
+	} else if online {
+		// 追兵锁定行踪时，向被追杀目标推送非阻断警报（只告帮名与地图，反杀博弈感拉满）。
+		l.notifyWarAlert(ctx, &pb.GuildWarAlertS2C{
+			Kind:              pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP,
+			SceneConfigId:     sceneConf,
+			ChannelNo:         chNo,
+			AttackerGuildName: guild.Name,
+			BountyId:          b.GetBountyId(),
+			RewardSilver:      b.GetEscrowSilver(),
+		}, []uint64{b.GetTargetPlayerId()})
+	}
+	return &pb.TrackGuildWarBountyResponse{
+		TargetOnline:  online,
+		InSafeZone:    inSafe,
+		SceneConfigId: sceneConf,
+		ChannelNo:     chNo,
+		NextTrackAtMs: nextTrackAt,
+		SceneId:       sceneID,
+	}, nil
+}
+
+// ── 9. GetGuildWarBattleResult ───────────────────────────────────────────────
+
+func (l *GuildLogic) GetGuildWarBattleResult(ctx context.Context, req *pb.GetGuildWarBattleResultRequest) (*pb.GetGuildWarBattleResultResponse, error) {
+	playerID, guildID, _, _, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.GetGuildWarBattleResultResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	rec, err := l.war.Repo.GetWarBattle(ctx, req.GetBattleId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get war battle: %v", err)
+	}
+	if rec == nil {
+		return &pb.GetGuildWarBattleResultResponse{Settled: false, BattleId: req.GetBattleId()}, nil
+	}
+	var sum warBattleSummary
+	_ = json.Unmarshal(rec.GetSummaryPayload(), &sum)
+	isAttacker := rec.GetAttackerGuildId() == guildID
+	for _, id := range sum.DefenderIDs {
+		if id == playerID {
+			isAttacker = false
+			break
+		}
+	}
+	contrib, silver, funds, merit := rec.GetAttackerContribution(), rec.GetAttackerSilver(), rec.GetAttackerFunds(), rec.GetAttackerMerit()
+	if !isAttacker {
+		contrib, silver, funds, merit = rec.GetDefenderContribution(), rec.GetDefenderSilver(), rec.GetDefenderFunds(), rec.GetDefenderMerit()
+	}
+	lostToEnemy := (isAttacker && rec.GetOutcome() == 2) || (!isAttacker && rec.GetOutcome() == 1)
+	var candidateID uint64
+	var candidateName string
+	if lostToEnemy {
+		if isAttacker && len(sum.DefenderIDs) > 0 {
+			candidateID = sum.DefenderIDs[0]
+			if len(sum.DefenderNames) > 0 {
+				candidateName = sum.DefenderNames[0]
+			}
+		} else if !isAttacker && len(sum.AttackerIDs) > 0 {
+			candidateID = sum.AttackerIDs[0]
+			if len(sum.AttackerNames) > 0 {
+				candidateName = sum.AttackerNames[0]
+			}
+		}
+	}
+	return &pb.GetGuildWarBattleResultResponse{
+		Settled:                   true,
+		BattleId:                  rec.GetBattleId(),
+		WarBattleKind:             pb.GuildWarBattleKind(rec.GetWarBattleKind()),
+		Outcome:                   rec.GetOutcome(),
+		Rounds:                    rec.GetTotalRounds(),
+		ContributionGain:          contrib,
+		SilverGain:                silver,
+		GuildFundsGain:            funds,
+		MeritGain:                 merit,
+		BountyJackpotContribution: rec.GetJackpotContribution(),
+		BountyJackpotSilver:       rec.GetJackpotSilver(),
+		BountyOutcomeTag:          rec.GetBountyOutcomeTag(),
+		DiminishPercent:           rec.GetDiminishPercent(),
+		LeylineId:                 rec.GetLeylineId(),
+		BannerHpBefore:            rec.GetBannerHpBefore(),
+		BannerHpAfter:             rec.GetBannerHpAfter(),
+		BannerShielded:            rec.GetBannerShielded() != 0,
+		CanPostBounty:             lostToEnemy && candidateID != 0 && rec.GetDefenderGuildId() != 0,
+		BountyCandidatePlayerId:   candidateID,
+		BountyCandidateName:       candidateName,
+		GoldLeylineBonus:          sum.GoldLeyline,
+		RivalryBonus:              sum.RivalryBonus,
+	}, nil
+}
+
+// ── 10. InspectFieldWarTargets（野外三图点选任意异帮玩家） ────────────────────
+
+func (l *GuildLogic) InspectFieldWarTargets(ctx context.Context, req *pb.InspectFieldWarTargetsRequest) (*pb.InspectFieldWarTargetsResponse, error) {
+	playerID, guildID, _, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.InspectFieldWarTargetsResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	weekKey := l.warWeekKey(now)
+	myState, _ := l.war.Repo.GetPlayerWarState(ctx, playerID, zoneID, weekKey)
+	rivals, _ := l.war.Repo.ListRivals(ctx, guildID, weekKey)
+	rivalSet := map[uint64]bool{}
+	for _, rg := range rivals {
+		rivalSet[rg] = true
+	}
+
+	rawIDs := req.GetPlayerIds()
+	if len(rawIDs) > 30 {
+		rawIDs = rawIDs[:30]
+	}
+	names := l.resolveNames(ctx, rawIDs)
+	out := make([]*pb.FieldWarTargetBrief, 0, len(rawIDs))
+	for _, pid := range rawIDs {
+		if pid == 0 || pid == playerID {
+			continue
+		}
+		tgid, _ := l.resolveWarPlayerGuildID(ctx, pid)
+		gName := ""
+		if tgid != 0 {
+			if g, gErr := l.repo.GetGuild(ctx, tgid); gErr == nil && g != nil {
+				gName = g.Name
+			}
+		}
+		st, _ := l.war.Repo.GetPlayerWarState(ctx, pid, zoneID, weekKey)
+		peace := st != nil && st.GetPeaceMode() != 0
+		protectUntil := uint64(0)
+		streak := uint32(0)
+		if st != nil {
+			protectUntil = st.GetProtectUntilMs()
+			streak = st.GetStreakCount()
+		}
+		bid := l.readBattleLockID(ctx, pid)
+		var bID, bSilver uint64
+		var bTier pb.GuildWarBountyTier
+		if activeB, _ := l.war.Repo.ActiveBountyByTarget(ctx, pid, nowMs); activeB != nil {
+			bID = activeB.GetBountyId()
+			bSilver = activeB.GetEscrowSilver()
+			bTier = pb.GuildWarBountyTier(activeB.GetTier())
+		}
+		canAttack := tgid != 0 && tgid != guildID && !peace && nowMs >= protectUntil && bid == 0 && (myState == nil || myState.GetPeaceMode() == 0)
+		out = append(out, &pb.FieldWarTargetBrief{
+			PlayerId:                 pid,
+			PlayerName:               names[pid],
+			GuildId:                  tgid,
+			GuildName:                gName,
+			PeaceMode:                peace,
+			ProtectUntilMs:           protectUntil,
+			Streak:                   streak,
+			InBattle:                 bid != 0,
+			BattleId:                 bid,
+			IsRivalGuild:             rivalSet[tgid],
+			ActiveBountyId:           bID,
+			ActiveBountyRewardSilver: bSilver,
+			ActiveBountyTier:         bTier,
+			CanAttackNow:             canAttack,
+		})
+	}
+	return &pb.InspectFieldWarTargetsResponse{Targets: out}, nil
+}
+
+// ── Kafka 帮战终局结算入口（SettleGuildWarResult） ────────────────────────────
+
+func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
+	if l.war == nil || l.war.Repo == nil || ev == nil {
+		return nil
+	}
+	actx := ev.GetActivityContext()
+	if actx == nil || actx.GetKind() != battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR || actx.GetGuildWar() == nil {
+		return nil
+	}
+	gw := actx.GetGuildWar()
+	battleID := ev.GetBattleId()
+	if battleID == 0 || gw.GetAttackerGuildId() == 0 {
+		return nil
+	}
+	if existing, err := l.war.Repo.GetWarBattle(ctx, battleID); err != nil {
+		return err
+	} else if existing != nil {
+		return nil // 已幂等结算
+	}
+
+	now := l.warNow()
+	nowMs := uint64(now.UnixMilli())
+	if ev.GetFinishedAtMs() > 0 {
+		nowMs = ev.GetFinishedAtMs()
+	}
+	weekKey := l.warWeekKey(time.UnixMilli(int64(nowMs)))
+	dayKey := l.warDayKey(time.UnixMilli(int64(nowMs)))
+	rule := l.warRule()
+
+	// 收集双方真人成员。
+	var attackerIDs, defenderIDs []uint64
+	for _, t := range ev.GetTeams() {
+		if t.GetTeamIndex() == 0 {
+			attackerIDs = append(attackerIDs, t.GetPlayerIds()...)
+		} else if t.GetTeamIndex() == 1 {
+			defenderIDs = append(defenderIDs, t.GetPlayerIds()...)
+		}
+	}
+	attackerWon := ev.GetOutcome() == battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN
+	defenderWon := ev.GetOutcome() == battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN
+	isDraw := !attackerWon && !defenderWon
+
+	// 30 分钟内同对手递减计数（基于最近帮战记录）。
+	diminishPct := uint32(100)
+	repeatOpp := false
+	if len(attackerIDs) > 0 && len(defenderIDs) > 0 {
+		recentCount := uint32(0)
+		winMs := uint64(war.DefaultDiminishWindowSec) * 1000
+		if rule != nil && rule.GetDiminishWindowSec() > 0 {
+			winMs = uint64(rule.GetDiminishWindowSec()) * 1000
+		}
+		if logs, lErr := l.war.Repo.ListRecentBattles(ctx, gw.GetAttackerGuildId(), 20); lErr == nil {
+			for _, lb := range logs {
+				if nowMs > lb.GetFinishedAtMs()+winMs {
+					continue
+				}
+				var s warBattleSummary
+				if json.Unmarshal(lb.GetSummaryPayload(), &s) == nil &&
+					((containsU64(s.AttackerIDs, attackerIDs[0]) && containsU64(s.DefenderIDs, defenderIDs[0])) ||
+						(containsU64(s.AttackerIDs, defenderIDs[0]) && containsU64(s.DefenderIDs, attackerIDs[0]))) {
+					recentCount++
+				}
+			}
+		}
+		diminishPct = war.DiminishPercent(recentCount)
+		repeatOpp = recentCount > 0
+	}
+
+	goldBps := war.DefaultGoldLeylineBps
+	rivalBps := war.DefaultRivalryBonusBps
+	if rule != nil {
+		if rule.GetGoldLeylineMultiplierBps() > 0 {
+			goldBps = rule.GetGoldLeylineMultiplierBps()
+		}
+		if rule.GetRivalryBonusBps() > 0 {
+			rivalBps = rule.GetRivalryBonusBps()
+		}
+	}
+
+	warKind := pb.GuildWarBattleKind(gw.GetWarBattleKind())
+	atkReward := war.ComputeSideReward(war.BattleRewardInput{
+		BattleKind:      warKind,
+		Won:             attackerWon,
+		Draw:            isDraw,
+		DiminishPercent: diminishPct,
+		IsGoldLeyline:   gw.GetGoldLeylineBonus(),
+		IsRivalGuild:    gw.GetRivalryBonus(),
+		GoldLeylineBps:  goldBps,
+		RivalryBonusBps: rivalBps,
+		Rule:            rule,
+	})
+	defReward := war.ComputeSideReward(war.BattleRewardInput{
+		BattleKind:      warKind,
+		Won:             defenderWon,
+		Draw:            isDraw,
+		DiminishPercent: diminishPct,
+		IsGoldLeyline:   gw.GetGoldLeylineBonus(),
+		IsRivalGuild:    gw.GetRivalryBonus(),
+		GoldLeylineBps:  goldBps,
+		RivalryBonusBps: rivalBps,
+		Rule:            rule,
+	})
+
+	// 连胜终结赏金检查（输方连胜 >= 3 且击败 >= 2 不同对手时发给赢方首人）。
+	var jackpotContrib, jackpotSilver uint64
+	var outcomeTag uint32
+	if !isDraw && len(attackerIDs) > 0 && len(defenderIDs) > 0 {
+		loserID := defenderIDs[0]
+		if defenderWon {
+			loserID = attackerIDs[0]
+		}
+		if loserState, sErr := l.war.Repo.GetPlayerWarState(ctx, loserID, gw.GetZoneId(), weekKey); sErr == nil && loserState != nil {
+			jc, js := war.StreakBountyJackpot(loserState.GetStreakCount(), loserState.GetStreakDistinctCount())
+			if jc > 0 || js > 0 {
+				jackpotContrib, jackpotSilver = jc, js
+				outcomeTag = 1 // 终结连胜
+			}
+		}
+	}
+
+	// 灵脉旗势变化与每帮限占 1 座判定。
+	var bannerDelta *war.BannerDelta
+	if gw.GetLeylineId() > 0 {
+		_ = l.war.Repo.EnsureZoneLeylines(ctx, gw.GetZoneId(), nowMs)
+		if leylines, lErr := l.war.Repo.ListLeylines(ctx, gw.GetZoneId()); lErr == nil {
+			var cur *pb.GuildWarLeylineRecord
+			ownsOther := false
+			for _, lr := range leylines {
+				if lr.GetLeylineId() == gw.GetLeylineId() {
+					cur = lr
+				} else if lr.GetOwnerGuildId() == gw.GetAttackerGuildId() {
+					ownsOther = true
+				}
+			}
+			if cur != nil {
+				d := war.ApplyBannerImpact(
+					rule, nowMs,
+					cur.GetOwnerGuildId(), cur.GetBannerHp(), cur.GetShieldUntilMs(),
+					gw.GetAttackerGuildId(), ownsOther,
+					attackerWon, warKind != pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE,
+					gw.GetGoldLeylineBonus(),
+				)
+				bannerDelta = &d
+				if d.BrokeBanner {
+					outcomeTag = 5 // 破旗首功
+					jackpotSilver += d.BreakBonusSilver
+				}
+			}
+		}
+	}
+
+	// 构造参战人员入账列表。
+	credits := make([]data.PlayerSettlementCredit, 0, len(attackerIDs)+len(defenderIDs))
+	appendSide := func(ids []uint64, gid uint64, teamIdx uint32, won bool, r war.SideReward, oppID uint64) error {
+		for idx, pid := range ids {
+			silver := r.Silver
+			contrib := r.Contribution
+			if won && idx == 0 {
+				contrib += jackpotContrib
+				silver += jackpotSilver
+			}
+			var opID uint64
+			var bundleBytes []byte
+			if silver > 0 && l.war.OpIDs != nil {
+				var err error
+				opID, err = l.war.OpIDs.Mint(ctx)
+				if err != nil {
+					return err
+				}
+				bundleBytes, err = buildSilverItemBundle(silver)
+				if err != nil {
+					return err
+				}
+			}
+			credits = append(credits, data.PlayerSettlementCredit{
+				PlayerID:         pid,
+				GuildID:          gid,
+				TeamIndex:        teamIdx,
+				Won:              won,
+				Draw:             isDraw,
+				ContributionGain: contrib,
+				SilverGain:       silver,
+				MeritGain:        r.Merit,
+				OpID:             opID,
+				CreditBundle:     bundleBytes,
+				TxType:           rollbackpb.TransactionType_TX_GUILD_WAR_REWARD,
+				OpKind:           pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_WAR_REWARD,
+				OpponentID:       oppID,
+				RepeatOpponent:   repeatOpp,
+			})
+		}
+		return nil
+	}
+	var firstDef, firstAtk uint64
+	if len(defenderIDs) > 0 {
+		firstDef = defenderIDs[0]
+	}
+	if len(attackerIDs) > 0 {
+		firstAtk = attackerIDs[0]
+	}
+	if err := appendSide(attackerIDs, gw.GetAttackerGuildId(), 0, attackerWon, atkReward, firstDef); err != nil {
+		return err
+	}
+	if err := appendSide(defenderIDs, gw.GetDefenderGuildId(), 1, defenderWon, defReward, firstAtk); err != nil {
+		return err
+	}
+
+	// 构造大事记快照。
+	allNames := l.resolveNames(ctx, append(append([]uint64(nil), attackerIDs...), defenderIDs...))
+	sum := warBattleSummary{
+		AttackerIDs:  attackerIDs,
+		DefenderIDs:  defenderIDs,
+		GoldLeyline:  gw.GetGoldLeylineBonus(),
+		RivalryBonus: gw.GetRivalryBonus(),
+	}
+	if g, _ := l.repo.GetGuild(ctx, gw.GetAttackerGuildId()); g != nil {
+		sum.AttackerGuildName = g.Name
+	}
+	if gw.GetDefenderGuildId() != 0 {
+		if g, _ := l.repo.GetGuild(ctx, gw.GetDefenderGuildId()); g != nil {
+			sum.DefenderGuildName = g.Name
+		}
+	} else {
+		sum.DefenderGuildName = "灵脉守卫"
+	}
+	for _, pid := range attackerIDs {
+		if n := allNames[pid]; n != "" {
+			sum.AttackerNames = append(sum.AttackerNames, n)
+		} else {
+			sum.AttackerNames = append(sum.AttackerNames, fmt.Sprintf("道友%d", pid))
+		}
+	}
+	for _, pid := range defenderIDs {
+		if n := allNames[pid]; n != "" {
+			sum.DefenderNames = append(sum.DefenderNames, n)
+		} else {
+			sum.DefenderNames = append(sum.DefenderNames, fmt.Sprintf("道友%d", pid))
+		}
+	}
+	sumBytes, _ := json.Marshal(sum)
+
+	var hpBefore, hpAfter, shielded uint32
+	var atkFunds = atkReward.GuildFunds
+	if bannerDelta != nil {
+		hpBefore = bannerDelta.HPBefore
+		hpAfter = bannerDelta.HPAfter
+		if nowMs < bannerDelta.ShieldUntilAfter && !bannerDelta.BrokeBanner {
+			shielded = 1
+		}
+		if bannerDelta.BrokeBanner {
+			atkFunds += bannerDelta.BreakBonusFunds
+		}
+	}
+
+	protectSec := war.DefaultPostBattleProtectSec
+	peaceCD := war.DefaultPeaceCooldownSec
+	bountyProtect := war.DefaultBountyProtectSec
+	counterTear := war.DefaultBountyCounterKillTear
+	dailyPayLimit := war.DefaultBountyDailyPayoutLimit
+	if rule != nil {
+		if rule.GetPostBattleProtectSec() > 0 {
+			protectSec = rule.GetPostBattleProtectSec()
+		}
+		if rule.GetPeaceCooldownSec() > 0 {
+			peaceCD = rule.GetPeaceCooldownSec()
+		}
+		if rule.GetBountyProtectSec() > 0 {
+			bountyProtect = rule.GetBountyProtectSec()
+		}
+		if rule.GetBountyCounterKillTear() > 0 {
+			counterTear = rule.GetBountyCounterKillTear()
+		}
+		if rule.GetBountyDailyPayoutLimit() > 0 {
+			dailyPayLimit = rule.GetBountyDailyPayoutLimit()
+		}
+	}
+
+	rec := &pb.GuildWarBattleRecord{
+		BattleId:             battleID,
+		ZoneId:               gw.GetZoneId(),
+		WarBattleKind:        gw.GetWarBattleKind(),
+		LeylineId:            gw.GetLeylineId(),
+		BountyId:             gw.GetBountyId(),
+		AttackerGuildId:      gw.GetAttackerGuildId(),
+		DefenderGuildId:      gw.GetDefenderGuildId(),
+		Outcome:              uint32(ev.GetOutcome()),
+		TotalRounds:          ev.GetTotalRounds(),
+		BannerHpBefore:       hpBefore,
+		BannerHpAfter:        hpAfter,
+		BannerShielded:       shielded,
+		BountyOutcomeTag:     outcomeTag,
+		JackpotContribution:  jackpotContrib,
+		JackpotSilver:        jackpotSilver,
+		DiminishPercent:      diminishPct,
+		AttackerContribution: atkReward.Contribution,
+		AttackerSilver:       atkReward.Silver,
+		AttackerFunds:        atkFunds,
+		AttackerMerit:        atkReward.Merit,
+		DefenderContribution: defReward.Contribution,
+		DefenderSilver:       defReward.Silver,
+		DefenderFunds:        defReward.GuildFunds,
+		DefenderMerit:        defReward.Merit,
+		SummaryPayload:       sumBytes,
+		FinishedAtMs:         nowMs,
+	}
+
+	settleOut, err := l.war.Repo.SettleWarBattle(ctx, data.SettleWarBattleInput{
+		Record:             rec,
+		WeekKey:            weekKey,
+		DayKey:             dayKey,
+		NowMs:              nowMs,
+		ProtectSec:         protectSec,
+		PeaceCooldownSec:   peaceCD,
+		BountyProtectSec:   bountyProtect,
+		CounterKillTear:    counterTear,
+		DailyPayoutLimit:   dailyPayLimit,
+		AttackerGuildFunds: atkFunds,
+		DefenderGuildFunds: defReward.GuildFunds,
+		AttackerMeritAdd:   atkReward.Merit * uint64(len(attackerIDs)),
+		DefenderMeritAdd:   defReward.Merit * uint64(len(defenderIDs)),
+		BannerDelta:        bannerDelta,
+		PlayerCredits:      credits,
+		ActiveBountyID:     gw.GetBountyId(),
+		BountyHunterWon:    attackerWon,
+		BountyTargetWon:    defenderWon,
+		BountyHunterID:     firstAtk,
+		BountyTargetID:     firstDef,
+		LeaseUntilMs:       nowMs + uint64(l.war.Lease.Milliseconds()),
+		LeaseToken:         battleID,
+	})
+	if errors.Is(err, data.ErrWarBattleAlreadyDone) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	// 追杀成功 / 反杀撕单独立入账（受每日 5 次赏金上限防洗钱约束）。
+	if settleOut.BountyPayoutSilver > 0 && settleOut.BountyRecipientID != 0 && l.war.OpIDs != nil {
+		recGid := gw.GetAttackerGuildId()
+		if settleOut.BountyRecipientID == firstDef {
+			recGid = gw.GetDefenderGuildId()
+		}
+		if bopID, mErr := l.war.OpIDs.Mint(ctx); mErr == nil && bopID != 0 {
+			if bBytes, bErr := buildSilverItemBundle(settleOut.BountyPayoutSilver); bErr == nil && len(bBytes) > 0 {
+				if row, ok, eErr := l.war.Repo.EnqueueBountyPayout(ctx, settleOut.BountyRecipientID, recGid, dayKey, dailyPayLimit, bopID, bBytes, nowMs+uint64(l.war.Lease.Milliseconds()), bopID, nowMs); eErr == nil && ok {
+					settleOut.CreatedOps = append(settleOut.CreatedOps, row)
+				}
+			}
+		}
+	}
+
+	for _, op := range settleOut.CreatedOps {
+		l.syncDeliverWarOp(ctx, op)
+	}
+
+	// 推帮会变动刷新信号给涉及参战人。
+	recipients := append(append([]uint64(nil), attackerIDs...), defenderIDs...)
+	l.notifier.Notify(ctx, &pb.GuildChangedS2C{
+		Kind:    pb.GuildChangeKind_GUILD_CHANGE_KIND_WAR_UPDATED,
+		GuildId: gw.GetAttackerGuildId(),
+	}, recipients)
+
+	return nil
+}
+
+func containsU64(slice []uint64, target uint64) bool {
+	for _, v := range slice {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}

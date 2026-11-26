@@ -1,6 +1,6 @@
 # RPC 热关停：节点 / 服务 / 方法三级（C++ 与 Go 同一套）
 
-> 状态：2026-11-12 落码，**未编译，待 Codex 验证**（命令见 §12）。Java 版待做（§13）。
+> 状态：2026-11-12 落码，**未编译，待 Gemini 验证**（命令见 §12）。Java 版待做（§13）。
 > 相关：Go 包 [`go/shared/killswitch`](../../go/shared/killswitch/killswitch.go)、C++ 模块 [`cpp/libs/engine/core/kill_switch/`](../../cpp/libs/engine/core/kill_switch/kill_switch.h)、
 > 断线重连核对 [infra-reconnect-overview.md](./infra-reconnect-overview.md) §4 R12（新鲜度只在真正读到 etcd 时刷新）。
 
@@ -219,7 +219,7 @@ Go：已有 `killswitch_rules`（改为只计本进程适用的规则：别的�
 | Go 各服务装配 | chat、client_rpc_router、data_service、db、friend、guild、login、mail / rank（domainhost）、match、player_inbox、player_locator、scene_manager、trade：填节点类型、注册后登记 uuid；client_rpc_router 与 match 新挂热关停，路由服按目标方法判 |
 | `java/gateway_node` | `/admin/killswitch` 管理接口与 etcd 存储；`AdminApiKeyFilter` 改常量时间比较、按规范化路径判管理路径、未配置口令时拒绝 |
 
-Codex 验证顺序（全部在仓库根目录；C++ MSBuild 串行 `/m:1`）：
+Gemini 验证顺序（全部在仓库根目录；C++ MSBuild 串行 `/m:1`）：
 
 1. 协议生成：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。期望 `cpp/generated/proto/common/base/rpc_message.pb.{h,cc}` 与 `go/proto/common/base/rpc_message.pb.go` 出现 `KILL_SWITCH_DENIED`。
 2. C++：先编库（core、muduo_grpc 所在工程）再编 gate / scene / battle 与测试工程（`run_cpp_tests -Build` 不重编库，必须先单独编库）；跑 `rpc_controller_test`（新增 `kill_switch_test.cpp` 全部 `KillSwitch*` 用例）与 `muduo_grpc_test`（新增 `ServerAdmission*` 用例）。

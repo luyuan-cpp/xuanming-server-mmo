@@ -73,6 +73,14 @@ type SeasonRuleDescComp struct {
     Value string
 }
 
+type SeasonRuleHonor_title_nameComp struct {
+    Value string
+}
+
+type SeasonRuleHonor_badge_icon_keyComp struct {
+    Value string
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -136,5 +144,13 @@ func MakeSeasonRuleDefault_seal_idComp(row *pb.SeasonRuleTable) SeasonRuleDefaul
 
 func MakeSeasonRuleDescComp(row *pb.SeasonRuleTable) SeasonRuleDescComp {
     return SeasonRuleDescComp{Value: row.Desc}
+}
+
+func MakeSeasonRuleHonor_title_nameComp(row *pb.SeasonRuleTable) SeasonRuleHonor_title_nameComp {
+    return SeasonRuleHonor_title_nameComp{Value: row.HonorTitleName}
+}
+
+func MakeSeasonRuleHonor_badge_icon_keyComp(row *pb.SeasonRuleTable) SeasonRuleHonor_badge_icon_keyComp {
+    return SeasonRuleHonor_badge_icon_keyComp{Value: row.HonorBadgeIconKey}
 }
 

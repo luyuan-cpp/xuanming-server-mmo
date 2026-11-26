@@ -1189,6 +1189,7 @@ type MatchChallengeInvitationRecord struct {
 	ExpiresMs          uint64                 `protobuf:"varint,10,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
 	State              uint32                 `protobuf:"varint,11,opt,name=state,proto3" json:"state,omitempty"` // 1待应答、2已成局、3已拒绝、4已接受待退出、5已安全关闭；原件不删除。
 	BattleId           uint64                 `protobuf:"varint,12,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	CustomRulesPayload []byte                 `protobuf:"bytes,13,opt,name=custom_rules_payload,json=customRulesPayload,proto3" json:"custom_rules_payload,omitempty"` // 确定性序列化 CustomDuelRules（默认空=常规切磋）
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1305,6 +1306,13 @@ func (x *MatchChallengeInvitationRecord) GetBattleId() uint64 {
 		return x.BattleId
 	}
 	return 0
+}
+
+func (x *MatchChallengeInvitationRecord) GetCustomRulesPayload() []byte {
+	if x != nil {
+		return x.CustomRulesPayload
+	}
+	return nil
 }
 
 // 同事务域全部副本使用相同撮合策略；新进程不能覆盖已准入策略。
@@ -1461,8 +1469,14 @@ type MatchFormationRecord struct {
 	RankedContext []byte `protobuf:"bytes,24,opt,name=ranked_context,json=rankedContext,proto3" json:"ranked_context,omitempty"`
 	// 论剑排位赛季编号(索引列,供换季排空查询本季已接纳对局;非排位为 0)。
 	RankedSeasonId uint32 `protobuf:"varint,25,opt,name=ranked_season_id,json=rankedSeasonId,proto3" json:"ranked_season_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 锦标赛 V2 在成局提交点冻结的 TournamentBattleContext(BO3 局分与五行灵脉);非锦标赛为空。
+	TournamentContext []byte `protobuf:"bytes,26,opt,name=tournament_context,json=tournamentContext,proto3" json:"tournament_context,omitempty"`
+	// 道友切磋坊冻结的 CustomDuelRules 字节载荷（非自定义切磋为空）。
+	CustomDuelRules []byte `protobuf:"bytes,27,opt,name=custom_duel_rules,json=customDuelRules,proto3" json:"custom_duel_rules,omitempty"`
+	// true = 五行幻境周常爬塔开战（PrepareBattle 注入权威层数与已选符印）。
+	IsWuxingTower bool `protobuf:"varint,28,opt,name=is_wuxing_tower,json=isWuxingTower,proto3" json:"is_wuxing_tower,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1668,6 +1682,27 @@ func (x *MatchFormationRecord) GetRankedSeasonId() uint32 {
 		return x.RankedSeasonId
 	}
 	return 0
+}
+
+func (x *MatchFormationRecord) GetTournamentContext() []byte {
+	if x != nil {
+		return x.TournamentContext
+	}
+	return nil
+}
+
+func (x *MatchFormationRecord) GetCustomDuelRules() []byte {
+	if x != nil {
+		return x.CustomDuelRules
+	}
+	return nil
+}
+
+func (x *MatchFormationRecord) GetIsWuxingTower() bool {
+	if x != nil {
+		return x.IsWuxingTower
+	}
+	return false
 }
 
 type MatchPreparedEndpoint struct {
@@ -3271,24 +3306,26 @@ func (x *MatchRankedPlayerPrefsRecord) GetUpdatedMs() uint64 {
 
 // 玩家单赛季进度(亮段/有效场次/胜负平/最高段位/封榜名次)。跨季新季不继承本表行,Elo 仍在 match_rating 继承。
 type MatchRankedPlayerSeasonRecord struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	SeasonId        uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
-	PlayerId        uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Qualified       bool                   `protobuf:"varint,3,opt,name=qualified,proto3" json:"qualified,omitempty"`
-	QualifiedAtMs   uint64                 `protobuf:"varint,4,opt,name=qualified_at_ms,json=qualifiedAtMs,proto3" json:"qualified_at_ms,omitempty"`
-	RatingCenti     int64                  `protobuf:"varint,5,opt,name=rating_centi,json=ratingCenti,proto3" json:"rating_centi,omitempty"`
-	PeakRatingCenti int64                  `protobuf:"varint,6,opt,name=peak_rating_centi,json=peakRatingCenti,proto3" json:"peak_rating_centi,omitempty"`
-	PeakTier        uint32                 `protobuf:"varint,7,opt,name=peak_tier,json=peakTier,proto3" json:"peak_tier,omitempty"`
-	ValidMatches    uint32                 `protobuf:"varint,8,opt,name=valid_matches,json=validMatches,proto3" json:"valid_matches,omitempty"`
-	Wins            uint32                 `protobuf:"varint,9,opt,name=wins,proto3" json:"wins,omitempty"`
-	Losses          uint32                 `protobuf:"varint,10,opt,name=losses,proto3" json:"losses,omitempty"`
-	Draws           uint32                 `protobuf:"varint,11,opt,name=draws,proto3" json:"draws,omitempty"`
-	MilestoneBits   uint32                 `protobuf:"varint,12,opt,name=milestone_bits,json=milestoneBits,proto3" json:"milestone_bits,omitempty"` // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
-	HonorBits       uint32                 `protobuf:"varint,13,opt,name=honor_bits,json=honorBits,proto3" json:"honor_bits,omitempty"`             // bit0=天枢/无双徽章, bit1=赛季称号, bit2=榜首题名
-	FinalRank       uint64                 `protobuf:"varint,14,opt,name=final_rank,json=finalRank,proto3" json:"final_rank,omitempty"`
-	UpdatedMs       uint64                 `protobuf:"varint,15,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId         uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	PlayerId         uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Qualified        bool                   `protobuf:"varint,3,opt,name=qualified,proto3" json:"qualified,omitempty"`
+	QualifiedAtMs    uint64                 `protobuf:"varint,4,opt,name=qualified_at_ms,json=qualifiedAtMs,proto3" json:"qualified_at_ms,omitempty"`
+	RatingCenti      int64                  `protobuf:"varint,5,opt,name=rating_centi,json=ratingCenti,proto3" json:"rating_centi,omitempty"`
+	PeakRatingCenti  int64                  `protobuf:"varint,6,opt,name=peak_rating_centi,json=peakRatingCenti,proto3" json:"peak_rating_centi,omitempty"`
+	PeakTier         uint32                 `protobuf:"varint,7,opt,name=peak_tier,json=peakTier,proto3" json:"peak_tier,omitempty"`
+	ValidMatches     uint32                 `protobuf:"varint,8,opt,name=valid_matches,json=validMatches,proto3" json:"valid_matches,omitempty"`
+	Wins             uint32                 `protobuf:"varint,9,opt,name=wins,proto3" json:"wins,omitempty"`
+	Losses           uint32                 `protobuf:"varint,10,opt,name=losses,proto3" json:"losses,omitempty"`
+	Draws            uint32                 `protobuf:"varint,11,opt,name=draws,proto3" json:"draws,omitempty"`
+	MilestoneBits    uint32                 `protobuf:"varint,12,opt,name=milestone_bits,json=milestoneBits,proto3" json:"milestone_bits,omitempty"` // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
+	HonorBits        uint32                 `protobuf:"varint,13,opt,name=honor_bits,json=honorBits,proto3" json:"honor_bits,omitempty"`             // bit0=天枢/无双徽章, bit1=赛季称号, bit2=榜首题名
+	FinalRank        uint64                 `protobuf:"varint,14,opt,name=final_rank,json=finalRank,proto3" json:"final_rank,omitempty"`
+	UpdatedMs        uint64                 `protobuf:"varint,15,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	CurrentWinStreak uint32                 `protobuf:"varint,16,opt,name=current_win_streak,json=currentWinStreak,proto3" json:"current_win_streak,omitempty"`
+	BestWinStreak    uint32                 `protobuf:"varint,17,opt,name=best_win_streak,json=bestWinStreak,proto3" json:"best_win_streak,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *MatchRankedPlayerSeasonRecord) Reset() {
@@ -3422,6 +3459,20 @@ func (x *MatchRankedPlayerSeasonRecord) GetFinalRank() uint64 {
 func (x *MatchRankedPlayerSeasonRecord) GetUpdatedMs() uint64 {
 	if x != nil {
 		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *MatchRankedPlayerSeasonRecord) GetCurrentWinStreak() uint32 {
+	if x != nil {
+		return x.CurrentWinStreak
+	}
+	return 0
+}
+
+func (x *MatchRankedPlayerSeasonRecord) GetBestWinStreak() uint32 {
+	if x != nil {
+		return x.BestWinStreak
 	}
 	return 0
 }
@@ -3609,6 +3660,16 @@ type MatchTournamentSeasonRecord struct {
 	ChampionMemberSummary string                 `protobuf:"bytes,16,opt,name=champion_member_summary,json=championMemberSummary,proto3" json:"champion_member_summary,omitempty"`
 	SettledMs             uint64                 `protobuf:"varint,17,opt,name=settled_ms,json=settledMs,proto3" json:"settled_ms,omitempty"`
 	UpdatedMs             uint64                 `protobuf:"varint,18,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	ChampionMembersBlob   []byte                 `protobuf:"bytes,19,opt,name=champion_members_blob,json=championMembersBlob,proto3" json:"champion_members_blob,omitempty"`   // V2: 确定性序列化 MatchTournamentChampionMembersBlob
+	ChampionSaluteCount   uint64                 `protobuf:"varint,20,opt,name=champion_salute_count,json=championSaluteCount,proto3" json:"champion_salute_count,omitempty"`  // V2: 全服累计观道致敬次数
+	ChampionEmblemId      uint32                 `protobuf:"varint,21,opt,name=champion_emblem_id,json=championEmblemId,proto3" json:"champion_emblem_id,omitempty"`           // V3: 冠军战队队徽(1..8)
+	ThirdPlaceSquadId     uint64                 `protobuf:"varint,22,opt,name=third_place_squad_id,json=thirdPlaceSquadId,proto3" json:"third_place_squad_id,omitempty"`      // V3: 季军战队 ID
+	ThirdPlaceSquadName   string                 `protobuf:"bytes,23,opt,name=third_place_squad_name,json=thirdPlaceSquadName,proto3" json:"third_place_squad_name,omitempty"` // V3: 季军战队名
+	ThirdPlaceEmblemId    uint32                 `protobuf:"varint,24,opt,name=third_place_emblem_id,json=thirdPlaceEmblemId,proto3" json:"third_place_emblem_id,omitempty"`   // V3: 季军战队队徽(1..8)
+	FinalMvpPlayerId      uint64                 `protobuf:"varint,25,opt,name=final_mvp_player_id,json=finalMvpPlayerId,proto3" json:"final_mvp_player_id,omitempty"`         // V3: 总决赛问鼎之星(MVP)玩家 ID
+	FinalMvpPlayerName    string                 `protobuf:"bytes,26,opt,name=final_mvp_player_name,json=finalMvpPlayerName,proto3" json:"final_mvp_player_name,omitempty"`    // V3: 总决赛 MVP 角色名
+	FinalMvpScore         uint32                 `protobuf:"varint,27,opt,name=final_mvp_score,json=finalMvpScore,proto3" json:"final_mvp_score,omitempty"`                    // V3: 总决赛 MVP 综合战功分
+	ChampionHonorBits     uint32                 `protobuf:"varint,28,opt,name=champion_honor_bits,json=championHonorBits,proto3" json:"champion_honor_bits,omitempty"`        // V4: 冠军战队赛季荣耀铭牌位图
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3769,6 +3830,120 @@ func (x *MatchTournamentSeasonRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+func (x *MatchTournamentSeasonRecord) GetChampionMembersBlob() []byte {
+	if x != nil {
+		return x.ChampionMembersBlob
+	}
+	return nil
+}
+
+func (x *MatchTournamentSeasonRecord) GetChampionSaluteCount() uint64 {
+	if x != nil {
+		return x.ChampionSaluteCount
+	}
+	return 0
+}
+
+func (x *MatchTournamentSeasonRecord) GetChampionEmblemId() uint32 {
+	if x != nil {
+		return x.ChampionEmblemId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSeasonRecord) GetThirdPlaceSquadId() uint64 {
+	if x != nil {
+		return x.ThirdPlaceSquadId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSeasonRecord) GetThirdPlaceSquadName() string {
+	if x != nil {
+		return x.ThirdPlaceSquadName
+	}
+	return ""
+}
+
+func (x *MatchTournamentSeasonRecord) GetThirdPlaceEmblemId() uint32 {
+	if x != nil {
+		return x.ThirdPlaceEmblemId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSeasonRecord) GetFinalMvpPlayerId() uint64 {
+	if x != nil {
+		return x.FinalMvpPlayerId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSeasonRecord) GetFinalMvpPlayerName() string {
+	if x != nil {
+		return x.FinalMvpPlayerName
+	}
+	return ""
+}
+
+func (x *MatchTournamentSeasonRecord) GetFinalMvpScore() uint32 {
+	if x != nil {
+		return x.FinalMvpScore
+	}
+	return 0
+}
+
+func (x *MatchTournamentSeasonRecord) GetChampionHonorBits() uint32 {
+	if x != nil {
+		return x.ChampionHonorBits
+	}
+	return 0
+}
+
+type MatchTournamentChampionMembersBlob struct {
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	Members       []*MatchTournamentMemberRecord `protobuf:"bytes,1,rep,name=members,proto3" json:"members,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchTournamentChampionMembersBlob) Reset() {
+	*x = MatchTournamentChampionMembersBlob{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTournamentChampionMembersBlob) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTournamentChampionMembersBlob) ProtoMessage() {}
+
+func (x *MatchTournamentChampionMembersBlob) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTournamentChampionMembersBlob.ProtoReflect.Descriptor instead.
+func (*MatchTournamentChampionMembersBlob) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *MatchTournamentChampionMembersBlob) GetMembers() []*MatchTournamentMemberRecord {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
 // 全服报名战队(主键 squad_id 由 BattleIDGen 永久发号;同赛季归一化名唯一)。
 type MatchTournamentSquadRecord struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -3789,13 +3964,15 @@ type MatchTournamentSquadRecord struct {
 	CheerCount      uint32                 `protobuf:"varint,15,opt,name=cheer_count,json=cheerCount,proto3" json:"cheer_count,omitempty"`
 	RegisteredMs    uint64                 `protobuf:"varint,16,opt,name=registered_ms,json=registeredMs,proto3" json:"registered_ms,omitempty"`
 	UpdatedMs       uint64                 `protobuf:"varint,17,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	EmblemId        uint32                 `protobuf:"varint,18,opt,name=emblem_id,json=emblemId,proto3" json:"emblem_id,omitempty"`    // V3: 官方预设道家队徽(1..8)
+	HonorBits       uint32                 `protobuf:"varint,19,opt,name=honor_bits,json=honorBits,proto3" json:"honor_bits,omitempty"` // V4: 战队赛季荣耀铭牌位图(bit 0..5)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *MatchTournamentSquadRecord) Reset() {
 	*x = MatchTournamentSquadRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[34]
+	mi := &file_proto_match_match_authority_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3807,7 +3984,7 @@ func (x *MatchTournamentSquadRecord) String() string {
 func (*MatchTournamentSquadRecord) ProtoMessage() {}
 
 func (x *MatchTournamentSquadRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[34]
+	mi := &file_proto_match_match_authority_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3820,7 +3997,7 @@ func (x *MatchTournamentSquadRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentSquadRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentSquadRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{34}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *MatchTournamentSquadRecord) GetSquadId() uint64 {
@@ -3942,6 +4119,20 @@ func (x *MatchTournamentSquadRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+func (x *MatchTournamentSquadRecord) GetEmblemId() uint32 {
+	if x != nil {
+		return x.EmblemId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSquadRecord) GetHonorBits() uint32 {
+	if x != nil {
+		return x.HonorBits
+	}
+	return 0
+}
+
 // 战队成员名册(主键 (season_id, player_id) 物理保证一人一季仅隶属一支战队)。
 type MatchTournamentMemberRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3953,13 +4144,16 @@ type MatchTournamentMemberRecord struct {
 	PlayerName    string                 `protobuf:"bytes,6,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
 	ZoneId        uint32                 `protobuf:"varint,7,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
 	JoinedMs      uint64                 `protobuf:"varint,8,opt,name=joined_ms,json=joinedMs,proto3" json:"joined_ms,omitempty"`
+	ClassId       uint32                 `protobuf:"varint,9,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Gender        uint32                 `protobuf:"varint,10,opt,name=gender,proto3" json:"gender,omitempty"`
+	AppearanceId  string                 `protobuf:"bytes,11,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchTournamentMemberRecord) Reset() {
 	*x = MatchTournamentMemberRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[35]
+	mi := &file_proto_match_match_authority_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3971,7 +4165,7 @@ func (x *MatchTournamentMemberRecord) String() string {
 func (*MatchTournamentMemberRecord) ProtoMessage() {}
 
 func (x *MatchTournamentMemberRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[35]
+	mi := &file_proto_match_match_authority_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3984,7 +4178,7 @@ func (x *MatchTournamentMemberRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentMemberRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentMemberRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{35}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *MatchTournamentMemberRecord) GetSeasonId() uint32 {
@@ -4043,6 +4237,27 @@ func (x *MatchTournamentMemberRecord) GetJoinedMs() uint64 {
 	return 0
 }
 
+func (x *MatchTournamentMemberRecord) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMemberRecord) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
+	}
+	return 0
+}
+
+func (x *MatchTournamentMemberRecord) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
 // 跨区战队邀请(待应答列表按受邀者查询)。
 type MatchTournamentInviteRecord struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -4059,7 +4274,7 @@ type MatchTournamentInviteRecord struct {
 
 func (x *MatchTournamentInviteRecord) Reset() {
 	*x = MatchTournamentInviteRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[36]
+	mi := &file_proto_match_match_authority_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4071,7 +4286,7 @@ func (x *MatchTournamentInviteRecord) String() string {
 func (*MatchTournamentInviteRecord) ProtoMessage() {}
 
 func (x *MatchTournamentInviteRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[36]
+	mi := &file_proto_match_match_authority_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4084,7 +4299,7 @@ func (x *MatchTournamentInviteRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentInviteRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentInviteRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{36}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *MatchTournamentInviteRecord) GetSquadId() uint64 {
@@ -4138,34 +4353,51 @@ func (x *MatchTournamentInviteRecord) GetExpiresMs() uint64 {
 
 // 赛程对局表(海选约战配对 + 淘汰赛对阵树)。
 type MatchTournamentMatchRecord struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	MatchId          uint64                 `protobuf:"varint,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
-	SeasonId         uint32                 `protobuf:"varint,2,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
-	Phase            uint32                 `protobuf:"varint,3,opt,name=phase,proto3" json:"phase,omitempty"` // TournamentMatchPhase
-	RoundIndex       uint32                 `protobuf:"varint,4,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"`
-	SlotIndex        uint32                 `protobuf:"varint,5,opt,name=slot_index,json=slotIndex,proto3" json:"slot_index,omitempty"`
-	SquadAId         uint64                 `protobuf:"varint,6,opt,name=squad_a_id,json=squadAId,proto3" json:"squad_a_id,omitempty"`
-	SquadBId         uint64                 `protobuf:"varint,7,opt,name=squad_b_id,json=squadBId,proto3" json:"squad_b_id,omitempty"` // 0 = 海选等待对手或淘汰赛轮空
-	LineupA          []byte                 `protobuf:"bytes,8,opt,name=lineup_a,json=lineupA,proto3" json:"lineup_a,omitempty"`       // 逗号分隔 uint64 成员 ID 或 protobuf 编码
-	LineupB          []byte                 `protobuf:"bytes,9,opt,name=lineup_b,json=lineupB,proto3" json:"lineup_b,omitempty"`
-	ReadyA           bool                   `protobuf:"varint,10,opt,name=ready_a,json=readyA,proto3" json:"ready_a,omitempty"`
-	ReadyB           bool                   `protobuf:"varint,11,opt,name=ready_b,json=readyB,proto3" json:"ready_b,omitempty"`
-	State            uint32                 `protobuf:"varint,12,opt,name=state,proto3" json:"state,omitempty"` // TournamentMatchState
-	BattleId         uint64                 `protobuf:"varint,13,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	WinnerSquadId    uint64                 `protobuf:"varint,14,opt,name=winner_squad_id,json=winnerSquadId,proto3" json:"winner_squad_id,omitempty"`
-	Outcome          uint32                 `protobuf:"varint,15,opt,name=outcome,proto3" json:"outcome,omitempty"` // battle.eBattleOutcome
-	FeaturedSpectate bool                   `protobuf:"varint,16,opt,name=featured_spectate,json=featuredSpectate,proto3" json:"featured_spectate,omitempty"`
-	ScheduledStartMs uint64                 `protobuf:"varint,17,opt,name=scheduled_start_ms,json=scheduledStartMs,proto3" json:"scheduled_start_ms,omitempty"`
-	DeadlineMs       uint64                 `protobuf:"varint,18,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
-	FinishedMs       uint64                 `protobuf:"varint,19,opt,name=finished_ms,json=finishedMs,proto3" json:"finished_ms,omitempty"`
-	UpdatedMs        uint64                 `protobuf:"varint,20,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	MatchId                uint64                 `protobuf:"varint,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	SeasonId               uint32                 `protobuf:"varint,2,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	Phase                  uint32                 `protobuf:"varint,3,opt,name=phase,proto3" json:"phase,omitempty"` // TournamentMatchPhase
+	RoundIndex             uint32                 `protobuf:"varint,4,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"`
+	SlotIndex              uint32                 `protobuf:"varint,5,opt,name=slot_index,json=slotIndex,proto3" json:"slot_index,omitempty"`
+	SquadAId               uint64                 `protobuf:"varint,6,opt,name=squad_a_id,json=squadAId,proto3" json:"squad_a_id,omitempty"`
+	SquadBId               uint64                 `protobuf:"varint,7,opt,name=squad_b_id,json=squadBId,proto3" json:"squad_b_id,omitempty"` // 0 = 海选等待对手或淘汰赛轮空
+	LineupA                []byte                 `protobuf:"bytes,8,opt,name=lineup_a,json=lineupA,proto3" json:"lineup_a,omitempty"`       // 逗号分隔 uint64 成员 ID 或 protobuf 编码
+	LineupB                []byte                 `protobuf:"bytes,9,opt,name=lineup_b,json=lineupB,proto3" json:"lineup_b,omitempty"`
+	ReadyA                 bool                   `protobuf:"varint,10,opt,name=ready_a,json=readyA,proto3" json:"ready_a,omitempty"`
+	ReadyB                 bool                   `protobuf:"varint,11,opt,name=ready_b,json=readyB,proto3" json:"ready_b,omitempty"`
+	State                  uint32                 `protobuf:"varint,12,opt,name=state,proto3" json:"state,omitempty"` // TournamentMatchState
+	BattleId               uint64                 `protobuf:"varint,13,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	WinnerSquadId          uint64                 `protobuf:"varint,14,opt,name=winner_squad_id,json=winnerSquadId,proto3" json:"winner_squad_id,omitempty"`
+	Outcome                uint32                 `protobuf:"varint,15,opt,name=outcome,proto3" json:"outcome,omitempty"` // battle.eBattleOutcome
+	FeaturedSpectate       bool                   `protobuf:"varint,16,opt,name=featured_spectate,json=featuredSpectate,proto3" json:"featured_spectate,omitempty"`
+	ScheduledStartMs       uint64                 `protobuf:"varint,17,opt,name=scheduled_start_ms,json=scheduledStartMs,proto3" json:"scheduled_start_ms,omitempty"`
+	DeadlineMs             uint64                 `protobuf:"varint,18,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
+	FinishedMs             uint64                 `protobuf:"varint,19,opt,name=finished_ms,json=finishedMs,proto3" json:"finished_ms,omitempty"`
+	UpdatedMs              uint64                 `protobuf:"varint,20,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	BestOf                 uint32                 `protobuf:"varint,21,opt,name=best_of,json=bestOf,proto3" json:"best_of,omitempty"`                                                   // V2: 1=BO1, 3=BO3
+	CurrentGameIndex       uint32                 `protobuf:"varint,22,opt,name=current_game_index,json=currentGameIndex,proto3" json:"current_game_index,omitempty"`                   // V2: 当前小局序号(1..best_of)
+	WinsA                  uint32                 `protobuf:"varint,23,opt,name=wins_a,json=winsA,proto3" json:"wins_a,omitempty"`                                                      // V2: A 队小局胜场
+	WinsB                  uint32                 `protobuf:"varint,24,opt,name=wins_b,json=winsB,proto3" json:"wins_b,omitempty"`                                                      // V2: B 队小局胜场
+	CurrentLeylineElement  uint32                 `protobuf:"varint,25,opt,name=current_leyline_element,json=currentLeylineElement,proto3" json:"current_leyline_element,omitempty"`    // V2: 当前/下一小局五行灵脉(TournamentLeylineElement)
+	LeylineSequence        string                 `protobuf:"bytes,26,opt,name=leyline_sequence,json=leylineSequence,proto3" json:"leyline_sequence,omitempty"`                         // V2: 逗号分隔灵脉序号如 "1,4,2"
+	IntermissionDeadlineMs uint64                 `protobuf:"varint,27,opt,name=intermission_deadline_ms,json=intermissionDeadlineMs,proto3" json:"intermission_deadline_ms,omitempty"` // V2: BO3 局间换阵截止时刻(Unix 毫秒)
+	IsThirdPlace           bool                   `protobuf:"varint,28,opt,name=is_third_place,json=isThirdPlace,proto3" json:"is_third_place,omitempty"`                               // V3: true=四强季军争夺战(铜牌战)
+	MvpPlayerId            uint64                 `protobuf:"varint,29,opt,name=mvp_player_id,json=mvpPlayerId,proto3" json:"mvp_player_id,omitempty"`                                  // V3: 本场问鼎之星(MVP)玩家 ID
+	MvpPlayerName          string                 `protobuf:"bytes,30,opt,name=mvp_player_name,json=mvpPlayerName,proto3" json:"mvp_player_name,omitempty"`                             // V3: 本场 MVP 角色名
+	MvpSquadId             uint64                 `protobuf:"varint,31,opt,name=mvp_squad_id,json=mvpSquadId,proto3" json:"mvp_squad_id,omitempty"`                                     // V3: 本场 MVP 所属战队 ID
+	MvpScore               uint32                 `protobuf:"varint,32,opt,name=mvp_score,json=mvpScore,proto3" json:"mvp_score,omitempty"`                                             // V3: 本场 MVP 综合战功分
+	MvpDamage              uint64                 `protobuf:"varint,33,opt,name=mvp_damage,json=mvpDamage,proto3" json:"mvp_damage,omitempty"`                                          // V3: 本场 MVP 累计伤害
+	MvpHealing             uint64                 `protobuf:"varint,34,opt,name=mvp_healing,json=mvpHealing,proto3" json:"mvp_healing,omitempty"`                                       // V3: 本场 MVP 累计治疗与护盾
+	MvpControls            uint32                 `protobuf:"varint,35,opt,name=mvp_controls,json=mvpControls,proto3" json:"mvp_controls,omitempty"`                                    // V3: 本场 MVP 累计成功硬控次数
+	BannedLeylineA         uint32                 `protobuf:"varint,36,opt,name=banned_leyline_a,json=bannedLeylineA,proto3" json:"banned_leyline_a,omitempty"`                         // V4: BO3 赛前 A 队队长禁选灵脉(0..5)
+	BannedLeylineB         uint32                 `protobuf:"varint,37,opt,name=banned_leyline_b,json=bannedLeylineB,proto3" json:"banned_leyline_b,omitempty"`                         // V4: BO3 赛前 B 队队长禁选灵脉(0..5)
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *MatchTournamentMatchRecord) Reset() {
 	*x = MatchTournamentMatchRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[37]
+	mi := &file_proto_match_match_authority_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4177,7 +4409,7 @@ func (x *MatchTournamentMatchRecord) String() string {
 func (*MatchTournamentMatchRecord) ProtoMessage() {}
 
 func (x *MatchTournamentMatchRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[37]
+	mi := &file_proto_match_match_authority_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4190,7 +4422,7 @@ func (x *MatchTournamentMatchRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentMatchRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentMatchRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{37}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *MatchTournamentMatchRecord) GetMatchId() uint64 {
@@ -4333,6 +4565,319 @@ func (x *MatchTournamentMatchRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+func (x *MatchTournamentMatchRecord) GetBestOf() uint32 {
+	if x != nil {
+		return x.BestOf
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetCurrentGameIndex() uint32 {
+	if x != nil {
+		return x.CurrentGameIndex
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetWinsA() uint32 {
+	if x != nil {
+		return x.WinsA
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetWinsB() uint32 {
+	if x != nil {
+		return x.WinsB
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetCurrentLeylineElement() uint32 {
+	if x != nil {
+		return x.CurrentLeylineElement
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetLeylineSequence() string {
+	if x != nil {
+		return x.LeylineSequence
+	}
+	return ""
+}
+
+func (x *MatchTournamentMatchRecord) GetIntermissionDeadlineMs() uint64 {
+	if x != nil {
+		return x.IntermissionDeadlineMs
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetIsThirdPlace() bool {
+	if x != nil {
+		return x.IsThirdPlace
+	}
+	return false
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpPlayerId() uint64 {
+	if x != nil {
+		return x.MvpPlayerId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpPlayerName() string {
+	if x != nil {
+		return x.MvpPlayerName
+	}
+	return ""
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpSquadId() uint64 {
+	if x != nil {
+		return x.MvpSquadId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpScore() uint32 {
+	if x != nil {
+		return x.MvpScore
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpDamage() uint64 {
+	if x != nil {
+		return x.MvpDamage
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpHealing() uint64 {
+	if x != nil {
+		return x.MvpHealing
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetMvpControls() uint32 {
+	if x != nil {
+		return x.MvpControls
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetBannedLeylineA() uint32 {
+	if x != nil {
+		return x.BannedLeylineA
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchRecord) GetBannedLeylineB() uint32 {
+	if x != nil {
+		return x.BannedLeylineB
+	}
+	return 0
+}
+
+// V2: 锦标赛小局战果归档与幂等去重表(主键 (match_id, game_index), battle_id 唯一, 防止 Kafka 重投重复加胜场, 同时支持淘汰赛全服公开回放鉴权)。
+type MatchTournamentMatchGameRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MatchId        uint64                 `protobuf:"varint,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	GameIndex      uint32                 `protobuf:"varint,2,opt,name=game_index,json=gameIndex,proto3" json:"game_index,omitempty"`
+	SeasonId       uint32                 `protobuf:"varint,3,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	Phase          uint32                 `protobuf:"varint,4,opt,name=phase,proto3" json:"phase,omitempty"` // TournamentMatchPhase
+	BattleId       uint64                 `protobuf:"varint,5,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	LeylineElement uint32                 `protobuf:"varint,6,opt,name=leyline_element,json=leylineElement,proto3" json:"leyline_element,omitempty"` // TournamentLeylineElement
+	WinnerSquadId  uint64                 `protobuf:"varint,7,opt,name=winner_squad_id,json=winnerSquadId,proto3" json:"winner_squad_id,omitempty"`
+	Outcome        uint32                 `protobuf:"varint,8,opt,name=outcome,proto3" json:"outcome,omitempty"` // battle.eBattleOutcome
+	FinishedMs     uint64                 `protobuf:"varint,9,opt,name=finished_ms,json=finishedMs,proto3" json:"finished_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MatchTournamentMatchGameRecord) Reset() {
+	*x = MatchTournamentMatchGameRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTournamentMatchGameRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTournamentMatchGameRecord) ProtoMessage() {}
+
+func (x *MatchTournamentMatchGameRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTournamentMatchGameRecord.ProtoReflect.Descriptor instead.
+func (*MatchTournamentMatchGameRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *MatchTournamentMatchGameRecord) GetMatchId() uint64 {
+	if x != nil {
+		return x.MatchId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetGameIndex() uint32 {
+	if x != nil {
+		return x.GameIndex
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetPhase() uint32 {
+	if x != nil {
+		return x.Phase
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetLeylineElement() uint32 {
+	if x != nil {
+		return x.LeylineElement
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetWinnerSquadId() uint64 {
+	if x != nil {
+		return x.WinnerSquadId
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetOutcome() uint32 {
+	if x != nil {
+		return x.Outcome
+	}
+	return 0
+}
+
+func (x *MatchTournamentMatchGameRecord) GetFinishedMs() uint64 {
+	if x != nil {
+		return x.FinishedMs
+	}
+	return 0
+}
+
+// V2: 全服每日免费观道致敬记录(主键 (player_id, salute_day) 原子保证 UTC+8 每人每日 1 次)。
+type MatchTournamentSaluteRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	SaluteDay     uint32                 `protobuf:"varint,2,opt,name=salute_day,json=saluteDay,proto3" json:"salute_day,omitempty"` // UTC+8 YYYYMMDD
+	SeasonId      uint32                 `protobuf:"varint,3,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	RewardId      uint64                 `protobuf:"varint,4,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"` // 发号器永久 ID, 供 MailAdmin 幂等发件
+	MailId        uint64                 `protobuf:"varint,5,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	CreatedMs     uint64                 `protobuf:"varint,6,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchTournamentSaluteRecord) Reset() {
+	*x = MatchTournamentSaluteRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTournamentSaluteRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTournamentSaluteRecord) ProtoMessage() {}
+
+func (x *MatchTournamentSaluteRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTournamentSaluteRecord.ProtoReflect.Descriptor instead.
+func (*MatchTournamentSaluteRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *MatchTournamentSaluteRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSaluteRecord) GetSaluteDay() uint32 {
+	if x != nil {
+		return x.SaluteDay
+	}
+	return 0
+}
+
+func (x *MatchTournamentSaluteRecord) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSaluteRecord) GetRewardId() uint64 {
+	if x != nil {
+		return x.RewardId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSaluteRecord) GetMailId() uint64 {
+	if x != nil {
+		return x.MailId
+	}
+	return 0
+}
+
+func (x *MatchTournamentSaluteRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
 // 全服免费助威(主键 (season_id, player_id) 物理防重复助威,零消费零押注)。
 type MatchTournamentCheerRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4347,7 +4892,7 @@ type MatchTournamentCheerRecord struct {
 
 func (x *MatchTournamentCheerRecord) Reset() {
 	*x = MatchTournamentCheerRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[38]
+	mi := &file_proto_match_match_authority_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4359,7 +4904,7 @@ func (x *MatchTournamentCheerRecord) String() string {
 func (*MatchTournamentCheerRecord) ProtoMessage() {}
 
 func (x *MatchTournamentCheerRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[38]
+	mi := &file_proto_match_match_authority_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4372,7 +4917,7 @@ func (x *MatchTournamentCheerRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentCheerRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentCheerRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{38}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *MatchTournamentCheerRecord) GetSeasonId() uint32 {
@@ -4434,7 +4979,7 @@ type MatchTournamentRewardRecord struct {
 
 func (x *MatchTournamentRewardRecord) Reset() {
 	*x = MatchTournamentRewardRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[39]
+	mi := &file_proto_match_match_authority_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4446,7 +4991,7 @@ func (x *MatchTournamentRewardRecord) String() string {
 func (*MatchTournamentRewardRecord) ProtoMessage() {}
 
 func (x *MatchTournamentRewardRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[39]
+	mi := &file_proto_match_match_authority_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4459,7 +5004,7 @@ func (x *MatchTournamentRewardRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentRewardRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentRewardRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{39}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *MatchTournamentRewardRecord) GetSeasonId() uint32 {
@@ -4561,6 +5106,131 @@ func (x *MatchTournamentRewardRecord) GetClaimedMs() uint64 {
 }
 
 func (x *MatchTournamentRewardRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// V3: 淘汰赛免费神机竞猜表(主键 (season_id, player_id, match_id) 物理保证一人一场一票,零消费零押注)。
+type MatchTournamentPredictionRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId         uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	PlayerId         uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	MatchId          uint64                 `protobuf:"varint,3,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	PredictedSquadId uint64                 `protobuf:"varint,4,opt,name=predicted_squad_id,json=predictedSquadId,proto3" json:"predicted_squad_id,omitempty"`
+	RoundIndex       uint32                 `protobuf:"varint,5,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"`
+	IsThirdPlace     bool                   `protobuf:"varint,6,opt,name=is_third_place,json=isThirdPlace,proto3" json:"is_third_place,omitempty"`
+	PlayerName       string                 `protobuf:"bytes,7,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	ResultState      uint32                 `protobuf:"varint,8,opt,name=result_state,json=resultState,proto3" json:"result_state,omitempty"` // 0 待结算 / 1 命中 / 2 未中
+	EarnedPoints     uint32                 `protobuf:"varint,9,opt,name=earned_points,json=earnedPoints,proto3" json:"earned_points,omitempty"`
+	CreatedMs        uint64                 `protobuf:"varint,10,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	UpdatedMs        uint64                 `protobuf:"varint,11,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MatchTournamentPredictionRecord) Reset() {
+	*x = MatchTournamentPredictionRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTournamentPredictionRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTournamentPredictionRecord) ProtoMessage() {}
+
+func (x *MatchTournamentPredictionRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTournamentPredictionRecord.ProtoReflect.Descriptor instead.
+func (*MatchTournamentPredictionRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *MatchTournamentPredictionRecord) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetMatchId() uint64 {
+	if x != nil {
+		return x.MatchId
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetPredictedSquadId() uint64 {
+	if x != nil {
+		return x.PredictedSquadId
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetRoundIndex() uint32 {
+	if x != nil {
+		return x.RoundIndex
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetIsThirdPlace() bool {
+	if x != nil {
+		return x.IsThirdPlace
+	}
+	return false
+}
+
+func (x *MatchTournamentPredictionRecord) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *MatchTournamentPredictionRecord) GetResultState() uint32 {
+	if x != nil {
+		return x.ResultState
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetEarnedPoints() uint32 {
+	if x != nil {
+		return x.EarnedPoints
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *MatchTournamentPredictionRecord) GetUpdatedMs() uint64 {
 	if x != nil {
 		return x.UpdatedMs
 	}
@@ -4688,7 +5358,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0estart_original\x18\f \x01(\fR\rstartOriginal:\x90\x01\x8a\x92\xf4\x01\x13match_direct_intent\x92\x92\xf4\x01&kind,owner_id,request_high,request_lowڒ\xf4\x01Hexit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low\"\x92\x01\n" +
 	"\x18MatchDirectStartOriginal\x129\n" +
 	"\tformation\x18\x01 \x01(\v2\x1b.match.MatchFormationRecordR\tformation\x12;\n" +
-	"\atickets\x18\x02 \x03(\v2!.match.MatchAuthorityTicketRecordR\atickets\"\x85\x05\n" +
+	"\atickets\x18\x02 \x03(\v2!.match.MatchAuthorityTicketRecordR\atickets\"\xb7\x05\n" +
 	"\x1eMatchChallengeInvitationRecord\x12!\n" +
 	"\fchallenge_id\x18\x01 \x01(\x04R\vchallengeId\x120\n" +
 	"\x14challenger_player_id\x18\x02 \x01(\x04R\x12challengerPlayerId\x12(\n" +
@@ -4704,7 +5374,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"expires_ms\x18\n" +
 	" \x01(\x04R\texpiresMs\x12\x14\n" +
 	"\x05state\x18\v \x01(\rR\x05state\x12\x1b\n" +
-	"\tbattle_id\x18\f \x01(\x04R\bbattleId:\xa5\x01\x8a\x92\xf4\x01\x1amatch_challenge_invitation\x92\x92\xf4\x01\fchallenge_idڒ\xf4\x01atarget_player_id,state,expires_ms,challenge_id;challenger_player_id,state,expires_ms,challenge_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x87\x01\n" +
+	"\tbattle_id\x18\f \x01(\x04R\bbattleId\x120\n" +
+	"\x14custom_rules_payload\x18\r \x01(\fR\x12customRulesPayload:\xa5\x01\x8a\x92\xf4\x01\x1amatch_challenge_invitation\x92\x92\xf4\x01\fchallenge_idڒ\xf4\x01atarget_player_id,state,expires_ms,challenge_id;challenger_player_id,state,expires_ms,challenge_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x87\x01\n" +
 	"\x17MatchGlobalPolicyRecord\x12\x1b\n" +
 	"\tpolicy_id\x18\x01 \x01(\rR\bpolicyId\x12'\n" +
 	"\x0fcontract_digest\x18\x02 \x01(\fR\x0econtractDigest:&\x8a\x92\xf4\x01\x13match_global_policy\x92\x92\xf4\x01\tpolicy_id\"\x84\x01\n" +
@@ -4713,7 +5384,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
 	"\n" +
 	"team_index\x18\x03 \x01(\rR\tteamIndex\x12\x18\n" +
-	"\acaptain\x18\x04 \x01(\bR\acaptain\"\x96\t\n" +
+	"\acaptain\x18\x04 \x01(\bR\acaptain\"\x99\n" +
+	"\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x14\n" +
@@ -4742,7 +5414,10 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x18adopted_outcome_observed\x18\x16 \x01(\bR\x16adoptedOutcomeObserved\x12#\n" +
 	"\rrelease_track\x18\x17 \x01(\tR\freleaseTrack\x12%\n" +
 	"\x0eranked_context\x18\x18 \x01(\fR\rrankedContext\x12(\n" +
-	"\x10ranked_season_id\x18\x19 \x01(\rR\x0erankedSeasonId:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
+	"\x10ranked_season_id\x18\x19 \x01(\rR\x0erankedSeasonId\x12-\n" +
+	"\x12tournament_context\x18\x1a \x01(\fR\x11tournamentContext\x12*\n" +
+	"\x11custom_duel_rules\x18\x1b \x01(\fR\x0fcustomDuelRules\x12&\n" +
+	"\x0fis_wuxing_tower\x18\x1c \x01(\bR\risWuxingTower:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xec\x01\n" +
@@ -4909,7 +5584,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\frule_version\x18\x04 \x01(\rR\vruleVersion\x12)\n" +
 	"\x10cosmetic_loadout\x18\x05 \x01(\fR\x0fcosmeticLoadout\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:,\x8a\x92\xf4\x01\x19match_ranked_player_prefs\x92\x92\xf4\x01\tplayer_id\"\xc7\x04\n" +
+	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:,\x8a\x92\xf4\x01\x19match_ranked_player_prefs\x92\x92\xf4\x01\tplayer_id\"\x9d\x05\n" +
 	"\x1dMatchRankedPlayerSeasonRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1c\n" +
@@ -4929,7 +5604,9 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
 	"final_rank\x18\x0e \x01(\x04R\tfinalRank\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:O\x8a\x92\xf4\x01\x1amatch_ranked_player_season\x92\x92\xf4\x01\x13season_id,player_idڒ\xf4\x01\x13player_id,season_id\"\x92\x02\n" +
+	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs\x12,\n" +
+	"\x12current_win_streak\x18\x10 \x01(\rR\x10currentWinStreak\x12&\n" +
+	"\x0fbest_win_streak\x18\x11 \x01(\rR\rbestWinStreak:O\x8a\x92\xf4\x01\x1amatch_ranked_player_season\x92\x92\xf4\x01\x13season_id,player_idڒ\xf4\x01\x13player_id,season_id\"\x92\x02\n" +
 	"\x17MatchRankedRewardRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tseason_id\x18\x02 \x01(\rR\bseasonId\x12\x1f\n" +
@@ -4944,7 +5621,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x12\"\n" +
 	"\rsettled_at_ms\x18\x04 \x01(\x04R\vsettledAtMs\x12\x18\n" +
-	"\asummary\x18\x05 \x01(\fR\asummary:V\x8a\x92\xf4\x01\x13match_ranked_battle\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x01!player_id,settled_at_ms,battle_id\"\x94\x06\n" +
+	"\asummary\x18\x05 \x01(\fR\asummary:V\x8a\x92\xf4\x01\x13match_ranked_battle\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x01!player_id,settled_at_ms,battle_id\"\xfd\t\n" +
 	"\x1bMatchTournamentSeasonRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -4968,7 +5645,19 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
 	"settled_ms\x18\x11 \x01(\x04R\tsettledMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x12 \x01(\x04R\tupdatedMs:>\x8a\x92\xf4\x01\x17match_tournament_season\x92\x92\xf4\x01\tseason_idڒ\xf4\x01\x0fstage,season_id\"\xeb\x05\n" +
+	"updated_ms\x18\x12 \x01(\x04R\tupdatedMs\x122\n" +
+	"\x15champion_members_blob\x18\x13 \x01(\fR\x13championMembersBlob\x122\n" +
+	"\x15champion_salute_count\x18\x14 \x01(\x04R\x13championSaluteCount\x12,\n" +
+	"\x12champion_emblem_id\x18\x15 \x01(\rR\x10championEmblemId\x12/\n" +
+	"\x14third_place_squad_id\x18\x16 \x01(\x04R\x11thirdPlaceSquadId\x123\n" +
+	"\x16third_place_squad_name\x18\x17 \x01(\tR\x13thirdPlaceSquadName\x121\n" +
+	"\x15third_place_emblem_id\x18\x18 \x01(\rR\x12thirdPlaceEmblemId\x12-\n" +
+	"\x13final_mvp_player_id\x18\x19 \x01(\x04R\x10finalMvpPlayerId\x121\n" +
+	"\x15final_mvp_player_name\x18\x1a \x01(\tR\x12finalMvpPlayerName\x12&\n" +
+	"\x0ffinal_mvp_score\x18\x1b \x01(\rR\rfinalMvpScore\x12.\n" +
+	"\x13champion_honor_bits\x18\x1c \x01(\rR\x11championHonorBits:>\x8a\x92\xf4\x01\x17match_tournament_season\x92\x92\xf4\x01\tseason_idڒ\xf4\x01\x0fstage,season_id\"b\n" +
+	"\"MatchTournamentChampionMembersBlob\x12<\n" +
+	"\amembers\x18\x01 \x03(\v2\".match.MatchTournamentMemberRecordR\amembers\"\xa7\x06\n" +
 	"\x1aMatchTournamentSquadRecord\x12\x19\n" +
 	"\bsquad_id\x18\x01 \x01(\x04R\asquadId\x12\x1b\n" +
 	"\tseason_id\x18\x02 \x01(\rR\bseasonId\x12\x12\n" +
@@ -4990,7 +5679,10 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"cheerCount\x12#\n" +
 	"\rregistered_ms\x18\x10 \x01(\x04R\fregisteredMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:\x8c\x01\x8a\x92\xf4\x01\x16match_tournament_squad\x92\x92\xf4\x01\bsquad_idڒ\xf4\x01Gseason_id,state,qualifier_points,squad_id;season_id,final_rank,squad_id\xe2\x92\xf4\x01\x13season_id,name_norm\"\xcd\x02\n" +
+	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs\x12\x1b\n" +
+	"\temblem_id\x18\x12 \x01(\rR\bemblemId\x12\x1d\n" +
+	"\n" +
+	"honor_bits\x18\x13 \x01(\rR\thonorBits:\x8c\x01\x8a\x92\xf4\x01\x16match_tournament_squad\x92\x92\xf4\x01\bsquad_idڒ\xf4\x01Gseason_id,state,qualifier_points,squad_id;season_id,final_rank,squad_id\xe2\x92\xf4\x01\x13season_id,name_norm\"\xa5\x03\n" +
 	"\x1bMatchTournamentMemberRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
@@ -5000,7 +5692,11 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\vplayer_name\x18\x06 \x01(\tR\n" +
 	"playerName\x12\x17\n" +
 	"\azone_id\x18\a \x01(\rR\x06zoneId\x12\x1b\n" +
-	"\tjoined_ms\x18\b \x01(\x04R\bjoinedMs:K\x8a\x92\xf4\x01\x17match_tournament_member\x92\x92\xf4\x01\x13season_id,player_idڒ\xf4\x01\x12squad_id,player_id\"\xee\x02\n" +
+	"\tjoined_ms\x18\b \x01(\x04R\bjoinedMs\x12\x19\n" +
+	"\bclass_id\x18\t \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\n" +
+	" \x01(\rR\x06gender\x12#\n" +
+	"\rappearance_id\x18\v \x01(\tR\fappearanceId:K\x8a\x92\xf4\x01\x17match_tournament_member\x92\x92\xf4\x01\x13season_id,player_idڒ\xf4\x01\x12squad_id,player_id\"\xee\x02\n" +
 	"\x1bMatchTournamentInviteRecord\x12\x19\n" +
 	"\bsquad_id\x18\x01 \x01(\x04R\asquadId\x12*\n" +
 	"\x11invitee_player_id\x18\x02 \x01(\x04R\x0finviteePlayerId\x12\x1b\n" +
@@ -5010,7 +5706,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
 	"created_ms\x18\x06 \x01(\x04R\tcreatedMs\x12\x1d\n" +
 	"\n" +
-	"expires_ms\x18\a \x01(\x04R\texpiresMs:k\x8a\x92\xf4\x01\x17match_tournament_invite\x92\x92\xf4\x01\x1asquad_id,invitee_player_idڒ\xf4\x01+invitee_player_id,state,expires_ms,squad_id\"\xfd\x05\n" +
+	"expires_ms\x18\a \x01(\x04R\texpiresMs:k\x8a\x92\xf4\x01\x17match_tournament_invite\x92\x92\xf4\x01\x1asquad_id,invitee_player_idڒ\xf4\x01+invitee_player_id,state,expires_ms,squad_id\"\xf7\n" +
+	"\n" +
 	"\x1aMatchTournamentMatchRecord\x12\x19\n" +
 	"\bmatch_id\x18\x01 \x01(\x04R\amatchId\x12\x1b\n" +
 	"\tseason_id\x18\x02 \x01(\rR\bseasonId\x12\x14\n" +
@@ -5039,7 +5736,48 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\vfinished_ms\x18\x13 \x01(\x04R\n" +
 	"finishedMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x14 \x01(\x04R\tupdatedMs:|\x8a\x92\xf4\x01\x16match_tournament_match\x92\x92\xf4\x01\bmatch_idڒ\xf4\x01Oseason_id,phase,round_index,slot_index;battle_id;season_id,phase,state,match_id\"\x82\x02\n" +
+	"updated_ms\x18\x14 \x01(\x04R\tupdatedMs\x12\x17\n" +
+	"\abest_of\x18\x15 \x01(\rR\x06bestOf\x12,\n" +
+	"\x12current_game_index\x18\x16 \x01(\rR\x10currentGameIndex\x12\x15\n" +
+	"\x06wins_a\x18\x17 \x01(\rR\x05winsA\x12\x15\n" +
+	"\x06wins_b\x18\x18 \x01(\rR\x05winsB\x126\n" +
+	"\x17current_leyline_element\x18\x19 \x01(\rR\x15currentLeylineElement\x12)\n" +
+	"\x10leyline_sequence\x18\x1a \x01(\tR\x0fleylineSequence\x128\n" +
+	"\x18intermission_deadline_ms\x18\x1b \x01(\x04R\x16intermissionDeadlineMs\x12$\n" +
+	"\x0eis_third_place\x18\x1c \x01(\bR\fisThirdPlace\x12\"\n" +
+	"\rmvp_player_id\x18\x1d \x01(\x04R\vmvpPlayerId\x12&\n" +
+	"\x0fmvp_player_name\x18\x1e \x01(\tR\rmvpPlayerName\x12 \n" +
+	"\fmvp_squad_id\x18\x1f \x01(\x04R\n" +
+	"mvpSquadId\x12\x1b\n" +
+	"\tmvp_score\x18  \x01(\rR\bmvpScore\x12\x1d\n" +
+	"\n" +
+	"mvp_damage\x18! \x01(\x04R\tmvpDamage\x12\x1f\n" +
+	"\vmvp_healing\x18\" \x01(\x04R\n" +
+	"mvpHealing\x12!\n" +
+	"\fmvp_controls\x18# \x01(\rR\vmvpControls\x12(\n" +
+	"\x10banned_leyline_a\x18$ \x01(\rR\x0ebannedLeylineA\x12(\n" +
+	"\x10banned_leyline_b\x18% \x01(\rR\x0ebannedLeylineB:|\x8a\x92\xf4\x01\x16match_tournament_match\x92\x92\xf4\x01\bmatch_idڒ\xf4\x01Oseason_id,phase,round_index,slot_index;battle_id;season_id,phase,state,match_id\"\x96\x03\n" +
+	"\x1eMatchTournamentMatchGameRecord\x12\x19\n" +
+	"\bmatch_id\x18\x01 \x01(\x04R\amatchId\x12\x1d\n" +
+	"\n" +
+	"game_index\x18\x02 \x01(\rR\tgameIndex\x12\x1b\n" +
+	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x12\x14\n" +
+	"\x05phase\x18\x04 \x01(\rR\x05phase\x12\x1b\n" +
+	"\tbattle_id\x18\x05 \x01(\x04R\bbattleId\x12'\n" +
+	"\x0fleyline_element\x18\x06 \x01(\rR\x0eleylineElement\x12&\n" +
+	"\x0fwinner_squad_id\x18\a \x01(\x04R\rwinnerSquadId\x12\x18\n" +
+	"\aoutcome\x18\b \x01(\rR\aoutcome\x12\x1f\n" +
+	"\vfinished_ms\x18\t \x01(\x04R\n" +
+	"finishedMs:^\x8a\x92\xf4\x01\x1bmatch_tournament_match_game\x92\x92\xf4\x01\x13match_id,game_indexڒ\xf4\x01\x13season_id,battle_id\xe2\x92\xf4\x01\tbattle_id\"\xa5\x02\n" +
+	"\x1bMatchTournamentSaluteRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
+	"\n" +
+	"salute_day\x18\x02 \x01(\rR\tsaluteDay\x12\x1b\n" +
+	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x12\x1b\n" +
+	"\treward_id\x18\x04 \x01(\x04R\brewardId\x12\x17\n" +
+	"\amail_id\x18\x05 \x01(\x04R\x06mailId\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x06 \x01(\x04R\tcreatedMs:X\x8a\x92\xf4\x01\x17match_tournament_salute\x92\x92\xf4\x01\x14player_id,salute_dayڒ\xf4\x01\x1eseason_id,salute_day,player_id\"\x82\x02\n" +
 	"\x1aMatchTournamentCheerRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
@@ -5069,7 +5807,24 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
 	"claimed_ms\x18\x0e \x01(\x04R\tclaimedMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:\x84\x01\x8a\x92\xf4\x01\x17match_tournament_reward\x92\x92\xf4\x01\x1dseason_id,player_id,tier_kindڒ\xf4\x01Aplayer_id,season_id,tier_kind;delivery_state,updated_ms,reward_id*\xcc\x03\n" +
+	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:\x84\x01\x8a\x92\xf4\x01\x17match_tournament_reward\x92\x92\xf4\x01\x1dseason_id,player_id,tier_kindڒ\xf4\x01Aplayer_id,season_id,tier_kind;delivery_state,updated_ms,reward_id\"\xa1\x04\n" +
+	"\x1fMatchTournamentPredictionRecord\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
+	"\bmatch_id\x18\x03 \x01(\x04R\amatchId\x12,\n" +
+	"\x12predicted_squad_id\x18\x04 \x01(\x04R\x10predictedSquadId\x12\x1f\n" +
+	"\vround_index\x18\x05 \x01(\rR\n" +
+	"roundIndex\x12$\n" +
+	"\x0eis_third_place\x18\x06 \x01(\bR\fisThirdPlace\x12\x1f\n" +
+	"\vplayer_name\x18\a \x01(\tR\n" +
+	"playerName\x12!\n" +
+	"\fresult_state\x18\b \x01(\rR\vresultState\x12#\n" +
+	"\rearned_points\x18\t \x01(\rR\fearnedPoints\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\n" +
+	" \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\v \x01(\x04R\tupdatedMs:\x8c\x01\x8a\x92\xf4\x01\x1bmatch_tournament_prediction\x92\x92\xf4\x01\x1cseason_id,player_id,match_idڒ\xf4\x01Fseason_id,match_id,predicted_squad_id;season_id,result_state,player_id*\xcc\x03\n" +
 	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
 	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
@@ -5093,71 +5848,76 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_proto_match_match_authority_proto_goTypes = []any{
-	(MatchBattleCompletionSourceKind)(0),      // 0: match.MatchBattleCompletionSourceKind
-	(*MatchNetworkProfile)(nil),               // 1: match.MatchNetworkProfile
-	(*MatchSpectatorRecord)(nil),              // 2: match.MatchSpectatorRecord
-	(*MatchSpectatorIntentRecord)(nil),        // 3: match.MatchSpectatorIntentRecord
-	(*MatchSpectatorHeadRecord)(nil),          // 4: match.MatchSpectatorHeadRecord
-	(*MatchNetworkProfileRecord)(nil),         // 5: match.MatchNetworkProfileRecord
-	(*MatchAuthorityTicketRecord)(nil),        // 6: match.MatchAuthorityTicketRecord
-	(*MatchRoleOccupancyRecord)(nil),          // 7: match.MatchRoleOccupancyRecord
-	(*MatchJoinIntentRecord)(nil),             // 8: match.MatchJoinIntentRecord
-	(*MatchDirectIntentRecord)(nil),           // 9: match.MatchDirectIntentRecord
-	(*MatchDirectStartOriginal)(nil),          // 10: match.MatchDirectStartOriginal
-	(*MatchChallengeInvitationRecord)(nil),    // 11: match.MatchChallengeInvitationRecord
-	(*MatchGlobalPolicyRecord)(nil),           // 12: match.MatchGlobalPolicyRecord
-	(*MatchFormationMember)(nil),              // 13: match.MatchFormationMember
-	(*MatchFormationRecord)(nil),              // 14: match.MatchFormationRecord
-	(*MatchPreparedEndpoint)(nil),             // 15: match.MatchPreparedEndpoint
-	(*MatchRatingRecord)(nil),                 // 16: match.MatchRatingRecord
-	(*MatchRatingAppliedRecord)(nil),          // 17: match.MatchRatingAppliedRecord
-	(*MatchRankSourceRecord)(nil),             // 18: match.MatchRankSourceRecord
-	(*MatchRankOutboxRecord)(nil),             // 19: match.MatchRankOutboxRecord
-	(*MatchRankRemovalRecord)(nil),            // 20: match.MatchRankRemovalRecord
-	(*MatchBattleCompletionRecord)(nil),       // 21: match.MatchBattleCompletionRecord
-	(*MatchBattleSettlementSourceRecord)(nil), // 22: match.MatchBattleSettlementSourceRecord
-	(*MatchManualResolutionRecord)(nil),       // 23: match.MatchManualResolutionRecord
-	(*MatchBattleReportRecord)(nil),           // 24: match.MatchBattleReportRecord
-	(*MatchPlayerBattleReportRecord)(nil),     // 25: match.MatchPlayerBattleReportRecord
-	(*MatchBattleScriptRecord)(nil),           // 26: match.MatchBattleScriptRecord
-	(*MatchBattleScriptReviewRecord)(nil),     // 27: match.MatchBattleScriptReviewRecord
-	(*MatchBattleScriptLoadoutRecord)(nil),    // 28: match.MatchBattleScriptLoadoutRecord
-	(*MatchRankedSeasonRecord)(nil),           // 29: match.MatchRankedSeasonRecord
-	(*MatchRankedPlayerPrefsRecord)(nil),      // 30: match.MatchRankedPlayerPrefsRecord
-	(*MatchRankedPlayerSeasonRecord)(nil),     // 31: match.MatchRankedPlayerSeasonRecord
-	(*MatchRankedRewardRecord)(nil),           // 32: match.MatchRankedRewardRecord
-	(*MatchRankedBattleRecord)(nil),           // 33: match.MatchRankedBattleRecord
-	(*MatchTournamentSeasonRecord)(nil),       // 34: match.MatchTournamentSeasonRecord
-	(*MatchTournamentSquadRecord)(nil),        // 35: match.MatchTournamentSquadRecord
-	(*MatchTournamentMemberRecord)(nil),       // 36: match.MatchTournamentMemberRecord
-	(*MatchTournamentInviteRecord)(nil),       // 37: match.MatchTournamentInviteRecord
-	(*MatchTournamentMatchRecord)(nil),        // 38: match.MatchTournamentMatchRecord
-	(*MatchTournamentCheerRecord)(nil),        // 39: match.MatchTournamentCheerRecord
-	(*MatchTournamentRewardRecord)(nil),       // 40: match.MatchTournamentRewardRecord
-	(*NetworkProbeReceipt)(nil),               // 41: match.NetworkProbeReceipt
-	(BattleOutcomeDecision)(0),                // 42: match.BattleOutcomeDecision
-	(StrandedFormationMode)(0),                // 43: match.StrandedFormationMode
-	(StrandedFormationClass)(0),               // 44: match.StrandedFormationClass
+	(MatchBattleCompletionSourceKind)(0),       // 0: match.MatchBattleCompletionSourceKind
+	(*MatchNetworkProfile)(nil),                // 1: match.MatchNetworkProfile
+	(*MatchSpectatorRecord)(nil),               // 2: match.MatchSpectatorRecord
+	(*MatchSpectatorIntentRecord)(nil),         // 3: match.MatchSpectatorIntentRecord
+	(*MatchSpectatorHeadRecord)(nil),           // 4: match.MatchSpectatorHeadRecord
+	(*MatchNetworkProfileRecord)(nil),          // 5: match.MatchNetworkProfileRecord
+	(*MatchAuthorityTicketRecord)(nil),         // 6: match.MatchAuthorityTicketRecord
+	(*MatchRoleOccupancyRecord)(nil),           // 7: match.MatchRoleOccupancyRecord
+	(*MatchJoinIntentRecord)(nil),              // 8: match.MatchJoinIntentRecord
+	(*MatchDirectIntentRecord)(nil),            // 9: match.MatchDirectIntentRecord
+	(*MatchDirectStartOriginal)(nil),           // 10: match.MatchDirectStartOriginal
+	(*MatchChallengeInvitationRecord)(nil),     // 11: match.MatchChallengeInvitationRecord
+	(*MatchGlobalPolicyRecord)(nil),            // 12: match.MatchGlobalPolicyRecord
+	(*MatchFormationMember)(nil),               // 13: match.MatchFormationMember
+	(*MatchFormationRecord)(nil),               // 14: match.MatchFormationRecord
+	(*MatchPreparedEndpoint)(nil),              // 15: match.MatchPreparedEndpoint
+	(*MatchRatingRecord)(nil),                  // 16: match.MatchRatingRecord
+	(*MatchRatingAppliedRecord)(nil),           // 17: match.MatchRatingAppliedRecord
+	(*MatchRankSourceRecord)(nil),              // 18: match.MatchRankSourceRecord
+	(*MatchRankOutboxRecord)(nil),              // 19: match.MatchRankOutboxRecord
+	(*MatchRankRemovalRecord)(nil),             // 20: match.MatchRankRemovalRecord
+	(*MatchBattleCompletionRecord)(nil),        // 21: match.MatchBattleCompletionRecord
+	(*MatchBattleSettlementSourceRecord)(nil),  // 22: match.MatchBattleSettlementSourceRecord
+	(*MatchManualResolutionRecord)(nil),        // 23: match.MatchManualResolutionRecord
+	(*MatchBattleReportRecord)(nil),            // 24: match.MatchBattleReportRecord
+	(*MatchPlayerBattleReportRecord)(nil),      // 25: match.MatchPlayerBattleReportRecord
+	(*MatchBattleScriptRecord)(nil),            // 26: match.MatchBattleScriptRecord
+	(*MatchBattleScriptReviewRecord)(nil),      // 27: match.MatchBattleScriptReviewRecord
+	(*MatchBattleScriptLoadoutRecord)(nil),     // 28: match.MatchBattleScriptLoadoutRecord
+	(*MatchRankedSeasonRecord)(nil),            // 29: match.MatchRankedSeasonRecord
+	(*MatchRankedPlayerPrefsRecord)(nil),       // 30: match.MatchRankedPlayerPrefsRecord
+	(*MatchRankedPlayerSeasonRecord)(nil),      // 31: match.MatchRankedPlayerSeasonRecord
+	(*MatchRankedRewardRecord)(nil),            // 32: match.MatchRankedRewardRecord
+	(*MatchRankedBattleRecord)(nil),            // 33: match.MatchRankedBattleRecord
+	(*MatchTournamentSeasonRecord)(nil),        // 34: match.MatchTournamentSeasonRecord
+	(*MatchTournamentChampionMembersBlob)(nil), // 35: match.MatchTournamentChampionMembersBlob
+	(*MatchTournamentSquadRecord)(nil),         // 36: match.MatchTournamentSquadRecord
+	(*MatchTournamentMemberRecord)(nil),        // 37: match.MatchTournamentMemberRecord
+	(*MatchTournamentInviteRecord)(nil),        // 38: match.MatchTournamentInviteRecord
+	(*MatchTournamentMatchRecord)(nil),         // 39: match.MatchTournamentMatchRecord
+	(*MatchTournamentMatchGameRecord)(nil),     // 40: match.MatchTournamentMatchGameRecord
+	(*MatchTournamentSaluteRecord)(nil),        // 41: match.MatchTournamentSaluteRecord
+	(*MatchTournamentCheerRecord)(nil),         // 42: match.MatchTournamentCheerRecord
+	(*MatchTournamentRewardRecord)(nil),        // 43: match.MatchTournamentRewardRecord
+	(*MatchTournamentPredictionRecord)(nil),    // 44: match.MatchTournamentPredictionRecord
+	(*NetworkProbeReceipt)(nil),                // 45: match.NetworkProbeReceipt
+	(BattleOutcomeDecision)(0),                 // 46: match.BattleOutcomeDecision
+	(StrandedFormationMode)(0),                 // 47: match.StrandedFormationMode
+	(StrandedFormationClass)(0),                // 48: match.StrandedFormationClass
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	41, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	45, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
 	2,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
 	14, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
 	6,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
 	13, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
 	15, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	42, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
+	46, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
 	0,  // 7: match.MatchBattleCompletionRecord.source_kind:type_name -> match.MatchBattleCompletionSourceKind
-	43, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
-	44, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
+	47, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
+	48, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
 	6,  // 10: match.MatchManualResolutionRecord.tickets_before:type_name -> match.MatchAuthorityTicketRecord
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	37, // 11: match.MatchTournamentChampionMembersBlob.members:type_name -> match.MatchTournamentMemberRecord
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_authority_proto_init() }
@@ -5173,7 +5933,7 @@ func file_proto_match_match_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   40,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

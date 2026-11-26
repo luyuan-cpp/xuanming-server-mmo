@@ -281,7 +281,7 @@ AGENTS.md §10.2 规定预计改动 30 个以上文件要先停下请示，本�
 
 **与其他会话的冲突**：11-05 工作区里，login（`loginqueue`、`node`）、scene_manager（`world_init`、`createscenelogic`）、gate 的 `main.cpp`、九个全局服务的入口文件、`k8s_deploy.ps1`、`common.proto` 都有其他会话未提交的改动。批 1 只碰当时没人在改的文件，`common.proto` 只在 `NodeInfo` 末尾追加字段；批 2 的服务入口和部署脚本，要等那些改动入库后再动。
 
-**验证分工**（AGENTS.md §10.1）：Claude 只写服务器代码、测试和文档；协议生成、编译、单测、冒烟由 Codex 执行，每批落码时给出命令清单。
+**验证分工**（AGENTS.md §10.1）：Claude 只写服务器代码、测试和文档；协议生成、编译、单测、冒烟由 Gemini 执行，每批落码时给出命令清单。
 
 ## 8. Java 版
 

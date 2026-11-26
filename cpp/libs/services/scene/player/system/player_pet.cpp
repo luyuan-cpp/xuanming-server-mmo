@@ -31,6 +31,7 @@
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "player/system/player_craft.h"
+#include "player/system/player_appearance.h"
 #include "player/system/player_skill.h"
 #include "services/battle/system/class_skill_rules.h"
 
@@ -497,6 +498,13 @@ void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstan
     PetSystem::FillTierAscension(player, pet, effectiveLevel, info);
     if (PetSystem::BuildEntriesInfo(pet, *info.mutable_entries()) != kSuccess) info.clear_entries();
 	info.set_pet_table_id(pet.pet_table_id());
+	{
+		uint32_t cosmeticId = 0;
+		std::string cosmeticArtKey;
+		PlayerAppearanceSystem::ResolvePetCosmeticVisual(player, pet, cosmeticId, cosmeticArtKey);
+		info.set_cosmetic_id(cosmeticId);
+		info.set_cosmetic_art_key(cosmeticArtKey);
+	}
 	info.set_level(effectiveLevel);
 	info.set_is_active(comp.active_pet_id() == pet.pet_id());
 	info.set_pool_id(pool.id());
@@ -1509,12 +1517,19 @@ bool BuildSinglePetBattleSnapshot(entt::entity player, const PetInstance& pet, u
 	}
 	const auto derived = ComputeDerived(pet, *row, pool);
 	PetEntriesInfo entries;
-	if (BuildEntriesInfo(pet, entries) == kSuccess) *snapshot.mutable_pet_cultivation() = entries.effects();
+	if (PetSystem::BuildEntriesInfo(pet, entries) == kSuccess) *snapshot.mutable_pet_cultivation() = entries.effects();
 	else snapshot.clear_pet_cultivation();
 	snapshot.set_pet_id(pet.pet_id());
 	snapshot.set_owner_player_id(tlsEcs.GetPlayerId(player));
 	snapshot.set_pet_name(!pet.name().empty() ? pet.name() : row->name());
 	snapshot.set_pet_table_id(pet.pet_table_id());
+	{
+		uint32_t cosmeticId = 0;
+		std::string cosmeticArtKey;
+		PlayerAppearanceSystem::ResolvePetCosmeticVisual(player, pet, cosmeticId, cosmeticArtKey);
+		snapshot.set_cosmetic_id(cosmeticId);
+		snapshot.set_cosmetic_art_key(cosmeticArtKey);
+	}
 	snapshot.set_level(PetEffectiveLevel(pet, row));
 	snapshot.set_max_health(derived.maxHealth);
 	snapshot.set_max_mana(derived.maxMana);

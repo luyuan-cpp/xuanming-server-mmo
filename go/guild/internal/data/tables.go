@@ -119,5 +119,13 @@ func Tables() []proto.Message {
 		// 只在已持 guild 行锁与 uk_guild(name_norm) 唯一索引锁之后碰本表(建帮 INSERT guild 之后、改名 UPDATE guild 之后),
 		// 与其它表永不成环。
 		&pb.GuildNameHoldRecord{},
+		// 帮会全天帮战 V2(docs/design/guild-play-v2.md):锁序位置 13..19(单调追加在 guild_name_hold 之后)。
+		&pb.GuildWarLeylineRecord{},
+		&pb.GuildWarGarrisonRecord{},
+		&pb.GuildWarWeeklyProgressRecord{},
+		&pb.GuildWarPlayerStateRecord{},
+		&pb.GuildWarBountyRecord{},
+		&pb.GuildWarBattleRecord{},
+		&pb.GuildWarRivalryRecord{},
 	}
 }

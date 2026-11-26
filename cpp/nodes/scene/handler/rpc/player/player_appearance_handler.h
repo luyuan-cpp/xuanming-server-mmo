@@ -32,6 +32,12 @@ public:
     static void NotifyAppearanceState(entt::entity player,
         const ::AppearanceStateNotify* request,
         ::Empty* response);
+    static void EquipPetCosmetic(entt::entity player,
+        const ::EquipPetCosmeticRequest* request,
+        ::EquipPetCosmeticResponse* response);
+    static void EquipSkillVfx(entt::entity player,
+        const ::EquipSkillVfxRequest* request,
+        ::EquipSkillVfxResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -88,6 +94,24 @@ public:
             NotifyAppearanceState(player,
                 static_cast<const ::AppearanceStateNotify*>(request),
                 static_cast<::Empty*>(response));
+			}
+            break;
+        case 6:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::EquipPetCosmeticResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            EquipPetCosmetic(player,
+                static_cast<const ::EquipPetCosmeticRequest*>(request),
+                static_cast<::EquipPetCosmeticResponse*>(response));
+			}
+            break;
+        case 7:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::EquipSkillVfxResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            EquipSkillVfx(player,
+                static_cast<const ::EquipSkillVfxRequest*>(request),
+                static_cast<::EquipSkillVfxResponse*>(response));
 			}
             break;
         default:

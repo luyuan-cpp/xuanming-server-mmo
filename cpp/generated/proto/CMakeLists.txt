@@ -189,6 +189,9 @@ set(SOURCE_FILES
     scene/player_trial_journal.pb.cc
     common/component/player_craft_comp.pb.cc
     common/component/player_festival_beast_comp.pb.cc
+    common/component/player_spirit_shop_comp.pb.cc
+    scene/player_spirit_shop.pb.cc
+    common/component/player_travel_pass_comp.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

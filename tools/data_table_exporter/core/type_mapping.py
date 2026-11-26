@@ -86,9 +86,27 @@ def to_go_type(proto_type: str) -> str:
 def to_go_proto_field(snake_name: str) -> str:
     """Convert snake_case proto field name to Go CamelCase struct field.
 
-    Example: ``sub_buff`` → ``SubBuff``, ``id`` → ``Id``.
+    Matches protoc-gen-go's strs.GoCamelCase (e.g. ``sub_buff`` -> ``SubBuff``,
+    ``item_id_1`` -> ``ItemId_1``).
     """
-    return "".join(word.capitalize() for word in snake_name.split("_"))
+    parts: list[str] = []
+    i = 0
+    n = len(snake_name)
+    while i < n:
+        c = snake_name[i]
+        if c == "_":
+            if i + 1 < n and snake_name[i + 1].isdigit():
+                parts.append("_")
+                i += 1
+            else:
+                i += 1
+                if i < n:
+                    parts.append(snake_name[i].upper())
+                    i += 1
+        else:
+            parts.append(c.upper() if not parts else c)
+            i += 1
+    return "".join(parts)
 
 
 def to_go_repeated_elem_type(proto_type: str) -> str:

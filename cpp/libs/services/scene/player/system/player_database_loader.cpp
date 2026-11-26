@@ -53,6 +53,10 @@
 #include "proto/common/component/player_craft_comp.pb.h"
 // 瑞兽迎春限时活动进度、永久资格、领奖回执与跨设备在途开局恢复。
 #include "proto/common/component/player_festival_beast_comp.pb.h"
+// 官方灵石百宝阁个人与共享组限购记录(docs/design/spirit-shop-and-starter-packs-v1.md):放 WALLET 组,同事务提交。
+#include "proto/common/component/player_spirit_shop_comp.pb.h"
+// 游历手记双轨进度、典藏买断态与纪念外观(docs/design/activity-travel-pass-and-showcase-v1.md):放 WALLET 组,同事务提交。
+#include "proto/common/component/player_travel_pass_comp.pb.h"
 // 实时技能冷却与下线保留的 Buff(docs/design/realtime-cooldown-buff-persistence.md):按需状态,随存档保留。
 #include "proto/common/component/time_comp.pb.h"
 #include "combat/skill/system/skill.h"
@@ -283,6 +287,10 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	tlsEcs.actorRegistry.emplace<PlayerCraftComp>(player, message.craft_component());
 	// 瑞兽迎春限时活动持久状态（字段 33）：旧存档缺失默认为空合法，唯一创建点。
 	tlsEcs.actorRegistry.emplace<PlayerFestivalBeastComp>(player, message.festival_beast_component());
+	// 官方灵石百宝阁个人与共享组限购记录（字段 34）：旧存档缺失默认为空合法，唯一创建点。
+	tlsEcs.actorRegistry.emplace<PlayerSpiritShopComp>(player, message.spirit_shop());
+	// 游历手记双轨进度与典藏状态（字段 35）：旧存档缺失默认为空合法，唯一创建点。
+	tlsEcs.actorRegistry.emplace<PlayerTravelPassComp>(player, message.travel_pass());
 	// 技能:只剔除 id 为 0 / 重复的坏条目(其余条目原样携带,按本版本技能表生效)+ 按当前职业补初始技能。
 	// 必须在属性重算之前 —— 被动技能的加成是重算的输入之一(docs/design/class-skills.md §3.2 / §7)
 	PlayerSkillSystem::InitializeOnLoad(player);
@@ -338,6 +346,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	const auto* trialJournalComp = FindPersistedComp<PlayerTrialJournalComp>(player, "PlayerTrialJournalComp", missing);
 	const auto* craftComp = FindPersistedComp<PlayerCraftComp>(player, "PlayerCraftComp", missing);
 	const auto* festivalBeastComp = FindPersistedComp<PlayerFestivalBeastComp>(player, "PlayerFestivalBeastComp", missing);
+	const auto* spiritShopComp = FindPersistedComp<PlayerSpiritShopComp>(player, "PlayerSpiritShopComp", missing);
+	const auto* travelPassComp = FindPersistedComp<PlayerTravelPassComp>(player, "PlayerTravelPassComp", missing);
 	const auto* currency = FindPersistedComp<CurrencyComp>(player, "CurrencyComp", missing);
 	const auto* currencyRuntime = FindPersistedComp<PlayerCurrencyComp>(player, "PlayerCurrencyComp", missing);
 	// 顶层未知字段缺了载体同样整份拒存:补空等于把新版本写进来的整列抹掉(混版本设计 §4.2 L1)。
@@ -412,6 +422,10 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_craft_component()->CopyFrom(*craftComp);
 	// 瑞兽迎春限时活动持久状态：与宠物、账本、战果同一次存盘提交，位置保持在 currency CopyFrom/SaveToProto 之外。
 	message.mutable_festival_beast_component()->CopyFrom(*festivalBeastComp);
+	// 官方灵石百宝阁限购记录：与货币、背包、幂等账本同一次存盘提交，位置保持在 currency CopyFrom/SaveToProto 之外。
+	message.mutable_spirit_shop()->CopyFrom(*spiritShopComp);
+	// 游历手记双轨进度与典藏状态：与货币、背包、幂等账本同一次存盘提交，位置保持在 currency CopyFrom/SaveToProto 之外。
+	message.mutable_travel_pass()->CopyFrom(*travelPassComp);
 	// 技能冷却与下线保留的 Buff:按需状态,缺组件 = 没有,写空、不补建。输出可能是上一次的快照,所以缺组件时要清掉。
 	// 位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	if (const auto* cooldowns = tlsEcs.actorRegistry.try_get<CooldownTimeListComp>(player))

@@ -188,6 +188,7 @@ message MatchChallengeInvitationRecord {
   uint64 expires_ms = 10;
   uint32 state = 11; // 1待应答、2已成局、3已拒绝、4已接受待退出、5已安全关闭；原件不删除。
   uint64 battle_id = 12;
+  bytes custom_rules_payload = 13; // 确定性序列化 CustomDuelRules（默认空=常规切磋）
 }
 
 // 同事务域全部副本使用相同撮合策略；新进程不能覆盖已准入策略。
@@ -239,6 +240,12 @@ message MatchFormationRecord {
   bytes ranked_context = 24;
   // 论剑排位赛季编号(索引列,供换季排空查询本季已接纳对局;非排位为 0)。
   uint32 ranked_season_id = 25;
+  // 锦标赛 V2 在成局提交点冻结的 TournamentBattleContext(BO3 局分与五行灵脉);非锦标赛为空。
+  bytes tournament_context = 26;
+  // 道友切磋坊冻结的 CustomDuelRules 字节载荷（非自定义切磋为空）。
+  bytes custom_duel_rules = 27;
+  // true = 五行幻境周常爬塔开战（PrepareBattle 注入权威层数与已选符印）。
+  bool is_wuxing_tower = 28;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -524,6 +531,8 @@ message MatchRankedPlayerSeasonRecord {
   uint32 honor_bits = 13;     // bit0=天枢/无双徽章, bit1=赛季称号, bit2=榜首题名
   uint64 final_rank = 14;
   uint64 updated_ms = 15;
+  uint32 current_win_streak = 16;
+  uint32 best_win_streak = 17;
 }
 
 // 玩家排位展示权益账(主键去重,跨季永久留存)。
@@ -575,6 +584,20 @@ message MatchTournamentSeasonRecord {
   string champion_member_summary = 16;
   uint64 settled_ms = 17;
   uint64 updated_ms = 18;
+  bytes champion_members_blob = 19; // V2: 确定性序列化 MatchTournamentChampionMembersBlob
+  uint64 champion_salute_count = 20;// V2: 全服累计观道致敬次数
+  uint32 champion_emblem_id = 21;   // V3: 冠军战队队徽(1..8)
+  uint64 third_place_squad_id = 22; // V3: 季军战队 ID
+  string third_place_squad_name = 23; // V3: 季军战队名
+  uint32 third_place_emblem_id = 24;  // V3: 季军战队队徽(1..8)
+  uint64 final_mvp_player_id = 25;    // V3: 总决赛问鼎之星(MVP)玩家 ID
+  string final_mvp_player_name = 26;  // V3: 总决赛 MVP 角色名
+  uint32 final_mvp_score = 27;        // V3: 总决赛 MVP 综合战功分
+  uint32 champion_honor_bits = 28;    // V4: 冠军战队赛季荣耀铭牌位图
+}
+
+message MatchTournamentChampionMembersBlob {
+  repeated MatchTournamentMemberRecord members = 1;
 }
 
 // 全服报名战队(主键 squad_id 由 BattleIDGen 永久发号;同赛季归一化名唯一)。
@@ -600,6 +623,8 @@ message MatchTournamentSquadRecord {
   uint32 cheer_count = 15;
   uint64 registered_ms = 16;
   uint64 updated_ms = 17;
+  uint32 emblem_id = 18;  // V3: 官方预设道家队徽(1..8)
+  uint32 honor_bits = 19; // V4: 战队赛季荣耀铭牌位图(bit 0..5)
 }
 
 // 战队成员名册(主键 (season_id, player_id) 物理保证一人一季仅隶属一支战队)。
@@ -615,6 +640,9 @@ message MatchTournamentMemberRecord {
   string player_name = 6;
   uint32 zone_id = 7;
   uint64 joined_ms = 8;
+  uint32 class_id = 9;
+  uint32 gender = 10;
+  string appearance_id = 11;
 }
 
 // 跨区战队邀请(待应答列表按受邀者查询)。
@@ -656,6 +684,53 @@ message MatchTournamentMatchRecord {
   uint64 deadline_ms = 18;
   uint64 finished_ms = 19;
   uint64 updated_ms = 20;
+  uint32 best_of = 21;                  // V2: 1=BO1, 3=BO3
+  uint32 current_game_index = 22;       // V2: 当前小局序号(1..best_of)
+  uint32 wins_a = 23;                   // V2: A 队小局胜场
+  uint32 wins_b = 24;                   // V2: B 队小局胜场
+  uint32 current_leyline_element = 25;  // V2: 当前/下一小局五行灵脉(TournamentLeylineElement)
+  string leyline_sequence = 26;         // V2: 逗号分隔灵脉序号如 "1,4,2"
+  uint64 intermission_deadline_ms = 27; // V2: BO3 局间换阵截止时刻(Unix 毫秒)
+  bool is_third_place = 28;             // V3: true=四强季军争夺战(铜牌战)
+  uint64 mvp_player_id = 29;            // V3: 本场问鼎之星(MVP)玩家 ID
+  string mvp_player_name = 30;          // V3: 本场 MVP 角色名
+  uint64 mvp_squad_id = 31;             // V3: 本场 MVP 所属战队 ID
+  uint32 mvp_score = 32;                // V3: 本场 MVP 综合战功分
+  uint64 mvp_damage = 33;               // V3: 本场 MVP 累计伤害
+  uint64 mvp_healing = 34;              // V3: 本场 MVP 累计治疗与护盾
+  uint32 mvp_controls = 35;             // V3: 本场 MVP 累计成功硬控次数
+  uint32 banned_leyline_a = 36;         // V4: BO3 赛前 A 队队长禁选灵脉(0..5)
+  uint32 banned_leyline_b = 37;         // V4: BO3 赛前 B 队队长禁选灵脉(0..5)
+}
+
+// V2: 锦标赛小局战果归档与幂等去重表(主键 (match_id, game_index), battle_id 唯一, 防止 Kafka 重投重复加胜场, 同时支持淘汰赛全服公开回放鉴权)。
+message MatchTournamentMatchGameRecord {
+  option (OptionTableName) = "match_tournament_match_game";
+  option (OptionPrimaryKey) = "match_id,game_index";
+  option (OptionUniqueKey) = "battle_id";
+  option (OptionIndex) = "season_id,battle_id";
+  uint64 match_id = 1;
+  uint32 game_index = 2;
+  uint32 season_id = 3;
+  uint32 phase = 4;               // TournamentMatchPhase
+  uint64 battle_id = 5;
+  uint32 leyline_element = 6;     // TournamentLeylineElement
+  uint64 winner_squad_id = 7;
+  uint32 outcome = 8;             // battle.eBattleOutcome
+  uint64 finished_ms = 9;
+}
+
+// V2: 全服每日免费观道致敬记录(主键 (player_id, salute_day) 原子保证 UTC+8 每人每日 1 次)。
+message MatchTournamentSaluteRecord {
+  option (OptionTableName) = "match_tournament_salute";
+  option (OptionPrimaryKey) = "player_id,salute_day";
+  option (OptionIndex) = "season_id,salute_day,player_id";
+  uint64 player_id = 1;
+  uint32 salute_day = 2; // UTC+8 YYYYMMDD
+  uint32 season_id = 3;
+  uint64 reward_id = 4;  // 发号器永久 ID, 供 MailAdmin 幂等发件
+  uint64 mail_id = 5;
+  uint64 created_ms = 6;
 }
 
 // 全服免费助威(主键 (season_id, player_id) 物理防重复助威,零消费零押注)。
@@ -690,4 +765,22 @@ message MatchTournamentRewardRecord {
   uint64 mail_id = 13;
   uint64 claimed_ms = 14;
   uint64 updated_ms = 15;
+}
+
+// V3: 淘汰赛免费神机竞猜表(主键 (season_id, player_id, match_id) 物理保证一人一场一票,零消费零押注)。
+message MatchTournamentPredictionRecord {
+  option (OptionTableName) = "match_tournament_prediction";
+  option (OptionPrimaryKey) = "season_id,player_id,match_id";
+  option (OptionIndex) = "season_id,match_id,predicted_squad_id;season_id,result_state,player_id";
+  uint32 season_id = 1;
+  uint64 player_id = 2;
+  uint64 match_id = 3;
+  uint64 predicted_squad_id = 4;
+  uint32 round_index = 5;
+  bool is_third_place = 6;
+  string player_name = 7;
+  uint32 result_state = 8; // 0 待结算 / 1 命中 / 2 未中
+  uint32 earned_points = 9;
+  uint64 created_ms = 10;
+  uint64 updated_ms = 11;
 }

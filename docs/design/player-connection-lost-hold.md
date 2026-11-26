@@ -521,7 +521,7 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
 
 2026-11-06 核对 §5 第 3 步的判据修正时看过 Java 版,没有同类问题,没有改 Java 仓:Java gate 发进场前先让旧场景放掉旧玩家,scene 每次进场都重新加载、新建实例并完整入场(`game-scene` 的 `SceneWorld.onPlayerEnter` / `finishPlayerLoaded`),不复用实体,也就没有「按已摘掉的快照会话判换会话」这一步。Java 做断线保留的接回时若改成复用实体,要用 §5 的两条判据:换会话按登录身份判(会话号或登录代次变了),不能比已摘掉的会话;接回保留也比登录代次,不能只比会话号。
 
-## 10. 验证(Codex)
+## 10. 验证(Gemini)
 
 前置:协议生成物里已有 `ExitGameReason`(`cpp/generated/proto/scene/player_lifecycle.pb.h`、`go/proto/scene/player_lifecycle.pb.go`),说明已有人跑过一次完整生成。如需重跑,在仓库根执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
 

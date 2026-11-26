@@ -14,7 +14,7 @@
 - 任一玩家 SQL 回包的 `Data` 真正缺失均拒绝，不能先填 `player_id` 骨架再称它是已有初始行。目录重放、Import、Repair、Restore、转让及墓碑均不重建缺行。首存前失败可以从仍完整的初始提交恢复；历史任一行丢失仍 fail-closed。该方案不声称检测全套 SQL 原件同时回档至同一旧快照。
 - 验证必须覆盖事务全回滚、并发同 ID、响应丢失、迟到 seed、开关两种模式、初始提交到首任 actor 的衔接、首存前路由失败后保持较高 owner，以及首存后删除任一行仍拒绝。原 §7 的 L-14 开关对照和 p99/读量观测要求保留；未运行时不宣称性能改善。
 
-> **状态**:提案(开服准备 L-05 / G3),2026-10-12 起草,等负责人按 §10 拍板。2026-10-13 已按 §10 的默认值落码(开关默认关,见 §13);同日三视角评审的修复见 §13.1。没有编译、测试或压测,按 AGENTS.md §10.1 交 Codex 验证。
+> **状态**:提案(开服准备 L-05 / G3),2026-10-12 起草,等负责人按 §10 拍板。2026-10-13 已按 §10 的默认值落码(开关默认关,见 §13);同日三视角评审的修复见 §13.1。没有编译、测试或压测,按 AGENTS.md §10.1 交 Gemini 验证。
 > **依据**:只读核对代码、配置与文档,HEAD `73b852f32`。`go/db/internal/kafka/key_ordered_consumer.go`、`tools/scripts/k8s_deploy.ps1`、`docs/design/player-storage-placement.md`、`docs/design/zone_data_rollback.md` 有他人未提交的改动,按工作区行号引用;其余文件工作区与 HEAD 相同。
 > **2026-10-16 更正**:同日 `redis_client.h` 删去两段存盘脚本里的 SADD、普通脚本改名并加注释,该文件行号整体下移;本文对 `redis_client.h` 的行号引用改为按符号(常量 / 函数名)引用,其余文件的行号仍是上述 HEAD 快照。
 > **起因**:[tidb-phase1-and-launch-readiness.md](./tidb-phase1-and-launch-readiness.md) §7 的 L-05(:816)。新号第一次 EnterGame 一定冷读数据库,玩家在加载屏上同步等待,每个读任务的等待上限是 8s。首日这是 Phase 2 全局玩家库唯一的同步路径,也是单 zone 预加载链的第一个瓶颈。
@@ -268,7 +268,7 @@
 
 **上线步骤**
 
-1. 落码,默认关。Codex 跑单测(§8)和 §13 列的验证命令。
+1. 落码,默认关。Gemini 跑单测(§8)和 §13 列的验证命令。
 2. 本地冒烟:临时打开 `login.yaml` 的开关,用 robot 建 N 个新号进场,核对指标。
 3. 告警先就位:
    - go/db `db_placement_guard_total{op="write",outcome="missing_required"}`(违规配置一:Required 开着而新号没落点);
@@ -388,7 +388,7 @@
 
 ## 13. 落码清单与验证(2026-10-13)
 
-按 §10 的默认值落码:采用 A;id 复用只告警;K8s 不打开;不做 TTL 续期;两类告警作为打开前置;`AccountLockTTL` 不调。**未编译、未测试**,待 Codex 验证。
+按 §10 的默认值落码:采用 A;id 复用只告警;K8s 不打开;不做 TTL 续期;两类告警作为打开前置;`AccountLockTTL` 不调。**未编译、未测试**,待 Gemini 验证。
 
 **新增**
 
@@ -404,7 +404,7 @@
 
 **不改**:C++、go/db、scene_manager、data_service、proto、`tools/scripts/k8s_deploy.ps1`。
 
-**交 Codex 的验证**(工作目录 `go/login`,串行,不需要外部服务):
+**交 Gemini 的验证**(工作目录 `go/login`,串行,不需要外部服务):
 
 ```powershell
 gofmt -l internal/logic/pkg/dataloader/new_player_seed.go internal/logic/pkg/dataloader/new_player_seed_test.go internal/logic/clientplayerlogin/createplayer_seed.go internal/logic/clientplayerlogin/createplayer_seed_test.go internal/config/new_player_seed_conf_test.go
@@ -429,7 +429,7 @@ go test ./... -count=1
 
 ### 13.1 三视角评审修复(2026-10-13)
 
-三视角评审加对抗核实确认了十条问题,按负责人当天的拍板全部处置。**未编译、未测试**,待 Codex 验证。
+三视角评审加对抗核实确认了十条问题,按负责人当天的拍板全部处置。**未编译、未测试**,待 Gemini 验证。
 
 | 条目 | 处置 | 文件 |
 |---|---|---|
@@ -453,7 +453,7 @@ go test ./... -count=1
 
 **没有做的**:`deploy/login-stack.linux/login.yaml` 没有改动(它没有那段旧的 PreloadPool 注释,锁预算注释也只在 etc 那份)。
 
-**交 Codex 的验证**(先在 `go/login` 下串行跑,不需要外部服务;最后一条在仓库根):
+**交 Gemini 的验证**(先在 `go/login` 下串行跑,不需要外部服务;最后一条在仓库根):
 
 ```powershell
 gofmt -l internal/logic/clientplayerlogin/entergame_pool_saturated_test.go internal/logic/clientplayerlogin/createplayer_name_test.go internal/logic/clientplayerlogin/createplayer_seed.go internal/config/new_player_seed_conf_test.go internal/logic/pkg/dataloader/new_player_seed.go
@@ -479,7 +479,7 @@ pwsh -NoProfile -File tools/scripts/test_stress_summarize.ps1
 
 ### 13.2 P2 / P7 定案后的落码(2026-10-15)
 
-负责人 2026-10-15 指示「按最标准修复」,§10 P2 / P7 定为:采用 P7(6c 之前只读探测),P2 升级为拒绝。取舍依据 AGENTS §11.3:玩家资产与数据完整性路径默认 fail-closed;能在副作用前完成的纯校验先完成(探测),提交点仍由同一机制原子复核(种子脚本的条件判断)。**未编译、未测试**,待 Codex 验证。
+负责人 2026-10-15 指示「按最标准修复」,§10 P2 / P7 定为:采用 P7(6c 之前只读探测),P2 升级为拒绝。取舍依据 AGENTS §11.3:玩家资产与数据完整性路径默认 fail-closed;能在副作用前完成的纯校验先完成(探测),提交点仍由同一机制原子复核(种子脚本的条件判断)。**未编译、未测试**,待 Gemini 验证。
 
 > **2026-10-16 补注**(更正上段「提交点仍由同一机制原子复核」):这句不成立。建角的提交点是第 7 步围栏写(`writeAccountBlobScript`),它只比对建角锁令牌,不复核 `PlayerAllData:{id}` / `player:{id}:owner_epoch`。种子脚本只在 `NewPlayerSeed.Enabled`(默认关)时运行,而且只覆盖「6b' 探测 → 6d' 种子写」这一段。因此关种子时「6b' → 第 7 步」、开种子时「6d' → 第 7 步」都没有复核,与 G3 落码前相同。这是对 AGENTS §11.3「提交点原子复核、预检不代替提交校验」的记录在案的偏离,作为已知残余窗口接受。理由与代价:(1) 这段窗口(秒级)只是「探测时旧持有者在 Redis 里没有状态」这一类的子集:旧持有者在第 7 步之后任何时候首次进场,同样串档,建角期的任何检查都拦不住,在第 7 步补复核只能把窗口再缩短几秒;(2) 旧持有者若经现行建角流程创建,6c 名字登记已按 `FailedPrecondition`(该 id 名下已有另一个名字)拒绝,与时序无关;漏网的只剩没有名字登记行的旧持有者(名字表上线前的老号,或 `player_name` 与 `id_segment` 一并丢失),以及新账号恰好请求了与旧持有者完全相同的名字(同 id 同名幂等成功)。兜底仍是 I1。若要在提交点真正复核(例如在 `writeAccountBlobScript` 里对这两把键 `EXISTS`),超出 2026-10-15 第 4 项决定,另行拍板。
 
@@ -539,7 +539,7 @@ pwsh -NoProfile -File tools/scripts/test_stress_summarize.ps1
 - `deploy/login-stack.linux/login.yaml` 没有 `Locker` 锁预算注释(§13.1 已记),这次也不用改。
 - Java 版:§11 判定种子这条链不适用;id 复用时拒绝建角在 Java 版有没有对等项(例如主键冲突天然拒绝),由主会话核对后登记 `PARITY.md`。`docs/PROGRESS.md` 也由主会话统一记。
 
-**交 Codex 的验证**(工作目录 `go/login`,串行,不需要外部服务):
+**交 Gemini 的验证**(工作目录 `go/login`,串行,不需要外部服务):
 
 ```powershell
 gofmt -l internal/logic/pkg/dataloader/new_player_seed.go internal/logic/pkg/dataloader/new_player_seed_test.go internal/logic/clientplayerlogin/createplayer_seed.go internal/logic/clientplayerlogin/createplayer_seed_test.go internal/logic/clientplayerlogin/metrics.go internal/logic/clientplayerlogin/createplayerlogic.go

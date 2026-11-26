@@ -2,7 +2,7 @@
 
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),DBTask、`db_task_zone_*` 和相应的保留期、盘预算都已删除。本文只作历史保留,不再描述现行行为。
 
-> **状态**：已落码，未编译、未测试，待 Codex 验证（AGENTS.md §10.1）。在 Codex 给出结果之前，本文任何一句都不等于「编译通过」或「已验证」。
+> **状态**：已落码，未编译、未测试，待 Gemini 验证（AGENTS.md §10.1）。在 Gemini 给出结果之前，本文任何一句都不等于「编译通过」或「已验证」。
 > **范围**：§A = S5a（C++ scene：发 DBTask 失败后的脏快照）；§B = S5b（Go + 部署脚本：db_task 的 retention.bytes 与 Kafka PVC 预算）。go/db、go/login 与 `tools/scripts/k8s_deploy.ps1` 的注释按「本文 §B」引用，章节号不要改。
 > **依据**：S5 实现规格（原 `docs/handoff/godb-pipeline-impl-20261015/S5-dirty-snapshot-retention-spec.md`，已清理，见 `ccf2840b2`）（B-01…B-22）；S5a 的落码报告 `docs/handoff/godb-pipeline-impl-20261015/batch-reports.md`（已清理，见 `ccf2840b2`） §C2；S5b 由主会话在 R3（Go 与部署脚本）与 R5a（复核修正）中落码，没有单独的阶段报告。**表述以截至 2026-10-16 的工作区代码为准**，与规格、阶段报告不一致的地方列在 §A.13 与 §B.9。
 > **归属**：负责人 2026-10-13 把「scene 发 DBTask 失败的脏快照」与「db_task 的 retention / PVC」改判归 godb 交接（规格 B-18；[上线待做](../ops/godb-pipeline-launch-todo.md) §3）。全局单点交接不要重做这两项。
@@ -81,7 +81,7 @@ Redis 失败路径 `HandlePlayerAsyncSaveFailed` 刻意不动快照，Kafka 路�
 
 **判据**：`NeedsResave = maxFailed != 0 && maxFailed >= lastFullyQueued`，意思是有一次失败还没被一次更新的、整份入队的存盘盖过。
 
-**失败种类**（R7 修复，2026-10-17；已落码，未编译、未测试，待 Codex 验证）：每次失败另记它是否「永久」，即按当前内存重发同样形状的消息也必然失败（消息过大、无写权限等）。调用方经 `db_task_dispatch::Failure{kind, code}` 传入（`FailureKind::kRetryable` / `kPermanent`；缺省是可重试、无错误码，即改动前的语义）。账本每个玩家只多记两个值：`maxPermanentFailed`（出过永久失败的最大代号）与 `permanentFailureCode`（那一代最后一次永久失败的错误码，对账本不透明，scene 粘合层放的是 `RdKafka::ErrorCode` 原值，只给日志用）。`Ledger::PermanentFailureCode(pid)` 只在「欠 MySQL 的那一代（`maxFailed`）里出过永久失败」时有值；更新的一代只出了可重试的失败时它就没有值，结论永远跟着最新一次失败走（`RecordFailure` 只让不更旧的一代覆盖错误码）。`DbTaskDispatchSystem::MarkLocalFailure`（不带种类）、`FinishSave(allQueued=false)` 的防御记账与票据超时（`ExpireStale`）一律按可重试记；监听器未登记时 `SendDbTask` 的同步拒绝走 `Ledger::MarkLocalFailure(pid, gen, ClassifyKafkaFailure(err))`，按错误码分种类（§A.5）。序列化现于 Redis 提交之前完成，失败时 `SavePlayerToRedisImpl` 直接返回 `kRejected`、不进账本；`DbTaskDispatchSystem::MarkLocalFailure` 目前没有生产调用方（§A.6 第 2 条的 2026-10-17 更正）。
+**失败种类**（R7 修复，2026-10-17；已落码，未编译、未测试，待 Gemini 验证）：每次失败另记它是否「永久」，即按当前内存重发同样形状的消息也必然失败（消息过大、无写权限等）。调用方经 `db_task_dispatch::Failure{kind, code}` 传入（`FailureKind::kRetryable` / `kPermanent`；缺省是可重试、无错误码，即改动前的语义）。账本每个玩家只多记两个值：`maxPermanentFailed`（出过永久失败的最大代号）与 `permanentFailureCode`（那一代最后一次永久失败的错误码，对账本不透明，scene 粘合层放的是 `RdKafka::ErrorCode` 原值，只给日志用）。`Ledger::PermanentFailureCode(pid)` 只在「欠 MySQL 的那一代（`maxFailed`）里出过永久失败」时有值；更新的一代只出了可重试的失败时它就没有值，结论永远跟着最新一次失败走（`RecordFailure` 只让不更旧的一代覆盖错误码）。`DbTaskDispatchSystem::MarkLocalFailure`（不带种类）、`FinishSave(allQueued=false)` 的防御记账与票据超时（`ExpireStale`）一律按可重试记；监听器未登记时 `SendDbTask` 的同步拒绝走 `Ledger::MarkLocalFailure(pid, gen, ClassifyKafkaFailure(err))`，按错误码分种类（§A.5）。序列化现于 Redis 提交之前完成，失败时 `SavePlayerToRedisImpl` 直接返回 `kRejected`、不进账本；`DbTaskDispatchSystem::MarkLocalFailure` 目前没有生产调用方（§A.6 第 2 条的 2026-10-17 更正）。
 
 | 事件 | 接口 | 对状态的影响 |
 |---|---|---|
@@ -115,7 +115,7 @@ Redis 失败路径 `HandlePlayerAsyncSaveFailed` 刻意不动快照，Kafka 路�
   1. `KafkaProducer::Instance().poll()` 派发回执；
   2. `ExpireStale(now, kTicketTimeout)`，`kTicketTimeout = 330s`；有过期票据时计 `ticket_expired`（逐张计），每拍打一行 `LOG_ERROR`（条数 + 首个玩家号，`metric=db_task_ticket_expired`），并把玩家压进待办。注意过期**不计** `delivery_failed`；
   3. 把待办表换出来、排序去重，逐个交给 `onSettled`。先换出再处理：onSettled 里的重存又会发 DBTask，它们的回执压进新的待办表，留给下一拍，不会在本拍里无限循环。
-- **停机**（R7 改，2026-10-17；已落码，未编译、未测试，待 Codex 验证）：`RedisSystem::BeginShutdown` 只取消周期存盘，**不**取消 Pump：停机 drain 期间等回执、被保留的退出实体要靠它推完。收账由 `RedisSystem::StopDbTaskDispatch()` 做：先取消 Pump 定时器，再调 `DbTaskDispatchSystem::Shutdown()`；`loop_` 为空（`Initialize` 没跑过或已 `Shutdown`）时是空操作，重复调用幂等。
+- **停机**（R7 改，2026-10-17；已落码，未编译、未测试，待 Gemini 验证）：`RedisSystem::BeginShutdown` 只取消周期存盘，**不**取消 Pump：停机 drain 期间等回执、被保留的退出实体要靠它推完。收账由 `RedisSystem::StopDbTaskDispatch()` 做：先取消 Pump 定时器，再调 `DbTaskDispatchSystem::Shutdown()`；`loop_` 为空（`Initialize` 没跑过或已 `Shutdown`）时是空操作，重复调用幂等。
   - **先做的那次**：Node 的拆除前钩子。scene 的 `cpp/nodes/scene/main.cpp` 用 `node.SetBeforeTeardown([](Node &){ tlsRedisSystem.StopDbTaskDispatch(); })` 挂上；`Node::FinalizeTeardownInLoop`（`cpp/libs/engine/core/node/system/node/node.cpp`）在 `kafkaManager.Shutdown()`（producer 最后一次有界 flush，它派发的回执已进账本）之后、`tlsRedis.Shutdown()` / 节点注册表 / `tlsEcs.Clear()` 与 `logSystem.stop()` 之前调它，每个 Node 只调一次（成员 `beforeTeardownRan_`）。普通停机、身份冲突停机（冲突 drain 结束后走 `Shutdown()`）与 `~Node` 的兜底排空都经过这里。那一刻异步日志还在写文件，下面这行 ERROR 在 Linux 上也能落盘。
   - **兜底的那次**：`RedisSystem::Shutdown()`（main.cpp 在 Node 作用域之后调用）在 `loop_` 有值的分支里复用 `StopDbTaskDispatch()`。钩子已调过时它什么都不打；钩子没挂上或没走到拆除时才真正生效，那时 `logSystem.stop()` 已执行、`gNodeAtomic` 已置空，打的日志在 Linux 上写不进文件。R7 之前收账只有这一次，所以未落定玩家清单在 Linux 上会静默丢失，Pump 也一直跑到那时。
   - `DbTaskDispatchSystem::Shutdown()` 本身幂等：注销监听器；有未落定玩家时打一行 `[DbTaskDispatch] shutting down with N player(s) whose MySQL copy may lag Redis (in-flight or undelivered DB write tasks): ids=[...]`，最多列 `kShutdownUnsettledLogLimit = 50` 个，超出时带 `(truncated)`；最后清空 `onSettled` 与待办表。清单反映的是最后一次 flush 之后的账本；那次 flush 派发的回执只进账本，不再交给 `onSettled`。
@@ -127,7 +127,7 @@ Redis 失败路径 `HandlePlayerAsyncSaveFailed` 刻意不动快照，Kafka 路�
 
 1. **快路径**：`snapshotMatches = allowSkipWhenPersisted && snap && snap->HasSnapshot() && dirty_save::IsEqual(*message, *snap->snapshot)`。快路径的相等判据**不剥离**压测探针（`stress_test_probe`），与 HEAD 一致；是否剥离待负责人定（`SavePlayerToRedisImpl` 上方注释）。剥离探针的 `player_exit::IsPersistedPayloadCurrent` 只用在退出收敛与 §A.7「恢复收尾」第 6 步。只在快照相等时才查账本（`dbTaskNeedsResave = snapshotMatches && DbTaskDispatchSystem::NeedsResave(playerId)`），`AllowsDirtySaveSkip` 为真才返回 `kAlreadyPersisted`。快照相等但欠账时强制真写：计 `forced_resave`，打 `LOG_INFO "[SavePlayerToRedis] forcing a real save for player X: an earlier DB write task was not delivered (metric=db_task_forced_resave)"`。
 2. **发 DBTask**：lambda 之前 `BeginSave` 领代号，置 `allDbTasksQueued = true`；两处 `SerializeToString` 失败都走 `MarkLocalFailure`；发送改为 `DbTaskDispatchSystem::SendDbTask(playerId, saveGeneration, dbTaskTopic, dbTaskBytes, playerIdStr)`，没入队时保留原有的 `Kafka send failed` 日志并带上 `err=`；两条都发完后调 `FinishSave(playerId, saveGeneration, allDbTasksQueued)`。没有全部入队时再打一行汇总 `LOG_ERROR`（`... MySQL lags Redis until the next save re-sends the full state (metric=db_task_produce_rejected)`）。
-   - **2026-10-17 更正**（按工作区代码 `cpp/libs/services/scene/player/system/player_lifecycle.cpp` 的 `SavePlayerToRedisImpl`；该段属同一工作区另一批未提交改动，已落码，未编译、未测试，待 Codex 验证）：上面这条描述的是旧流程，现行顺序如下。
+   - **2026-10-17 更正**（按工作区代码 `cpp/libs/services/scene/player/system/player_lifecycle.cpp` 的 `SavePlayerToRedisImpl`；该段属同一工作区另一批未提交改动，已落码，未编译、未测试，待 Gemini 验证）：上面这条描述的是旧流程，现行顺序如下。
      1. **序列化前移到 Redis 提交之前**：`serializeSubTableTask` 先把两张子表的 DBTask 都序列化进提交意图 `RedisSaveCommitIntent`（`cpp/libs/engine/infra/storage/redis_client/redis_client.h`），任一失败直接返回 `SaveResult::kRejected`。这时还没有 `BeginSave`，账本不记任何东西，Redis 也不写；调用方按各自的 `kRejected` 分支收尾（退出路径见 §A.12 行为变化第 4 条）。
      2. **`BeginSave`、`SendDbTask`、`FinishSave` 都挪进 Redis 提交回调 `publishDbTasks`**：`owner_epoch != 0` 时经 `SaveWithCommitBarrier(..., commitIntent, std::move(publishDbTasks))` 提交，返回 false 时整次存盘返回 `kRejected`；`owner_epoch == 0` 时经 `Save(message, playerId, std::move(publishDbTasks))`。回调只在这份快照真正写进 Redis 之后执行一次，未下发就被合并的快照不执行（`CommittedCallback` 的注释）。
      3. 因此 `DbTaskDispatchSystem::MarkLocalFailure` 目前没有生产调用方（单测 `cpp/tests/cross_zone_test/db_task_dispatch_test.cpp` 直接调的是 `Ledger::MarkLocalFailure`，也不经过它；`db_task_dispatch_system.h` 文件头注释「失败时 MarkLocalFailure」同样是旧流程，待改该文件的会话同步）；`Ledger::MarkLocalFailure` 的生产调用只剩 `SendDbTask` 在监听器未登记时的同步拒绝一处（§A.5）。§A.11 的 `local_failure` 计数器随之没有生产来源，稳态恒为 0。
@@ -180,7 +180,7 @@ Redis 失败路径 `HandlePlayerAsyncSaveFailed` 刻意不动快照，Kafka 路�
 1. **Kafka 恢复**：在途回执到达 → Pump → `OnDbTaskDispatchSettled` → 闸门。回执若是永久失败（如 broker / topic 的 `max.message.bytes` 拒收），闸门判 `kFinishUnsynced`。
 2. **周期存盘**：`RedisSystem::Initialize` 的 1s 分槽定时器（`SCENE_PLAYER_SAVE_INTERVAL_SECONDS`，缺省 300，按 `playerId % 300` 每秒一槽）遍历 `tlsEcs.playerList`，退出中的实体也在其中。欠账时快路径让路、整份重写；落地后由退出分支照常判定。新一代整份入队之后 `NeedsResave` 解除，闸门转为等回执；这批回执再出可重试的失败，就再判一次 `kRetainExhausted`，出永久失败则 `kFinishUnsynced`。
 3. **再来一次退出请求**：停机 `exitAllPlayers`、s2s LeaveScene、排空、疏散都会走 `HandleExitGameNode`，触发 §A.7 的 rekick。
-4. **停机看门狗**：`Node::StartShutdownDrainWatchdog`（`cpp/libs/engine/core/node/system/node/node.cpp`，`kShutdownDrainBudget = 15s`）。scene 的停机谓词（`cpp/nodes/scene/main.cpp` 里的 `SetShutdownDrainComplete`）要求所有停机玩家 `IsSaveInFlight` 为假、`FlushProducer(0)` 为真（另有剩余玩家数、A1′ 在途数、改派待确认数都归零）。Kafka 不可用时 15s 远短于 300s 的 `message.timeout.ms` 与 330s 的票据超时，看门狗必然先到期。到期本身只记下停机失败；要等 gRPC 服务端排空完成、Kafka 消费回调全部 join（`kafkaManager.ConsumersJoined()`），`Node::MaybeFinalizeShutdownInLoop` 才打 ERROR `Lifecycle HOLD: shutdown budget expired with unresolved work; teardown is not a closure receipt. timeout_s=15` 并继续停机。15s 从看门狗启动算起，而看门狗在 Kafka 消费端 stop（同步 close 并 join）与停机钩子返回之后才启动，所以从 SIGTERM 算起 15s 只是下限（2026-11-06 按 `node.cpp` 现行日志文本与收尾条件更正）。之后的收账顺序（R7 改，2026-10-17；已落码，未编译、未测试，待 Codex 验证）：
+4. **停机看门狗**：`Node::StartShutdownDrainWatchdog`（`cpp/libs/engine/core/node/system/node/node.cpp`，`kShutdownDrainBudget = 15s`）。scene 的停机谓词（`cpp/nodes/scene/main.cpp` 里的 `SetShutdownDrainComplete`）要求所有停机玩家 `IsSaveInFlight` 为假、`FlushProducer(0)` 为真（另有剩余玩家数、A1′ 在途数、改派待确认数都归零）。Kafka 不可用时 15s 远短于 300s 的 `message.timeout.ms` 与 330s 的票据超时，看门狗必然先到期。到期本身只记下停机失败；要等 gRPC 服务端排空完成、Kafka 消费回调全部 join（`kafkaManager.ConsumersJoined()`），`Node::MaybeFinalizeShutdownInLoop` 才打 ERROR `Lifecycle HOLD: shutdown budget expired with unresolved work; teardown is not a closure receipt. timeout_s=15` 并继续停机。15s 从看门狗启动算起，而看门狗在 Kafka 消费端 stop（同步 close 并 join）与停机钩子返回之后才启动，所以从 SIGTERM 算起 15s 只是下限（2026-11-06 按 `node.cpp` 现行日志文本与收尾条件更正）。之后的收账顺序（R7 改，2026-10-17；已落码，未编译、未测试，待 Gemini 验证）：
    - `Node::FinalizeTeardownInLoop` 先做 `kafkaManager.Shutdown()`：producer 最后一次有界 flush（`KafkaManager::Shutdown` 的参数 `producerFlushTimeout` 缺省 2000ms）。没排空时打 ERROR `KafkaManager shut down with producer messages still in flight. pending=<N> tracked=<M>`，`tracked` 是其中还在等逐条回执的跟踪消息数（scene 的 DBTask，`KafkaProducer::trackedInFlight()`）；
    - 紧接着是拆除前钩子（`Node::SetBeforeTeardown` → `RedisSystem::StopDbTaskDispatch`，§A.5「停机」）：停 Pump，`DbTaskDispatchSystem::Shutdown` 的 ERROR 行列出未落定的玩家号；
    - 两行都在 `tlsRedis.Shutdown()`、`tlsEcs.Clear()` 与 `logSystem.stop()` 之前，Linux 上也能落盘。`KafkaProducer` 析构时那行 `[Kafka] producer destroyed with N tracked messages still awaiting delivery reports` 发生在线程退出、Node 已析构之后，Linux 上写不进日志文件，以 `tracked=` 为准；`RedisSystem::Shutdown()` 里的那次收账此时是空操作。
@@ -232,7 +232,7 @@ Redis 失败路径 `HandlePlayerAsyncSaveFailed` 刻意不动快照，Kafka 路�
 
 日志里的 `metric=` 标签（英文正文、中文注释）：`db_task_forced_resave`、`db_task_produce_rejected`、`exit_db_task_await_ack`、`exit_db_task_resave`、`exit_db_task_resave_capped`、`exit_db_task_unsynced`、`exit_db_task_rekick`、`db_task_orphan_unsynced`、`db_task_ticket_expired`；拒存丢弃沿用 `save_marshal_refused`。另有两行无标签的 ERROR：`[DbTaskDispatch] shutting down with N player(s) ...` 与 `[Kafka] N tracked messages lost their delivery report ...`。
 
-R7（2026-10-17；已落码，未编译、未测试，待 Codex 验证）新增或改动的日志：
+R7（2026-10-17；已落码，未编译、未测试，待 Gemini 验证）新增或改动的日志：
 
 - 闸门永久失败收尾（`FinishExitOrAwaitDbTaskAck` 的 `kFinishUnsynced` 分支）：ERROR `FinishExitOrAwaitDbTaskAck: exiting player X has a DB write task that Kafka permanently rejects (err=<code> (<err2str>)); re-saving cannot help, finishing exit with MySQL lagging Redis (in_flight=N, metric=exit_db_task_unsynced)`。`err=` 的值来自 `DbTaskDispatchSystem::PermanentFailure`。它与交接已发起的那行 `FinishExitOrAwaitDbTaskAck: could not re-save exiting player X; finishing exit with MySQL lagging Redis (metric=exit_db_task_unsynced)` 共用 `exit_db_task_unsynced` 标签，按正文区分成因。
 - `KafkaManager::Shutdown`（engine 层，所有节点共用）：有界 flush 没排空时那行 ERROR 末尾多了 ` tracked=<M>`，整行为 `KafkaManager shut down with producer messages still in flight. pending=<N> tracked=<M>`。它替代 `KafkaProducer` 析构时那行 `[Kafka] producer destroyed with N tracked messages still awaiting delivery reports`：后者在 Node 析构之后才打，Linux 上写不进日志文件（§A.8 第 4 条）。
@@ -435,7 +435,7 @@ exec 进 broker 跑 Kafka CLI 时必须把 `KAFKA_HEAP_OPTS` 覆盖成小堆（`
 
 ### B.8 残余风险与后续项
 
-1. **F9 未核实**：旧版二进制（没有 `RetentionBytes` 字段）读到 ConfigMap 里的新键会忽略还是报错。go/db 依赖 go-zero v1.10.0，go/login 依赖 v1.9.2（各自 go.mod）。若会报错，S5b 回滚必须连同旧的 ConfigMap 生成器一起回退。列为 Codex 验证项。
+1. **F9 未核实**：旧版二进制（没有 `RetentionBytes` 字段）读到 ConfigMap 里的新键会忽略还是报错。go/db 依赖 go-zero v1.10.0，go/login 依赖 v1.9.2（各自 go.mod）。若会报错，S5b 回滚必须连同旧的 ConfigMap 生成器一起回退。列为 Gemini 验证项。
 2. zone-down 删的是 namespace，那个 zone 的 db_task topic 仍按旧的 retention.bytes 留着数据，直到 retention.ms 到期（prod 24h），盘预算数不到它。期间部署别的 zone 时按超量承诺对待，用 `--alter` 把残留 topic 调小。
 3. 加 zone 之后，新部署的 zone 按新的 Z 拿到更小的 retention.bytes，先部署的 zone 在下次 zone-up 之前保留旧值，期间超量承诺。要对全部 zone 重跑 zone-up。
 4. lag 秒级告警没做（B-12）：积压逼近 T_buf 时没有主动告警，Kafka 的删除是静默的。`implied_db_task_buffer_min` 是以后定告警阈值的依据。
@@ -482,7 +482,7 @@ exec 进 broker 跑 Kafka CLI 时必须把 `KAFKA_HEAP_OPTS` 覆盖成小堆（`
 
 ---
 
-## 验证（交 Codex）
+## 验证（交 Gemini）
 
 仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，PowerShell 7 + VS 开发者环境。前一步红了就停下归因，不连续重试。报错落在其它会话的未提交文件里（scene 库下大量 M 状态文件、`player_database_loader.cpp`、`generated/*`、`muduo_grpc/client_session.cpp` 等）时单独记录，不算本项的问题。
 
@@ -508,7 +508,7 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 
 - 通过标准：各工程 0 error；`DeliveryTracker.*`（5 例）、`DbTaskDispatchLedger.*`（12 例）、`DbTaskDispatchStats.*`（1 例）、`ExitDbTaskGate.*`（3 例）、`DbTaskDispatchEcs.*`（9 例）全绿；既有 `ExitPersist*` 与 bag / currency 用例与改动前相比没有新增失败。
 - 失败时保留：msbuild 第一条 error 的前后 20 行、gtest 失败用例全文。
-- **R7 增补（2026-10-17；已落码，未编译、未测试，待 Codex 验证）**：
+- **R7 增补（2026-10-17；已落码，未编译、未测试，待 Gemini 验证）**：
   - 构建：`node.h` 改了，所以在上面的工程之外，还要串行（`/m:1`）重编 `cpp\libs\engine\core\core.vcxproj` 与三个节点 `cpp\nodes\scene\scene.vcxproj`、`cpp\nodes\gate\gate.vcxproj`、`cpp\nodes\battle\battle.vcxproj`，再编 `cross_zone_test` 与 `kafka_command_test`。R7 没有新增文件，CMakeLists / .vcxproj / .filters 不用改。
   - 运行：`cross_zone_test.exe --gtest_filter=DbTaskDispatch*:ExitDbTaskGate*:ExitPersist*`；`kafka_command_test.exe --gtest_filter=DeliveryErrorClassification*:ClassifyProduceResult*`。
   - 用例数（按工作区源码数出，替代上面第一条里的旧数）：`DbTaskDispatchLedger.*` 16 例、`ExitDbTaskGate.*` 4 例、`DbTaskDispatchEcs.*` 12 例、`DeliveryErrorClassification.*` 3 例。R7 新增的是 `DeliveryErrorClassification.PermanentMessageErrorsAreBoundToTheMessageNotToAvailability`，`DbTaskDispatchLedger` 的 `PermanentSyncRejectionIsReportedWithItsCode`、`RetryableFailuresAreNotPermanent`、`PermanentVerdictFollowsTheLatestFailingGeneration`、`StalePermanentFailureOfAnOlderGenerationDoesNotOverrideTheVerdict`，`ExitDbTaskGate.PermanentFailureFinishesUnsyncedRegardlessOfRoundsAndAcks`，以及 `DbTaskDispatchEcs` 的 `PermanentFailedAckOnExitingPlayerFinishesUnsynced`（回归）、`RetryableFailureIsNotReportedAsPermanent`、`ShutdownListsUnsettledPlayersExactlyOnce`。既有的 `SendDbTaskWithoutBrokersMarksResave` 多了一条断言：`ERR__STATE` 不算永久。

@@ -1,0 +1,30 @@
+syntax = "proto3";
+option go_package = "robot/proto/common/component";
+
+// 单期游历手记持久进度（docs/design/activity-travel-pass-and-showcase-v1.md）：
+// 按期次独立隔离，每期内部使用 64 位掩码记录免费轨与典藏轨领取位，不膨胀永久全局位图。
+message TravelPassSeasonProgress {
+  uint32 pass_id = 1;
+  uint32 progress_points = 2;
+  bool premium_unlocked = 3;
+  uint64 premium_unlocked_at_ms = 4;
+  // bit (tier_index - 1) = 1 表示该档免费轨已领取（tier_index in 1..64）。
+  uint64 free_claimed_mask = 5;
+  // bit (tier_index - 1) = 1 表示该档典藏轨已领取（tier_index in 1..64）。
+  uint64 premium_claimed_mask = 6;
+  // 本期已解锁的零战力纪念头像框/称谓键（如 frame_travel_qingyun_s1 / title_travel_qingyun_s1）。
+  repeated string unlocked_cosmetic_keys = 7;
+  uint64 last_updated_at_ms = 8;
+}
+
+// 玩家游历手记持久组件（挂载于 player_database.travel_pass = 35, OptionPersistGroup = 7 WALLET）。
+message PlayerTravelPassComp {
+  // 条目间无序，按 pass_id 查找（最多 32 期；已解锁典藏或有未领档位的期次永久保留）。
+  repeated TravelPassSeasonProgress seasons = 1;
+  // 每次积点、解锁典藏、领奖或换装递增 1。
+  uint64 pass_revision = 2;
+  // 当前展示佩戴的零战力纪念头像框键（空串表示默认无框）。
+  string equipped_frame_key = 3;
+  // 当前展示佩戴的零战力纪念称谓键（空串表示不展示）。
+  string equipped_title_key = 4;
+}

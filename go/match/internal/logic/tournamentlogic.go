@@ -11,9 +11,11 @@ import (
 	"match/internal/constants"
 	"match/internal/playercontract"
 	"match/internal/svc"
+	"match/internal/tournament"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
+	battlepb "proto/battle"
 	base "proto/common/base"
 	cgpb "proto/content_guard"
 	mailpb "proto/mail"
@@ -80,6 +82,18 @@ func tournamentErrorTip(err error) uint32 {
 		return constants.ErrTournamentAlreadyCheered
 	case errors.Is(err, authority.ErrTournamentRewardUnavailable):
 		return constants.ErrTournamentRewardUnavailable
+	case errors.Is(err, authority.ErrTournamentAlreadySalutedToday):
+		return constants.ErrTournamentAlreadySalutedToday
+	case errors.Is(err, authority.ErrTournamentNoChampionToSalute):
+		return constants.ErrTournamentNoChampionToSalute
+	case errors.Is(err, authority.ErrTournamentEmblemInvalid):
+		return constants.ErrTournamentEmblemInvalid
+	case errors.Is(err, authority.ErrTournamentPredictionClosed):
+		return constants.ErrTournamentPredictionClosed
+	case errors.Is(err, authority.ErrTournamentPredictionTargetInvalid):
+		return constants.ErrTournamentPredictionTargetInvalid
+	case errors.Is(err, authority.ErrTournamentWarmupUnavailable):
+		return constants.ErrTournamentWarmupUnavailable
 	default:
 		return constants.ErrInternal
 	}
@@ -131,7 +145,7 @@ func (l *TournamentLogic) CreateTournamentSquad(in *matchpb.CreateTournamentSqua
 	}
 	playerName := challengePublicName(l.ctx, l.svcCtx, playerID)
 	zoneID := l.lookupPlayerZone(playerID)
-	squad, err := l.svcCtx.Authority.CreateTournamentSquad(l.ctx, playerID, playerName, zoneID, in.GetSquadName(), squadID)
+	squad, err := l.svcCtx.Authority.CreateTournamentSquad(l.ctx, playerID, playerName, zoneID, in.GetSquadName(), in.GetEmblemId(), squadID)
 	if err != nil {
 		code := tournamentErrorTip(err)
 		if code == constants.ErrInternal {
@@ -273,44 +287,82 @@ func (l *TournamentLogic) StartTournamentMatch(in *matchpb.StartTournamentMatchR
 		return &matchpb.StartTournamentMatchResponse{ErrorMessage: tournamentTip(0), Match: matchView}, nil
 	}
 
-	// 双方就绪:沿用既有直接开战管线(Kind=4 锦标赛直接成局)与 gather 建房。
-	members := make([]uint64, 0, len(launch.TeamA)+len(launch.TeamB))
-	members = append(members, launch.TeamA...)
-	members = append(members, launch.TeamB...)
-	key := &matchpb.MatchDirectIntentRecord{
-		Kind:       4,
-		OwnerId:    launch.MatchID,
-		RequestLow: launch.MatchID,
-	}
-	payload := encodeTournamentLaunchPayload(launch)
-	formation, err := reserveGlobalDirect(l.ctx, l.svcCtx, key, payload, matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT, launch.BattleConfigID, members, directOptions{})
-	if err != nil {
-		l.Errorf("[tournament] reserveGlobalDirect failed match=%d: %v", launch.MatchID, err)
-		_ = l.svcCtx.Authority.BindTournamentMatchBattle(context.Background(), launch.MatchID, 0, false)
+	battleID, launchErr := launchTournamentSpec(l.ctx, l.svcCtx, launch)
+	if launchErr != nil {
+		l.Errorf("[tournament] launchTournamentSpec failed match=%d game=%d: %v", launch.MatchID, launch.GameIndex, launchErr)
 		return &matchpb.StartTournamentMatchResponse{ErrorMessage: tournamentTip(constants.ErrTournamentMatchNotReady), Match: matchView}, nil
 	}
-	if err := l.svcCtx.Authority.BindTournamentMatchBattle(l.ctx, launch.MatchID, formation.BattleId, launch.Featured); err != nil {
-		l.Errorf("[tournament] BindTournamentMatchBattle failed match=%d battle=%d: %v", launch.MatchID, formation.BattleId, err)
-	}
-	if formation.State < 4 {
-		launchGlobalFormation(l.svcCtx, formation)
-	}
-	matchView.BattleId = formation.BattleId
+	matchView.BattleId = battleID
 	matchView.State = matchpb.TournamentMatchState_TOURNAMENT_MATCH_STATE_IN_BATTLE
 	matchView.FeaturedSpectate = launch.Featured
+	matchView.IntermissionDeadlineMs = 0
 	return &matchpb.StartTournamentMatchResponse{
 		ErrorMessage: tournamentTip(0),
 		Match:        matchView,
-		BattleId:     formation.BattleId,
+		BattleId:     battleID,
 	}, nil
 }
 
+// launchTournamentSpec 复用既有直接开战管线(Kind=4 锦标赛直接成局)发起单局建房并绑定 battle_id。
+// BO3 各小局以 RequestHigh=game_index 隔离直接开局幂等键,避免第 2/3 局复用第 1 局原件。
+func launchTournamentSpec(ctx context.Context, svcCtx *svc.ServiceContext, launch *authority.TournamentLaunchSpec) (uint64, error) {
+	members := make([]uint64, 0, len(launch.TeamA)+len(launch.TeamB))
+	members = append(members, launch.TeamA...)
+	members = append(members, launch.TeamB...)
+	gameIdx := launch.GameIndex
+	if gameIdx == 0 {
+		gameIdx = 1
+	}
+	bestOf := launch.BestOf
+	if bestOf == 0 {
+		bestOf = 1
+	}
+	key := &matchpb.MatchDirectIntentRecord{
+		Kind:        4,
+		OwnerId:     launch.MatchID,
+		RequestHigh: uint64(gameIdx),
+		RequestLow:  launch.MatchID,
+	}
+	payload := encodeTournamentLaunchPayload(launch)
+	tCtx := &battlepb.TournamentBattleContext{
+		SeasonId:       launch.SeasonID,
+		MatchId:        launch.MatchID,
+		BestOf:         bestOf,
+		GameIndex:      gameIdx,
+		WinsA:          launch.WinsA,
+		WinsB:          launch.WinsB,
+		LeylineElement: launch.LeylineElement,
+		SquadAId:       launch.SquadAId,
+		SquadAName:     launch.SquadAName,
+		SquadBId:       launch.SquadBId,
+		SquadBName:     launch.SquadBName,
+		SquadAEmblemId: launch.SquadAEmblemID,
+		SquadBEmblemId: launch.SquadBEmblemID,
+		IsWarmup:       launch.IsWarmup,
+		IsThirdPlace:   launch.IsThirdPlace,
+	}
+	formation, err := reserveGlobalDirect(ctx, svcCtx, key, payload, matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT, launch.BattleConfigID, members, directOptions{tournamentContext: tCtx})
+	if err != nil {
+		_ = svcCtx.Authority.BindTournamentMatchBattle(context.Background(), launch.MatchID, 0, false)
+		return 0, err
+	}
+	if err := svcCtx.Authority.BindTournamentMatchBattle(ctx, launch.MatchID, formation.BattleId, launch.Featured); err != nil {
+		logx.Errorf("[tournament] BindTournamentMatchBattle failed match=%d battle=%d: %v", launch.MatchID, formation.BattleId, err)
+	}
+	if formation.State < 4 {
+		launchGlobalFormation(svcCtx, formation)
+	}
+	return formation.BattleId, nil
+}
+
 func encodeTournamentLaunchPayload(spec *authority.TournamentLaunchSpec) []byte {
-	buf := make([]byte, 16+8*(len(spec.TeamA)+len(spec.TeamB)))
+	buf := make([]byte, 24+8*(len(spec.TeamA)+len(spec.TeamB)))
 	binary.LittleEndian.PutUint64(buf[0:], spec.MatchID)
 	binary.LittleEndian.PutUint32(buf[8:], spec.SeasonID)
 	binary.LittleEndian.PutUint32(buf[12:], spec.BattleConfigID)
-	offset := 16
+	binary.LittleEndian.PutUint32(buf[16:], spec.GameIndex)
+	binary.LittleEndian.PutUint32(buf[20:], uint32(spec.LeylineElement))
+	offset := 24
 	for _, pid := range spec.TeamA {
 		binary.LittleEndian.PutUint64(buf[offset:], pid)
 		offset += 8
@@ -415,7 +467,252 @@ func (l *TournamentLogic) ClaimTournamentReward(in *matchpb.ClaimTournamentRewar
 	}, nil
 }
 
-// StartTournamentLoop 启动全服赛季锦标赛阶段推进循环(按 OwnsWork("tournament:driver") 选主,SQL 提交点兜底幂等)。
+// SaluteTournamentChampion V2 每日免费观道致敬往届总冠军并经既有邮箱链路幂等投递绑定小礼。
+func (l *TournamentLogic) SaluteTournamentChampion(in *matchpb.SaluteTournamentChampionRequest) (*matchpb.SaluteTournamentChampionResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil || l.svcCtx.BattleIDGen == nil {
+		return &matchpb.SaluteTournamentChampionResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	rewardID, err := l.svcCtx.BattleIDGen.Generate()
+	if err != nil {
+		l.Errorf("[tournament] SaluteTournamentChampion id generate failed player=%d: %v", playerID, err)
+		return &matchpb.SaluteTournamentChampionResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	res, err := l.svcCtx.Authority.SaluteTournamentChampion(l.ctx, playerID, in.GetSeasonId(), rewardID)
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] SaluteTournamentChampion failed player=%d: %v", playerID, err)
+		}
+		return &matchpb.SaluteTournamentChampionResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	rule := l.svcCtx.ActiveTournament().Rule()
+	atts, goldAmount, items := tournament.BuildSaluteMailAttachments(rule)
+	var mailID uint64
+	if l.svcCtx.MailAdmin != nil && l.svcCtx.MailSecret != "" && (goldAmount > 0 || len(items) > 0) {
+		nowMs := uint64(time.Now().UnixMilli())
+		mailReq := &mailpb.SendMailRequest{
+			SenderKind:        tournamentMailSenderKind,
+			RequestId:         res.RewardID,
+			RecipientPlayerId: playerID,
+			Title:             "群仙问道赛·每日观道致敬礼",
+			Body:              fmt.Sprintf("感念道友瞻仰第%d赛季群仙问道赛总冠军，特奉上绑定修道小礼！", res.SeasonID),
+			Attachments:       atts,
+			ExpireMs:          nowMs + tournamentMailTTLMs,
+		}
+		if signErr := serviceauth.Sign(mailpb.MailAdmin_SendPersonalMail_FullMethodName, mailReq, tournamentMailCaller, l.svcCtx.MailSecret, nowMs); signErr != nil {
+			l.Errorf("[tournament] Sign salute mail failed player=%d reward=%d: %v", playerID, res.RewardID, signErr)
+		} else {
+			callCtx, cancel := context.WithTimeout(l.ctx, 2*time.Second)
+			mailResp, callErr := l.svcCtx.MailAdmin.SendPersonalMail(callCtx, mailReq)
+			cancel()
+			if callErr != nil || mailResp.GetErrorMessage().GetId() != 0 {
+				l.Errorf("[tournament] Send salute mail failed player=%d reward=%d tip=%d err=%v", playerID, res.RewardID, mailResp.GetErrorMessage().GetId(), callErr)
+			} else {
+				mailID = mailResp.GetMailId()
+				_ = l.svcCtx.Authority.UpdateTournamentSaluteMailID(l.ctx, playerID, res.SaluteDay, mailID)
+			}
+		}
+	}
+	return &matchpb.SaluteTournamentChampionResponse{
+		ErrorMessage:        tournamentTip(0),
+		SeasonId:            res.SeasonID,
+		ChampionSaluteCount: res.ChampionSaluteCount,
+		SalutedToday:        true,
+		GoldAmount:          goldAmount,
+		Items:               items,
+		MailId:              mailID,
+	}, nil
+}
+
+// SendTournamentSpectateCheer V2 观战底部预设喝彩(严格白名单 1..6 + 5 秒冷却 + 全 L0/L1/L2 观众通用)。
+func (l *TournamentLogic) SendTournamentSpectateCheer(in *matchpb.SendTournamentSpectateCheerRequest) (*matchpb.SendTournamentSpectateCheerResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if playerID == 0 || l.svcCtx == nil {
+		return &matchpb.SendTournamentSpectateCheerResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	battleID := in.GetBattleId()
+	if battleID == 0 || !tournament.IsValidSpectateCheerPhrase(in.GetPhraseId()) || !tournament.IsValidSpectateCheerSide(in.GetSide()) {
+		return &matchpb.SendTournamentSpectateCheerResponse{ErrorMessage: tournamentTip(constants.ErrTournamentSpectateCheerInvalid)}, nil
+	}
+	if l.svcCtx.Authority != nil && !l.svcCtx.Authority.IsTournamentBattle(l.ctx, battleID) {
+		return &matchpb.SendTournamentSpectateCheerResponse{ErrorMessage: tournamentTip(constants.ErrTournamentSpectateCheerInvalid)}, nil
+	}
+	nowMs := uint64(time.Now().UnixMilli())
+	senderName := challengePublicName(l.ctx, l.svcCtx, playerID)
+	snap, cooldownHit, invalidArg := l.svcCtx.ActiveTournamentCheers().Send(battleID, playerID, senderName, in.GetPhraseId(), in.GetSide(), nowMs)
+	if invalidArg {
+		return &matchpb.SendTournamentSpectateCheerResponse{ErrorMessage: tournamentTip(constants.ErrTournamentSpectateCheerInvalid)}, nil
+	}
+	tipCode := uint32(0)
+	if cooldownHit {
+		tipCode = constants.ErrTournamentSpectateCheerCooldown
+	}
+	return &matchpb.SendTournamentSpectateCheerResponse{
+		ErrorMessage:    tournamentTip(tipCode),
+		BattleId:        snap.BattleID,
+		CountA:          snap.CountA,
+		CountB:          snap.CountB,
+		CooldownUntilMs: snap.CooldownUntilMs,
+		RecentCheers:    snap.RecentCheers,
+		ServerTimeMs:    snap.ServerTimeMs,
+	}, nil
+}
+
+// GetTournamentSpectateCheer V2 拉取指定锦标赛对局最新双边人气计数与增量预设喝彩。
+func (l *TournamentLogic) GetTournamentSpectateCheer(in *matchpb.GetTournamentSpectateCheerRequest) (*matchpb.GetTournamentSpectateCheerResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if l.svcCtx == nil {
+		return &matchpb.GetTournamentSpectateCheerResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	battleID := in.GetBattleId()
+	if battleID == 0 {
+		return &matchpb.GetTournamentSpectateCheerResponse{ErrorMessage: tournamentTip(constants.ErrTournamentSpectateCheerInvalid)}, nil
+	}
+	nowMs := uint64(time.Now().UnixMilli())
+	snap := l.svcCtx.ActiveTournamentCheers().Snapshot(battleID, playerID, in.GetAfterSeq(), nowMs)
+	return &matchpb.GetTournamentSpectateCheerResponse{
+		ErrorMessage:    tournamentTip(0),
+		BattleId:        snap.BattleID,
+		CountA:          snap.CountA,
+		CountB:          snap.CountB,
+		CooldownUntilMs: snap.CooldownUntilMs,
+		RecentCheers:    snap.RecentCheers,
+		ServerTimeMs:    snap.ServerTimeMs,
+	}, nil
+}
+
+// ---- 《群仙问道赛》V3 增量 RPC：队徽更换 / 赛前零积分热身约战 / 神机问道免费竞猜 ----
+
+func (l *TournamentLogic) UpdateTournamentSquadEmblem(in *matchpb.UpdateTournamentSquadEmblemRequest) (*matchpb.UpdateTournamentSquadEmblemResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil {
+		return &matchpb.UpdateTournamentSquadEmblemResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	squad, err := l.svcCtx.Authority.UpdateTournamentSquadEmblem(l.ctx, playerID, in.GetEmblemId())
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] UpdateTournamentSquadEmblem failed captain=%d emblem=%d: %v", playerID, in.GetEmblemId(), err)
+		}
+		return &matchpb.UpdateTournamentSquadEmblemResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	return &matchpb.UpdateTournamentSquadEmblemResponse{ErrorMessage: tournamentTip(0), Squad: squad}, nil
+}
+
+func (l *TournamentLogic) StartTournamentWarmup(in *matchpb.StartTournamentWarmupRequest) (*matchpb.StartTournamentWarmupResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil || l.svcCtx.BattleIDGen == nil {
+		return &matchpb.StartTournamentWarmupResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	preMatchID, err := l.svcCtx.BattleIDGen.Generate()
+	if err != nil {
+		l.Errorf("[tournament] StartTournamentWarmup id generate failed player=%d: %v", playerID, err)
+		return &matchpb.StartTournamentWarmupResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	matchView, launch, err := l.svcCtx.Authority.PrepareTournamentWarmup(l.ctx, playerID, in.GetTargetSquadId(), in.GetLeylineElement(), in.GetLineupPlayerIds(), preMatchID)
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] StartTournamentWarmup prepare failed captain=%d: %v", playerID, err)
+		}
+		return &matchpb.StartTournamentWarmupResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	if launch == nil {
+		return &matchpb.StartTournamentWarmupResponse{ErrorMessage: tournamentTip(0), Match: matchView}, nil
+	}
+	battleID, launchErr := launchTournamentSpec(l.ctx, l.svcCtx, launch)
+	if launchErr != nil {
+		l.Errorf("[tournament] StartTournamentWarmup launch failed match=%d: %v", launch.MatchID, launchErr)
+		return &matchpb.StartTournamentWarmupResponse{ErrorMessage: tournamentTip(constants.ErrTournamentMatchNotReady), Match: matchView}, nil
+	}
+	matchView.BattleId = battleID
+	matchView.State = matchpb.TournamentMatchState_TOURNAMENT_MATCH_STATE_IN_BATTLE
+	return &matchpb.StartTournamentWarmupResponse{
+		ErrorMessage: tournamentTip(0),
+		Match:        matchView,
+		BattleId:     battleID,
+	}, nil
+}
+
+func (l *TournamentLogic) PredictTournamentMatch(in *matchpb.PredictTournamentMatchRequest) (*matchpb.PredictTournamentMatchResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil {
+		return &matchpb.PredictTournamentMatchResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	playerName := challengePublicName(l.ctx, l.svcCtx, playerID)
+	countA, countB, err := l.svcCtx.Authority.PredictTournamentMatch(l.ctx, playerID, playerName, in.GetMatchId(), in.GetPredictedSquadId())
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] PredictTournamentMatch failed player=%d match=%d: %v", playerID, in.GetMatchId(), err)
+		}
+		return &matchpb.PredictTournamentMatchResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	return &matchpb.PredictTournamentMatchResponse{
+		ErrorMessage:     tournamentTip(0),
+		MatchId:          in.GetMatchId(),
+		PredictedSquadId: in.GetPredictedSquadId(),
+		PredictCountA:    countA,
+		PredictCountB:    countB,
+	}, nil
+}
+
+func (l *TournamentLogic) GetTournamentPredictionBoard(in *matchpb.GetTournamentPredictionBoardRequest) (*matchpb.GetTournamentPredictionBoardResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if l.svcCtx == nil || l.svcCtx.Authority == nil {
+		return &matchpb.GetTournamentPredictionBoardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	resp, err := l.svcCtx.Authority.LoadTournamentPredictionBoard(l.ctx, in.GetSeasonId(), playerID)
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] GetTournamentPredictionBoard failed season=%d: %v", in.GetSeasonId(), err)
+		}
+		return &matchpb.GetTournamentPredictionBoardResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	resp.ErrorMessage = tournamentTip(0)
+	return resp, nil
+}
+
+// ---- 《群仙问道赛》V4 增量 RPC：BO3 五行灵脉禁选 + 本季名局录 ----
+
+func (l *TournamentLogic) BanTournamentLeyline(in *matchpb.BanTournamentLeylineRequest) (*matchpb.BanTournamentLeylineResponse, error) {
+	playerID := authoritativePlayerID(l.ctx, 0)
+	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil {
+		return &matchpb.BanTournamentLeylineResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	if in.GetMatchId() == 0 || !tournament.IsValidLeylineElement(in.GetLeylineElement()) {
+		return &matchpb.BanTournamentLeylineResponse{ErrorMessage: tournamentTip(constants.ErrTournamentMatchNotReady)}, nil
+	}
+	matchView, err := l.svcCtx.Authority.BanTournamentLeyline(l.ctx, playerID, in.GetMatchId(), in.GetLeylineElement())
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] BanTournamentLeyline failed captain=%d match=%d: %v", playerID, in.GetMatchId(), err)
+		}
+		return &matchpb.BanTournamentLeylineResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	return &matchpb.BanTournamentLeylineResponse{ErrorMessage: tournamentTip(0), Match: matchView}, nil
+}
+
+func (l *TournamentLogic) GetTournamentHighlights(in *matchpb.GetTournamentHighlightsRequest) (*matchpb.GetTournamentHighlightsResponse, error) {
+	if l.svcCtx == nil || l.svcCtx.Authority == nil {
+		return &matchpb.GetTournamentHighlightsResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+	}
+	resp, err := l.svcCtx.Authority.LoadTournamentHighlights(l.ctx, in.GetSeasonId())
+	if err != nil {
+		code := tournamentErrorTip(err)
+		if code == constants.ErrInternal {
+			l.Errorf("[tournament] GetTournamentHighlights failed season=%d: %v", in.GetSeasonId(), err)
+		}
+		return &matchpb.GetTournamentHighlightsResponse{ErrorMessage: tournamentTip(code)}, nil
+	}
+	resp.ErrorMessage = tournamentTip(0)
+	return resp, nil
+}
+
+// StartTournamentLoop 启动全服赛季锦标赛阶段推进与 BO3 局间到期自动开局循环(按 OwnsWork("tournament:driver") 选主,SQL 提交点兜底幂等)。
 func StartTournamentLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
 	if svcCtx == nil || svcCtx.Authority == nil || svcCtx.BattleIDGen == nil {
 		return
@@ -443,10 +740,19 @@ func StartTournamentLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
 					}
 					return ids, nil
 				})
-				cancel()
 				if err != nil && ctx.Err() == nil {
 					logx.Errorf("[tournament] season advance tick failed: %v", err)
 				}
+				dueSpecs, dueErr := svcCtx.Authority.TakeDueIntermissionLaunches(tickCtx, 0)
+				if dueErr != nil && ctx.Err() == nil {
+					logx.Errorf("[tournament] due intermission scan failed: %v", dueErr)
+				}
+				for _, spec := range dueSpecs {
+					if _, lErr := launchTournamentSpec(tickCtx, svcCtx, spec); lErr != nil && ctx.Err() == nil {
+						logx.Errorf("[tournament] auto-launch BO3 game failed match=%d game=%d: %v", spec.MatchID, spec.GameIndex, lErr)
+					}
+				}
+				cancel()
 			}
 		}
 	})

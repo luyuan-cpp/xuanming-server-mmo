@@ -13,7 +13,7 @@
 
 两条请求都走**大厅连接**(gate → match),和 `WatchBattle`、`RequestBattleTicket` 一样;不需要、也不要建 battle 直连。
 
-**生成**:新消息在 `proto/battle/player_battle.proto` 和 `proto/match/match_service.proto` 末尾,两份文件客户端本来就在生成白名单里(请核对)。Codex 服务端验证用的是不写客户端仓的配置;客户端落码时按客户端的流程用默认配置重新生成 C#,消息号以生成结果为准。
+**生成**:新消息在 `proto/battle/player_battle.proto` 和 `proto/match/match_service.proto` 末尾,两份文件客户端本来就在生成白名单里(请核对)。Gemini 服务端验证用的是不写客户端仓的配置;客户端落码时按客户端的流程用默认配置重新生成 C#,消息号以生成结果为准。
 
 | 请求 | 响应 | 说明 |
 |---|---|---|
@@ -98,7 +98,7 @@
 | 播放 | 从第 1 回合播完;从中间回合开始;`DEADLINE_DRAW`(含 `rounds` 为空);`truncated`;跳过 |
 | 错误码 | NotFound 移除条目;Internal 提示不自动重试;限频提示 |
 
-**样例数据**:Codex 跑通服务端冒烟(设计稿 §17 第 5 步)后,用 robot 打一局 1v1,把 `GetBattleReport` 的回包原样存一份,给客户端当夹具;再造一份 `DEADLINE_DRAW`(整场期限到)的样例。
+**样例数据**:Gemini 跑通服务端冒烟(设计稿 §17 第 5 步)后,用 robot 打一局 1v1,把 `GetBattleReport` 的回包原样存一份,给客户端当夹具;再造一份 `DEADLINE_DRAW`(整场期限到)的样例。
 
 ## 8. 服务端状态(2026-11-21)
 

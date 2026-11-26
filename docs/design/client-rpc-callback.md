@@ -1,14 +1,14 @@
 # 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler
 
-> 状态:**运行时与服务端前提已实施,未编译、未测试,待 Codex 验证**(2026-10-19,Claude)。生成器改造(§5)只出细则,由 Codex 实施;robot 运行时(§6)已由 Claude 实施(§6.1),同样未编译、未测试。
-> 2026-10-20 更新:用户改定分工——生成器源码由 Claude 写,只有跑生成、编译、冒烟交给 Codex。§5 的 proto option 与标注、共享分类校验层、Unity 调用桩生成器已落码,Codex 接通流水线并跑出客户端 `Net/Generated/Rpc/`(实施记录见 §5.7,剩余项见 §5.7 末);客户端引用迁移(§5.6)已做完;R1 两版已落码(§7);R6 负责人拍板先不改(§7)。
-> 任务来源:用户 2026-10-19「客户端也改成 RPC 回调,用上 muduo 的消息 id,每次 request 自己塞回调函数,不用专门的 Handler;Handler 是工具生成的,生成部分出细节给 Codex,你按最标准的来」。
+> 状态:**运行时与服务端前提已实施,未编译、未测试,待 Gemini 验证**(2026-10-19,Claude)。生成器改造(§5)只出细则,由 Gemini 实施;robot 运行时(§6)已由 Claude 实施(§6.1),同样未编译、未测试。
+> 2026-10-20 更新:用户改定分工——生成器源码由 Claude 写,只有跑生成、编译、冒烟交给 Gemini。§5 的 proto option 与标注、共享分类校验层、Unity 调用桩生成器已落码,Gemini 接通流水线并跑出客户端 `Net/Generated/Rpc/`(实施记录见 §5.7,剩余项见 §5.7 末);客户端引用迁移(§5.6)已做完;R1 两版已落码(§7);R6 负责人拍板先不改(§7)。
+> 任务来源:用户 2026-10-19「客户端也改成 RPC 回调,用上 muduo 的消息 id,每次 request 自己塞回调函数,不用专门的 Handler;Handler 是工具生成的,生成部分出细节给 Gemini,你按最标准的来」。
 > 「muduo 的消息 id」即 muduo `RpcMessage.id`:每次调用一个调用号,对端原样回显,调用方按它找回自己的回调。节点间 RPC0 已按此改造(`muduo-rpc-channel.md`);客户端信封早就有同位字段 `ClientRequest.id` / `MessageContent.id`(`proto/common/base/message.proto:11-17,133-140`),本次让两端都把它用成唯一的关联依据。
 > 事实核对基线:本仓 `1fc103dce`,客户端仓 `09c6ccea`,Java 仓 `4054006`。只读摸底工作流 `wf_fcd259cb-0bb`(5 个视角),结论与证据见附录 A。
 
 ## 0. 一句话
 
-客户端每次请求分配非 0 的 `ClientRequest.id` 并登记自己的回调;回包只按 `MessageContent.id` 认领,恰好一次完成(回包 / 信封错误 / 超时 / 断线 / 本地未发出);`id = 0` 只用于推送与单向消息。服务端补上最后一处不回显请求号的路径(gate 直连模式的 gRPC 回包与失败)。每消息一个的生成 Handler 由「每个服务一个类型化调用桩类」取代(§5,Codex)。
+客户端每次请求分配非 0 的 `ClientRequest.id` 并登记自己的回调;回包只按 `MessageContent.id` 认领,恰好一次完成(回包 / 信封错误 / 超时 / 断线 / 本地未发出);`id = 0` 只用于推送与单向消息。服务端补上最后一处不回显请求号的路径(gate 直连模式的 gRPC 回包与失败)。每消息一个的生成 Handler 由「每个服务一个类型化调用桩类」取代(§5,Gemini)。
 
 ## 1. 改造前的问题
 
@@ -93,7 +93,7 @@
 4. ReleaseSkill 改为请求-响应:被拒时记 `[skill] ReleaseSkill … rejected: tip=N`;未连接时记一行 NotSent(改前静默)。
 5. 战斗直连换局(新分配包 / 对另一局补签)时,旧连接上的在途调用立即以 `"link: connection_replaced"` 失败(改前要等 15s 超时,或被新局之后的断线顶着失败)。上层按 `TransportErrorPrefix` 判传输层失败,这一类判断不变;`SpectateClient` 的 StopWatchBattle 失败提示不看局号,换局瞬间仍会弹一次「退出观战失败」,只是从 15s 后提前到当场。
 
-## 5. 生成器改造细则(交给 Codex 实施)
+## 5. 生成器改造细则(交给 Gemini 实施)
 
 目标:**不再生成每消息一个的 Handler**;每个客户端协议服务生成一个「类型化调用桩」静态类,请求-响应方法带 `RpcDone<TResp>` 回调,单向方法只发,推送方法生成类型化注册函数。生成器源码在 `tools/proto_generator/protogen/`(Go)。客户端仓的写入受 `enable_unity_client` 控制,**跑生成前须获客户端任务授权**(本任务已授权)。
 
@@ -115,7 +115,7 @@ extend google.protobuf.MethodOptions {
 }
 ```
 
-在 proto 上标注(以 Codex 核对后的全集为准,下列来自摸底报告):
+在 proto 上标注(以 Gemini 核对后的全集为准,下列来自摸底报告):
 
 - `CLIENT_RPC_PUSH`:全部 `Notify*` 方法(31 个)+ `SceneClientPlayerCommon` 的 `SendTipToClient` / `KickPlayer` / `RedirectToGate`。
 - `CLIENT_RPC_ONE_WAY`:`SceneMovementClientPlayer.MoveStart / MoveStop / MoveSync`、`SceneSceneClientPlayer.SceneInfoC2S / GetSyncDigest`。判据 = 走 scene TCP 路径且响应类型**恰好**是 `Empty`(gate 按 `descriptor == ::Empty` 精确判定单向,`client_session_handler.cpp:859-866`)。
@@ -206,7 +206,7 @@ namespace MmorpgClient.Net.Generated
 
 > 2026-10-23 落地形状(以代码为准,实施记录见 §5.7):同步版带 `timeout` 参数(`pkg.GameClient.CallSync` 要求正的超时预算),签名是 `<Method>Sync(ctx context.Context, c *pkg.GameClient, req *<ReqType>, timeout time.Duration) (*<RespType>, error)`。同一个 Go 包里多个服务有同名方法,所以调用桩挂在每服务一个导出零值变量上:`var <Service> <lowerCamelService>Rpc`,调用形如 `rpc.ClientPlayerFriend.AddFriend(c, req, timeout, done)`,与 Unity 的 `ClientPlayerFriendRpc.AddFriend` 对应。结局形状:成功 `(resp, nil)`;信封错误 `(nil, *pkg.ServerTipError)`;解码失败返回包裹了服务.方法的错误;其余错误原样返回。`ONE_WAY` 是 `<Method>(c, req) error`,走 `SendRequest`(id = 0)。注册表规则:`PUSH` 一律登记,缺桩就建;`REQUEST` / `ONE_WAY` / `SERVER_ONLY` 不再建桩,只在标准文件名 `<snake_service_method>.go` 的 handler 存在时登记,所以 id = 0 路径的行为不变。删掉旧 handler 文件后,必须先重跑 proto 生成再编译 robot。
 
-### 5.6 迁移 `XxxHandler.MessageId` 引用(Codex,生成之后、编译之前)
+### 5.6 迁移 `XxxHandler.MessageId` 引用(Gemini,生成之后、编译之前)
 
 删 Handler 后以下引用会断,逐个改为 `<Service>Rpc.<Method>MessageId`(或已有的 `MessageIds.X`,二选一,同一文件内统一):
 
@@ -230,9 +230,9 @@ namespace MmorpgClient.Net.Generated
 
 核对命令:`rg -n "Handler\.MessageId|HandlerRegistry" Assets --glob '*.cs' --glob '!Assets/Scripts/Proto/Generated/**'` 结果为空。注释里提到 `HandlerRegistry` 的三处(`GameClient.cs` 重定向处理器注释、`LandingSyncClient.cs:175`、`SceneChannelClient.cs:239`)改为说明「推送注册以 OnNotify / `<Service>Rpc.On<Method>` 为准」。
 
-### 5.7 实施记录(2026-10-19 ~ 10-20;未经 Claude 编译或测试,编译 / 测试证据以 Codex 结果为准)
+### 5.7 实施记录(2026-10-19 ~ 10-20;未经 Claude 编译或测试,编译 / 测试证据以 Gemini 结果为准)
 
-分工(用户 2026-10-20 改定):生成器源码由 Claude 写;跑生成、编译、冒烟交给 Codex。
+分工(用户 2026-10-20 改定):生成器源码由 Claude 写;跑生成、编译、冒烟交给 Gemini。
 
 | 部分 | 内容 | 由谁 / 入库 |
 |---|---|---|
@@ -246,10 +246,10 @@ namespace MmorpgClient.Net.Generated
 ~~**剩余(等 Codex 当前的改动停手后由 Claude 续做)**~~ 2026-10-22 ~ 23 已做完(未经 Claude 编译或测试):
 
 1. 删旧生成器:`internal/generator/unity/unity_client_handler.go`、`internal/template/unity_client_handler.cs.tmpl`、`unity_client_handler_registry.cs.tmpl`,以及 `config.go` 里已无配置键的 `UnityHandlerDir` / `UnityHandlerRegistryFile`。**已删**(主会话);两份 yaml 里描述旧 Handler 产物的注释改为调用桩说法。
-2. §5.4 生成器单测:**已补**。Codex 先写了 7 条(`internal/client_rpc_kind_test.go`、`internal/generator/unity/unity_client_rpc_test.go`);工作流 `wf_7e4688f1-354` 代理 T 补了缺口,新增 `internal/method_comment_test.go`,覆盖一次报全多条违例、合法形态被接受、类名与成员名冲突、孤立 `.meta`、目录布局校验、稳定排序、注释提取。
+2. §5.4 生成器单测:**已补**。Gemini 先写了 7 条(`internal/client_rpc_kind_test.go`、`internal/generator/unity/unity_client_rpc_test.go`);工作流 `wf_7e4688f1-354` 代理 T 补了缺口,新增 `internal/method_comment_test.go`,覆盖一次报全多条违例、合法形态被接受、类名与成员名冲突、孤立 `.meta`、目录布局校验、稳定排序、注释提取。
 3. §5.5 robot 生成器:**已实施**(代理 R 写完源码后撞额度中断,Codex 随即用它跑出 `robot/generated/rpc/` 20 个文件,`message_body_handler.go` 只新增 3 条新服务推送、没有减少,本仓提交 `2c07f2c28`)。文件:`internal/generator/go/{robot_rpc.go,robot_go_type.go,robot_handler.go,robot_case.go}`、模板 `robot_rpc.go.tmpl` / `robot_handler.go.tmpl`、配置 `RobotRpcDir` / `robot_rpc_dir`、`cmd/pipeline.go` 的 `GoRobotRpcGenerator`。单测:`robot_rpc_test.go`(调用桩)、`robot_handler_test.go`(注册规则、推送建桩、注册表渲染,工作流 `wf_b7585ecd-bee`)。
 4. 复核(`wf_b7585ecd-bee`,robot 与共享层 / Unity 两个视角):12 条发现,0 条 major。处理结果:
-   - 已修:R1 推送 handler 写在非标准文件名时会重复建桩、文件名冲突检测(修复代理与 Codex 在 `9d2784fbf` / `f83da2e18` 完成)。
+   - 已修:R1 推送 handler 写在非标准文件名时会重复建桩、文件名冲突检测(修复代理与 Gemini 在 `9d2784fbf` / `f83da2e18` 完成)。
    - 已修:其余 R2 / B2 / B3 / B4 / B5 / R4 / R7 与 B1 陈旧注释,由工作流 `wf_3db7ae9d-706` 修复,另派复核员核对,只报了 2 条 nit。
      - R2:注册表对已存在的非 PUSH handler 文件校验 Go 构建后缀,stat 出错即报错。按复核 N1 收窄为「文件存在才校验」,方法名带 Test / Windows 等后缀但没有 handler 文件的,不会让整次生成失败。删掉了 `fileExists`。
      - B2:Unity 整写目录拒绝覆盖同名手写 `.cs`,保留集合按小写比较。复核 N2 指出大小写敏感文件系统上只差大小写的旧桩不会被清理,这个代价已写进 Unity 与 robot 两处注释。
@@ -261,7 +261,7 @@ namespace MmorpgClient.Net.Generated
    - 本节订正:R5,本文档与实现不符的地方。
    - 不在本轮:R6,`internal/model.go` 的 `GoRequest` / `GoResponse` 一类死代码,留给单独的整理改动。
 
-## 6. robot 运行时改造细则(第 1–6 条已全部实施,A / B / C 三类等待都已迁,见 §6.1;未编译,待 Codex 验证)
+## 6. robot 运行时改造细则(第 1–6 条已全部实施,A / B / C 三类等待都已迁,见 §6.1;未编译,待 Gemini 验证)
 
 `robot/pkg/client.go`:
 
@@ -335,14 +335,14 @@ namespace MmorpgClient.Net.Generated
   - robot:迁到 `Call` 的 scene 请求本来就把信封拒绝当失败,没有会变红的既有断言;只订正了 `robot/mystery_merchant_smoke_scenario.go:81` 一行注释(已告知 robot 迁移会话)。客户端仓没有断言「早退不回包」的测试。
 - **R2 业务模块仍用旧字符串错误**:8 个模块因 FIFO 错配而「错误不明即隔离到重连」的保守策略,在 id-only 认领后可以放宽为「仅 `OutcomeUnknown` 才隔离」。逐模块改、逐模块测,不在本轮。
 - **R3 `IBattleTransport` 与 `IRpcChannel` 并存**:16 个实现与约 60 个调用点未迁,`ToLegacyError` 是唯一桥。迁完后删 `Call(onResponse, onError)` 与 `ParseCallLevelTip` 一类字符串解析。
-- **R4 gate 上行白名单按方法方向收口(2026-11-05 已落码,未编译,待 Codex 重新生成并验证)**:改前生成器只看服务是否标了 `OptionIsClientProtocolService`,同一服务里的推送号(NotifyFriendEvent、NotifyMailChanged 等)与仅服务端方法(`GuildService.UpdateGuildScore`)也进了 gate 的 `IsClientMessageId`,客户端发上来会被转给业务服,只靠各服务的会话拦截器挡。现在:
+- **R4 gate 上行白名单按方法方向收口(2026-11-05 已落码,未编译,待 Gemini 重新生成并验证)**:改前生成器只看服务是否标了 `OptionIsClientProtocolService`,同一服务里的推送号(NotifyFriendEvent、NotifyMailChanged 等)与仅服务端方法(`GuildService.UpdateGuildScore`)也进了 gate 的 `IsClientMessageId`,客户端发上来会被转给业务服,只靠各服务的会话拦截器挡。现在:
   - 唯一判定 `ClientRpcKind.AcceptsClientUpstream()`(`tools/proto_generator/protogen/internal/client_rpc_kind.go`):只有 REQUEST(含未标注)与 ONE_WAY 为真。C++ 生成器 `service_register_info.go` 的纯函数 `clientAllowlistCases` 取 `internal.ClassifyClientRpcServices` 的分类(与 Unity、robot 生成器同一份),只在进 RPC 注册表的服务(`inRpcRegistry`:有方法、不属 db 节点、对得上节点类型)里按它收号。分类校验有任一违例(option 读不出来、Notify 前缀没标推送等 §5.2 各条)时生成失败,不按 REQUEST 兜底放行;这样 C++ 产物自己就受 §5.2 校验约束,不依赖同组的 Unity / robot 生成器恰好在跑。单测:判定 `TestClientRpcKindAcceptsClientUpstreamOnlyForClientInitiatedKinds`(internal 包),接线 `TestClientAllowlistCasesOnlyAdmitsClientInitiatedMethods`、`TestClientAllowlistCasesFailsClosedOnInvalidClientRpcKind`(generator/cpp 包)。
   - 被排除的号只有服务端下行的推送(Notify*、`KickPlayer`、`RedirectToGate`、`SendTipToClient`)与 `Disconnect`(gate 合成)、`UpdateGuildScore`,没有客户端合法上行的方法。客户端发上来时 gate 走「未知 / 未授权消息号」分支:计一次非法包(累计到阈值踢线)、不回包。正常客户端不发这些号,不受影响。
   - 第二道防线只在经路由服转发的 Go 业务服:friend、guild、mail、trade、rank 等的会话拦截器按手写方法级白名单(`ClientMethods`)保留。路由服的路由表照旧按服务登记,它只接收 gate 转来的请求,不重复做方向判定。**scene 的 TCP 路径没有第二道**:`scene_handler.cpp` 的 `ProcessClientPlayerMessage` 只按注册表派发,只拦退出中的玩家与 GM 方法,不看方法形态,推送类 handler(`NotifyEnterScene`、`KickPlayer`、`RedirectToGate` 等)的方向约束只靠 gate 这一道。后续可让 C++ 生成器同时生成「方法可否由客户端发起」的查询,在 `ProcessClientPlayerMessage` 入口与 GM 闸一起复核(未排期)。
   - robot 的三个反向断言改为期望超时(与 trade 第 2 步同一口径):friend 第 6 步(NotifyFriendEvent)、mail 第 7 步(NotifyMailChanged)、guild 第 9 步(UpdateGuildScore,随后仍查榜确认积分没变);收到信封拒绝即判 gate 白名单没按新生成器重新生成。
-  - **连带改动(2026-11-05 评审确认,同日已改正文;未编译,待 Codex 验证)**:下列各项都已按 R4 口径改完,逐项写明落到的位置。已执行轮次的实跑证据保留原文,旁边注明「这是 R4 之前的口径」。下一个会话不要照这份清单重改一遍。
+  - **连带改动(2026-11-05 评审确认,同日已改正文;未编译,待 Gemini 验证)**:下列各项都已按 R4 口径改完,逐项写明落到的位置。已执行轮次的实跑证据保留原文,旁边注明「这是 R4 之前的口径」。下一个会话不要照这份清单重改一遍。
     - 冒烟验收(已改):`guild-zone-client-access.md` 第 18 行 G4、§6 第 82 行 proto-gen 的 `IsClientMessageId` 预期号表(不再含 UpdateGuildScore 的 8)与第 92–94 行 step 9;`friend-port-20260918.md` 第 60 行 F5 与第 226 行 ⑥;`mail-system.md` §10 ⑦ 与 §12.3「给构建方的顺序」第 5 步(方法名已改为 NotifyMailChanged);`docs/handoff/friend-handoff-20260920.md` 第 512–513 行 D-9(friend-port ⑥ 以它为准)与第 742 行。统一口径:这个请求等满约 10s 超时才算通过(guild 随后查榜积分仍为 0);推送号或 SERVER_ONLY 号收到信封拒绝,说明 gate 不是 R4 重新生成后编出的版本;mail 第 7 步的两个 `MailAdmin` 号收到信封则与 R4 无关,说明 `MailAdmin` 被放进了客户端白名单(见 `mail-system.md` §10 ⑦);路由服与业务服日志里不应出现这次请求;会话拦截器这道防线由 session 单测(`TestClientCannotCallInternalMethod`、`TestSessionGateWiredIntoUnaryChain` 等)证明。实跑证据 `friend-handoff-20260920.md:1130`、`guild-zone-client-access.md:114` 保留原文,已注明是 R4 之前的口径。
-    - 客户端规格(已改):`friend-client-spec-20260920.md` 第 182–184 行与第 372 行,改为「调 NotifyFriendEvent 不会有任何回包,计入 gate 非法包,累计到阈值断线」;`client-access-band-routing.md` 的 K5(第 112 行)、K8(第 115 行)、F2(第 147 行)已加 R4 标注(待 Codex 重新生成并验证),同文件 §14「断线通知的完整口径」与 §16 阶段 0 e 项已改为 R4 之后的现状;Java 版待做。
+    - 客户端规格(已改):`friend-client-spec-20260920.md` 第 182–184 行与第 372 行,改为「调 NotifyFriendEvent 不会有任何回包,计入 gate 非法包,累计到阈值断线」;`client-access-band-routing.md` 的 K5(第 112 行)、K8(第 115 行)、F2(第 147 行)已加 R4 标注(待 Gemini 重新生成并验证),同文件 §14「断线通知的完整口径」与 §16 阶段 0 e 项已改为 R4 之后的现状;Java 版待做。
     - 注释与配置(已改):`robot/etc/guild_smoke.yaml` 文件头第 7–14 行(期望超时,收到信封即 gate 未重新生成)与前置第 22–23 行;`proto/guild/guild.proto` 第 558–562 行与第 586–587 行(UpdateGuildScore 仍登记在路由表,但因 SERVER_ONLY 不进 gate 上行白名单;推送号同理;session 白名单是第二道防线。改 proto 注释会带出描述符字节变化,并入下一次 proto 生成);`robot/main.go` runRobotOnce 第 443–448 行(断线通知由 gate 在 TCP 关闭时合成,带会话代次,robot 只需关连接)。
     - 清理(已做):已删 `robot/login_test.go`(两条用例只测空函数 `sendDisconnectBestEffort` 不 panic,不守任何行为)与 `sendDisconnectBestEffort` 的定义及全部调用点。残留引用同批订正:`docs/ops/release-checklist.md` F.B-1(治标层已撤除)、`docs/ops/pr-templates.md` 模板 A / B2 / C(注明是 R4 之前的口径,模板 C 的 Test 段换成 gate 侧回归测试)、`robot/travel_smoke_scenario.go` cleanup 的注释(已发出 Login 的新连接关闭时 gate 仍会合成断线通知)。
   - Java 版:gate 白名单同样按服务判定,待做,已登记 Java `PARITY.md`。
@@ -355,7 +355,7 @@ namespace MmorpgClient.Net.Generated
 - PARITY:建议在 Java 仓 `PARITY.md` 登记一行「客户端请求号关联:C++ gate 直连模式回包 / 失败回显 id(本次)↔ Java gate 已满足(`ClientDispatcher` 全路径回显)」,跨仓写入待用户同意;另 `PARITY.md:170`(「ClientForward 不带关联号,Java 待做」)已过时,`node_link.proto:120` 早有 `request_id`,一并订正。
 - **2026-10-20 已写入 Java `PARITY.md`**:第 171 行(原 170 行)状态订正为「Java 待做(部分)」,只剩「转出之后 gate 不跟踪在途请求」;第 172 行 R6「Java 待做」;第 173 行 R1「已对齐(两版都未编译、未测试)」。
 
-## 9. 给 Codex 的验证步骤
+## 9. 给 Gemini 的验证步骤
 
 按顺序;任何一步失败保留输出并停下。
 

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+// SkillVfxCosmetic 表的权威 schema。源表 data/SkillVfxCosmetic.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 技能特效外观目录表（纯战斗画面表现，零伤害/范围/目标/冷却变更）：
+//   - id 列带 (cfg_bit_index) = true,由导表器经 skillvfxcosmetic_mapping.json 分配永不复用的紧凑位序,
+//     供 PlayerProfileComp.skill_vfx_owned_bits(永久拥有位图)使用。
+//   - 表级 (cfg_ids_permanent) = true:上线后禁止物理删行或复用旧 ID,下架特效请将 enabled 置 0。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message SkillVfxCosmeticTable {
+  option (cfg_sheet)         = "SkillVfxCosmetic";
+  option (cfg_source_file)   = "SkillVfxCosmetic.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+
+  // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到拥有位图下标)
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // 稳定特效标识键(全表唯一非空,如 "vfx_xuanfu_gilded")
+  string vfx_key = 2;
+  // 中文展示名(如 "鎏金符纹")
+  string name = 3;
+  // 适用技能 ID(Skill.id,必须存在于 Skill 表)
+  uint32 skill_table_id = 4 [(cfg_fk) = "Skill"];
+  // 命中/主特效帧条 ID(Battle/Fx/<fx_id>_strip)
+  string fx_id = 5;
+  // 可选飞行段特效帧条 ID(空串表示沿用技能默认飞行段)
+  string projectile_fx_id = 6;
+  // 可选预示段特效帧条 ID(空串表示沿用技能默认预示段)
+  string telegraph_fx_id = 7;
+  // 可选色调覆盖(#RRGGBB,空串表示原色)
+  string tint_hex = 8;
+  // 是否启用:1 = 开放展示与启用,0 = 下架(不物理删行)
+  uint32 enabled = 9;
+  // 界面展示排序(升序)
+  uint32 sort_order = 10;
+  // 官方商城永久衣柜对应 SKU ID(0 = 非官方商城直售/待上架)
+  uint64 mall_sku_id = 11;
+  // 未拥有且未上架时展示的取得条件文案
+  string acquire_hint = 12;
+  // 特效说明文案(纯画面描述,零数值)
+  string desc = 13;
+}

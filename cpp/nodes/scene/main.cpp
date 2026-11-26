@@ -45,6 +45,8 @@
 #include "player/system/player_season.h"
 #include "player/system/player_trial_journal.h"
 #include "player/system/player_craft.h"
+#include "player/system/player_spirit_shop.h"
+#include "player/system/player_travel_pass.h"
 #include "player/system/player_rename.h"
 
 #include <chrono>
@@ -172,6 +174,8 @@ namespace
                 PlayerSeasonSystem::ValidateTables();
                 PlayerTrialJournalSystem::ValidateTables();
                 PlayerCraftSystem::ValidateTables();
+                PlayerSpiritShopSystem::ValidateTables();
+                PlayerTravelPassSystem::ValidateTables();
                 rankedpreset::ValidateTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();

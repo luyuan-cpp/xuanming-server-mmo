@@ -92,7 +92,7 @@ C++ 侧 `cpp/libs/engine/infra/storage/redis_client/redis_client.h` 基于 hired
 | D2 | **双存储**:match 私有 key(`match:*` / `challenge:*` / `spectate:*`)→ `MatchRedis`(可配 `Type: cluster`);跨运行时契约 key(`player:{id}:location` / `player:session:{id}` / `battle:lock:{id}`)→ `SharedRedis`(既有共享库,match 只读)。**例外(2026-09-15,[team-system.md](team-system.md) DV-2 / J-2)**:match 进程内的 team 模块(`go/match/internal/team`)写 SharedRedis 的 `team:rec:*` / `team:<id>` / `team:player:*` / `team:invite:*` 四类 key;match 原有代码(队列 / 票据 / 切磋 / 观战)对 SharedRedis 仍只读。**2026-10-12 更正**:唯一的写是 matcher 启动时与周期 sweep 的 `migrateLegacyQueues`(`go/match/internal/logic/matcher.go`),在 SharedRedis 上 SCAN + RPOP 改造前实例写下的旧格式队列并搬进 MatchRedis;写的是 match 自己的旧 key,不碰任何跨运行时契约 key。**2026-10-20 更正**:项目未上线、没有改造前实例留下的旧格式队列,`migrateLegacyQueues` / `migrateLegacyQueue` / `legacyQueueSweepInterval`、`keys.go` 的 `legacyMatchQueueScanPattern` / `legacyMatchQueueKey`、CancelQueue 与 `dequeueMemberCtx` 对旧格式键的单 key LREM 已整体删除,`ticketQueueKey` 只返回新格式键;match 原有代码(队列 / 票据 / 切磋 / 观战)对 SharedRedis 恢复为只读,上面的 team 例外仍是唯一的写 | 契约 key 的写者是 scene_manager / player_locator / **C++ scene**,C++ 无集群客户端;按有界上下文拆存储是标准做法,且不动任何其他服务。`MatchRedis` 缺省时回落到 `Redis`(向后兼容,本地单库照跑)。team 例外的理由:C++ scene 用 hiredis `GetZoneRedis()` 读 `team:<id>` 投影(无集群客户端),所以投影只能放 SharedRedis;权威记录、投影、玩家索引、邀请反查必须在同一条 Lua 里原子提交,四类 key 只能同库。写入范围限定这四类前缀,不扩大到其他契约 key |
 | D3 | **队列相关 key 共用 hash tag `{mq}` 同 slot**:`match:{mq}:index`(注册集)、`match:{mq}:queue:<mode>:<config>`、`match:{mq}:lock:<mode>:<config>`;入队用 Lua 原子 `SADD index + RPUSH queue` | 用注册集取代 SCAN;同 slot 让"注册集 ⊆ 队列集合"成为不变量(主从异步复制的故障切换不会让队列脱离注册集);队列操作 QPS 极低,单 slot 不是瓶颈(§6) |
 | D4 | 票据 `match:ticket:{pid}` 按玩家分布;新增 `zone_id`、`queue_key` 字段 | zone 用于可观测性与对局日志;`queue_key` 让取消 / 回队首不再重算 key(格式演进安全) |
-| D5 | **`matched` 态票据短 TTL**:弹组时按组大小计算 `max(MatchedTicketTTLSeconds, n×(removeObserverTimeout+prepareTimeout) + createTimeout + rollbackTimeout + 10s)`(2 人 30s / 5 人 48s / 10 人 78s;超时常量取自 gather.go,不另写数字)。**(2026-09-29 更正,原公式与数值保留作历史)现行公式** `max(MatchedTicketTTLSeconds, ⌈n×(removeObserverTimeout+prepareBattleTimeout) + gatherCreateStageWorst + rollbackTimeout⌉ + 10s)`:原来的 `createTimeout` 项换成 `gatherCreateStageWorst = 2×(spectateRecordWriteWorst + createBattleTimeout) = 2×(6.1s+5s) = 22.2s`,覆盖「建房前先写观战记录(fail-closed)+ 首选节点被准入拒绝(`battle_not_allocatable`)后改写记录、换节点再建一次」的最坏链路(k8s-client-entry D82);常量 3s / 3s / 5s / 3s / 6.1s 取自 `gather.go:27-29`、`spectate.go:35`、`:81`。**1 / 2 / 5 / 10 人 = 42 / 48 / 66 / 96s**(`go/match/internal/logic/queue.go:342`、`:367-380`)。同一值也是 `prepare_deadline_ms` 的窗口(D13),下游:scene 备战锁 EX = 该期限 + 60s(十人组最长到 gather 起点 +156s),battle 确认事件补发窗口 `kConfirmResendWindowMs` = 180s ≥ 156s(`battle_room_manager.cpp:267`)。未编译、未测试,待 Codex 验证。**(2026-10-31 更正)**观战记录键已删,`gatherCreateStageWorst = 2×createBattleTimeout = 10s`,**1 / 2 / 5 / 10 人 = 30(配置下限,公式值 29)/ 35 / 53 / 83s**,十人组锁最长到 gather 起点 +143s,仍 ≤ 180s;未运行,待 Codex 验证;gather 失败进补偿前对幸存者按 `prepared×3+10` 续期;**票据所有写入带 ticket id 的 Lua CAS**(matched / ready / 回队首 / 失败删票 / 取消删票五处):票据过期被玩家重排后的新票据不会被迟到的旧 gather 写脏;CAS 失败的成员不进 gather(视为已取消出局);回队首**先 CAS 后 LPUSH**,LPUSH 失败则 CAS 删票不留反向孤儿;JoinQueue 遇 queued 票据先 `LPOS` 探测队列,不在则原地补入队(票据/队列分属两个 master 的故障切换组合丢失可自愈);JoinQueue 遇 **ready** 票据且 `battle:lock` 已不存在(战斗已结束)→ CAS 删票放行(2026-09-02 冒烟复跑:上一局 16s 前结束,ready 票据 TTL 60s 未到把"打完立刻再排"拒了一分钟) | 三视角复审(2026-09-02)逐条推翻了"固定 30s"与"先 LPUSH 后 CAS":gather 链路是 清退×n → Prepare×n → Create → (失败)Destroy+解冻×n,固定 30s 在 5 人组正常路径就会过期;scene 侧冻结由既有 deadline reaper 兜底(见 §5) |
+| D5 | **`matched` 态票据短 TTL**:弹组时按组大小计算 `max(MatchedTicketTTLSeconds, n×(removeObserverTimeout+prepareTimeout) + createTimeout + rollbackTimeout + 10s)`(2 人 30s / 5 人 48s / 10 人 78s;超时常量取自 gather.go,不另写数字)。**(2026-09-29 更正,原公式与数值保留作历史)现行公式** `max(MatchedTicketTTLSeconds, ⌈n×(removeObserverTimeout+prepareBattleTimeout) + gatherCreateStageWorst + rollbackTimeout⌉ + 10s)`:原来的 `createTimeout` 项换成 `gatherCreateStageWorst = 2×(spectateRecordWriteWorst + createBattleTimeout) = 2×(6.1s+5s) = 22.2s`,覆盖「建房前先写观战记录(fail-closed)+ 首选节点被准入拒绝(`battle_not_allocatable`)后改写记录、换节点再建一次」的最坏链路(k8s-client-entry D82);常量 3s / 3s / 5s / 3s / 6.1s 取自 `gather.go:27-29`、`spectate.go:35`、`:81`。**1 / 2 / 5 / 10 人 = 42 / 48 / 66 / 96s**(`go/match/internal/logic/queue.go:342`、`:367-380`)。同一值也是 `prepare_deadline_ms` 的窗口(D13),下游:scene 备战锁 EX = 该期限 + 60s(十人组最长到 gather 起点 +156s),battle 确认事件补发窗口 `kConfirmResendWindowMs` = 180s ≥ 156s(`battle_room_manager.cpp:267`)。未编译、未测试,待 Gemini 验证。**(2026-10-31 更正)**观战记录键已删,`gatherCreateStageWorst = 2×createBattleTimeout = 10s`,**1 / 2 / 5 / 10 人 = 30(配置下限,公式值 29)/ 35 / 53 / 83s**,十人组锁最长到 gather 起点 +143s,仍 ≤ 180s;未运行,待 Gemini 验证;gather 失败进补偿前对幸存者按 `prepared×3+10` 续期;**票据所有写入带 ticket id 的 Lua CAS**(matched / ready / 回队首 / 失败删票 / 取消删票五处):票据过期被玩家重排后的新票据不会被迟到的旧 gather 写脏;CAS 失败的成员不进 gather(视为已取消出局);回队首**先 CAS 后 LPUSH**,LPUSH 失败则 CAS 删票不留反向孤儿;JoinQueue 遇 queued 票据先 `LPOS` 探测队列,不在则原地补入队(票据/队列分属两个 master 的故障切换组合丢失可自愈);JoinQueue 遇 **ready** 票据且 `battle:lock` 已不存在(战斗已结束)→ CAS 删票放行(2026-09-02 冒烟复跑:上一局 16s 前结束,ready 票据 TTL 60s 未到把"打完立刻再排"拒了一分钟) | 三视角复审(2026-09-02)逐条推翻了"固定 30s"与"先 LPUSH 后 CAS":gather 链路是 清退×n → Prepare×n → Create → (失败)Destroy+解冻×n,固定 30s 在 5 人组正常路径就会过期;scene 侧冻结由既有 deadline reaper 兜底(见 §5) |
 | D5b | **`shared/snowflakealloc` 接管原 worker id 的条件 = (旧 lease 已死)或(前任留下 `released` 标记)**:`Close()` 不撤销 lease(既有契约:≤TTL 的隔离窗吸收跨机时钟偏斜)但会在同一 lease 下写 `<nodeKey>/released` 标记 → 同主机优雅重启仍在 TTL 内复用原 id;lease 活着且无标记(仍在运行 / 刚崩溃)则**不抢**,改用派生键 `hostname#<leaseID>` 继续分配新 id(不能停在原键上:双 key CAS 要求 nodeKey 不存在,会一直失败到 ctx 超时 —— kill 后 60s 内重启也会撞上,本地实测 scene_manager 就这样 `claim txn: context deadline exceeded` 起不来);KeepAlive 句柄按 idKey 里实际写入的亲和键做所有权 watch;match 另把亲和键改为 `hostname#ListenOn` | 原实现按 hostname 亲和"复用"且不校验旧持有者存活(`allocator.go:144-167`)。**本地实证(2026-09-02 11:43)**:按 `-Zone 2` 起第二个 login,它抢走 worker 0 并把 nodeKey 挂到自己的 lease,zone1 login 在 keepalive 里检测到 ownership lost → fence + 退出 → 网关 assign-gate 全线 UNAVAILABLE。这是共享库缺陷,login / scene_manager / player_locator / guild / friend / match 全部受影响,所以修在库里而不是各服务绕开;K8s 每 Pod 独立 hostname 不触发,但不能把正确性押在部署形态上 |
 | D5c | `queue_depth` 只由持锁实例上报;队列从注册集剔除时显式归零 | 多实例各自上报同一队列 → 看板 sum 放大 N 倍;队列弹空后 gauge 永不归零 → 积压告警误报 |
 | D6 | JoinQueue 读位置取 zone;位置缺失直接拒(新错误码 `ErrNotInScene=8`) | 无位置的玩家 gather 必败(`no_location`),提前拒绝比进队再失败更省 |
@@ -137,7 +137,7 @@ JoinQueue(任一 zone 玩家)→ 票据(含 zone)→ Lua 原子入队 → matche
 > - 入口路由:上图「zN gate ──gRPC──▶ match×N(NODE_MATCH 随机路由)」是 gate 直连模式的画法。本地(`start_game.ps1`)与 K8s(`k8s_deploy.ps1`)部署默认路由模式,gate 经 `client_rpc_router` 转到 match(gate 白名单收成 `{Scene, ClientRpcRouter}`,`gate/main.cpp:216-219`;[client-rpc-router.md](./client-rpc-router.md),[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-12 修订);C++ 进程默认仍是直连。
 > - 各 zone 的客户端收到 Assigned 后,凭票据**直连**全局池里的 battle 节点(每局第二条连接,与所在 zone 无关;跨 zone 对局双方连同一台 battle);上行战斗消息只走这条直连。
 > - 更正后的流程:… → CreateBattle(battle 预签全员票据,任一失败不建房,D70)→ battle 经各自 gate 的命令 topic 推 Assigned / Start(无活直连时回落;有活直连则直发)→ 客户端直连 battle → 战斗 → 结算回各自 scene(Kafka scene 命令 topic,路径不变)。
-> - 以上已落码、**未编译、未测试**,待 Codex 验证;集群外客户端能否连到 battle 取决于入口形态(D76–D93,k8s-client-entry.md)。
+> - 以上已落码、**未编译、未测试**,待 Gemini 验证;集群外客户端能否连到 battle 取决于入口形态(D76–D93,k8s-client-entry.md)。
 
 ---
 
@@ -299,7 +299,7 @@ MULTI、MGET(§10.0)。所以 SharedRedis **必须保持单实例(或主从哨�
 
 | 服务 | 阻塞项 |
 |---|---|
-| C++ scene | hiredis 裸连接无 MOVED/ASK;存盘 Lua 访问未声明的全局 key `dirty_keys_set`(`redis_client.h:18-22,461-475`)。(2026-10-20 更正:B0-2 已随 `e76f6f747` 删掉这项写入,两段存盘脚本 `kSaveLuaScript` / `kSaveIfGuardLuaScript` 现在只访问 KEYS[] 声明的键,未编译、待 Codex 验证。本行剩下的阻塞是:无 MOVED/ASK,以及守卫脚本的两个键没有共同 hash tag)|
+| C++ scene | hiredis 裸连接无 MOVED/ASK;存盘 Lua 访问未声明的全局 key `dirty_keys_set`(`redis_client.h:18-22,461-475`)。(2026-10-20 更正:B0-2 已随 `e76f6f747` 删掉这项写入,两段存盘脚本 `kSaveLuaScript` / `kSaveIfGuardLuaScript` 现在只访问 KEYS[] 声明的键,未编译、待 Gemini 验证。本行剩下的阻塞是:无 MOVED/ASK,以及守卫脚本的两个键没有共同 hash tag)|
 | player_locator | 8 个 Lua 把 per-player key 与全局租约容器原子绑定(CROSSSLOT);`claimExpiredLeasesScript` 脚本内拼 key |
 | login | 排队/token 4 处跨 slot MULTI/EXEC;gate 排空查询跨 slot MGET |
 | scene_manager | 场景生命周期 Lua 7 key/3N key 跨 slot |
@@ -502,7 +502,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 
 ## 13. 全球权威成局与未知结果恢复（2026-10-16）
 
-本节为第 12 节的实现补充，覆盖第 1～11 节 Redis 票据/成局作为生产权威的旧口径。2026-10-30 起 `GlobalMatch.Enabled` 与 Redis 队列、票据已删除（未编译，待 Codex 验证），开发与生产同一份代码，都连接同一逻辑 SQL 库（TiDB，或 `Backend: mysql` 的 MySQL 主库，见 `player-data-tidb-scaling-plan.md` §5.4）。故障时拒绝新提交并查询原意图，不回落 Redis 建票/随机机房。队伍名单、邀请展示、在线位置继续使用既有服务；成局票据、全员占用、原业务意图、执行目标和创建请求以 SQL 为权威。
+本节为第 12 节的实现补充，覆盖第 1～11 节 Redis 票据/成局作为生产权威的旧口径。2026-10-30 起 `GlobalMatch.Enabled` 与 Redis 队列、票据已删除（未编译，待 Gemini 验证），开发与生产同一份代码，都连接同一逻辑 SQL 库（TiDB，或 `Backend: mysql` 的 MySQL 主库，见 `player-data-tidb-scaling-plan.md` §5.4）。故障时拒绝新提交并查询原意图，不回落 Redis 建票/随机机房。队伍名单、邀请展示、在线位置继续使用既有服务；成局票据、全员占用、原业务意图、执行目标和创建请求以 SQL 为权威。
 
 ### 13.1 逐成员延迟与调度
 
@@ -518,10 +518,10 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 - 整队：`StartTeamMatch.request_id` 为发起端落盘的稳定 UUID。源队伍开战 CAS 后，在成功回包前，将原始请求与全员 SQL 占用作为持久原件 `team_launch` 一次事务提交（补位与 PVP 在同一事务进队列，满员 PVE 随后沿原件成局）；GetMyTeam 携原 UUID 补拉 `TeamMatchIntent`，StartTeamMatch 回包也带它。空/非法 UUID 明确拒绝，不能按旧客户端空请求号假成功。后台布尔 gather 结果不构成未知成局失败的证据。
   - 回执口径（`proto/team/team.proto` 的 `TeamMatchIntent.state`）：带 battle_id 时取原 formation 的状态，4/5 才清源开战锁并推送最终结果，1～3 保留原意图；不带 battle_id 时取整队原件的状态，2 已入队、5 未成局即关闭（含 CancelQueue 在首次提交前立下的原 UUID 墓碑）都是确定结论，1 待提交保留原意图。
   - 6 表示原件属于角色此前的归属：会话已按护栏核对为角色现主人，原件却记着过户前的主人。现主人不能恢复它，StartTeamMatch 沿它重发按业务拒绝（`kInvalidParameter`）并带同一回执，客户端据此释放本机原意图。会话本身已不归角色现主人时不给这个结论，仍按原会话失效处理。
-  - 查不到原件时不带回执，查询失败回故障，两种情况客户端都保留原意图。客户端只在恢复查询或重发原请求时显示「原……」确认用语，首发请求的回包沿用开战提示。2026-11-19 起按此口径（未编译、未测试，待 Codex 验证；Java 待做）。
+  - 查不到原件时不带回执，查询失败回故障，两种情况客户端都保留原意图。客户端只在恢复查询或重发原请求时显示「原……」确认用语，首发请求的回包沿用开战提示。2026-11-19 起按此口径（未编译、未测试，待 Gemini 验证；Java 待做）。
 - 活动：原持久 guild lobby_id 作为 `StartActivityBattle.request_id`，同 guild/同 lobby 重试返回原 formation；不能在后台才发号建票。
 - 切磋：原 challenge_id 与应战者组成稳定业务键，同一 SQL 决策锁中争抢接受/拒绝。接受包含全员占用和成局，拒绝写永久决策墓碑；迟到另一决定不能反转。邀请 Redis 投影在 SQL 决定之后清理，投影故障不能改写 SQL 结局。
-- 角色换主人之后的本机原请求（2026-11-19，未生成、未编译、未测试，待 Codex 验证；Java 待做）：过户、删角之前护栏要求这名角色在各参与域的在途操作全部了结（`authority.RoleFencePending` 是 match 的那一份），所以换主人之前留在设备上的待确认记录都已作废，新主人既不该恢复也不该重发。分两层保证：
+- 角色换主人之后的本机原请求（2026-11-19，未生成、未编译、未测试，待 Gemini 验证；Java 待做）：过户、删角之前护栏要求这名角色在各参与域的在途操作全部了结（`authority.RoleFencePending` 是 match 的那一份），所以换主人之前留在设备上的待确认记录都已作废，新主人既不该恢复也不该重发。分两层保证：
   - 客户端：受理的 `EnterGameResponse.owner_revision` 把角色的归属修订号交给客户端（与角色编号同时记下）。本机待确认记录（单人排队、整队开局、组队操作、活动领奖、装备打造、材料选择、帮会经济、商城）在首行记写入时的修订号；记录与当前修订号都已知且不同，就按不存在处理：不恢复、不重发、不占槽位。任一方未知（旧服务端、沿用上一发在途进场而没拿到应答、旧格式文件）时照旧保留，宁可退回原行为，也不把本人的记录藏起来。
   - 服务端：客户端判断不了时（修订号未知、旧客户端），match 的恢复入口对「原件属于前主人」给确定结论，不当故障回：整队开局回 `TeamMatchIntent.state=6`；排队查询回 `request_cancelled=true`（`authority.QueueRequestClosed`），撤销回成功且原件不动（`authority.CancelIntent`、CancelQueue）。会话本身已不归角色现主人时不给这些结论，仍按原会话失效处理。组队操作的回执本来就按业务拒绝回（`errTeamIntentConflict` → `kInvalidParameter`），客户端收到即作废记录。
 
@@ -540,9 +540,9 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 - **无原件**：Create 只在同一租约下 `SaveSupportedIntent` 提交成功、发送前 `CheckWork` 仍有效之后才发出；租约被接管后旧 worker 的写入与发送都会被拒。所以本代租约下没有原件（`Store.CreateIntentPersisted` 返回 false）就证明原 operation 从未、也不会再建房，`globalDestroy` 不再等目标 Battle 应答，直接走 `globalAbortPrepared → Finish(false)` 解冻并回队或结束原票；`Finish` 在行锁内复核同一租约且仍无原件，多副本只有持租者能提交。
 - **有原件**：一次查询超时、拨号失败或实例消失只记 UNKNOWN，截止前绝不释放（Create 可能在途，提前释放会让同一玩家进两局）。唯一的例外是正面证明：原件准入期限加时钟余量已过、原实例对原操作立了拒收墓碑并回 ABORTED，2026-11-05 起据此提前 ABORT（见下文「2026-11-05 修复」第 7 条）。截止后 `AcquireWork` 回 `ErrAwaitingExpiredOutcome`，`Pending` 也不再列出（2026-11-06 起不分终局协议），原租约最多 120 秒后到期，由 `RecoverExpiredOutcomes` 在原 P→formation 锁内争唯一 SQL ABORT（`match_battle_completion` 主键保证只有一份）；2026-11-06 起作废之前先向原执行实例取证，原实例仍持有房间就等它提交，最多等到硬上限（见下文「2026-11-06 修复：截止作废先取证」）；迟到的 COMPLETE 只能读到 ABORT。
 
-不采用"注册中心里目标 UUID 消失超过宽限期"作证据：etcd 租约到期不等于进程已死（分区时旧进程可能仍在跑这局），同端点出现新 UUID 也只说明端点被复用；两者都不能排除旧进程迟到提交。释放后玩家冻结与 `battle:lock` 仍按原路径解除：发房前收尾逐人 `CancelBattlePrepare`，失败时 scene 按备战期限兜底；到期 ABORT 不调用解冻，scene reaper 按备战期限（未确认开局）或同一权威截止（已确认开局）自行解除。Battle 侧不需要改：`QueryBattleCreation` 对不符的目标 UUID 空回包，match 按 UNKNOWN 处理即是 fail-closed。第一轮 §4 第 11 条（已打完的战斗被恢复误判为未建成、票据回队）已由同日「已开局后丢失终局的恢复接缝」覆盖：v1 房间先取得 COMPLETE 再删房，`Finish(false)` 拒绝有原件的失败收尾，本修复没有改那条路径。回归在 `go/match/internal/authority/formation_recovery_exit_test.go`（真 TiDB）；未编译、未测试，待 Codex 验证。Java 版同类入口（`GlobalMatchService.abort` 无原件时同样要求固定执行端回 ABORTED）待做。
+不采用"注册中心里目标 UUID 消失超过宽限期"作证据：etcd 租约到期不等于进程已死（分区时旧进程可能仍在跑这局），同端点出现新 UUID 也只说明端点被复用；两者都不能排除旧进程迟到提交。释放后玩家冻结与 `battle:lock` 仍按原路径解除：发房前收尾逐人 `CancelBattlePrepare`，失败时 scene 按备战期限兜底；到期 ABORT 不调用解冻，scene reaper 按备战期限（未确认开局）或同一权威截止（已确认开局）自行解除。Battle 侧不需要改：`QueryBattleCreation` 对不符的目标 UUID 空回包，match 按 UNKNOWN 处理即是 fail-closed。第一轮 §4 第 11 条（已打完的战斗被恢复误判为未建成、票据回队）已由同日「已开局后丢失终局的恢复接缝」覆盖：v1 房间先取得 COMPLETE 再删房，`Finish(false)` 拒绝有原件的失败收尾，本修复没有改那条路径。回归在 `go/match/internal/authority/formation_recovery_exit_test.go`（真 TiDB）；未编译、未测试，待 Gemini 验证。Java 版同类入口（`GlobalMatchService.abort` 无原件时同样要求固定执行端回 ABORTED）待做。
 
-**2026-10-22 修复（评审补，social-match-battle#0 评审意见；Go，未编译、未测试，待 Codex 验证）。**
+**2026-10-22 修复（评审补，social-match-battle#0 评审意见；Go，未编译、未测试，待 Gemini 验证）。**
 
 - **回归测试补到 logic 层**：上段的 Store 层用例只证明了 `CreateIntentPersisted` 与 `Finish(false)` 的既有前提（`Finish(false)` 无原件时修复前就能成功，`AcquireWork` 本来就互斥），把 `globalDestroy` 改回旧代码它们照样全绿。`globalDestroy` 的依赖收窄成接口 `formationDestroyAuthority`（`CreateIntentPersisted` / `RecordBattleAdopted` / `Finish`，生产实现仍是 `*authority.Store`），`go/match/internal/logic/global_destroy_test.go` 用替身直接调生产函数，目标端点指向不监听的 `127.0.0.1:1`，不起 TiDB、不起 Battle：
   - 无原件必须返回 true，且不调用任何提交。改回旧代码会去拨号，`DestroyBattle` 失败返回 false，用例转红；
@@ -558,7 +558,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
   - **截止竞态**：权威截止与 Battle 房间 deadline 是同一个值，打满时限的强制平局、截止前几秒打完但 `CommitBattleOutcome` 晚到的正常结果，都会与到期 ABORT 抢 `match_battle_completion` 同一主键。2026-10-24 已加 60 秒终局提交宽限（`terminalOutcomeGraceMs`，`abortTerminalTx` 与候选 SQL 共用，帮会取消入口同样经 `abortTerminalTx`），见下文「2026-10-24：终局提交宽限」一节。match 或 TiDB 不可用超过 60 秒宽限时合法终局会被作废的那段残余，2026-11-06 起由「截止作废先取证」收窄：原实例仍持有房间（终局已冻结、正在重放）就不作废，等它提交；剩下的只有原实例连不上又证明不了已不在、且超过硬上限（截止 + 宽限 + 10 分钟），或越过硬上限之后 battle 在 2 分钟持有宽限内仍没提交（见下文「2026-11-06 修复：截止作废先取证」）。「截止后宽限内 COMPLETE 优先」由 `TestDeadlineAbortTiDBWaitsWhileBattleHoldsAndLateCompleteWins` 覆盖。
 - **Java 版**：同类入口仍待做（见上段），实现时一并满足上面三条。
 
-**2026-11-05 修复（全球局终局协议：原件一定可裁决、回放先于冲突、到期 ABORT 随副本扩展、可观测、提前 ABORT；Go match + proto，未编译、未测试，待 Codex 验证）。** 评审依据是 2026-11-05 一轮只读评审（battle / guild 的正确性与扩展性四路，加人工释放工具设计一路）。同日对本批落码又做了一轮评审，修正四处，已直接改进下文对应各条：参战名单判据并入落库前检查（第 1 条）、退休扫描与全量页每圈只跑一次（第 4 条）、原件落库前被拒单独计 `original_unterminable`（第 1、5 条）、提前 ABORT 不再借 `globalDestroy`「无原件」那个不问 battle 的 true（第 7 条）。
+**2026-11-05 修复（全球局终局协议：原件一定可裁决、回放先于冲突、到期 ABORT 随副本扩展、可观测、提前 ABORT；Go match + proto，未编译、未测试，待 Gemini 验证）。** 评审依据是 2026-11-05 一轮只读评审（battle / guild 的正确性与扩展性四路，加人工释放工具设计一路）。同日对本批落码又做了一轮评审，修正四处，已直接改进下文对应各条：参战名单判据并入落库前检查（第 1 条）、退休扫描与全量页每圈只跑一次（第 4 条）、原件落库前被拒单独计 `original_unterminable`（第 1、5 条）、提前 ABORT 不再借 `globalDestroy`「无原件」那个不问 battle 的 true（第 7 条）。
 
 1. **凡持久的 v1 Create 原件，终局一定裁决得了（三路评审一致的必修）。** 成局 `created_ms` 取 TiDB 时刻（`claimTx`），Create 原件的 `CreatedAtMs` 原来取 match 本机墙钟（`gather.go`），终局两条路径共用的 `supportedOutcomeOriginal` 要求 `CreatedAtMs >= created_ms`，而 `SaveSupportedIntent` 落库前不跑这条。match 主机比 TiDB 慢过「成局提交 → 组 Create」这几十毫秒，原件就照常落库、照常发 Create、battle 照常开打，之后 COMPLETE（`validateTerminalResult`）与 ABORT（`abortTerminalTx`）都永久失败：全员票停在 2/3 再也排不了全球匹配，帮会 launch 与参与者 ACTIVE 占用永不释放，这一局结算丢失。修法如下：
    - `gather.go` 的原件创建时刻改取 `createOriginalCreatedAtMs(nowMs(), f.CreatedMs)`，即本机时刻与成局时刻取大。不改用 TiDB 当前时刻：多个 tidb-server 的时钟也不完全一致，下限只能由成局时刻自己给。这个值只作展示与观战排序，battle 不据它做判定。
@@ -593,7 +593,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
   - 人工 ABORT 处置工具已在同日另一批做完（`commitAbortTx` 的第三个调用方，`source_kind=MANUAL_ABORT`，枚举值 5），见下一段。
 - **Java 版**：待做，范围同上 7 条：原件落库前跑 COMPLETE 只看原件的全部判据（含参战名单与成局成员同一集合，备战快照的玩家号必须是备战玩家）、终局回放先于冲突、去掉跨主机结束时刻比较、到期恢复分车道（退休扫描与全量页每圈一次，车道页不做全量扫描）、ABORT 计数与日志（落库前被拒单独计数，不与存储故障共用）、共用 ABORT 入口、提前 ABORT（证据只认原实例立墓碑并回 ABORTED，不借「无原件」判定；Java 版需按自身 battle 节点的准入与墓碑语义逐条核实）。
 
-**2026-11-05 修复：永久 UNKNOWN 成局的人工处置工具（数据覆写审计 R2 r2-guild#1；Go match + proto，未编译、未测试，待 Codex 验证）。** 终局两条路径共读 `supportedOutcomeOriginal`，原件过不了这道核对的成局按设计 fail-closed，永远停在 UNKNOWN：形状不合格（`expired_unrecoverable`）、形状合格但原件正文与成局字段不符（`original_mismatch`）。上面第 1 条修复后这类原件不再能新产生，剩下的来自数据损坏、手改或修复前落库的行。它们没有任何自动出口，全员票停在 2/3、帮会 launch 与参与者占用永不释放，而本节原文又禁止手改三张表，出事时没有合规的处置手段。本批补上唯一的合规出口，运维步骤见 [手册](../ops/match-formation-manual-abort-runbook.md)。
+**2026-11-05 修复：永久 UNKNOWN 成局的人工处置工具（数据覆写审计 R2 r2-guild#1；Go match + proto，未编译、未测试，待 Gemini 验证）。** 终局两条路径共读 `supportedOutcomeOriginal`，原件过不了这道核对的成局按设计 fail-closed，永远停在 UNKNOWN：形状不合格（`expired_unrecoverable`）、形状合格但原件正文与成局字段不符（`original_mismatch`）。上面第 1 条修复后这类原件不再能新产生，剩下的来自数据损坏、手改或修复前落库的行。它们没有任何自动出口，全员票停在 2/3、帮会 launch 与参与者占用永不释放，而本节原文又禁止手改三张表，出事时没有合规的处置手段。本批补上唯一的合规出口，运维步骤见 [手册](../ops/match-formation-manual-abort-runbook.md)。
 
 1. **只经 match 服务写 match 库。** 新增 `MatchInternal.ListStrandedFormations`（只读列表）与 `ResolveStrandedFormation`（`SHOW` 锁外核对 / `DRY_RUN` 锁内演练后回滚 / `ABORT`），由运行中的副本执行（`logic/stranded_formation_ops.go`）。工具 `go/match/cmd/formationfix` 不连数据库。不让工具直连的原因：匹配库只归 match 服务（AGENTS.md §7.6）；写者 boot grant 一个进程只能消费一次；提交点还要角色护栏与目录装配，在工具里复制这套装配就是第二份平行装配。交给运行中的副本，自然沿用本库写者闸门、冻结与护栏，与自动恢复器同一进程模型。
 2. **鉴权。** 先拒带会话的调用，再验 serviceauth：调用方只认 `ops-formation`（`config.ManualResolutionCaller`），签名绑定方法与整个请求。密钥来自 `GlobalMatch.ManualResolutionSecretEnv` 指名的环境变量，不与观战运营的 `ops` 共用。缺省为空，入口关闭；配了却读不到 32 字节以上的密钥时打 ERROR，入口同样关闭，不拒启。工具只从环境变量读密钥，不进命令行，也不进输出。`DRY_RUN` / `ABORT` 还要求 `expect_target` 与本部署的环境名 `GlobalMatch.ManualResolutionEnvironment`（1~64 个 ASCII 字母、数字或 `.` `_` `-`，开启入口时必填，缺了或不合规入口同样关闭）逐字相等，不符回 `REFUSED/target_mismatch`、不碰库。目标标识不用库地址：库名固定是 `mmorpg_match`，集群内各环境的 Host 又常是同一个 Service DNS（按映射拨号时 Host 还不是实际集群），拼出来的串在不同环境里一模一样，拦不住连错环境（2026-11-05 评审修正，原先取 `Host/Database`）。这项核对是辅助：运维按工单上写明的环境名填才有用，照抄 `show` 的输出就核不出来；真正防误操作的是按环境分开的密钥（别的环境的密钥验签不过）与成局摘要。
@@ -618,7 +618,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
   - 原件身份与成局行不一致的四类处置后，battle 房间要等 battle 本地的重放上限才删（最长约 30 小时），期间计入滞留房间；要提前收尾，得让 battle 认 match 按 battle_id 签发的 ABORT 回执，另行设计。
 - **Java 版**：待做。同一放行判据（五条）、同一锁序与 ABORT 事务入口、审计表与 MANUAL_ABORT 来源、独立调用方密钥且缺省关闭、带会话拒绝、目标环境核对（按部署配置的环境名，不用库地址）、工具退出码口径；拿不到锁时先复读再回答（缺票行与没有这一局分开）、成局行损坏与读库失败分开报、审计日志自由文本加引号。
 
-**2026-11-06 修复：截止作废先取证、「哪些局会有终局」收成一个判据、过截止的非 v1 成局停止续租、已建房票巡检按片分工（批 B5；Go match，未编译、未测试，待 Codex 验证）。**
+**2026-11-06 修复：截止作废先取证、「哪些局会有终局」收成一个判据、过截止的非 v1 成局停止续租、已建房票巡检按片分工（批 B5；Go match，未编译、未测试，待 Gemini 验证）。**
 
 1. **截止作废先要证据（审计会话报，按标准做）。** 截止加宽限只说明 COMPLETE 本该到了，不说明不会再来。match 或 TiDB 不可用的时间跨过截止加宽限时，截止前已经打完、battle 正在重放 `CommitBattleOutcome` 的局，恢复后通常是到期恢复的截止 ABORT 先写，整局作废、奖励丢失（帮会取消同理）。做法（`authority/terminal_abort.go`、`logic/global_deadline_evidence.go`）：
    - 证据取值 `authority.DeadlineAbortEvidence`：`NoRoom`（原实例对原 operation 立了拒收墓碑并回 ABORTED）；`InstanceGone`（原地址上应答的是另一个实例；或原地址的 TCP 端口当场拒连（RST：主机在、端口上已没有进程在听）、且已同步的注册中心镜像里也没有原实例）；`BattleStillHolds`（原实例回 PRESENT：battle 在截止时刻强制结束房间，截止之后房间还在，说明终局已冻结、正在重放）；`Undetermined`（其余，含没装配取证）。不算证据的：只凭「注册中心查不到」（与上文 2026-10-22 段同口径）；gRPC 调用失败，哪怕在期限之内当场失败；超时、主机或网络不可达；「原 node_id 已登记成另一个实例」。
@@ -655,7 +655,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
   - 老路径会把到已摘册端点的连接放回进程级缓存（2026-11-11 已修其中「新节点在同一地址上线却拿到旧连接」这一半，未编译）：玩家申请战斗票据（`globalRequestBattleTicket`）、观战、恢复路径对已摘册的 `TargetEndpoint` 调 `DialEndpoint` 时，连接仍会回到缓存，这一点没变。修的是新节点在同一 ip:port 上线时拿到旧连接：`NodeWatcher.Upsert` 与 `fullSync` 遇到新上线的条目（新 key，或同 key 换了 endpoint），丢掉这个 endpoint 上停在 TRANSIENT_FAILURE 的缓存连接（`discovery.dropStaleEndpointConn`），下次 `DialEndpoint` 新建连接，首个调用在 CONNECTING 里等建连。只丢 TRANSIENT_FAILURE 的：READY / CONNECTING / IDLE 的连接可能正被同一进程的在途调用使用（同一进程换 key 重新登记时旧 key 还在镜像里）；停在 TRANSIENT_FAILURE 的连接上调用本来就当场失败，丢掉不会更糟。同 key 同 endpoint 的重复登记（例如准入状态变化的 PUT）不算上线、不换连接。查状态与摘除在同一把锁里。回归 `internal/discovery/node_watcher_conn_test.go`（`TestNodeOnlineDropsTransientFailureConnToSameEndpoint`、`TestNodeOnlineKeepsHealthyConnToSameEndpoint`、`TestNodeReputSameEndpointLeavesCachedConnAlone`）。死端点的连接对象（K8s 里 Pod 重启换 IP 之后的旧地址多半不会再有节点上线）2026-11-11 起由巡检清掉（未编译）：每个 watcher 周期性全量同步之后调 `pruneUnlistedConns`，关掉「不在任何一份镜像里、超过 10 分钟没人拨、且不是 READY」的缓存连接；还在册的、最近拨过的（`DialEndpoint` 先刷新时刻再读缓存，刚交出去的连接一定不算久未使用）、READY 的（活着的长连接）都不动。回归 `TestPruneUnlistedConnsOnlyDropsIdleDeadEndpoints`。
   - `formationfix list` 翻页（2026-11-11 已修，未编译）：原先按会变的 `retry_at_ms` 翻页，翻页期间等证据的局被改了排期会在后面的页再列一次；现在 `ListStrandedFormations` 只按不变的 `battle_id` 翻页，不重不漏，`after_retry_at_ms` / `next_retry_at_ms` 保留不用（恒为 0）。圈定范围只有在途成局，按主键排序代价可以忽略。
   - （2026-11-10 核对）上一版这里登记的「`turn-battle-gap-closure.md` §11.2、`battle_freeze_hold_rules.h`、`work_owner.go` 的 `workReadyTicket` 注释、`global-match-hierarchical-pools.md` §5.2 仍是旧口径、待同步」已过时：四处都已改成取证、硬上限与 `ReadyAfter` 已接的口径，本轮只把其中「截止 + 13.6 分钟」改成两次访问延迟后的「截止 + 14.2 分钟」，并把 `turn-battle-gap-closure.md` 里 `TerminalOutcomeExpected` 的判据改写为 `autoTerminalOriginal`。
-- **收尾补充（2026-11-11，未编译、未测试，待 Codex）**，把上面残余里的两条做完：
+- **收尾补充（2026-11-11，未编译、未测试，待 Gemini）**，把上面残余里的两条做完：
   1. **原件内容不合格的局截止之后立即作废**（`authority/rejected_original_abort.go`）。battle 打完一局把终局冻结成一份原字节，之后只原样重放（`result_commit.h`），不会再算出另一份；原件被内容规则拒收（个人结算超过 Inbox 上限、成员或队伍与创建原件不符、逃跑 / 阵亡索引对不上、原字节解不开），这一局就永远提交不了 COMPLETE。修复前 match 只回 FailedPrecondition，battle 照旧重放、房间一直在，截止作废取证看到 PRESENT，只能等到硬上限，全员多冻约 13 分钟。现在过了权威截止加终局宽限之后，原执行实例的下一次重放（5 秒内）就在 COMPLETE 同一把原 P→formation→原票锁里经 `commitAbortTx` 写 ABORT（`source_kind = MATCH_REJECTED_ORIGINAL_ABORT = 6`，proto 追加），把 ABORT 回给 battle，battle 收尾删房；计 `global_flow_total{stage="terminal",outcome="abort_rejected_original"}` 并打带 battle_id 与拒收原因的 ERROR。条件全部在锁内复核：身份与成局一致（`placement_operation_id`、`target_instance_id`；别的实例或过期操作的原件说明不了原实例冻结了什么）、不是版本错位类拒收（`outcomeVersionSkew`：请求或结算正文带未知字段、结算格式版本不是 1、本版本读不到 Inbox 上限 —— 滚动升级时新版 match 可能接受，照旧等硬上限）、成局自动路径可裁决（`autoTerminalOriginal`）、已过截止加宽限（`terminalAbortDue`，与截止 ABORT 同一分界）。截止之前照旧回原件冲突。锁外校验就拒的原件走 `settleRejectedOriginal`（加锁、复读终局再判），锁内对照创建原件才拒的在 `commitBattleOutcomeLocked` 原地判。不新增持久列：battle 的重放本身就是持久的触发。
   2. **积压在一拍预算内清掉，清不完就报警**。车道页多回一个 `more`（`Store.RecoverExpiredOutcomeLanePage`：满页，或改了排期、游标回零值），恢复循环（`logic/global_outcome_recover.go`）只要本拍预算还够一页（`drainLanePageReserve` = 取证期限 + 1 秒）就接着扫同一条车道，直到没有到期局、车道页出错或预算不够；每圈第一拍的全量页仍紧跟第一页车道页，不被饿死。修复前一拍只扫一页（8 局），一条车道同时到期超过一页时后面的局要隔一两圈才轮到。一拍预算也清不完的积压由每分钟巡检报出来：`CountOverdueDeadlineAborts` 数「截止之后超过最晚落定时刻（`deadlineAbortOverdueMs`，即上式黑洞那一档，约 16.3 分钟）仍没有终局的可裁决在途成局」，写 gauge `match_global_deadline_abort_overdue_formations` 与 `match_global_deadline_abort_overdue_oldest_seconds`，大于 0 打 ERROR；形状合格却过不了原件核对的局（original_mismatch）也计在里面（永远不会自动落定，用 formationfix）。恢复循环节拍 `ExpiredOutcomeRecoverTick` 移到 authority，logic 直接引用，阈值与上限测试共用一份。
   - 测试（未运行）：`authority/rejected_original_abort_test.go`（纯函数 `TestOutcomeVersionSkewOnlyFlagsUnreadableVersions`；真 TiDB `TestRejectedOriginalTiDBBeforeDeadlineStaysRejected`、`TestRejectedOriginalTiDBAbortsOnReplayAfterDeadline`（锁外拒收与锁内拒收两类：过截止加宽限后重放回 ABORT、来源 6、formation 5、原票 4、没有个人来源、计数只加一次、再重放只回放）、`TestRejectedOriginalTiDBVersionSkewAndForeignIdentityWait`）；`authority/overdue_deadline_abort_test.go`（`TestOverdueDeadlineAbortsTiDBCountOnlyPastTheLatestSettleTime`）；`TestDeadlineAbortBoundsFitSceneFreezeHold` 追加「巡检阈值就是黑洞那一档」；logic `TestGlobalOutcomeRecoveryDrainsLaneWithinOneRound`、`TestGlobalOutcomeRecoveryStopsDrainingOnErrorOrLowBudget`、`TestGlobalOutcomeAuditReportsOverdueDeadlineAborts`。
@@ -710,7 +710,7 @@ Go 全球启动在 matcher 和 RPC 准入之前同步核对结果 topic，独立
   - 个人 pending 只在 all ACK 之后由 `FinishBattle` → `DispatchSettlementDurably` 写入。
   - 停机时 `AbortAllRooms` 先 `StopResultCommits` 再清房，框架随后 flush producer。结果到了 broker，评分与帮会历练照常入账，个人结算却永不派发。
   - 回执处理前崩溃，同理。
-- **修复（C++，2026-10-19，未编译、未测试，待 Codex 验证）：**
+- **修复（C++，2026-10-19，未编译、未测试，待 Gemini 验证）：**
   - 结果第一次发往 broker 的前置条件，改为全部成员的个人结算已写进 R07 pending。由 `ResultCommit::BeginStaging` / `FinishStaging` 把关，`BattleRoomManager::StagePersonalSettlements` 按成员 EVAL 原 `kSetPendingSettlementScript`。
   - 字节统一取 `BuildPersonalSettlementPayloads(冻结原件)`。
   - 回执之后，`FinishBattle` 走 `DispatchStagedSettlement`：只投 SceneCommand、登记发件箱，不再改写 pending。原因是回执前 scene 可能已应用并销账，改写会让 pending 复活，玩家重复领奖。
@@ -725,7 +725,7 @@ Go 全球启动在 matcher 和 RPC 准入之前同步核对结果 topic，独立
   - battle 节点的 Redis / Kafka 编排没有单测接缝。停机与崩溃场景只有纯状态机单测，以及 PROGRESS 同日条目里的可选冒烟步骤。
 - **Java 版**（0.1.0-SNAPSHOT）：只读核实，`BattleRoomServiceImpl` 同样在回执后才落 pending，`abortAll` 不派发，**待做**。
 
-**2026-10-19 修复：落库重试只写没落定的成员，轮次设上限**（第二轮审计 r2-battle#1、r2-battle#4，见 [data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.3、§3.4；C++，未编译、未测试，待 Codex 验证）
+**2026-10-19 修复：落库重试只写没落定的成员，轮次设上限**（第二轮审计 r2-battle#1、r2-battle#4，见 [data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.3、§3.4；C++，未编译、未测试，待 Gemini 验证）
 
 - **r2-battle#1（上一段修复的缺陷）**：落库重试轮原来对全部成员无条件 SET。第 1 轮已写进去、随后被 scene 应用并销账的成员，pending 复活，下次登录重复领奖。
   - `ResultCommit` 按成员记结论。`UnstagedMembers` 只剩没拿到确定结论的成员，`FinishStaging` 只移出本轮落定的成员，后续轮次只写其余成员。
@@ -738,7 +738,7 @@ Go 全球启动在 matcher 和 RPC 准入之前同步核对结果 topic，独立
 - **残余**：battle 节点单边连不上 Redis 超过 24 小时，标记会过期（2026-10-22 已由 6 小时总跨度堵上，见下段）；按命令粒度的 ACL 误配置（放行 SET、拒绝 SADD）；Redis 主从异步复制丢掉已确认的写，与销账丢失同属既有一类。
 - **Java 版**：确认模式落库尚未实现（见上一段「待做」），实现时要同时满足这两条。
 
-**2026-10-22 修复：落库重试先快后慢、6 小时总跨度兜底，滞留房间周期提醒**（上段 r2-battle#1/#4 修复的评审改进项；C++，未编译、未测试，待 Codex 验证）
+**2026-10-22 修复：落库重试先快后慢、6 小时总跨度兜底，滞留房间周期提醒**（上段 r2-battle#1/#4 修复的评审改进项；C++，未编译、未测试，待 Gemini 验证）
 
 - **墙钟跨度上限（堵住真实缺口）**：上段的上限只数 Redis 连得上时开出的轮，没有墙钟上限，标记 TTL 能否兜住取决于连通性。时序：某成员上一轮已执行但应答丢了，标记里有他；随后 battle 单边断连或 Redis 反复闪断，凑满 24 轮的跨度超过 24 小时；期间 scene 应用并销账；重连后标记已过期、锁也已随销账删掉，下一轮照写，pending 复活，登录时重复发奖。
   - `ResultCommit` 在第一次问起落库时（`ExhaustStagingIfOverdue` / `BeginStaging` 的第一次调用，用调用方传入的 steady_clock 时间点，不读墙钟）记下跨度起点；满 `kMaxStagingSpan = 6h` 即不再开轮。
@@ -765,7 +765,7 @@ Go 全球启动在 matcher 和 RPC 准入之前同步核对结果 topic，独立
   - 序列化失败 / 成员对不上的「终局未知」占位房间同样会滞留在节点上，只有一次性日志，不在周期提醒里（程序缺陷类，非本条范围）。
 - **Java 版**：确认模式落库仍待做（Java `PARITY.md` 已把 §2.4 登记为待做，不另起一行），实现时一并满足跨度上限、低频重试与周期提醒。
 
-**2026-10-22 修复（评审补）：锁不在时看 pending 槽归属；滞留提醒覆盖所有排不空的房间；低频阶段落定额外报数**（上段 r2-battle#1/#4 改进项的评审意见；C++，未编译、未测试，待 Codex 验证）
+**2026-10-22 修复（评审补）：锁不在时看 pending 槽归属；滞留提醒覆盖所有排不空的房间；低频阶段落定额外报数**（上段 r2-battle#1/#4 改进项的评审意见；C++，未编译、未测试，待 Gemini 验证）
 
 - **锁不在照写会旧盖新（评审 must_fix）**：「锁不在照写」不看 pending 槽当前属于哪一局。时序：B1 落库时成员 X 一直没写进去（battle 单边连不上 zone Redis，或该节点命令持续报错）；X 的冻结在 B1 截止时解除，接着打完 B2 并下线；B2 的 pending 两键已写、还没消费，锁 B2 在期限 + 60s 后自然过期；B1 恢复后再开一轮，锁为 nil，照写，B2 的 pending 被 B1 覆盖；B2 的发件箱探测到 `pending:id ≠ B2`，按已销账停投，B2 奖励永久丢失。上段的低频阶段正是为长时间故障后自动恢复设计的，它把这个窗口从约 9.5 分钟拉长到 6 小时，恢复后最常见的情形就是覆盖。
   - 修法：`kStagePendingSettlementOnceScript` 在锁判定之后、第一条 SET 之前加一条守卫，锁不在且 `pending:id` 属于别的局时返回 3、不写。锁 == 本局时照旧覆盖：锁证明本局是当前局，槽里如果是别的局只会更旧。锁不在而槽空、或槽已属于本局（scene 离线暂存写过同一份）时照写。
@@ -791,7 +791,7 @@ Go 全球启动在 matcher 和 RPC 准入之前同步核对结果 topic，独立
 
 Cancel与ReserveDirect在同一direct主键事务锁上二选一提交：Cancel先赢在零battle行写永久cancelled墓碑，迟到Start无论预检是否完成都不得越过；Reserve先赢后Cancel只返回原固定battle_id和真实formation状态，不调用运行时、不把取消请求冒充战斗已经中止。相同请求重放只认原完整正文，不同正文拒绝。Commit未知不签成功回执，重放同一原件消歧。帮会只有验证后的零battle取消墓碑，或formation=5的安全中止收据，才同本地原件事务持久回执并终结ACTIVE参与索引；formation=1..4继续保留或等待真实结果。既有EXPIRED允许迟到结果，因此不能当安全中止。新回归源码区分纯鉴权、真实TiDB墓碑／并发与完整运行链；本批尚未运行编译和这些回归。
 
-**2026-10-23 修复：停机 / 崩溃后同局成员结算对称、帮会历练占用有出口**（第二轮审计 r2-battle#2、r2-guild#1，见 [data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.4、§3.7；负责人 2026-10-23 拍板首发开全球匹配后两条均为上线阻塞；C++ / Go，未编译、未测试，待 Codex 验证）
+**2026-10-23 修复：停机 / 崩溃后同局成员结算对称、帮会历练占用有出口**（第二轮审计 r2-battle#2、r2-guild#1，见 [data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.4、§3.7；负责人 2026-10-23 拍板首发开全球匹配后两条均为上线阻塞；C++ / Go，未编译、未测试，待 Gemini 验证）
 
 - **复核（按当前工作区）**：两条同根，battle 实例在「终局已定、还没可靠发出」之间消失，下游没有出口。审计依据的是 HEAD 已提交代码：全球局走旧协议确认模式（R07 pending 逐成员落库后才发 Kafka），落库做到一半停机或崩溃即同局不对称；match 编队到 formation=4 之后没有任何迁移。当前工作区里，下文「2026-10-23：已开局后丢失终局的恢复接缝」一节（并行轨道，未提交、未验收）已把全球局改为终局协议 v1，结构上闭合了两条的主路径：
   - **提交点**：battle 在任何个人副作用之前，把冻结的完整原件（含全员个人结算）交给 match `CommitBattleOutcome`。match 在原 P→formation 锁内用一个 SQL 事务写下 COMPLETE、全员个人结算来源、结果与个人两个发件箱，formation 置 4（`completion.go`）。发件箱逐行按 `next_retry_ms` CAS 认领，多副本对同一行同一时刻只有一方投递；个人结算经 PlayerInbox 永久收据去重，只有 APPLIED 才销账；评分与帮会按 battle_id 幂等消费。v1 房间不写 R07 pending，也不发个人直投（`FinishBattle` 对 v1 只推公共终局帧）。所以没有「A 已领奖、B 永不结算」：要么全员都有持久来源、由存活的 match 副本补完，要么全员作废。
@@ -850,7 +850,7 @@ Cancel与ReserveDirect在同一direct主键事务锁上二选一提交：Cancel�
 
 K8s沿既有迁移门禁接`match-migrate`：ConfigMap先于Job，全球模式所有档位都等Job成功才部署常驻实例；失败、未知或超时保留Job证据并阻断，重跑不删除在途Job。Job只引用`domain-service-secrets`中的`match-migration-user/password`，不注入探测、榜单或登录密钥，常驻Deployment不引用迁移凭据。显式旧dev兼容关闭SQL时不运行此Job。本机启动器不后台迁移；先以同一配置显式运行上述CLI，再清掉仅用于该子命令的迁移环境变量，最后运行`start-exe`。
 
-接口回归覆盖缺表／人工项／dirty拒启与CLI隔离及退出码；新增真实TiDB有限DML账号用例核对Plan、索引可读，CREATE/ALTER真实权限拒绝，管理员删除表后常驻检查拒启且不补建。该真库用例及当前Match重新构建、单测、vet与Runtime EXE均待Codex实际执行，原598项普通回归仅保留原输入范围，不能作为本次新增启动接缝证据。
+接口回归覆盖缺表／人工项／dirty拒启与CLI隔离及退出码；新增真实TiDB有限DML账号用例核对Plan、索引可读，CREATE/ALTER真实权限拒绝，管理员删除表后常驻检查拒启且不补建。该真库用例及当前Match重新构建、单测、vet与Runtime EXE均待 Gemini实际执行，原598项普通回归仅保留原输入范围，不能作为本次新增启动接缝证据。
 
 ### 2026-10-23：已开局后丢失终局的恢复接缝（已授权实施，尚未验收）
 

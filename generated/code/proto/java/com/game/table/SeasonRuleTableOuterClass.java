@@ -45,7 +45,7 @@ public final class SeasonRuleTableOuterClass extends com.google.protobuf.Generat
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\026seasonrule_table.proto\"\345\002\n\017SeasonRuleT" +
+      "\n\026seasonrule_table.proto\"\235\003\n\017SeasonRuleT" +
       "able\022\n\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\024\n\014starts" +
       "_at_ms\030\003 \001(\004\022\022\n\nends_at_ms\030\004 \001(\004\022\017\n\007enab" +
       "led\030\005 \001(\010\022\027\n\017seal_max_points\030\006 \001(\r\022\026\n\016pv" +
@@ -54,10 +54,12 @@ public final class SeasonRuleTableOuterClass extends com.google.protobuf.Generat
       "th_bps_cap\030\n \001(\r\022\027\n\017defense_bps_cap\030\013 \001(" +
       "\r\022\035\n\025catchup_currency_type\030\014 \001(\r\022\037\n\027catc" +
       "hup_price_per_point\030\r \001(\004\022\027\n\017default_sea" +
-      "l_id\030\016 \001(\r\022\014\n\004desc\030\017 \001(\t\"5\n\023SeasonRuleTa" +
-      "bleData\022\036\n\004data\030\001 \003(\0132\020.SeasonRuleTableB" +
-      "A\n\016com.game.tableB\031SeasonRuleTableOuterC" +
-      "lassP\001Z\022generated/pb/tableb\006proto3"
+      "l_id\030\016 \001(\r\022\014\n\004desc\030\017 \001(\t\022\030\n\020honor_title_" +
+      "name\030\020 \001(\t\022\034\n\024honor_badge_icon_key\030\021 \001(\t" +
+      "\"5\n\023SeasonRuleTableData\022\036\n\004data\030\001 \003(\0132\020." +
+      "SeasonRuleTableBA\n\016com.game.tableB\031Seaso" +
+      "nRuleTableOuterClassP\001Z\022generated/pb/tab" +
+      "leb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -68,7 +70,7 @@ public final class SeasonRuleTableOuterClass extends com.google.protobuf.Generat
     internal_static_SeasonRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_SeasonRuleTable_descriptor,
-        new java.lang.String[] { "Id", "Name", "StartsAtMs", "EndsAtMs", "Enabled", "SealMaxPoints", "PveWinPoints", "PvpWinPoints", "PvpOtherPoints", "MaxHealthBpsCap", "DefenseBpsCap", "CatchupCurrencyType", "CatchupPricePerPoint", "DefaultSealId", "Desc", });
+        new java.lang.String[] { "Id", "Name", "StartsAtMs", "EndsAtMs", "Enabled", "SealMaxPoints", "PveWinPoints", "PvpWinPoints", "PvpOtherPoints", "MaxHealthBpsCap", "DefenseBpsCap", "CatchupCurrencyType", "CatchupPricePerPoint", "DefaultSealId", "Desc", "HonorTitleName", "HonorBadgeIconKey", });
     internal_static_SeasonRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_SeasonRuleTableData_fieldAccessorTable = new

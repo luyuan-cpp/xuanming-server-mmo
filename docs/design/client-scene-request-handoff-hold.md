@@ -1,7 +1,7 @@
 # 换场景节点期间的玩家消息：客户端请求在 gate 暂存并按序重投（场景 lane）
 
 **Created:** 2026-11-12
-**状态:** 已落码，定案见 §4.1。**未生成协议、未编译、未测试**，待 Codex 按 §9 验证。Java 版待做（§10）。
+**状态:** 已落码，定案见 §4.1。**未生成协议、未编译、未测试**，待 Gemini 按 §9 验证。Java 版待做（§10）。
 **关联:** [client-request-ordering.md](./client-request-ordering.md)（路由 lane，O1–O14；本文修订其 O2 对 TCP 路径的表述）、[muduo-rpc-channel.md](./muduo-rpc-channel.md) §8.1（gate → scene 客户端消息）、[client-rpc-callback.md](./client-rpc-callback.md) §7 R1（scene 早退回 1003）、[cross-zone-scene-travel.md](./cross-zone-scene-travel.md) §14（连续换场景期间的消息投递，设计参考）、[reliable-player-inbox-20261014.md](./reliable-player-inbox-20261014.md)（重要消息的持久待办原则）、[player-inbox-service.md](./player-inbox-service.md)、[guild-phase2/04-asset-channel.md](./guild-phase2/04-asset-channel.md)、[gate-drain-session-migration.md](./gate-drain-session-migration.md)。
 
 **证据标注:** 【码】代码事实，写函数名与文件，不写行号（这些文件改动频繁）。【推】静态阅读得出的推断，未运行验证。
@@ -305,7 +305,7 @@ r1、r2 都只执行一次，先后顺序与客户端发出的顺序相同。如
 
 ---
 
-## 9. 给 Codex 的验证命令
+## 9. 给 Gemini 的验证命令
 
 工作目录都是仓库根目录。任一步失败即停，保留输出。
 

@@ -169,3 +169,26 @@ func (battleClientPlayerRpc) decodeUpdateBattlePrep(reply *base.MessageContent, 
 	}
 	return resp, nil
 }
+
+// SendBattlePing 异步调用 BattleClientPlayer.SendBattlePing(REQUEST),done 的契约见 BattleClientPlayer。
+func (r battleClientPlayerRpc) SendBattlePing(c *pkg.GameClient, req *battle.SendBattlePingRequest, timeout time.Duration, done func(*battle.SendBattlePingResponse, error)) {
+	c.Call(game.BattleClientPlayerSendBattlePingMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSendBattlePing(reply, err))
+	})
+}
+
+// SendBattlePingSync 同步调用 BattleClientPlayer.SendBattlePing(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r battleClientPlayerRpc) SendBattlePingSync(ctx context.Context, c *pkg.GameClient, req *battle.SendBattlePingRequest, timeout time.Duration) (*battle.SendBattlePingResponse, error) {
+	return r.decodeSendBattlePing(c.CallSync(ctx, game.BattleClientPlayerSendBattlePingMessageId, req, timeout))
+}
+
+func (battleClientPlayerRpc) decodeSendBattlePing(reply *base.MessageContent, err error) (*battle.SendBattlePingResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &battle.SendBattlePingResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode BattleClientPlayer.SendBattlePing reply: %w", err)
+	}
+	return resp, nil
+}

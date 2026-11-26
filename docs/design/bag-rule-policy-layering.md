@@ -1,14 +1,14 @@
 # 背包:玩法规则的策略化分层 (2026-09-01)
 
-> **2026-11-05 变更(审计 cpp-economy#2,§6.6;未编译,待 Codex 验证):临时格不再先进先出。**
+> **2026-11-05 变更(审计 cpp-economy#2,§6.6;未编译,待 Gemini 验证):临时格不再先进先出。**
 > 满 200 件后挤掉最早那件 = 真丢(被挤掉的东西没有任何去处),现在满了就拒:入账在任何副作用之前被拒、
 > 由来源保留(战斗结算整笔延后);新增 `RetrieveTemporaryItems` 让玩家把临时格的东西取回人物背包。
 > 四个固定包从此全部是 `RejectWhenFull`,`EvictOldestFirst` 留在淘汰轴上、没有生产使用者。下面 2026-09 的状态说明保留为历史。
 >
-> **2026-11-12 变更(§6.6;未编译,待 Codex 验证):** `EvictOldestFirst` 连同它的用例一起删除;
+> **2026-11-12 变更(§6.6;未编译,待 Gemini 验证):** `EvictOldestFirst` 连同它的用例一起删除;
 > 背包腾位改由 `BagService` 统一发「腾位通知」唤醒收件箱(不只临时格取回);「全部取回」全或无定为口径。
 >
-> **2026-11-12(补;未编译,待 Codex 验证):淘汰轴整条删除**(§3、§6.6 (2))。`IEvictionPolicy` / `RejectWhenFull`
+> **2026-11-12(补;未编译,待 Gemini 验证):淘汰轴整条删除**(§3、§6.6 (2))。`IEvictionPolicy` / `RejectWhenFull`
 > (`eviction_policy.h` 删掉)、`BagProfile::eviction`、`Bag::SetEviction` / `Eviction()` / `PlanEviction`、`AddItem` / `AddItems`
 > 的淘汰回执参数、`BagService::LogEvictedInstances`,以及 `ItemStore` 两个规划函数只为淘汰存在的 `exclude` 参数一起删掉。
 > 背包满了一律就拒,没有任何代码路径会为腾位销毁玩家的东西。下文提到淘汰轴的地方,除特别注明外都是历史。
@@ -283,7 +283,7 @@ setter 的理由。2026-09 加淘汰轴时兑现过这句话:只多了一个字�
 #### 缺陷:`CanFit()` 对具名槽说谎 —— 已落码,未编译
 
 > **2026-09-01 已修,但尚未编译、尚未跑过用例**(按 `CLAUDE.md` §10.1,构建由
-> Codex 执行)。下面的推演仍是**静态阅读**的产物;回归用例已一并写好
+> Gemini 执行)。下面的推演仍是**静态阅读**的产物;回归用例已一并写好
 > (`EquipmentReserveTest` 套件),跑通之前不要当作"已验证"。
 
 `FixedSlotLayout` 继承 `FlatLayout` 且**没有覆盖 `CanFit()`**,于是:
@@ -617,7 +617,7 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
    `cross_zone_test` 链接 `modules.lib` + `scene.lib`,`bag_marshal.obj` 里
    `entt::basic_storage<PlayerBagsComp>` 的实例化步长是旧的。§8.2 已改。
 
-### 6.6 临时格改为满即拒,新增取回协议(2026-11-05,审计 cpp-economy#2;未编译,待 Codex 验证)
+### 6.6 临时格改为满即拒,新增取回协议(2026-11-05,审计 cpp-economy#2;未编译,待 Gemini 验证)
 
 #### (1) 问题(复核成立)
 
@@ -777,7 +777,7 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
 - 传输失败(1003)不自动重发,只重拉两个包。新消息号由 proto-gen 发,客户端只引用生成常量;文案以导表产物为准。
 - 2026-11-12 客户端已按本节落码(客户端仓 main,未生成、未编译、未运行):入口在背包页「工具 → 临时格」,另有一个面板,
   不是背包页里的页签;取回单飞、两次发包至少隔 700 毫秒;进游戏、从战斗界面回到大世界、打开背包页时各拉一次临时格。
-  细节与 Codex 命令见 `docs/PROGRESS.md` 同日「客户端·强化期望等级与幂等键、临时格取回、进场失败后换角」条。
+  细节与 Gemini 命令见 `docs/PROGRESS.md` 同日「客户端·强化期望等级与幂等键、临时格取回、进场失败后换角」条。
 
 #### (6) 用例与验证
 
@@ -906,7 +906,7 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
 错误码不变,线上协议与持久化格式不变,公开 API **只增不改**
 (新增的都是带默认值的可选参数与新方法)。
 
-### 8.2 编译(交 Codex)
+### 8.2 编译(交 Gemini)
 
 按 `CLAUDE.md` §10.1:Claude 不执行编译。第 1~3 步已落码,**未编译**。
 

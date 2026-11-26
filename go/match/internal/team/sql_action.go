@@ -155,19 +155,19 @@ func writeSQLAction(ctx context.Context, tx *sql.Tx, action *sqlAction, response
 	if action == nil {
 		return nil
 	}
-	// 回执保留业务结果与原版本；在线/战斗展示不作为持久事实。
+	// 回执保留业务结果与原版本；在线/托管/战斗展示不作为持久事实。
 	stable := proto.Clone(response).(*teampb.TeamResponse)
 	for _, member := range stable.GetTeam().GetMembers() {
-		member.IsOnline, member.InBattle = false, false
+		member.IsOnline, member.IsHosted, member.InBattle = false, false, false
 	}
 	for _, application := range stable.GetTeam().GetApplications() {
 		if application.Player != nil {
-			application.Player.IsOnline, application.Player.InBattle = false, false
+			application.Player.IsOnline, application.Player.IsHosted, application.Player.InBattle = false, false, false
 		}
 	}
 	for _, invitation := range stable.GetTeam().GetPendingInvites() {
 		if invitation.Invitee != nil {
-			invitation.Invitee.IsOnline, invitation.Invitee.InBattle = false, false
+			invitation.Invitee.IsOnline, invitation.Invitee.IsHosted, invitation.Invitee.InBattle = false, false, false
 		}
 	}
 	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(stable)
@@ -261,4 +261,10 @@ func (s *Service) DisbandTeam(ctx context.Context, caller uint64, in *teampb.Dis
 }
 func (s *Service) ConfirmRankedPreset(ctx context.Context, caller uint64, in *teampb.ConfirmRankedPresetRequest) *teampb.TeamResponse {
 	return s.sqlAction(ctx, caller, uint32(OpConfirmRankedPreset), in, func(ctx context.Context) *teampb.TeamResponse { return s.confirmRankedPreset(ctx, caller, in) })
+}
+func (s *Service) SetTeamFormation(ctx context.Context, caller uint64, in *teampb.SetTeamFormationRequest) *teampb.TeamResponse {
+	return s.sqlAction(ctx, caller, uint32(OpSetFormation), in, func(ctx context.Context) *teampb.TeamResponse { return s.setTeamFormation(ctx, caller, in) })
+}
+func (s *Service) RecallTeamMembers(ctx context.Context, caller uint64, in *teampb.RecallTeamMembersRequest) *teampb.TeamResponse {
+	return s.sqlAction(ctx, caller, uint32(OpRecallMembers), in, func(ctx context.Context) *teampb.TeamResponse { return s.recallTeamMembers(ctx, caller, in) })
 }

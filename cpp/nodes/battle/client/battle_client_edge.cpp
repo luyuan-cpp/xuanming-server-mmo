@@ -835,6 +835,18 @@ void BattleClientEdge::DispatchVerifiedRequest(DirectSession &session,
         reply.set_serialized_message(resp.SerializeAsString());
         break;
     }
+    case BattleClientPlayerSendBattlePingMessageId:
+    {
+        ::SendBattlePingRequest req;
+        if (!parseOrReject(req))
+        {
+            return;
+        }
+        ::SendBattlePingResponse resp;
+        BattleRoomManager::Instance().HandleSendBattlePing(sessionDetails, req, resp);
+        reply.set_serialized_message(resp.SerializeAsString());
+        break;
+    }
     default:
         SendEnvelopeError(conn, request, kInvalidParameter);
         RegisterIllegalPacket(session, conn, "message_id_not_allowed");

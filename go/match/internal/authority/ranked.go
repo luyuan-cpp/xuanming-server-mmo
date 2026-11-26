@@ -39,7 +39,7 @@ const (
 
 const (
 	seasonColumns       = "season_id,season_key,season_name,rank_generation,source_epoch,rule_version,state,rollover_stage,start_ms,end_ms,rank_board_id,expected_rank_cursor,champion_player_id,champion_name,champion_rating_centi,updated_ms"
-	playerSeasonColumns = "season_id,player_id,qualified,qualified_at_ms,rating_centi,peak_rating_centi,peak_tier,valid_matches,wins,losses,draws,milestone_bits,honor_bits,final_rank,updated_ms"
+	playerSeasonColumns = "season_id,player_id,qualified,qualified_at_ms,rating_centi,peak_rating_centi,peak_tier,valid_matches,wins,losses,draws,milestone_bits,honor_bits,final_rank,updated_ms,current_win_streak,best_win_streak"
 )
 
 var (
@@ -74,7 +74,7 @@ func scanSeason(row scanner) (*pb.MatchRankedSeasonRecord, error) {
 
 func scanPlayerSeason(row scanner) (*pb.MatchRankedPlayerSeasonRecord, error) {
 	r := &pb.MatchRankedPlayerSeasonRecord{}
-	err := row.Scan(&r.SeasonId, &r.PlayerId, &r.Qualified, &r.QualifiedAtMs, &r.RatingCenti, &r.PeakRatingCenti, &r.PeakTier, &r.ValidMatches, &r.Wins, &r.Losses, &r.Draws, &r.MilestoneBits, &r.HonorBits, &r.FinalRank, &r.UpdatedMs)
+	err := row.Scan(&r.SeasonId, &r.PlayerId, &r.Qualified, &r.QualifiedAtMs, &r.RatingCenti, &r.PeakRatingCenti, &r.PeakTier, &r.ValidMatches, &r.Wins, &r.Losses, &r.Draws, &r.MilestoneBits, &r.HonorBits, &r.FinalRank, &r.UpdatedMs, &r.CurrentWinStreak, &r.BestWinStreak)
 	return r, err
 }
 
@@ -194,6 +194,18 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 			return ErrRankedRuleVersionMismatch
 		}
 	}
+	var memberStreaks map[uint64]uint32
+	for _, t := range current {
+		var streak uint32
+		if sErr := tx.QueryRowContext(ctx, "SELECT current_win_streak FROM match_ranked_player_season WHERE season_id=? AND player_id=?", cur.SeasonId, t.PlayerId).Scan(&streak); sErr == nil && streak >= 3 {
+			if memberStreaks == nil {
+				memberStreaks = make(map[uint64]uint32)
+			}
+			memberStreaks[t.PlayerId] = streak
+		} else if sErr != nil && !errors.Is(sErr, sql.ErrNoRows) {
+			return sErr
+		}
+	}
 	frozen := &battlepb.RankedMatchContext{
 		SeasonId:          cur.SeasonId,
 		SeasonKey:         cur.SeasonKey,
@@ -202,6 +214,7 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 		TeamSize:          uint32(len(current) / 2),
 		ConfigFingerprint: cat.Fingerprint(),
 		UseFreePreset:     false,
+		MemberWinStreaks:  memberStreaks,
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(frozen)
 	if err != nil {
@@ -555,9 +568,11 @@ func (s *Store) toPlayerSeasonSummary(r *pb.MatchRankedPlayerSeasonRecord, seaso
 		Losses:          r.Losses,
 		Draws:           r.Draws,
 		QualifiedAtMs:   r.QualifiedAtMs,
-		MilestoneBits:   r.MilestoneBits,
-		FinalRank:       r.FinalRank,
-		ChampionAwarded: (r.HonorBits & 4) != 0,
+		MilestoneBits:    r.MilestoneBits,
+		FinalRank:        r.FinalRank,
+		ChampionAwarded:  (r.HonorBits & 4) != 0,
+		CurrentWinStreak: r.CurrentWinStreak,
+		BestWinStreak:    r.BestWinStreak,
 	}
 }
 
@@ -1043,6 +1058,8 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 		qualifiedAt := ps.QualifiedAtMs
 		validAfter := ps.ValidMatches
 		wins, losses, draws := ps.Wins, ps.Losses, ps.Draws
+		curStreak, bestStreak := ps.CurrentWinStreak, ps.BestWinStreak
+		endedOpponentStreak := uint32(0)
 		peakRating := ps.PeakRatingCenti
 		peakTier := pb.RankedTier(ps.PeakTier)
 		bits := ps.MilestoneBits
@@ -1078,8 +1095,29 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 				draws++
 			case (sides[pid] == 0 && scoreA == 1.0) || (sides[pid] == 1 && scoreA == 0.0):
 				wins++
+				curStreak++
+				if curStreak > bestStreak {
+					bestStreak = curStreak
+				}
+				if st != nil && st.GetEndedOpponentStreak() >= 3 {
+					endedOpponentStreak = st.GetEndedOpponentStreak()
+				} else {
+					for oppID, oppSide := range sides {
+						if oppSide == sides[pid] {
+							continue
+						}
+						oppStreak := rctx.GetMemberWinStreaks()[oppID]
+						if oppStreak < 3 && playerSeasons[oppID] != nil {
+							oppStreak = playerSeasons[oppID].CurrentWinStreak
+						}
+						if oppStreak >= 3 && oppStreak > endedOpponentStreak {
+							endedOpponentStreak = oppStreak
+						}
+					}
+				}
 			default:
 				losses++
+				curStreak = 0
 			}
 			tierAfter := cat.TierFor(afterRating, qualifiedAfter)
 			if qualifiedAfter {
@@ -1133,9 +1171,9 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 				}
 			}
 			if _, err = tx.ExecContext(ctx,
-				"INSERT INTO match_ranked_player_season("+playerSeasonColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
-					"ON DUPLICATE KEY UPDATE qualified=VALUES(qualified),qualified_at_ms=VALUES(qualified_at_ms),rating_centi=VALUES(rating_centi),peak_rating_centi=VALUES(peak_rating_centi),peak_tier=VALUES(peak_tier),valid_matches=VALUES(valid_matches),wins=VALUES(wins),losses=VALUES(losses),draws=VALUES(draws),milestone_bits=VALUES(milestone_bits),updated_ms=VALUES(updated_ms)",
-				season.SeasonId, pid, qualifiedAfter, qualifiedAt, afterRating, peakRating, uint32(peakTier), validAfter, wins, losses, draws, bits, ps.HonorBits, ps.FinalRank, stamp); err != nil {
+				"INSERT INTO match_ranked_player_season("+playerSeasonColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+					"ON DUPLICATE KEY UPDATE qualified=VALUES(qualified),qualified_at_ms=VALUES(qualified_at_ms),rating_centi=VALUES(rating_centi),peak_rating_centi=VALUES(peak_rating_centi),peak_tier=VALUES(peak_tier),valid_matches=VALUES(valid_matches),wins=VALUES(wins),losses=VALUES(losses),draws=VALUES(draws),milestone_bits=VALUES(milestone_bits),updated_ms=VALUES(updated_ms),current_win_streak=VALUES(current_win_streak),best_win_streak=VALUES(best_win_streak)",
+				season.SeasonId, pid, qualifiedAfter, qualifiedAt, afterRating, peakRating, uint32(peakTier), validAfter, wins, losses, draws, bits, ps.HonorBits, ps.FinalRank, stamp, curStreak, bestStreak); err != nil {
 				return false, err
 			}
 			if qualifiedAfter {
@@ -1173,6 +1211,8 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 			SettledAtMs:             stamp,
 			CharacterPresetId:       loadout.GetPresets().GetCharacterPresetId(),
 			PetPresetId:             loadout.GetPresets().GetPetPresetId(),
+			WinStreakAfter:          curStreak,
+			EndedOpponentStreak:     endedOpponentStreak,
 		}
 		if err = writeRankedBattleRowTx(ctx, tx, view, pid); err != nil {
 			return false, err

@@ -8,7 +8,7 @@
 
 > **2026-10-23 建角初始提交合同（实现与验证中）**：仅正常 `CreateAccountRole` 对严格全新 ID 的目录首次 INSERT，可与权威落点的两张玩家 SQL 行在同一个 TiDB 事务中产生保留初始版本 `(1,1)`。此版本表示无 actor 的真实持久基底，不是“空 SQL 可放行”的例外；缺失的历史行不得补种。首次加载沿现有 SQL 采纳原子地建立 owner 地板 1，随后仍由 SceneManager 唯一发号为首任 actor 2；实际存盘的 SaveSeqAllocator 采用载入下限并严格前进。已有更高 owner 不回退，任何并发 pending/ACK/owner 变化仍由原提交 Lua 拒绝。完整的锁序、提交回执与缓存开关合同见 [建角初始持久提交](new-player-first-enter-no-cold-read.md#建角初始持久提交)。本注不代表已经编译或取得运行证据。
 
-> **2026-10-17 实施状态补充（Codex，未提交）**：负责人已授权统一接手并保留各线改动；下文 v0.4 草案的「未落码」和旧会话等待信号属于历史状态。当前工作区已合并 SQL 行内围栏、真实锁定行收据、双表 SQL ACK、父快照持久补投、缺父键强读恢复及交接标记 SQL 屏障；定向 C++ 构建和完整受影响单测通过。隔离 zone 990017/990018 的真实邮件和跨区交易到账测试均已执行通过、0 跳过，含 SQL 行锁负例、原件成长保留和真实重投。证据见 `build/asset-arrival-20261017/fullstack/logs/fullstack-mail-2.result.json`、`fullstack-trade-1.result.json` 与 `docs/PROGRESS.md` 本日追加条目。默认 `legacy`、历史屏障维护补种及停旧写者切换门禁仍在；此状态不表示已生产切换、Redis Cluster 同槽支持、跨洲故障或目标容量验收。
+> **2026-10-17 实施状态补充（Gemini，未提交）**：负责人已授权统一接手并保留各线改动；下文 v0.4 草案的「未落码」和旧会话等待信号属于历史状态。当前工作区已合并 SQL 行内围栏、真实锁定行收据、双表 SQL ACK、父快照持久补投、缺父键强读恢复及交接标记 SQL 屏障；定向 C++ 构建和完整受影响单测通过。隔离 zone 990017/990018 的真实邮件和跨区交易到账测试均已执行通过、0 跳过，含 SQL 行锁负例、原件成长保留和真实重投。证据见 `build/asset-arrival-20261017/fullstack/logs/fullstack-mail-2.result.json`、`fullstack-trade-1.result.json` 与 `docs/PROGRESS.md` 本日追加条目。默认 `legacy`、历史屏障维护补种及停旧写者切换门禁仍在；此状态不表示已生产切换、Redis Cluster 同槽支持、跨洲故障或目标容量验收。
 
 > **状态**：设计稿 v0.4（2026-10-16，Claude）。v0.4 由两件事触发：一是 v0.3 的补审（`docs/handoff/landing-fencing-takeover-20261016/fence-v03-review.md`（已清理，见 `ccf2840b2`），fix_plan 第二节 1–9 条全部采纳）；二是工作区里出现了一套来源不明的在途围栏实现（`docs/handoff/landing-fencing-takeover-20261016/fence-inflight.md`（已清理，见 `ccf2840b2`），来源是「全域到账续批」写入方）。负责人 2026-10-16 拍板：在途实现由本线「合并并继续，按最标准的做」。**路线以 v0.3 为准，把在途实现收敛过来**（§0.2），保留在途已占的号位 `DBTask.save_seq = 9`、`PlayerAllData.last_save_seq = 7`。§14 的待拍板项按负责人授权取推荐项定稿，只剩两项要负责人亲自确认。**仍未落码、未编译、未测试**（AGENTS.md §10.1）。各版来由见 §17。
 > **实现归属**：由「落地恢复与围栏」接手线落码（接手记录（原 `docs/handoff/landing-fencing-takeover-20261016/README.md`，已清理，见 `ccf2840b2`） §3.4、§5 第 3 批），go/db 会话不做。落码前置见 §0.2「合并前置」：① 「全域到账续批」写入方对围栏相关文件停手；② go/db 存盘管线接手会话发来 R2 / R3 落完后的文件清单。L-04 第 1 批（[db-task-store-unavailable-deferral.md](db-task-store-unavailable-deferral.md) v0.3）已在工作区，本文在它的接口上实现。
@@ -194,7 +194,7 @@ class-3 在现行代码里很难走到：scene_manager 的路由一律带观察�
 - **2026-10-16 现状**：在途实现已声明 `uint64 save_seq = 9;`（未提交），注释是「同一玩家同一 owner_epoch 内严格递增；与 SQL 行版本一起校验」，没写 10 号预留，8 号注释也没订正 [C]。保留字段，落码时把注释换成下面的口径（§0.2 第 1 行）。
 - 语义：生产者按玩家发出的存盘序号，同一玩家只增不减；0 表示生产者没有发号（旧版 C++，或该次存盘的 owner_epoch 为 0）。
 - 注释定稿（落码照抄，可调措辞不改语义）：「scene 进程级发号器按玩家发出的存盘序号：同一玩家只增不减（跨实体重建、跨进程靠加载播种与墙钟下限，见 db-write-fencing-mysql.md §7）；0 = 生产者未发号。go/db 把 (owner_epoch, save_seq) 盖成 MySQL 行内围栏。10 号预留给全局单点交接的 reply_instance，不得占用。」
-- **2026-10-18 更正**：10 号已由 `reply_instance` 使用（task:result 读回执通知按 login 实例分频道第 1 批：`proto/db/db_task.proto` 已声明 `string reply_instance = 10;` 并写了语义注释，未编译，待 Codex 重生成）。上一条注释定稿的末句「10 号预留给全局单点交接的 reply_instance，不得占用」落码时改为「10 号为 reply_instance」或直接删去，不要再写「预留」，否则 proto 里相邻两段注释自相矛盾。本节第 1 条、§0.2 逐条去留第 1 行与 §14 已定第 1 条里「10 号预留」的说法同此更正。
+- **2026-10-18 更正**：10 号已由 `reply_instance` 使用（task:result 读回执通知按 login 实例分频道第 1 批：`proto/db/db_task.proto` 已声明 `string reply_instance = 10;` 并写了语义注释，未编译，待 Gemini 重生成）。上一条注释定稿的末句「10 号预留给全局单点交接的 reply_instance，不得占用」落码时改为「10 号为 reply_instance」或直接删去，不要再写「预留」，否则 proto 里相邻两段注释自相矛盾。本节第 1 条、§0.2 逐条去留第 1 行与 §14 已定第 1 条里「10 号预留」的说法同此更正。
 - 顺带订正 8 号字段的注释（:18-19）：现在比对的是「已落库的最大 epoch」（`consumer:applied_epoch:*`，KOC 的 `appliedEpochKey` / `checkOwnerEpoch` / `guardOwnerEpoch`），不是 `player:{key}:owner_epoch`。
 
 ### 3.2 玩家表（`proto/common/database/mysql_database_table.proto`）
@@ -777,7 +777,7 @@ F-4（§1.2）按这张表理解：缓存单调，但可能落后。不采用「
 
 上线与回退顺序见 §8.7。
 
-**落码记录（2026-10-16，资产通道消费方与证据发布；未编译、未测试，待 Codex 验证）**：
+**落码记录（2026-10-16，资产通道消费方与证据发布；未编译、未测试，待 Gemini 验证）**：
 
 - 开关名：`assetop.LoopConfig.RequireSQLCommit`；guild / trade 的配置键 `AssetOp.RequireSQLCommit`（`etc/guild.yaml`、`etc/trade.yaml`，缺省 `false`）。guild、trade 都是全服服务、一份配置覆盖所有 zone，`Op` 里也没有玩家的 zone，所以「按 zone」落为「该服务会投递到的 zone **全部**满足打开条件后才打开」；真要逐 zone 生效，需要 `Op` 带 home_zone 或由 data_service 回报该 zone 的模式，本批不做。
 - 读取：`LedgerReader.ReadPersistedLedger` 回到 HEAD 口径（Redis 父键 blob，`require_sql_commit=false`）；新增可选接口 `SQLCommitLedgerReader.ReadSQLCommittedLedger`（`require_sql_commit=true`，旧 data_service 回 `sql_committed=false` 时报错）。`DataServiceLedger` 两个都实现。开关打开时在线终结（`verifySQLCommit`）、离线读账本只走后者；关闭时都不碰证据，托管扣出另用同一判据核对回包里的原件身份。
@@ -1126,8 +1126,8 @@ F-5（§1.2）的成立条件就是上表第 2、5 行：没有旧二进制，�
 - 子表缓存键没有新增，`playerCacheKeys` 不用改。资产 SQL 提交证据键要加进 `tools/merge_zone/player_rows.go` 的 `invalidatePlayerCaches` 删除清单，并补用例（§6.6）。
 - **2026-10-20 修复（r2-mz#1）**：前向 copy 合服不再删 `player:{id}:save_barrier`（`invalidatePlayerCachesKeepBarrier`），撤销与 PITR 照删；`-verify-merged` 新增 `verify:save_barrier` 逐人核对，`save_barrier_restore` 新增 plan 期开关 `-allow-home-fallback`。理由与边界见文末「上线状态」之前的同日附注。
 - `go/data_service/cmd/debug_import` 会把导出时的围栏值一起写回。从别的环境导入的行如果围栏比本环境的 epoch 大，之后的存盘会进死信；`fence_save_seq` 超出 §7.2 上界时，冷加载会触发 `Observe` 的超界处置（§7.2）。两种情况都按 §9.1 抬计数器处置，不建议归零。
-- **2026-10-22 修复（r2-ds#1 / r2-ds#2，未编译、未测试，待 Codex）**：上一条描述的是旧 playerdb 导入；player-bundle 导入不搬线上围栏，在本地重铸版本 E = max(线上, 本地 owner_epoch, 本地两行围栏, 本地屏障令牌) + 1，并在本地行围栏或屏障令牌高于本地 owner_epoch（本地 Redis 丢过状态、Kafka 可能有看不见的更高代次残留）时拒绝导入，所以本地残留 DBTask 的代次都低于 E、会被行内围栏判 stale_owner。写前身份闸对取不到身份的一侧（TiDB、旧版导出包）fail-closed，要目标库带本地标记表或显式 `-allow-unverified-target-identity`。细节与操作见 [online-debug-data-fetch.md](../ops/online-debug-data-fetch.md) §7。
-- **2026-10-22 修复评审补充（未编译、未测试，待 Codex）**：Redis 写目标的 `run_id` 与来源不同不再算证明（线上 Redis HA 切主、重启都会换 `run_id`，闸门放行后会在线上删父快照、改屏障与 owner_epoch），Redis 目标也要本地标记键 `debug_import:local_target`；MySQL 身份比对按角色配对（落点库对落点库、全局库对全局库，对应来源没读就要标记）；旧 player / playerdb 模式补上同一道闸（只认标记或显式放行）。同见 online-debug-data-fetch.md §7「评审补充」。
+- **2026-10-22 修复（r2-ds#1 / r2-ds#2，未编译、未测试，待 Gemini）**：上一条描述的是旧 playerdb 导入；player-bundle 导入不搬线上围栏，在本地重铸版本 E = max(线上, 本地 owner_epoch, 本地两行围栏, 本地屏障令牌) + 1，并在本地行围栏或屏障令牌高于本地 owner_epoch（本地 Redis 丢过状态、Kafka 可能有看不见的更高代次残留）时拒绝导入，所以本地残留 DBTask 的代次都低于 E、会被行内围栏判 stale_owner。写前身份闸对取不到身份的一侧（TiDB、旧版导出包）fail-closed，要目标库带本地标记表或显式 `-allow-unverified-target-identity`。细节与操作见 [online-debug-data-fetch.md](../ops/online-debug-data-fetch.md) §7。
+- **2026-10-22 修复评审补充（未编译、未测试，待 Gemini）**：Redis 写目标的 `run_id` 与来源不同不再算证明（线上 Redis HA 切主、重启都会换 `run_id`，闸门放行后会在线上删父快照、改屏障与 owner_epoch），Redis 目标也要本地标记键 `debug_import:local_target`；MySQL 身份比对按角色配对（落点库对落点库、全局库对全局库，对应来源没读就要标记）；旧 player / playerdb 模式补上同一道闸（只认标记或显式放行）。同见 online-debug-data-fetch.md §7「评审补充」。
 
 ### 9.4 死信里的条件写条目（`fence_stale_owner` / `owner_epoch_regressed` / `fence_legacy_after_seq`）
 
@@ -1188,9 +1188,9 @@ F-5（§1.2）的成立条件就是上表第 2、5 行：没有旧二进制，�
 
 ---
 
-## 11. 测试与 Codex 验证
+## 11. 测试与 Gemini 验证
 
-前提：Claude 没有编译、没有运行任何测试，下面全部由 Codex 执行。任一步失败就保留错误和日志摘要后停下，不连续重试、不改断言、不跳过测试。
+前提：Claude 没有编译、没有运行任何测试，下面全部由 Gemini 执行。任一步失败就保留错误和日志摘要后停下，不连续重试、不改断言、不跳过测试。
 
 **0. 前置**：L-04 第 1 批已在工作区。§0.2 的两条合并前置已满足（「全域到账续批」写入方停手；go/db 会话的 R2 / R3 文件清单已到、本线已 rebase）。原语：proto2mysql `v0.3.0` 发布之前用过渡实现（§4.8），不需要改 go.mod；发版之后（§14 第 21 条），`go/db/go.mod` 的 require 与 replace 两侧都升到 `v0.3.0`，换 `fenceSave` 函数体，第 2、3 步原样再跑一遍。
 
@@ -1401,7 +1401,7 @@ v0.4 按「合并在途实现 + 补审修订」重列。归属一列：**本线*
 - 重试源任务在 Stop 第⑤步被归还时 RetryCount 是否回退（影响 §4.6「耗预算」的程度）。
 - 启用 Regions 集群或 G4a 拆分后，资产证据键的读写两侧是否仍在同一实例（§6.6）。
 - 「全域到账续批」写入方是否已停手：截至 2026-10-15 23:05 仍在改；在途代码在分析期间被 gofmt 重排过，§0.2 的行号引用前重新定位。
-- `SaveConditional` 尚未经 Codex 验证、尚未发版；本设计的全部改动未落码、未编译、未测试。
+- `SaveConditional` 尚未经 Gemini 验证、尚未发版；本设计的全部改动未落码、未编译、未测试。
 
 ---
 
@@ -1568,7 +1568,7 @@ DB 令牌发布脚本另带 `player:{id}:save_barrier`，只在 `dual` / class-1
 
 每份完整快照携带自己的提交钩子,每份实际成功写入 Redis 的值都立即执行一次,先投递两张完整子表 DBTask、登记投递票据,然后才发出下一份排队快照;全局 `HandlePlayerAsyncSaved` 仍只对最终最新值发布。只有未下发就被合并的中间值、拒绝、错误和旧连接回调不能投递 SQL 任务。钩子前崩溃仍可由持久意图补投;未下发的中间快照被最新完整状态涵盖。钩子与回包同线程,保留本次在途登记直至钩子结束,允许重入 Save;钩子后重新查 key 与 element 身份,不跨钩子持有 map iterator。两张完整任务必须在写父键前全部序列化成功,严格 API 强制显式非空意图,没有绕过意图的旧重载,参数或序列化失败向调用方返回拒绝。钩子只按值持有不可变任务字节和玩家号、home zone、topic、owner epoch、save seq,不捕获 ECS 引用或 Node 裸指针。epoch=0 的旧兼容路径也在父写成功后才投递 SQL,但不提供严格 pending/outbox 屏障,仍受全 writer 升级门禁约束。
 
-`HandlePlayerAsyncLoadFailed(DataNotFound)` 一律走载入失败通知、会话映射清理与 `AbandonInheritClear`,不能把缓存缺失解释成新号。`HandlePlayerAsyncLoaded` 在消费 pending 或暂存 A2′ 载入结果之前要求两张子表的 player_id 都等于当前非零玩家号,空 ID 或串号均走同一失败链,不再依据异步 key 补 ID。新号的父缓存已由 login `SeedNewPlayerAllData` 预种双 ID,合法种子的 registration_timestamp 仍为 0,继续由 `InitPlayerFromAllData` 完成首次注册;冷加载无法证明 SQL 两行与屏障齐备时拒绝入场。运行验收由 Codex 统一安排,本切片不单独启动 MSBuild。
+`HandlePlayerAsyncLoadFailed(DataNotFound)` 一律走载入失败通知、会话映射清理与 `AbandonInheritClear`,不能把缓存缺失解释成新号。`HandlePlayerAsyncLoaded` 在消费 pending 或暂存 A2′ 载入结果之前要求两张子表的 player_id 都等于当前非零玩家号,空 ID 或串号均走同一失败链,不再依据异步 key 补 ID。新号的父缓存已由 login `SeedNewPlayerAllData` 预种双 ID,合法种子的 registration_timestamp 仍为 0,继续由 `InitPlayerFromAllData` 完成首次注册;冷加载无法证明 SQL 两行与屏障齐备时拒绝入场。运行验收由 Gemini 统一安排,本切片不单独启动 MSBuild。
 
 归属交接不能只等父 Redis 成功:新 epoch 会令尚未落库的旧 epoch 任务被拒绝。`BeginTravelHandoff` 改用同实例三键 Lua（旧 owner、save_barrier、旧 handoff）,仅当 owner 仍同代、pending 合法且属于该 owner、两 SQL ACK 都精确等于 pending 时,才在同一原子段 SET 原格式标记并保留原 300 秒 TTL。双 ACK 未齐返回 0 且不写标记,释放本次请求占位与 markEpoch,按原冻结代次每 250 毫秒重查;截止固定在冻结起点后的 35 秒,不因重试滑动。0 状态仍受原存盘看门狗与 70 秒冻结硬上限约束。只有明确 1 才发 SceneManager;owner 已变则不存盘销毁旧实体,不采纳新 epoch;明确错误不留标记,连接断开或异常回包仍按原未知结果取证,不能直接解冻。timer 与回包都按玩家号和单调冻结代次回查,退出、新代次或另一条标记命令在途时旧 timer 失效。实际 Lua 的连续 0→0→1 / 错型 / 错版 / owner 变化回归与纯单调时间接缝、wiring 契约同批覆盖;ECS 与 muduo timer 贯通运行尚待单独宿主验收,源码契约不替代该证据。
 
@@ -1676,14 +1676,14 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 - `deploy/k8s/db-task-retry-alerts.yaml` 新增 `db-task.save-outbox` 组三条：`DbSaveOutboxExhausted`（critical）、`DbSaveOutboxTerminal`（warning）、`DbSaveOutboxPausedByLegacyWriter`（critical）。上线时手工 apply；阈值未经 promtool 校验。
 
 **验证与 Java**
-- **验证**：未编译、未测试，交 Codex。用例在：
+- **验证**：未编译、未测试，交 Gemini。用例在：
   - `saveoutbox/generation_test.go`、`replay_bounds_test.go`，以及改造过的 `replay_test.go` / `replay_integration_test.go`；
   - `kafka/save_outbox_note_test.go`；
   - `kafka/player_row_fence_mode_test.go`（空串改为 `dual`）；
   - `tools/scripts/tests/k8s_zone_rollback_discard.tests.ps1`（Fencing 缺省改为 `dual`）。
 - **Java 版**：不适用。Java 不经 Kafka / go/db 落库，没有父快照提交屏障与补投器（AGENTS §12）。
 
-**2026-10-19 第二轮审计修复（r2-db#1、r2-db#3，Claude，未编译、未测试，待 Codex 验证）**
+**2026-10-19 第二轮审计修复（r2-db#1、r2-db#3，Claude，未编译、未测试，待 Gemini 验证）**
 
 来源：[data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.1、§3.2。两条都先对照代码复核，确认成立后才修。上文第 3、5 条与字段表以本段为准。
 
@@ -1707,7 +1707,7 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 - **指标**：`db_save_outbox_total{result}` 新增 `publish_paused`。
 - **Java 版**：不适用，理由同上。
 
-**2026-10-20 第二轮审计修复（r2-mz#1，Claude，未编译、未测试，待 Codex 验证）**
+**2026-10-20 第二轮审计修复（r2-mz#1，Claude，未编译、未测试，待 Gemini 验证）**
 
 来源：[data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.3、§5。先对照代码复核成立后才修。上文「2026-10-17 登录冷恢复与恢复运维门禁」末段「合服/撤销与 PITR 必须清除……save_barrier」对**前向 copy 合服**不再成立，以本段为准；撤销与 PITR 不变。
 
@@ -1724,7 +1724,7 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
   - 落点键存在但值为空串，按畸形记录拒绝（go/db 对它 fail-closed），不混同「无记录」。
   - home≠zone、落点指向他库或冻结、屏障与 SQL 不同版、缓存 / 证据 / 交接标记仍在、补投桶非空、合服围栏仍在，照旧拒绝。
   - 缺省 false 时行为与修复前一致；字段 `omitempty`，旧计划照读。
-- **测试**（未运行，交 Codex）：
+- **测试**（未运行，交 Gemini）：
   - `tools/merge_zone/player_rows_barrier_test.go`：前向清单不含屏障、撤销清单含；fake Redis 上前向不删、撤销删、dry-run 不发命令；AST 钉住 `runMerge` / `runUnmerge` 的接线；镜像字面量；`judgeSaveBarrier` 逐条；verify 的通过、block、不要求、INFRA、NOT VERIFIED；屏障含 `schema_gen` / `schema_writer` 时通过，且只 HMGET 三个字段；`-verify-merged` 包含这一行。
   - `tools/merge_zone/save_barrier_integration_test.go`（`merge_integration`）：真 MySQL 读行围栏（含 uint64 上界、缺列报错），真 Redis HMGET 不受多余字段影响。
   - `go/db/internal/barrierrestore/home_fallback_test.go`：无记录且 home==zone 恢复成功、幂等、不补写落点；缺省拒收；home≠zone / 非规范 / 缺失，落点空串 / 他库 / 冻结 / 畸形，一律拒绝；计划后落点出现时，Go 侧复核与 Lua 原子复核分别拒绝；零围栏 SQL 提交后重锁发现落点出现则不发布；其余原子校验仍拒；篡改计划去掉开关被 `Validate` 拒绝；`redis-split` 只回退到本区 zone 库。
@@ -1732,7 +1732,7 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 - **残余**：`verify:save_barrier` 只在 Step 5 跑；Step 5 之后到开服之间的写入不再复核，与其他 verify 行相同。撤销没有对应的 verify 行，靠 `save_barrier_restore` 的逐人回执与受控测试号冷登录确认。
 - **Java 版**：不适用。Java 没有 Redis 父快照提交屏障与 `save_barrier_restore`，沿用 player / player_state 同 SQL 事务；Java 合服作业随批次 7.3 待做，届时按其自身存储协议设计，不照抄本条。
 
-**2026-10-22 修复（r2-mz#1 评审跟进，Claude，未编译、未测试，待 Codex 验证）**：上段「机械核对」与「残余」以本段为准。
+**2026-10-22 修复（r2-mz#1 评审跟进，Claude，未编译、未测试，待 Gemini 验证）**：上段「机械核对」与「残余」以本段为准。
 
 - **问题**：`verify:save_barrier` 照的是 10-22 之前的 login。现在的冷加载走 `savebarrier.Reconcile`（[zone-redis-regression-guard-20261022.md](zone-redis-regression-guard-20261022.md) §4.1.4），对 V2 / V7 会采纳 SQL 自愈，verify 却一律 block、并按手册要求跑 `save_barrier_restore`：比 login 严，会把合法合服挡在 Step 5。`barrier_missing` 又把「无 SQL 行」（r2-login#1 的受害者，恢复工具救不了）与「零围栏」（要 `-allow-legacy`）混在一起。另有两类假 info：owner_epoch 键类型错（MGET 回 nil，被当成不要求屏障）、owner 缺失或为 0 而屏障存在。
 - **改法**（`tools/merge_zone/save_barrier_verify.go`）：`judgeSaveBarrier` 按 login 冷加载的顺序预判（beginParentLoad 的键类型 / 字段规范 / owner 不低于 pending 代次 → route 的在途等待 → 两行缺失 → `reconcileSaveBarrier`，后者逐条镜像 `Reconcile`），结论分三档：V1 一致 info；login 会采纳 SQL 的 `barrier_missing_sql_adoptable` / `sql_rows_ahead_of_barrier` warn；会拒登的 block。`barrier_missing` 按行状态拆成 `barrier_missing_no_sql_row` / `barrier_missing_zero_fence` / `barrier_missing_rows_disagree` 与上面的 adoptable；`pending_malformed` 并入 `save_barrier_malformed`（也覆盖屏障键类型错、ACK 不规范）；新增 `barrier_without_owner`。读法改为每人一条 GET owner_epoch 加一条 HMGET 屏障、同一条 pipeline；WRONGTYPE 归到那名玩家（owner 记 `owner_epoch_malformed`、屏障记 `save_barrier_malformed`），只有连接级错误才整行 INFRA。范围从「owner≠0」扩为「owner≠0、键畸形、或屏障里有 pending / ACK」。
@@ -1742,7 +1742,7 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 - **测试**：`tools/merge_zone/player_rows_barrier_test.go` 改为对共享表，另补 block 与 warn 并列、只有 warn、缺屏障按行状态分流、WRONGTYPE 与孤儿屏障逐人归类、超时文案；`save_barrier_integration_test.go` 补真 Redis pipeline 里 WRONGTYPE 逐人归类、前向缓存失效后屏障 hash 逐字段不变而撤销删除。
 - **残余**：每个 auditor 的时间预算仍是 `runAuditMode` 里的固定值，`verify:manifest_rows` 与本行在几十万人以上的清单可能稳定超时（INFRA，fail-closed）；放宽要改 `runAuditMode`，不在本条范围。端到端用例 `TestIT_EndToEnd_MergeVerifyUnmerge` 的共享夹具没有围栏列，仍只覆盖 info 一支。owner 为 0 且没有屏障的人本行不判，他们的行在不在由 `verify:manifest_rows` 回答（只看 `player_database`）。
 
-**2026-10-23 第二轮审计修复（r2-rr#5 数据侧，Claude，未编译、未测试，待 Codex 验证）**
+**2026-10-23 第二轮审计修复（r2-rr#5 数据侧，Claude，未编译、未测试，待 Gemini 验证）**
 
 来源：[data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.7 r2-rr#5。先对照代码复核：`replay.go` 的 `Tick` 只看发布暂停、主库冷却、legacy 存活三个条件，确实不看就绪闸，数据侧成立后才修。本段只修数据侧（补投在停摆期间放大与计次）；停摆时长本身归 D1，见「残余」。上文 r2-db#1 段「跨 zone 迁移缺权威 home_zone 仍计次」与「修复后 exhausted 只来自……」两句以本段为准。
 
@@ -1780,7 +1780,7 @@ DBTask TopicGeneration 换代的排空集合同时包含旧代 Kafka、retry 与
 - **退场**：负责人 2026-10-23 已定映射改为直读 TiDB（`docs/handoff/d1-review-fix-handoff-20261023.md`（已清理，见 `ccf2840b2`）），go/db 就绪闸届时作废，本条的闸判定随之失去对象。
   - 同批删除：`saveoutbox.RouteGate`、`KeyOrderedKafkaConsumer.RouteGateOpen`（含编译期断言）、`db.go` 的注入、测试夹具 `routeGateStub` 与 `replay_route_gate_test.go` 里的闸用例。不要保留一个恒放行的空实现。
   - 跨 zone 迁移前读 home_zone 的 `GET player:zone:{id}` 改读 TiDB 真源，归新方向会话。本条的错误分类沿用：存储不可用或配置错误不计次，该玩家数据的确定性错误（缺失、形态不对、不符）计次。
-- **测试**（未运行，交 Codex）：
+- **测试**（未运行，交 Gemini）：
   - `saveoutbox/replay_route_gate_test.go`：闸关着的多拍（跨过整段退避、为次数上限的两倍）不碰 broker、不计次、不推迟索引、不进 exhausted，重开后第一拍照常补投并计一次；本拍中途关上时停止认领；mapping 读失败（传输错误、`LOADING`、`NOPERM` 三个子用例）不计次、不迁索引、报错带原因（`TestHomeZoneReadErrorDoesNotConsumeAttempt`）；映射键被写成 hash、GET 回 `WRONGTYPE` 时按意图不合法计一次（`TestHomeZoneWrongTypeConsumesAttempt`）；`New` 拒收 nil 闸。
   - `kafka/route_gate_open_test.go`：`RouteGateOpen` 跟着每次刷新走（标记不在、读脚本出错都关），不记等待次数，nil 闸恒放行。
   - 既有夹具 `replay_test.go`、`replay_bounds_test.go`、`replay_integration_test.go` 改为注入恒放行的闸，断言不变。
@@ -1870,7 +1870,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 3. **加库是扩写吞吐的手段**：玩家档每 zone 一个库，是 `NewPlayerStorageId` 的静态规则。写热点按库分摊，加库按[玩家数据 TiDB 扩容方案](player-data-tidb-scaling-plan.md)的分库办法做，不提高单个闸门的吞吐。
 4. **不做：去掉 BEGIN 之前那次 `route_meta` 读。** 它给 `LOCK_TOUCH` 档的条件写提供 epoch，这是一次当前读的 epoch 校验；挪进事务就落进了 RR 快照（见 `beginLocked` 注释）。要动它，得连锁原语资格一起重新论证。
 
-**之后的压测验证**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
+**之后的压测验证**（交 Gemini，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
 
 - **负载**：以玩家存盘（go/db）为主的写负载，单 zone、单存档库。存档副本数按 1 → 2 → 4 阶梯加，每档稳态不少于 5 分钟。
 - **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`；11-12 另加不在每笔事务上的 `pin`、`revalidate`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
@@ -1888,7 +1888,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 - 11-10：测量用的 `writer_gate_seconds`，闸门判定不变。定义在 `go/shared/authoritysql/metrics.go`；三个观察点在 `writer.go` 的 `beforeBegin`、`enter`、`admitRead`；单测 `metrics_gate_test.go`。
 - 11-11：`writer.go` 的 `enter` 拆出 `lockSlot`、`readSlotRow`、`readGateView`、`registrationMatchesGrant`、`parseRawMeta`；`verifyBootRegistration` 改用 `registrationMatchesGrant`。单测 `writer_frozen_test.go`：假连接认得合并读并数语句；新增 `TestGateEnterSendsTwoStatements`、`TestGateDeniesWhenRegistrationRowIsMissing`、`TestGateLockTouchEpochAdvancedDuringEnterIsFrozen`；原有的冻结与拒绝分类用例不改，照样要过。
 
-**验证**（交 Codex）：
+**验证**（交 Gemini）：
 
 1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `gofmt -l authoritysql/`（应无输出）、`go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。上面三条新用例与 `TestGateClassifiesFrozenApartFromDenied` 全部要过。
 2. 真库闸门用例：合并读用了 `LEFT JOIN`，要在真库上走一遍。MySQL 与 TiDB 各跑一轮，两种锁原语（`MMORPG_SQL_FIXTURE_LOCK_PRIMITIVE`）都要跑。门控按 `writer_gate_tidb_test.go`、`writer_tidb_test.go`、`writer_succession_tidb_test.go` 文件头：设 `MMORPG_SQL_FIXTURE_ADMIN_DSN` 等夹具变量，再带上 `MAIL_RANK_REQUIRE_TESTS=1`，没配齐就直接失败、不跳过。
@@ -1913,7 +1913,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 
 **行为变化**：写者被退休或换代之后，池里已有的连接复用时不再被拒，拒绝发生在下一笔写事务里，调用方拿到确定的 `ErrWriterDenied`。纯读不需要写资格（11-06 读闸门），退休的写者还能用池里的旧连接读到连接生命周期结束；新建连接仍在 `pin` 里核注册。
 
-**验证**（交 Codex）：
+**验证**（交 Gemini）：
 
 1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `gofmt -l authoritysql/`（应无输出）、`go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。`revalidate_test.go` 的全部用例（落码时五条，评审补强后九条）、`TestWriterDriverSessionOptionalInterfacesPreservePolicy`、`TestMySQLResetSessionRecheckAfterDemotion`、`TestObserveWriterGateRecordsEachPhase` 要过。
 2. 真库闸门用例按上一节第 2 步的门控各跑一轮（MySQL 与 TiDB、两种锁原语）。重点是 `writer_succession_tidb_test.go` 里「上一代的写要被拒」那几处：现在由闸门直接回 `ErrWriterDenied`。
@@ -1934,7 +1934,7 @@ SQL_RELEASED 后只允许同 run 的新一代注册：账号是预先批准的�
 
 另更正上面「行为变化」里退休写者旧连接的可读时长：go/db 的存档库池是 5 分钟，`authoritysql.Open` 建的池是 15 分钟（`SetConnMaxLifetime`）。
 
-**补强的验证**（并入上面第 1~3 步，交 Codex）：
+**补强的验证**（并入上面第 1~3 步，交 Gemini）：
 
 - 单测：`revalidate_test.go` 现在九条（新增 `TestTiDBRuntimeReuseAfterIdleSendsOneSessionRead`、`TestTiDBSessionReadAcceptsDriverNativeIntegers`、`TestTiDBRuntimeReuseAfterIdleRejectsDeadPeerAndDriftedSession`、`TestIdleTiDBConnectionFailingProbeIsDiscarded`）；`driver_test.go` 新增 `TestWriterDriverResetSessionReportsIdleSinceReturn`、`TestWriterDriverBeginFailureWithIsolationDiscardsConnection`。
 - 真库：`reuse_session_tidb_test.go` 的 `TestPinnedSessionSurvivesPoolReuse`，门控同 `twoLogicalDBFixture`，MySQL 与 TiDB 各一轮。它同时验证探测读回的列形状和代码认的一致：不一致时好连接会被判坏、连接号变化，用例报「连接被重建了」。

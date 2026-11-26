@@ -59,6 +59,8 @@ func TestSpectateVisibilityPolicy(t *testing.T) {
 		{"点名切磋私密", matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, nil, visPrivate},
 		{"人数档 PVP 私密", matchpb.MatchMode_MATCH_MODE_PVP_TEAM, nil, visPrivate},
 		{"物法易势 5V5 私密", matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, nil, visPrivate},
+		{"帮会帮战真人局公开", matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP, &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR}, visPublic},
+		{"帮会守旗阵踢馆公开", matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE, &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR}, visPublic},
 		{"全服赛季战队锦标赛公开", matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT, nil, visPublic},
 		{"3V3 未开放私密", matchpb.MatchMode_MATCH_MODE_3V3, nil, visPrivate},
 		{"漏填模式私密", matchpb.MatchMode_MATCH_MODE_UNSPECIFIED, nil, visPrivate},

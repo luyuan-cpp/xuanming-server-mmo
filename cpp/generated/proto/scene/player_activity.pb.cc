@@ -61,9 +61,525 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
         // ::ClaimFestivalBeastRewardResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::TravelPassTierView
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::TravelPassSnapshot
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::GetTravelPassStateRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::GetTravelPassStateResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::UnlockTravelPassPremiumRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::UnlockTravelPassPremiumResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::ClaimTravelPassRewardRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::ClaimTravelPassRewardResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::EquipTravelPassCosmeticRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
+        // ::EquipTravelPassCosmeticResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class UnlockTravelPassPremiumRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnlockTravelPassPremiumRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_._has_bits_);
+};
+
+constexpr UnlockTravelPassPremiumRequest::ParseTableT_ UnlockTravelPassPremiumRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::UnlockTravelPassPremiumRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 client_request_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockTravelPassPremiumRequest, _impl_.client_request_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.client_request_id_)}},
+      // uint32 pass_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockTravelPassPremiumRequest, _impl_.pass_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.pass_id_)}},
+      // uint32 expected_currency_type = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockTravelPassPremiumRequest, _impl_.expected_currency_type_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_currency_type_)}},
+      // uint64 expected_price = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockTravelPassPremiumRequest, _impl_.expected_price_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_price_)}},
+      // uint32 expected_config_revision = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockTravelPassPremiumRequest, _impl_.expected_config_revision_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_config_revision_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 client_request_id = 1;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 pass_id = 2;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.pass_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 expected_currency_type = 3;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_currency_type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 expected_price = 4;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_price_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 expected_config_revision = 5;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_config_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnlockTravelPassPremiumRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        client_request_id_{::uint64_t{0u}},
+        pass_id_{0u},
+        expected_currency_type_{0u},
+        expected_price_{::uint64_t{0u}},
+        expected_config_revision_{0u} {}
+
+template <typename>
+constexpr UnlockTravelPassPremiumRequest::UnlockTravelPassPremiumRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnlockTravelPassPremiumRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnlockTravelPassPremiumRequest(arena);
+}
+constexpr auto UnlockTravelPassPremiumRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnlockTravelPassPremiumRequest), alignof(UnlockTravelPassPremiumRequest));
+}
+constexpr auto UnlockTravelPassPremiumRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnlockTravelPassPremiumRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnlockTravelPassPremiumRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnlockTravelPassPremiumRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnlockTravelPassPremiumRequest>(), &UnlockTravelPassPremiumRequest::ByteSizeLong,
+              &UnlockTravelPassPremiumRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[20],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnlockTravelPassPremiumRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnlockTravelPassPremiumRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnlockTravelPassPremiumRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnlockTravelPassPremiumRequest::InternalGenerateClassData_(
+            _default, &UnlockTravelPassPremiumRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnlockTravelPassPremiumRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnlockTravelPassPremiumRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnlockTravelPassPremiumRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnlockTravelPassPremiumRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnlockTravelPassPremiumRequestGlobalsTypeInternal UnlockTravelPassPremiumRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnlockTravelPassPremiumRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnlockTravelPassPremiumRequest_globals_.GetClassData();
+#else
+  return UnlockTravelPassPremiumRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class TravelPassTierView::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TravelPassTierView>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_._has_bits_);
+};
+
+constexpr TravelPassTierView::ParseTableT_ TravelPassTierView::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_._has_bits_),
+      0, // no _extensions_
+      22, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4290772992,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      22,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::TravelPassTierView>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 tier_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.tier_id_), 8>(),
+       {8, 8, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.tier_id_)}},
+      // uint32 tier_index = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.tier_index_), 9>(),
+       {16, 9, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.tier_index_)}},
+      // uint32 required_points = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.required_points_), 10>(),
+       {24, 10, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.required_points_)}},
+      // bool reached = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TravelPassTierView, _impl_.reached_), 14>(),
+       {32, 14, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.reached_)}},
+      // uint32 free_item_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.free_item_id_), 11>(),
+       {40, 11, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_id_)}},
+      // uint32 free_item_count = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.free_item_count_), 13>(),
+       {48, 13, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_count_)}},
+      // string free_item_name = 7;
+      {::_pbi::TcParser::FastUS1,
+       {58, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_name_)}},
+      // string free_item_icon_key = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_icon_key_)}},
+      // uint64 free_gold = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TravelPassTierView, _impl_.free_gold_), 12>(),
+       {72, 12, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_gold_)}},
+      // string free_cosmetic_key = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_cosmetic_key_)}},
+      // string free_cosmetic_name = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_cosmetic_name_)}},
+      // bool free_claimed = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TravelPassTierView, _impl_.free_claimed_), 15>(),
+       {96, 15, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_claimed_)}},
+      // bool free_can_claim = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TravelPassTierView, _impl_.free_can_claim_), 16>(),
+       {104, 16, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_can_claim_)}},
+      // uint32 premium_item_id = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.premium_item_id_), 18>(),
+       {112, 18, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_id_)}},
+      // uint32 premium_item_count = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassTierView, _impl_.premium_item_count_), 19>(),
+       {120, 19, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_count_)}},
+      // string premium_item_name = 16;
+      {::_pbi::TcParser::FastUS2,
+       {386, 4, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_name_)}},
+      // string premium_item_icon_key = 17;
+      {::_pbi::TcParser::FastUS2,
+       {394, 5, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_icon_key_)}},
+      // uint64 premium_gold = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 20, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_gold_)}},
+      // string premium_cosmetic_key = 19;
+      {::_pbi::TcParser::FastUS2,
+       {410, 6, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_cosmetic_key_)}},
+      // string premium_cosmetic_name = 20;
+      {::_pbi::TcParser::FastUS2,
+       {418, 7, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_cosmetic_name_)}},
+      // bool premium_claimed = 21;
+      {::_pbi::TcParser::FastV8S2,
+       {424, 17, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_claimed_)}},
+      // bool premium_can_claim = 22;
+      {::_pbi::TcParser::FastV8S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_can_claim_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 tier_id = 1;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.tier_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tier_index = 2;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.tier_index_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 required_points = 3;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.required_points_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool reached = 4;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.reached_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 free_item_id = 5;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 free_item_count = 6;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string free_item_name = 7;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string free_item_icon_key = 8;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_item_icon_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 free_gold = 9;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_gold_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string free_cosmetic_key = 10;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_cosmetic_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string free_cosmetic_name = 11;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_cosmetic_name_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool free_claimed = 12;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_claimed_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool free_can_claim = 13;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.free_can_claim_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 premium_item_id = 14;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 premium_item_count = 15;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_count_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string premium_item_name = 16;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_name_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string premium_item_icon_key = 17;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_item_icon_key_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 premium_gold = 18;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_gold_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string premium_cosmetic_key = 19;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_cosmetic_key_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string premium_cosmetic_name = 20;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_cosmetic_name_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool premium_claimed = 21;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_claimed_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool premium_can_claim = 22;
+      {PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_can_claim_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+      "\22\0\0\0\0\0\0\16\22\0\21\22\0\0\0\0\21\25\0\24\25\0\0\0"
+      "TravelPassTierView"
+      "free_item_name"
+      "free_item_icon_key"
+      "free_cosmetic_key"
+      "free_cosmetic_name"
+      "premium_item_name"
+      "premium_item_icon_key"
+      "premium_cosmetic_key"
+      "premium_cosmetic_name"
+    }},
+  };
+}
+
+
+inline constexpr TravelPassTierView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        free_item_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        free_item_icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        free_cosmetic_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        free_cosmetic_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        premium_item_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        premium_item_icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        premium_cosmetic_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        premium_cosmetic_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        tier_id_{0u},
+        tier_index_{0u},
+        required_points_{0u},
+        free_item_id_{0u},
+        free_gold_{::uint64_t{0u}},
+        free_item_count_{0u},
+        reached_{false},
+        free_claimed_{false},
+        free_can_claim_{false},
+        premium_claimed_{false},
+        premium_item_id_{0u},
+        premium_item_count_{0u},
+        premium_gold_{::uint64_t{0u}},
+        premium_can_claim_{false} {}
+
+template <typename>
+constexpr TravelPassTierView::TravelPassTierView(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TravelPassTierView::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TravelPassTierView(arena);
+}
+constexpr auto TravelPassTierView::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TravelPassTierView), alignof(TravelPassTierView));
+}
+constexpr auto TravelPassTierView::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TravelPassTierView::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TravelPassTierView>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TravelPassTierView::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TravelPassTierView>(), &TravelPassTierView::ByteSizeLong,
+              &TravelPassTierView::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[16],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TravelPassTierViewGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TravelPassTierViewGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TravelPassTierView_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TravelPassTierView::InternalGenerateClassData_(
+            _default, &TravelPassTierView_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TravelPassTierView>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TravelPassTierViewGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TravelPassTierView _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TravelPassTierView>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TravelPassTierViewGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TravelPassTierViewGlobalsTypeInternal TravelPassTierView_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TravelPassTierView_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TravelPassTierView_globals_.GetClassData();
+#else
+  return TravelPassTierView_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class StartFestivalBeastChallengeRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<StartFestivalBeastChallengeRequest>()._impl_._has_bits_);
@@ -404,6 +920,147 @@ const ::_pbi::ClassData* PlayerActivityRewardItem_get_class_data() {
   return PlayerActivityRewardItem_globals_.GetClassData();
 #else
   return PlayerActivityRewardItem_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetTravelPassStateRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetTravelPassStateRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetTravelPassStateRequest, _impl_._has_bits_);
+};
+
+constexpr GetTravelPassStateRequest::ParseTableT_ GetTravelPassStateRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetTravelPassStateRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetTravelPassStateRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 pass_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetTravelPassStateRequest, _impl_.pass_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetTravelPassStateRequest, _impl_.pass_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 pass_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GetTravelPassStateRequest, _impl_.pass_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetTravelPassStateRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        pass_id_{0u} {}
+
+template <typename>
+constexpr GetTravelPassStateRequest::GetTravelPassStateRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetTravelPassStateRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetTravelPassStateRequest(arena);
+}
+constexpr auto GetTravelPassStateRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetTravelPassStateRequest), alignof(GetTravelPassStateRequest));
+}
+constexpr auto GetTravelPassStateRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetTravelPassStateRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetTravelPassStateRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetTravelPassStateRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetTravelPassStateRequest>(), &GetTravelPassStateRequest::ByteSizeLong,
+              &GetTravelPassStateRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetTravelPassStateRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[18],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetTravelPassStateRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetTravelPassStateRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetTravelPassStateRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetTravelPassStateRequest::InternalGenerateClassData_(
+            _default, &GetTravelPassStateRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetTravelPassStateRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetTravelPassStateRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetTravelPassStateRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetTravelPassStateRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetTravelPassStateRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetTravelPassStateRequestGlobalsTypeInternal GetTravelPassStateRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetTravelPassStateRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetTravelPassStateRequest_globals_.GetClassData();
+#else
+  return GetTravelPassStateRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1143,6 +1800,321 @@ const ::_pbi::ClassData* FestivalBeastMaterialSummary_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class EquipTravelPassCosmeticRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EquipTravelPassCosmeticRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_._has_bits_);
+};
+
+constexpr EquipTravelPassCosmeticRequest::ParseTableT_ EquipTravelPassCosmeticRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::EquipTravelPassCosmeticRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string cosmetic_key = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_.cosmetic_key_)}},
+      // uint32 cosmetic_slot = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipTravelPassCosmeticRequest, _impl_.cosmetic_slot_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_.cosmetic_slot_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 cosmetic_slot = 1;
+      {PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_.cosmetic_slot_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string cosmetic_key = 2;
+      {PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_.cosmetic_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\36\0\14\0\0\0\0\0"
+      "EquipTravelPassCosmeticRequest"
+      "cosmetic_key"
+    }},
+  };
+}
+
+
+inline constexpr EquipTravelPassCosmeticRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        cosmetic_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        cosmetic_slot_{0u} {}
+
+template <typename>
+constexpr EquipTravelPassCosmeticRequest::EquipTravelPassCosmeticRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EquipTravelPassCosmeticRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EquipTravelPassCosmeticRequest(arena);
+}
+constexpr auto EquipTravelPassCosmeticRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EquipTravelPassCosmeticRequest), alignof(EquipTravelPassCosmeticRequest));
+}
+constexpr auto EquipTravelPassCosmeticRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EquipTravelPassCosmeticRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EquipTravelPassCosmeticRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EquipTravelPassCosmeticRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EquipTravelPassCosmeticRequest>(), &EquipTravelPassCosmeticRequest::ByteSizeLong,
+              &EquipTravelPassCosmeticRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[24],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EquipTravelPassCosmeticRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EquipTravelPassCosmeticRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EquipTravelPassCosmeticRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EquipTravelPassCosmeticRequest::InternalGenerateClassData_(
+            _default, &EquipTravelPassCosmeticRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EquipTravelPassCosmeticRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EquipTravelPassCosmeticRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EquipTravelPassCosmeticRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EquipTravelPassCosmeticRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EquipTravelPassCosmeticRequestGlobalsTypeInternal EquipTravelPassCosmeticRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EquipTravelPassCosmeticRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EquipTravelPassCosmeticRequest_globals_.GetClassData();
+#else
+  return EquipTravelPassCosmeticRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimTravelPassRewardRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimTravelPassRewardRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_._has_bits_);
+};
+
+constexpr ClaimTravelPassRewardRequest::ParseTableT_ ClaimTravelPassRewardRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ClaimTravelPassRewardRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool premium_track = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimTravelPassRewardRequest, _impl_.premium_track_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.premium_track_)}},
+      // uint64 client_request_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimTravelPassRewardRequest, _impl_.client_request_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.client_request_id_)}},
+      // uint32 pass_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimTravelPassRewardRequest, _impl_.pass_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.pass_id_)}},
+      // uint32 tier_index = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimTravelPassRewardRequest, _impl_.tier_index_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.tier_index_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 client_request_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 pass_id = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.pass_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tier_index = 3;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.tier_index_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool premium_track = 4;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.premium_track_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimTravelPassRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        client_request_id_{::uint64_t{0u}},
+        pass_id_{0u},
+        tier_index_{0u},
+        premium_track_{false} {}
+
+template <typename>
+constexpr ClaimTravelPassRewardRequest::ClaimTravelPassRewardRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimTravelPassRewardRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimTravelPassRewardRequest(arena);
+}
+constexpr auto ClaimTravelPassRewardRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimTravelPassRewardRequest), alignof(ClaimTravelPassRewardRequest));
+}
+constexpr auto ClaimTravelPassRewardRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimTravelPassRewardRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimTravelPassRewardRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimTravelPassRewardRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimTravelPassRewardRequest>(), &ClaimTravelPassRewardRequest::ByteSizeLong,
+              &ClaimTravelPassRewardRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[22],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimTravelPassRewardRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimTravelPassRewardRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimTravelPassRewardRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimTravelPassRewardRequest::InternalGenerateClassData_(
+            _default, &ClaimTravelPassRewardRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimTravelPassRewardRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimTravelPassRewardRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimTravelPassRewardRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimTravelPassRewardRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimTravelPassRewardRequestGlobalsTypeInternal ClaimTravelPassRewardRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimTravelPassRewardRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimTravelPassRewardRequest_globals_.GetClassData();
+#else
+  return ClaimTravelPassRewardRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ClaimFestivalBeastRewardRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<ClaimFestivalBeastRewardRequest>()._impl_._has_bits_);
@@ -1472,6 +2444,399 @@ const ::_pbi::ClassData* ClaimActivityVitalityRewardRequest_get_class_data() {
   return ClaimActivityVitalityRewardRequest_globals_.GetClassData();
 #else
   return ClaimActivityVitalityRewardRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class TravelPassSnapshot::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TravelPassSnapshot>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_._has_bits_);
+};
+
+constexpr TravelPassSnapshot::ParseTableT_ TravelPassSnapshot::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_._has_bits_),
+      0, // no _extensions_
+      32, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      0,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      32,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::TravelPassSnapshot>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // bool available = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TravelPassSnapshot, _impl_.available_), 15>(),
+       {8, 15, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.available_)}},
+      // string unavailable_reason = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.unavailable_reason_)}},
+      // uint64 server_now_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TravelPassSnapshot, _impl_.server_now_ms_), 9>(),
+       {24, 9, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.server_now_ms_)}},
+      // uint64 pass_revision = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TravelPassSnapshot, _impl_.pass_revision_), 10>(),
+       {32, 10, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pass_revision_)}},
+      // uint32 pass_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassSnapshot, _impl_.pass_id_), 11>(),
+       {40, 11, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pass_id_)}},
+      // uint32 config_revision = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassSnapshot, _impl_.config_revision_), 12>(),
+       {48, 12, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.config_revision_)}},
+      // string name = 7;
+      {::_pbi::TcParser::FastUS1,
+       {58, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.name_)}},
+      // string description = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 4, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.description_)}},
+      // string icon_key = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 5, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.icon_key_)}},
+      // string banner_asset_key = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 6, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.banner_asset_key_)}},
+      // uint64 starts_at_ms = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TravelPassSnapshot, _impl_.starts_at_ms_), 13>(),
+       {88, 13, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.starts_at_ms_)}},
+      // uint64 ends_at_ms = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TravelPassSnapshot, _impl_.ends_at_ms_), 14>(),
+       {96, 14, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.ends_at_ms_)}},
+      // bool open_for_progress = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TravelPassSnapshot, _impl_.open_for_progress_), 16>(),
+       {104, 16, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.open_for_progress_)}},
+      // bool open_for_unlock = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TravelPassSnapshot, _impl_.open_for_unlock_), 17>(),
+       {112, 17, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.open_for_unlock_)}},
+      // uint32 progress_points = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassSnapshot, _impl_.progress_points_), 19>(),
+       {120, 19, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.progress_points_)}},
+      // uint32 max_points = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 20, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.max_points_)}},
+      // uint32 pve_win_points = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 21, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pve_win_points_)}},
+      // uint32 hard_or_pvp_win_points = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 22, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.hard_or_pvp_win_points_)}},
+      // uint32 pvp_qualified_other_points = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 23, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pvp_qualified_other_points_)}},
+      // bool premium_unlocked = 20;
+      {::_pbi::TcParser::FastV8S2,
+       {416, 18, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_unlocked_)}},
+      // uint64 premium_unlocked_at_ms = 21;
+      {::_pbi::TcParser::FastV64S2,
+       {424, 24, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_unlocked_at_ms_)}},
+      // uint32 premium_currency_type = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 27, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_currency_type_)}},
+      // uint64 premium_price = 23;
+      {::_pbi::TcParser::FastV64S2,
+       {440, 25, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_price_)}},
+      // uint64 diamond_balance = 24;
+      {::_pbi::TcParser::FastV64S2,
+       {448, 26, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.diamond_balance_)}},
+      // uint64 bind_diamond_balance = 25;
+      {::_pbi::TcParser::FastV64S2,
+       {456, 29, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.bind_diamond_balance_)}},
+      // uint32 claimable_free_count = 26;
+      {::_pbi::TcParser::FastV32S2,
+       {464, 28, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.claimable_free_count_)}},
+      // uint32 claimable_premium_count = 27;
+      {::_pbi::TcParser::FastV32S2,
+       {472, 30, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.claimable_premium_count_)}},
+      // uint32 retroactive_premium_count = 28;
+      {::_pbi::TcParser::FastV32S2,
+       {480, 31, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.retroactive_premium_count_)}},
+      // repeated .TravelPassTierView tiers = 29;
+      {::_pbi::TcParser::FastMtR2,
+       {490, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.tiers_)}},
+      // repeated string unlocked_cosmetic_keys = 30;
+      {::_pbi::TcParser::FastUR2,
+       {498, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.unlocked_cosmetic_keys_)}},
+      // string equipped_frame_key = 31;
+      {::_pbi::TcParser::FastUS2,
+       {506, 7, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.equipped_frame_key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool available = 1;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.available_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string unavailable_reason = 2;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.unavailable_reason_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 server_now_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.server_now_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 pass_revision = 4;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pass_revision_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 pass_id = 5;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pass_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 config_revision = 6;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.config_revision_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 7;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.name_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string description = 8;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.description_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string icon_key = 9;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.icon_key_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string banner_asset_key = 10;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.banner_asset_key_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 starts_at_ms = 11;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.starts_at_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 ends_at_ms = 12;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.ends_at_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool open_for_progress = 13;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.open_for_progress_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool open_for_unlock = 14;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.open_for_unlock_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 progress_points = 15;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.progress_points_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_points = 16;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.max_points_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 pve_win_points = 17;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pve_win_points_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 hard_or_pvp_win_points = 18;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.hard_or_pvp_win_points_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 pvp_qualified_other_points = 19;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.pvp_qualified_other_points_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool premium_unlocked = 20;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_unlocked_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 premium_unlocked_at_ms = 21;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_unlocked_at_ms_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 premium_currency_type = 22;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_currency_type_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 premium_price = 23;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.premium_price_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 diamond_balance = 24;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.diamond_balance_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 bind_diamond_balance = 25;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.bind_diamond_balance_), _Internal::kHasBitsOffset + 29, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 claimable_free_count = 26;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.claimable_free_count_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 claimable_premium_count = 27;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.claimable_premium_count_), _Internal::kHasBitsOffset + 30, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 retroactive_premium_count = 28;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.retroactive_premium_count_), _Internal::kHasBitsOffset + 31, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated .TravelPassTierView tiers = 29;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.tiers_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated string unlocked_cosmetic_keys = 30;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.unlocked_cosmetic_keys_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
+      // string equipped_frame_key = 31;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.equipped_frame_key_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string equipped_title_key = 32;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.equipped_title_key_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TravelPassTierView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TravelPassTierView_globals_},
+        #endif
+    }},
+    {{
+      "\22\0\22\0\0\0\0\4\13\10\20\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\26\22\22\0\0\0\0\0\0\0"
+      "TravelPassSnapshot"
+      "unavailable_reason"
+      "name"
+      "description"
+      "icon_key"
+      "banner_asset_key"
+      "unlocked_cosmetic_keys"
+      "equipped_frame_key"
+      "equipped_title_key"
+    }},
+  };
+}
+
+
+inline constexpr TravelPassSnapshot::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        tiers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::TravelPassSnapshot,
+            PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.tiers_)>()
+         }
+        ,
+        unlocked_cosmetic_keys_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::TravelPassSnapshot,
+            PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.unlocked_cosmetic_keys_)>()
+         }
+        ,
+        unavailable_reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        description_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        banner_asset_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        equipped_frame_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        equipped_title_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        server_now_ms_{::uint64_t{0u}},
+        pass_revision_{::uint64_t{0u}},
+        pass_id_{0u},
+        config_revision_{0u},
+        starts_at_ms_{::uint64_t{0u}},
+        ends_at_ms_{::uint64_t{0u}},
+        available_{false},
+        open_for_progress_{false},
+        open_for_unlock_{false},
+        premium_unlocked_{false},
+        progress_points_{0u},
+        max_points_{0u},
+        pve_win_points_{0u},
+        hard_or_pvp_win_points_{0u},
+        pvp_qualified_other_points_{0u},
+        premium_unlocked_at_ms_{::uint64_t{0u}},
+        premium_price_{::uint64_t{0u}},
+        diamond_balance_{::uint64_t{0u}},
+        premium_currency_type_{0u},
+        claimable_free_count_{0u},
+        bind_diamond_balance_{::uint64_t{0u}},
+        claimable_premium_count_{0u},
+        retroactive_premium_count_{0u} {}
+
+template <typename>
+constexpr TravelPassSnapshot::TravelPassSnapshot(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TravelPassSnapshot::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TravelPassSnapshot(arena);
+}
+constexpr auto TravelPassSnapshot::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TravelPassSnapshot), alignof(TravelPassSnapshot));
+}
+constexpr auto TravelPassSnapshot::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TravelPassSnapshot::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TravelPassSnapshot>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TravelPassSnapshot::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TravelPassSnapshot>(), &TravelPassSnapshot::ByteSizeLong,
+              &TravelPassSnapshot::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[17],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TravelPassSnapshotGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TravelPassSnapshotGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TravelPassSnapshot_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TravelPassSnapshot::InternalGenerateClassData_(
+            _default, &TravelPassSnapshot_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TravelPassSnapshot>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TravelPassSnapshotGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TravelPassSnapshot _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TravelPassSnapshot>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TravelPassSnapshotGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TravelPassSnapshotGlobalsTypeInternal TravelPassSnapshot_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TravelPassSnapshot_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TravelPassSnapshot_globals_.GetClassData();
+#else
+  return TravelPassSnapshot_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2891,6 +4256,173 @@ const ::_pbi::ClassData* ClaimFestivalBeastRewardResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class UnlockTravelPassPremiumResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnlockTravelPassPremiumResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_._has_bits_);
+};
+
+constexpr UnlockTravelPassPremiumResponse::ParseTableT_ UnlockTravelPassPremiumResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::UnlockTravelPassPremiumResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.error_message_)}},
+      // .TravelPassSnapshot snapshot = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.snapshot_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(UnlockTravelPassPremiumResponse, _impl_.replayed_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.replayed_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .TravelPassSnapshot snapshot = 2;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TravelPassSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TravelPassSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnlockTravelPassPremiumResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        snapshot_{nullptr},
+        replayed_{false} {}
+
+template <typename>
+constexpr UnlockTravelPassPremiumResponse::UnlockTravelPassPremiumResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnlockTravelPassPremiumResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnlockTravelPassPremiumResponse(arena);
+}
+constexpr auto UnlockTravelPassPremiumResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnlockTravelPassPremiumResponse), alignof(UnlockTravelPassPremiumResponse));
+}
+constexpr auto UnlockTravelPassPremiumResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnlockTravelPassPremiumResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnlockTravelPassPremiumResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnlockTravelPassPremiumResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnlockTravelPassPremiumResponse>(), &UnlockTravelPassPremiumResponse::ByteSizeLong,
+              &UnlockTravelPassPremiumResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[21],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnlockTravelPassPremiumResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnlockTravelPassPremiumResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnlockTravelPassPremiumResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnlockTravelPassPremiumResponse::InternalGenerateClassData_(
+            _default, &UnlockTravelPassPremiumResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnlockTravelPassPremiumResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnlockTravelPassPremiumResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnlockTravelPassPremiumResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnlockTravelPassPremiumResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnlockTravelPassPremiumResponseGlobalsTypeInternal UnlockTravelPassPremiumResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnlockTravelPassPremiumResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnlockTravelPassPremiumResponse_globals_.GetClassData();
+#else
+  return UnlockTravelPassPremiumResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PlayerActivityVitalitySnapshot::_Internal {
  public:
   using HasBits = decltype(::std::declval<PlayerActivityVitalitySnapshot>()._impl_._has_bits_);
@@ -3112,6 +4644,324 @@ const ::_pbi::ClassData* PlayerActivityVitalitySnapshot_get_class_data() {
   return PlayerActivityVitalitySnapshot_globals_.GetClassData();
 #else
   return PlayerActivityVitalitySnapshot_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetTravelPassStateResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetTravelPassStateResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_._has_bits_);
+};
+
+constexpr GetTravelPassStateResponse::ParseTableT_ GetTravelPassStateResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetTravelPassStateResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .TravelPassSnapshot snapshot = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_.snapshot_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .TravelPassSnapshot snapshot = 2;
+      {PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TravelPassSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TravelPassSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetTravelPassStateResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        snapshot_{nullptr} {}
+
+template <typename>
+constexpr GetTravelPassStateResponse::GetTravelPassStateResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetTravelPassStateResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetTravelPassStateResponse(arena);
+}
+constexpr auto GetTravelPassStateResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetTravelPassStateResponse), alignof(GetTravelPassStateResponse));
+}
+constexpr auto GetTravelPassStateResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetTravelPassStateResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetTravelPassStateResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetTravelPassStateResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetTravelPassStateResponse>(), &GetTravelPassStateResponse::ByteSizeLong,
+              &GetTravelPassStateResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[19],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetTravelPassStateResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetTravelPassStateResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetTravelPassStateResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetTravelPassStateResponse::InternalGenerateClassData_(
+            _default, &GetTravelPassStateResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetTravelPassStateResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetTravelPassStateResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetTravelPassStateResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetTravelPassStateResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetTravelPassStateResponseGlobalsTypeInternal GetTravelPassStateResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetTravelPassStateResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetTravelPassStateResponse_globals_.GetClassData();
+#else
+  return GetTravelPassStateResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class EquipTravelPassCosmeticResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EquipTravelPassCosmeticResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_._has_bits_);
+};
+
+constexpr EquipTravelPassCosmeticResponse::ParseTableT_ EquipTravelPassCosmeticResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::EquipTravelPassCosmeticResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .TravelPassSnapshot snapshot = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_.snapshot_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .TravelPassSnapshot snapshot = 2;
+      {PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TravelPassSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TravelPassSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr EquipTravelPassCosmeticResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        snapshot_{nullptr} {}
+
+template <typename>
+constexpr EquipTravelPassCosmeticResponse::EquipTravelPassCosmeticResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EquipTravelPassCosmeticResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EquipTravelPassCosmeticResponse(arena);
+}
+constexpr auto EquipTravelPassCosmeticResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(EquipTravelPassCosmeticResponse), alignof(EquipTravelPassCosmeticResponse));
+}
+constexpr auto EquipTravelPassCosmeticResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EquipTravelPassCosmeticResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EquipTravelPassCosmeticResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EquipTravelPassCosmeticResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EquipTravelPassCosmeticResponse>(), &EquipTravelPassCosmeticResponse::ByteSizeLong,
+              &EquipTravelPassCosmeticResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[25],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EquipTravelPassCosmeticResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EquipTravelPassCosmeticResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EquipTravelPassCosmeticResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EquipTravelPassCosmeticResponse::InternalGenerateClassData_(
+            _default, &EquipTravelPassCosmeticResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EquipTravelPassCosmeticResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EquipTravelPassCosmeticResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EquipTravelPassCosmeticResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EquipTravelPassCosmeticResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EquipTravelPassCosmeticResponseGlobalsTypeInternal EquipTravelPassCosmeticResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EquipTravelPassCosmeticResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EquipTravelPassCosmeticResponse_globals_.GetClassData();
+#else
+  return EquipTravelPassCosmeticResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3492,6 +5342,194 @@ const ::_pbi::ClassData* ClaimActivityVitalityRewardResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimTravelPassRewardResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimTravelPassRewardResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_._has_bits_);
+};
+
+constexpr ClaimTravelPassRewardResponse::ParseTableT_ ClaimTravelPassRewardResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      3,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ClaimTravelPassRewardResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.error_message_)}},
+      // .TravelPassSnapshot snapshot = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.snapshot_)}},
+      // .BagInfo bag = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 2, 2,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.bag_)}},
+      // bool replayed = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimTravelPassRewardResponse, _impl_.replayed_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.replayed_)}},
+      // uint32 claimed_count = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimTravelPassRewardResponse, _impl_.claimed_count_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.claimed_count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .TravelPassSnapshot snapshot = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .BagInfo bag = 3;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.bag_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool replayed = 4;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 claimed_count = 5;
+      {PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.claimed_count_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TravelPassSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TravelPassSnapshot_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BagInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BagInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimTravelPassRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        snapshot_{nullptr},
+        bag_{nullptr},
+        replayed_{false},
+        claimed_count_{0u} {}
+
+template <typename>
+constexpr ClaimTravelPassRewardResponse::ClaimTravelPassRewardResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimTravelPassRewardResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimTravelPassRewardResponse(arena);
+}
+constexpr auto ClaimTravelPassRewardResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimTravelPassRewardResponse), alignof(ClaimTravelPassRewardResponse));
+}
+constexpr auto ClaimTravelPassRewardResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimTravelPassRewardResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimTravelPassRewardResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimTravelPassRewardResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimTravelPassRewardResponse>(), &ClaimTravelPassRewardResponse::ByteSizeLong,
+              &ClaimTravelPassRewardResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[23],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimTravelPassRewardResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimTravelPassRewardResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimTravelPassRewardResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimTravelPassRewardResponse::InternalGenerateClassData_(
+            _default, &ClaimTravelPassRewardResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimTravelPassRewardResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimTravelPassRewardResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimTravelPassRewardResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimTravelPassRewardResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimTravelPassRewardResponseGlobalsTypeInternal ClaimTravelPassRewardResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimTravelPassRewardResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimTravelPassRewardResponse_globals_.GetClassData();
+#else
+  return ClaimTravelPassRewardResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
     file_level_enum_descriptors_proto_2fscene_2fplayer_5factivity_2eproto[9];
 static const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL
@@ -3851,6 +5889,192 @@ const ::uint32_t
         7,
         8,
         9,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_._has_bits_),
+        25, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.tier_id_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.tier_index_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.required_points_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.reached_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_item_id_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_item_count_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_item_name_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_item_icon_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_gold_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_cosmetic_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_cosmetic_name_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_claimed_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.free_can_claim_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_item_id_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_item_count_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_item_name_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_item_icon_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_gold_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_cosmetic_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_cosmetic_name_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_claimed_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassTierView, _impl_.premium_can_claim_),
+        8,
+        9,
+        10,
+        14,
+        11,
+        13,
+        0,
+        1,
+        12,
+        2,
+        3,
+        15,
+        16,
+        18,
+        19,
+        4,
+        5,
+        20,
+        6,
+        7,
+        17,
+        21,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_._has_bits_),
+        35, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.available_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.unavailable_reason_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.server_now_ms_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.pass_revision_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.pass_id_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.config_revision_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.description_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.icon_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.banner_asset_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.starts_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.ends_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.open_for_progress_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.open_for_unlock_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.progress_points_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.max_points_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.pve_win_points_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.hard_or_pvp_win_points_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.pvp_qualified_other_points_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.premium_unlocked_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.premium_unlocked_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.premium_currency_type_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.premium_price_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.diamond_balance_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.bind_diamond_balance_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.claimable_free_count_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.claimable_premium_count_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.retroactive_premium_count_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.tiers_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.unlocked_cosmetic_keys_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.equipped_frame_key_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.equipped_title_key_),
+        15,
+        2,
+        9,
+        10,
+        11,
+        12,
+        3,
+        4,
+        5,
+        6,
+        13,
+        14,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23,
+        18,
+        24,
+        27,
+        25,
+        26,
+        29,
+        28,
+        30,
+        31,
+        0,
+        1,
+        7,
+        8,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::GetTravelPassStateRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::GetTravelPassStateRequest, _impl_.pass_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::GetTravelPassStateResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::GetTravelPassStateResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::GetTravelPassStateResponse, _impl_.snapshot_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumRequest, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumRequest, _impl_.pass_id_),
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumRequest, _impl_.expected_currency_type_),
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumRequest, _impl_.expected_price_),
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumRequest, _impl_.expected_config_revision_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumResponse, _impl_.snapshot_),
+        PROTOBUF_FIELD_OFFSET(::UnlockTravelPassPremiumResponse, _impl_.replayed_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardRequest, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardRequest, _impl_.pass_id_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardRequest, _impl_.tier_index_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardRequest, _impl_.premium_track_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardResponse, _impl_.snapshot_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardResponse, _impl_.bag_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::ClaimTravelPassRewardResponse, _impl_.claimed_count_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::EquipTravelPassCosmeticRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::EquipTravelPassCosmeticRequest, _impl_.cosmetic_slot_),
+        PROTOBUF_FIELD_OFFSET(::EquipTravelPassCosmeticRequest, _impl_.cosmetic_key_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::EquipTravelPassCosmeticResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::EquipTravelPassCosmeticResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::EquipTravelPassCosmeticResponse, _impl_.snapshot_),
+        0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -3871,6 +6095,16 @@ static const ::_pbi::MigrationSchema
         {301, sizeof(::StartFestivalBeastChallengeResponse)},
         {322, sizeof(::ClaimFestivalBeastRewardRequest)},
         {329, sizeof(::ClaimFestivalBeastRewardResponse)},
+        {352, sizeof(::TravelPassTierView)},
+        {399, sizeof(::TravelPassSnapshot)},
+        {466, sizeof(::GetTravelPassStateRequest)},
+        {471, sizeof(::GetTravelPassStateResponse)},
+        {478, sizeof(::UnlockTravelPassPremiumRequest)},
+        {491, sizeof(::UnlockTravelPassPremiumResponse)},
+        {500, sizeof(::ClaimTravelPassRewardRequest)},
+        {511, sizeof(::ClaimTravelPassRewardResponse)},
+        {524, sizeof(::EquipTravelPassCosmeticRequest)},
+        {531, sizeof(::EquipTravelPassCosmeticResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3890,132 +6124,202 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::StartFestivalBeastChallengeResponse_globals_,
         &::ClaimFestivalBeastRewardRequest_globals_,
         &::ClaimFestivalBeastRewardResponse_globals_,
+        &::TravelPassTierView_globals_,
+        &::TravelPassSnapshot_globals_,
+        &::GetTravelPassStateRequest_globals_,
+        &::GetTravelPassStateResponse_globals_,
+        &::UnlockTravelPassPremiumRequest_globals_,
+        &::UnlockTravelPassPremiumResponse_globals_,
+        &::ClaimTravelPassRewardRequest_globals_,
+        &::ClaimTravelPassRewardResponse_globals_,
+        &::EquipTravelPassCosmeticRequest_globals_,
+        &::EquipTravelPassCosmeticResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5factivity_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n!proto/scene/player_activity.proto\032\033pro"
     "to/db/proto_option.proto\032\033proto/common/b"
-    "ase/tip.proto\"~\n\030PlayerActivityRewardIte"
-    "m\022\026\n\016item_config_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004"
-    "\022\014\n\004name\030\003 \001(\t\022\020\n\010icon_key\030\004 \001(\t\022\033\n\023bind"
-    "ing_description\030\005 \001(\t\"\265\005\n\022PlayerActivity"
-    "Info\022\023\n\013activity_id\030\001 \001(\r\022\022\n\nmission_id\030"
-    "\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\023\n\013description\030\004 \001(\t"
-    "\022\020\n\010icon_key\030\005 \001(\t\022%\n\006status\030\006 \001(\0162\025.Pla"
-    "yerActivityStatus\022\024\n\014starts_at_ms\030\007 \001(\004\022"
-    "\022\n\nends_at_ms\030\010 \001(\004\022\027\n\017can_participate\030\t"
-    " \001(\010\022\032\n\022unavailable_reason\030\n \001(\t\022\021\n\trewa"
-    "rd_id\030\013 \001(\r\022\026\n\016definition_key\030\014 \001(\t\022\036\n\026c"
-    "onfiguration_revision\030\r \001(\004\022)\n\010category\030"
-    "\016 \001(\0162\027.PlayerActivityCategory\022/\n\014reward"
-    "_types\030\017 \003(\0162\031.PlayerActivityRewardType\022"
-    ",\n\nentry_kind\030\020 \001(\0162\030.PlayerActivityEntr"
-    "yKind\022\025\n\rmission_scope\030\021 \001(\r\022\036\n\026completi"
-    "on_count_known\030\022 \001(\010\022\027\n\017completed_count\030"
-    "\023 \001(\r\022\030\n\020completion_limit\030\024 \001(\r\022\031\n\021compl"
-    "etion_period\030\025 \001(\t\022\027\n\017vitality_points\030\026 "
-    "\001(\r\022*\n\007rewards\030\027 \003(\0132\031.PlayerActivityRew"
-    "ardItem\022\034\n\024has_claimable_reward\030\030 \001(\010\"\333\001"
-    "\n\034PlayerActivityVitalityReward\022\024\n\014thresh"
-    "old_id\030\001 \001(\r\022\027\n\017required_points\030\002 \001(\r\022\021\n"
-    "\treward_id\030\003 \001(\r\022\021\n\tcan_claim\030\004 \001(\010\022\017\n\007c"
-    "laimed\030\005 \001(\010\022\017\n\007durable\030\006 \001(\010\022\032\n\022unavail"
-    "able_reason\030\007 \001(\t\022(\n\005items\030\010 \003(\0132\031.Playe"
-    "rActivityRewardItem\"\241\002\n\036PlayerActivityVi"
-    "talitySnapshot\022\021\n\tavailable\030\001 \001(\010\022\032\n\022una"
-    "vailable_reason\030\002 \001(\t\022\017\n\007rule_id\030\003 \001(\r\022\036"
-    "\n\026configuration_revision\030\004 \001(\004\022\021\n\tperiod"
-    "_id\030\005 \001(\004\022\033\n\023period_starts_at_ms\030\006 \001(\004\022\031"
-    "\n\021period_ends_at_ms\030\007 \001(\004\022\016\n\006points\030\010 \001("
-    "\r\022\024\n\014points_limit\030\t \001(\r\022.\n\007rewards\030\n \003(\013"
-    "2\035.PlayerActivityVitalityReward\"\030\n\026GetAc"
-    "tivityListRequest\"\265\001\n\027GetActivityListRes"
-    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
-    "ssage\022\'\n\nactivities\030\002 \003(\0132\023.PlayerActivi"
-    "tyInfo\022\026\n\016server_time_ms\030\003 \001(\004\0221\n\010vitali"
-    "ty\030\004 \001(\0132\037.PlayerActivityVitalitySnapsho"
-    "t\"\222\001\n\"ClaimActivityVitalityRewardRequest"
-    "\022\017\n\007rule_id\030\001 \001(\r\022\036\n\026configuration_revis"
-    "ion\030\002 \001(\004\022\021\n\tperiod_id\030\003 \001(\004\022\024\n\014threshol"
-    "d_id\030\004 \001(\r\022\022\n\nrequest_id\030\005 \001(\t\"\310\001\n#Claim"
-    "ActivityVitalityRewardResponse\022&\n\rerror_"
-    "message\030\001 \001(\0132\017.TipInfoMessage\0221\n\010snapsh"
-    "ot\030\002 \001(\0132\037.PlayerActivityVitalitySnapsho"
-    "t\022\022\n\nrequest_id\030\003 \001(\t\022\017\n\007claimed\030\004 \001(\010\022\017"
-    "\n\007durable\030\005 \001(\010\022\020\n\010replayed\030\006 \001(\010\"\305\002\n\036Fe"
-    "stivalBeastPendingLaunchInfo\022\031\n\021client_r"
-    "equest_id\030\001 \001(\t\022\034\n\024activity_instance_id\030"
-    "\002 \001(\r\022\027\n\017config_revision\030\003 \001(\r\022\025\n\rlocked"
-    "_pet_id\030\004 \001(\004\022\027\n\017matched_tier_id\030\005 \001(\r\022/"
-    "\n\014launch_state\030\006 \001(\0162\031.FestivalBeastLaun"
-    "chState\022\021\n\tbattle_id\030\007 \001(\004\022\027\n\017requested_"
-    "at_ms\030\010 \001(\004\022\026\n\016admitted_at_ms\030\t \001(\004\022\025\n\rr"
-    "eject_tip_id\030\n \001(\r\022\025\n\rreject_reason\030\013 \001("
-    "\t\"\347\003\n\034FestivalBeastMaterialSummary\0223\n\nqu"
-    "ota_mode\030\001 \001(\0162\037.FestivalBeastMaterialQu"
-    "otaMode\022\032\n\022expected_win_units\030\002 \001(\r\022 \n\030e"
-    "arnable_remaining_units\030\003 \001(\r\022\027\n\017availab"
-    "le_units\030\004 \001(\004\022 \n\030available_tradable_uni"
-    "ts\030\005 \001(\004\022\024\n\014earned_today\030\006 \001(\r\022\023\n\013daily_"
-    "limit\030\007 \001(\r\022\030\n\020day_starts_at_ms\030\010 \001(\004\022\034\n"
-    "\024next_day_reset_at_ms\030\t \001(\004\022\033\n\023weekly_ph"
-    "ase_active\030\n \001(\010\022\027\n\017lifetime_earned\030\013 \001("
-    "\r\022\026\n\016lifetime_limit\030\014 \001(\r\022\030\n\020earned_this"
-    "_week\030\r \001(\r\022\024\n\014weekly_limit\030\016 \001(\r\022\031\n\021wee"
-    "k_starts_at_ms\030\017 \001(\004\022\035\n\025next_week_reset_"
-    "at_ms\030\020 \001(\004\"=\n\035GetFestivalBeastDetailReq"
-    "uest\022\034\n\024activity_instance_id\030\001 \001(\r\"\315\t\n\036G"
-    "etFestivalBeastDetailResponse\022&\n\rerror_m"
-    "essage\030\001 \001(\0132\017.TipInfoMessage\022\025\n\rserver_"
-    "now_ms\030\002 \001(\004\022\"\n\005phase\030\003 \001(\0162\023.FestivalBe"
-    "astPhase\022\034\n\024activity_instance_id\030\004 \001(\r\022\027"
-    "\n\017config_revision\030\005 \001(\r\022\025\n\ractivity_name"
-    "\030\006 \001(\t\022\021\n\tboss_name\030\007 \001(\t\022\030\n\020banner_asse"
-    "t_key\030\010 \001(\t\022\020\n\010icon_key\030\t \001(\t\022\035\n\025effecti"
-    "ve_start_at_ms\030\n \001(\004\022\033\n\023effective_end_at"
-    "_ms\030\013 \001(\004\022 \n\030claim_showcase_end_at_ms\030\014 "
-    "\001(\004\022\024\n\014current_wins\030\r \001(\r\022\025\n\rrequired_wi"
-    "ns\030\016 \001(\r\022\027\n\017reward_identity\030\017 \001(\t\022!\n\031rew"
-    "ard_definition_version\030\020 \001(\r\022\033\n\023reward_p"
-    "et_table_id\030\021 \001(\r\022\033\n\023reward_pet_model_id"
-    "\030\022 \001(\r\022\027\n\017reward_pet_name\030\023 \001(\t\022!\n\031has_p"
-    "ermanent_eligibility\030\024 \001(\010\022&\n\036eligibilit"
-    "y_source_instance_id\030\025 \001(\r\022 \n\030eligibilit"
-    "y_earned_at_ms\030\026 \001(\004\022\026\n\016reward_claimed\030\027"
-    " \001(\010\022\034\n\024reward_claim_durable\030\030 \001(\010\022\026\n\016cl"
-    "aimed_pet_id\030\031 \001(\004\022\025\n\rclaimed_at_ms\030\032 \001("
-    "\004\022\030\n\020claim_request_id\030\033 \001(\t\022\033\n\023can_start"
-    "_challenge\030\034 \001(\010\0227\n\020start_block_code\030\035 \001"
-    "(\0162\035.FestivalBeastActionBlockCode\022\032\n\022sta"
-    "rt_block_reason\030\036 \001(\t\022\030\n\020can_claim_rewar"
-    "d\030\037 \001(\010\0227\n\020claim_block_code\030  \001(\0162\035.Fest"
-    "ivalBeastActionBlockCode\022\032\n\022claim_block_"
-    "reason\030! \001(\t\0227\n\016pending_launch\030\" \001(\0132\037.F"
-    "estivalBeastPendingLaunchInfo\0227\n\020materia"
-    "l_summary\030# \001(\0132\035.FestivalBeastMaterialS"
-    "ummary\022\027\n\017matched_tier_id\030$ \001(\r\022\023\n\013round"
-    "_limit\030% \001(\r\022\034\n\024heavy_damage_percent\030& \001"
-    "(\r\022\026\n\016state_revision\030\' \001(\004\"v\n\"StartFesti"
-    "valBeastChallengeRequest\022\031\n\021client_reque"
-    "st_id\030\001 \001(\t\022\034\n\024activity_instance_id\030\002 \001("
-    "\r\022\027\n\017config_revision\030\003 \001(\r\"\235\002\n#StartFest"
-    "ivalBeastChallengeResponse\022&\n\rerror_mess"
-    "age\030\001 \001(\0132\017.TipInfoMessage\022/\n\014launch_sta"
-    "te\030\002 \001(\0162\031.FestivalBeastLaunchState\022\020\n\010r"
-    "eplayed\030\003 \001(\010\022\031\n\021client_request_id\030\004 \001(\t"
-    "\022\025\n\rlocked_pet_id\030\005 \001(\004\022\021\n\tbattle_id\030\006 \001"
-    "(\004\022\027\n\017matched_tier_id\030\007 \001(\r\022\026\n\016admitted_"
-    "at_ms\030\010 \001(\004\022\025\n\rreject_reason\030\t \001(\t\"U\n\037Cl"
-    "aimFestivalBeastRewardRequest\022\031\n\021client_"
-    "request_id\030\001 \001(\t\022\027\n\017reward_identity\030\002 \001("
-    "\t\"\265\002\n ClaimFestivalBeastRewardResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022+"
-    "\n\007outcome\030\002 \001(\0162\032.FestivalBeastClaimOutc"
-    "ome\022\020\n\010replayed\030\003 \001(\010\022\017\n\007durable\030\004 \001(\010\022\031"
-    "\n\021client_request_id\030\005 \001(\t\022\027\n\017reward_iden"
-    "tity\030\006 \001(\t\022!\n\031reward_definition_version\030"
-    "\007 \001(\r\022\033\n\023reward_pet_table_id\030\010 \001(\r\022\016\n\006pe"
-    "t_id\030\t \001(\004\022\025\n\rclaimed_at_ms\030\n \001(\004*\212\001\n\024Pl"
+    "ase/tip.proto\032\034proto/scene/player_bag.pr"
+    "oto\"~\n\030PlayerActivityRewardItem\022\026\n\016item_"
+    "config_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\022\014\n\004name\030\003"
+    " \001(\t\022\020\n\010icon_key\030\004 \001(\t\022\033\n\023binding_descri"
+    "ption\030\005 \001(\t\"\265\005\n\022PlayerActivityInfo\022\023\n\013ac"
+    "tivity_id\030\001 \001(\r\022\022\n\nmission_id\030\002 \001(\r\022\014\n\004n"
+    "ame\030\003 \001(\t\022\023\n\013description\030\004 \001(\t\022\020\n\010icon_k"
+    "ey\030\005 \001(\t\022%\n\006status\030\006 \001(\0162\025.PlayerActivit"
+    "yStatus\022\024\n\014starts_at_ms\030\007 \001(\004\022\022\n\nends_at"
+    "_ms\030\010 \001(\004\022\027\n\017can_participate\030\t \001(\010\022\032\n\022un"
+    "available_reason\030\n \001(\t\022\021\n\treward_id\030\013 \001("
+    "\r\022\026\n\016definition_key\030\014 \001(\t\022\036\n\026configurati"
+    "on_revision\030\r \001(\004\022)\n\010category\030\016 \001(\0162\027.Pl"
+    "ayerActivityCategory\022/\n\014reward_types\030\017 \003"
+    "(\0162\031.PlayerActivityRewardType\022,\n\nentry_k"
+    "ind\030\020 \001(\0162\030.PlayerActivityEntryKind\022\025\n\rm"
+    "ission_scope\030\021 \001(\r\022\036\n\026completion_count_k"
+    "nown\030\022 \001(\010\022\027\n\017completed_count\030\023 \001(\r\022\030\n\020c"
+    "ompletion_limit\030\024 \001(\r\022\031\n\021completion_peri"
+    "od\030\025 \001(\t\022\027\n\017vitality_points\030\026 \001(\r\022*\n\007rew"
+    "ards\030\027 \003(\0132\031.PlayerActivityRewardItem\022\034\n"
+    "\024has_claimable_reward\030\030 \001(\010\"\333\001\n\034PlayerAc"
+    "tivityVitalityReward\022\024\n\014threshold_id\030\001 \001"
+    "(\r\022\027\n\017required_points\030\002 \001(\r\022\021\n\treward_id"
+    "\030\003 \001(\r\022\021\n\tcan_claim\030\004 \001(\010\022\017\n\007claimed\030\005 \001"
+    "(\010\022\017\n\007durable\030\006 \001(\010\022\032\n\022unavailable_reaso"
+    "n\030\007 \001(\t\022(\n\005items\030\010 \003(\0132\031.PlayerActivityR"
+    "ewardItem\"\241\002\n\036PlayerActivityVitalitySnap"
+    "shot\022\021\n\tavailable\030\001 \001(\010\022\032\n\022unavailable_r"
+    "eason\030\002 \001(\t\022\017\n\007rule_id\030\003 \001(\r\022\036\n\026configur"
+    "ation_revision\030\004 \001(\004\022\021\n\tperiod_id\030\005 \001(\004\022"
+    "\033\n\023period_starts_at_ms\030\006 \001(\004\022\031\n\021period_e"
+    "nds_at_ms\030\007 \001(\004\022\016\n\006points\030\010 \001(\r\022\024\n\014point"
+    "s_limit\030\t \001(\r\022.\n\007rewards\030\n \003(\0132\035.PlayerA"
+    "ctivityVitalityReward\"\030\n\026GetActivityList"
+    "Request\"\265\001\n\027GetActivityListResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\na"
+    "ctivities\030\002 \003(\0132\023.PlayerActivityInfo\022\026\n\016"
+    "server_time_ms\030\003 \001(\004\0221\n\010vitality\030\004 \001(\0132\037"
+    ".PlayerActivityVitalitySnapshot\"\222\001\n\"Clai"
+    "mActivityVitalityRewardRequest\022\017\n\007rule_i"
+    "d\030\001 \001(\r\022\036\n\026configuration_revision\030\002 \001(\004\022"
+    "\021\n\tperiod_id\030\003 \001(\004\022\024\n\014threshold_id\030\004 \001(\r"
+    "\022\022\n\nrequest_id\030\005 \001(\t\"\310\001\n#ClaimActivityVi"
+    "talityRewardResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\0221\n\010snapshot\030\002 \001(\0132\037"
+    ".PlayerActivityVitalitySnapshot\022\022\n\nreque"
+    "st_id\030\003 \001(\t\022\017\n\007claimed\030\004 \001(\010\022\017\n\007durable\030"
+    "\005 \001(\010\022\020\n\010replayed\030\006 \001(\010\"\305\002\n\036FestivalBeas"
+    "tPendingLaunchInfo\022\031\n\021client_request_id\030"
+    "\001 \001(\t\022\034\n\024activity_instance_id\030\002 \001(\r\022\027\n\017c"
+    "onfig_revision\030\003 \001(\r\022\025\n\rlocked_pet_id\030\004 "
+    "\001(\004\022\027\n\017matched_tier_id\030\005 \001(\r\022/\n\014launch_s"
+    "tate\030\006 \001(\0162\031.FestivalBeastLaunchState\022\021\n"
+    "\tbattle_id\030\007 \001(\004\022\027\n\017requested_at_ms\030\010 \001("
+    "\004\022\026\n\016admitted_at_ms\030\t \001(\004\022\025\n\rreject_tip_"
+    "id\030\n \001(\r\022\025\n\rreject_reason\030\013 \001(\t\"\347\003\n\034Fest"
+    "ivalBeastMaterialSummary\0223\n\nquota_mode\030\001"
+    " \001(\0162\037.FestivalBeastMaterialQuotaMode\022\032\n"
+    "\022expected_win_units\030\002 \001(\r\022 \n\030earnable_re"
+    "maining_units\030\003 \001(\r\022\027\n\017available_units\030\004"
+    " \001(\004\022 \n\030available_tradable_units\030\005 \001(\004\022\024"
+    "\n\014earned_today\030\006 \001(\r\022\023\n\013daily_limit\030\007 \001("
+    "\r\022\030\n\020day_starts_at_ms\030\010 \001(\004\022\034\n\024next_day_"
+    "reset_at_ms\030\t \001(\004\022\033\n\023weekly_phase_active"
+    "\030\n \001(\010\022\027\n\017lifetime_earned\030\013 \001(\r\022\026\n\016lifet"
+    "ime_limit\030\014 \001(\r\022\030\n\020earned_this_week\030\r \001("
+    "\r\022\024\n\014weekly_limit\030\016 \001(\r\022\031\n\021week_starts_a"
+    "t_ms\030\017 \001(\004\022\035\n\025next_week_reset_at_ms\030\020 \001("
+    "\004\"=\n\035GetFestivalBeastDetailRequest\022\034\n\024ac"
+    "tivity_instance_id\030\001 \001(\r\"\315\t\n\036GetFestival"
+    "BeastDetailResponse\022&\n\rerror_message\030\001 \001"
+    "(\0132\017.TipInfoMessage\022\025\n\rserver_now_ms\030\002 \001"
+    "(\004\022\"\n\005phase\030\003 \001(\0162\023.FestivalBeastPhase\022\034"
+    "\n\024activity_instance_id\030\004 \001(\r\022\027\n\017config_r"
+    "evision\030\005 \001(\r\022\025\n\ractivity_name\030\006 \001(\t\022\021\n\t"
+    "boss_name\030\007 \001(\t\022\030\n\020banner_asset_key\030\010 \001("
+    "\t\022\020\n\010icon_key\030\t \001(\t\022\035\n\025effective_start_a"
+    "t_ms\030\n \001(\004\022\033\n\023effective_end_at_ms\030\013 \001(\004\022"
+    " \n\030claim_showcase_end_at_ms\030\014 \001(\004\022\024\n\014cur"
+    "rent_wins\030\r \001(\r\022\025\n\rrequired_wins\030\016 \001(\r\022\027"
+    "\n\017reward_identity\030\017 \001(\t\022!\n\031reward_defini"
+    "tion_version\030\020 \001(\r\022\033\n\023reward_pet_table_i"
+    "d\030\021 \001(\r\022\033\n\023reward_pet_model_id\030\022 \001(\r\022\027\n\017"
+    "reward_pet_name\030\023 \001(\t\022!\n\031has_permanent_e"
+    "ligibility\030\024 \001(\010\022&\n\036eligibility_source_i"
+    "nstance_id\030\025 \001(\r\022 \n\030eligibility_earned_a"
+    "t_ms\030\026 \001(\004\022\026\n\016reward_claimed\030\027 \001(\010\022\034\n\024re"
+    "ward_claim_durable\030\030 \001(\010\022\026\n\016claimed_pet_"
+    "id\030\031 \001(\004\022\025\n\rclaimed_at_ms\030\032 \001(\004\022\030\n\020claim"
+    "_request_id\030\033 \001(\t\022\033\n\023can_start_challenge"
+    "\030\034 \001(\010\0227\n\020start_block_code\030\035 \001(\0162\035.Festi"
+    "valBeastActionBlockCode\022\032\n\022start_block_r"
+    "eason\030\036 \001(\t\022\030\n\020can_claim_reward\030\037 \001(\010\0227\n"
+    "\020claim_block_code\030  \001(\0162\035.FestivalBeastA"
+    "ctionBlockCode\022\032\n\022claim_block_reason\030! \001"
+    "(\t\0227\n\016pending_launch\030\" \001(\0132\037.FestivalBea"
+    "stPendingLaunchInfo\0227\n\020material_summary\030"
+    "# \001(\0132\035.FestivalBeastMaterialSummary\022\027\n\017"
+    "matched_tier_id\030$ \001(\r\022\023\n\013round_limit\030% \001"
+    "(\r\022\034\n\024heavy_damage_percent\030& \001(\r\022\026\n\016stat"
+    "e_revision\030\' \001(\004\"v\n\"StartFestivalBeastCh"
+    "allengeRequest\022\031\n\021client_request_id\030\001 \001("
+    "\t\022\034\n\024activity_instance_id\030\002 \001(\r\022\027\n\017confi"
+    "g_revision\030\003 \001(\r\"\235\002\n#StartFestivalBeastC"
+    "hallengeResponse\022&\n\rerror_message\030\001 \001(\0132"
+    "\017.TipInfoMessage\022/\n\014launch_state\030\002 \001(\0162\031"
+    ".FestivalBeastLaunchState\022\020\n\010replayed\030\003 "
+    "\001(\010\022\031\n\021client_request_id\030\004 \001(\t\022\025\n\rlocked"
+    "_pet_id\030\005 \001(\004\022\021\n\tbattle_id\030\006 \001(\004\022\027\n\017matc"
+    "hed_tier_id\030\007 \001(\r\022\026\n\016admitted_at_ms\030\010 \001("
+    "\004\022\025\n\rreject_reason\030\t \001(\t\"U\n\037ClaimFestiva"
+    "lBeastRewardRequest\022\031\n\021client_request_id"
+    "\030\001 \001(\t\022\027\n\017reward_identity\030\002 \001(\t\"\265\002\n Clai"
+    "mFestivalBeastRewardResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\022+\n\007outcome\030"
+    "\002 \001(\0162\032.FestivalBeastClaimOutcome\022\020\n\010rep"
+    "layed\030\003 \001(\010\022\017\n\007durable\030\004 \001(\010\022\031\n\021client_r"
+    "equest_id\030\005 \001(\t\022\027\n\017reward_identity\030\006 \001(\t"
+    "\022!\n\031reward_definition_version\030\007 \001(\r\022\033\n\023r"
+    "eward_pet_table_id\030\010 \001(\r\022\016\n\006pet_id\030\t \001(\004"
+    "\022\025\n\rclaimed_at_ms\030\n \001(\004\"\264\004\n\022TravelPassTi"
+    "erView\022\017\n\007tier_id\030\001 \001(\r\022\022\n\ntier_index\030\002 "
+    "\001(\r\022\027\n\017required_points\030\003 \001(\r\022\017\n\007reached\030"
+    "\004 \001(\010\022\024\n\014free_item_id\030\005 \001(\r\022\027\n\017free_item"
+    "_count\030\006 \001(\r\022\026\n\016free_item_name\030\007 \001(\t\022\032\n\022"
+    "free_item_icon_key\030\010 \001(\t\022\021\n\tfree_gold\030\t "
+    "\001(\004\022\031\n\021free_cosmetic_key\030\n \001(\t\022\032\n\022free_c"
+    "osmetic_name\030\013 \001(\t\022\024\n\014free_claimed\030\014 \001(\010"
+    "\022\026\n\016free_can_claim\030\r \001(\010\022\027\n\017premium_item"
+    "_id\030\016 \001(\r\022\032\n\022premium_item_count\030\017 \001(\r\022\031\n"
+    "\021premium_item_name\030\020 \001(\t\022\035\n\025premium_item"
+    "_icon_key\030\021 \001(\t\022\024\n\014premium_gold\030\022 \001(\004\022\034\n"
+    "\024premium_cosmetic_key\030\023 \001(\t\022\035\n\025premium_c"
+    "osmetic_name\030\024 \001(\t\022\027\n\017premium_claimed\030\025 "
+    "\001(\010\022\031\n\021premium_can_claim\030\026 \001(\010\"\326\006\n\022Trave"
+    "lPassSnapshot\022\021\n\tavailable\030\001 \001(\010\022\032\n\022unav"
+    "ailable_reason\030\002 \001(\t\022\025\n\rserver_now_ms\030\003 "
+    "\001(\004\022\025\n\rpass_revision\030\004 \001(\004\022\017\n\007pass_id\030\005 "
+    "\001(\r\022\027\n\017config_revision\030\006 \001(\r\022\014\n\004name\030\007 \001"
+    "(\t\022\023\n\013description\030\010 \001(\t\022\020\n\010icon_key\030\t \001("
+    "\t\022\030\n\020banner_asset_key\030\n \001(\t\022\024\n\014starts_at"
+    "_ms\030\013 \001(\004\022\022\n\nends_at_ms\030\014 \001(\004\022\031\n\021open_fo"
+    "r_progress\030\r \001(\010\022\027\n\017open_for_unlock\030\016 \001("
+    "\010\022\027\n\017progress_points\030\017 \001(\r\022\022\n\nmax_points"
+    "\030\020 \001(\r\022\026\n\016pve_win_points\030\021 \001(\r\022\036\n\026hard_o"
+    "r_pvp_win_points\030\022 \001(\r\022\"\n\032pvp_qualified_"
+    "other_points\030\023 \001(\r\022\030\n\020premium_unlocked\030\024"
+    " \001(\010\022\036\n\026premium_unlocked_at_ms\030\025 \001(\004\022\035\n\025"
+    "premium_currency_type\030\026 \001(\r\022\025\n\rpremium_p"
+    "rice\030\027 \001(\004\022\027\n\017diamond_balance\030\030 \001(\004\022\034\n\024b"
+    "ind_diamond_balance\030\031 \001(\004\022\034\n\024claimable_f"
+    "ree_count\030\032 \001(\r\022\037\n\027claimable_premium_cou"
+    "nt\030\033 \001(\r\022!\n\031retroactive_premium_count\030\034 "
+    "\001(\r\022\"\n\005tiers\030\035 \003(\0132\023.TravelPassTierView\022"
+    "\036\n\026unlocked_cosmetic_keys\030\036 \003(\t\022\032\n\022equip"
+    "ped_frame_key\030\037 \001(\t\022\032\n\022equipped_title_ke"
+    "y\030  \001(\t\",\n\031GetTravelPassStateRequest\022\017\n\007"
+    "pass_id\030\001 \001(\r\"k\n\032GetTravelPassStateRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\022%\n\010snapshot\030\002 \001(\0132\023.TravelPassSnapsh"
+    "ot\"\246\001\n\036UnlockTravelPassPremiumRequest\022\031\n"
+    "\021client_request_id\030\001 \001(\004\022\017\n\007pass_id\030\002 \001("
+    "\r\022\036\n\026expected_currency_type\030\003 \001(\r\022\026\n\016exp"
+    "ected_price\030\004 \001(\004\022 \n\030expected_config_rev"
+    "ision\030\005 \001(\r\"\202\001\n\037UnlockTravelPassPremiumR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022%\n\010snapshot\030\002 \001(\0132\023.TravelPassSn"
+    "apshot\022\020\n\010replayed\030\003 \001(\010\"u\n\034ClaimTravelP"
+    "assRewardRequest\022\031\n\021client_request_id\030\001 "
+    "\001(\004\022\017\n\007pass_id\030\002 \001(\r\022\022\n\ntier_index\030\003 \001(\r"
+    "\022\025\n\rpremium_track\030\004 \001(\010\"\256\001\n\035ClaimTravelP"
+    "assRewardResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022%\n\010snapshot\030\002 \001(\0132\023.Tr"
+    "avelPassSnapshot\022\025\n\003bag\030\003 \001(\0132\010.BagInfo\022"
+    "\020\n\010replayed\030\004 \001(\010\022\025\n\rclaimed_count\030\005 \001(\r"
+    "\"M\n\036EquipTravelPassCosmeticRequest\022\025\n\rco"
+    "smetic_slot\030\001 \001(\r\022\024\n\014cosmetic_key\030\002 \001(\t\""
+    "p\n\037EquipTravelPassCosmeticResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022%\n\010sn"
+    "apshot\030\002 \001(\0132\023.TravelPassSnapshot*\212\001\n\024Pl"
     "ayerActivityStatus\022\037\n\033PLAYER_ACTIVITY_UN"
     "SCHEDULED\020\000\022\034\n\030PLAYER_ACTIVITY_UPCOMING\020"
     "\001\022\030\n\024PLAYER_ACTIVITY_OPEN\020\002\022\031\n\025PLAYER_AC"
@@ -4030,77 +6334,90 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5factivity_2eproto[]
     "REWARD_EXPERIENCE\020\001\022\036\n\032PLAYER_ACTIVITY_R"
     "EWARD_TAO\020\002\022\037\n\033PLAYER_ACTIVITY_REWARD_IT"
     "EM\020\003\022$\n PLAYER_ACTIVITY_REWARD_EQUIPMENT"
-    "\020\004\022\036\n\032PLAYER_ACTIVITY_REWARD_PET\020\005*\215\001\n\027P"
+    "\020\004\022\036\n\032PLAYER_ACTIVITY_REWARD_PET\020\005*\223\002\n\027P"
     "layerActivityEntryKind\022%\n!PLAYER_ACTIVIT"
     "Y_ENTRY_UNSPECIFIED\020\000\022!\n\035PLAYER_ACTIVITY"
     "_ENTRY_MISSION\020\001\022(\n$PLAYER_ACTIVITY_ENTR"
-    "Y_FESTIVAL_BEAST\020\002*\355\001\n\022FestivalBeastPhas"
-    "e\022$\n FESTIVAL_BEAST_PHASE_UNSPECIFIED\020\000\022"
-    "$\n FESTIVAL_BEAST_PHASE_UNSCHEDULED\020\001\022!\n"
-    "\035FESTIVAL_BEAST_PHASE_UPCOMING\020\002\022\035\n\031FEST"
-    "IVAL_BEAST_PHASE_OPEN\020\003\022\'\n#FESTIVAL_BEAS"
-    "T_PHASE_CLAIM_SHOWCASE\020\004\022 \n\034FESTIVAL_BEA"
-    "ST_PHASE_HISTORY\020\005*\237\004\n\034FestivalBeastActi"
-    "onBlockCode\022\035\n\031FESTIVAL_BEAST_BLOCK_NONE"
-    "\020\000\022!\n\035FESTIVAL_BEAST_BLOCK_NOT_OPEN\020\001\022\'\n"
-    "#FESTIVAL_BEAST_BLOCK_CONFIG_INVALID\020\002\022\037"
-    "\n\033FESTIVAL_BEAST_BLOCK_FROZEN\020\003\022\"\n\036FESTI"
-    "VAL_BEAST_BLOCK_IN_BATTLE\020\004\022%\n!FESTIVAL_"
-    "BEAST_BLOCK_PET_REQUIRED\020\005\022!\n\035FESTIVAL_B"
-    "EAST_BLOCK_PET_DEAD\020\006\022)\n%FESTIVAL_BEAST_"
-    "BLOCK_LAUNCH_IN_FLIGHT\020\007\022%\n!FESTIVAL_BEA"
-    "ST_BLOCK_NOT_ELIGIBLE\020\010\022(\n$FESTIVAL_BEAS"
-    "T_BLOCK_ALREADY_CLAIMED\020\t\022)\n%FESTIVAL_BE"
-    "AST_BLOCK_CLAIM_CONFIRMING\020\n\0220\n,FESTIVAL"
-    "_BEAST_BLOCK_EXCLUSIVE_SLOT_OCCUPIED\020\013\022,"
-    "\n(FESTIVAL_BEAST_BLOCK_SERVICE_UNAVAILAB"
-    "LE\020\014*\321\001\n\030FestivalBeastLaunchState\022%\n!FES"
-    "TIVAL_BEAST_LAUNCH_UNSPECIFIED\020\000\022#\n\037FEST"
-    "IVAL_BEAST_LAUNCH_LAUNCHING\020\001\022\"\n\036FESTIVA"
-    "L_BEAST_LAUNCH_ADMITTED\020\002\022\"\n\036FESTIVAL_BE"
-    "AST_LAUNCH_REJECTED\020\003\022!\n\035FESTIVAL_BEAST_"
-    "LAUNCH_UNKNOWN\020\004*\322\001\n\031FestivalBeastClaimO"
-    "utcome\022$\n FESTIVAL_BEAST_CLAIM_UNSPECIFI"
-    "ED\020\000\022 \n\034FESTIVAL_BEAST_CLAIM_APPLIED\020\001\022("
-    "\n$FESTIVAL_BEAST_CLAIM_ALREADY_CLAIMED\020\002"
-    "\022!\n\035FESTIVAL_BEAST_CLAIM_REJECTED\020\003\022 \n\034F"
-    "ESTIVAL_BEAST_CLAIM_UNKNOWN\020\004*\313\001\n\036Festiv"
-    "alBeastMaterialQuotaMode\022\'\n#FESTIVAL_MAT"
-    "ERIAL_QUOTA_UNSPECIFIED\020\000\022+\n\'FESTIVAL_MA"
-    "TERIAL_QUOTA_STAGE1_LIFETIME\020\001\022)\n%FESTIV"
-    "AL_MATERIAL_QUOTA_STAGE2_WEEKLY\020\002\022(\n$FES"
-    "TIVAL_MATERIAL_QUOTA_DAILY_LEGACY\020\0032\375\003\n\031"
-    "SceneActivityClientPlayer\022D\n\017GetActivity"
-    "List\022\027.GetActivityListRequest\032\030.GetActiv"
-    "ityListResponse\022h\n\033ClaimActivityVitality"
-    "Reward\022#.ClaimActivityVitalityRewardRequ"
-    "est\032$.ClaimActivityVitalityRewardRespons"
-    "e\022Y\n\026GetFestivalBeastDetail\022\036.GetFestiva"
-    "lBeastDetailRequest\032\037.GetFestivalBeastDe"
-    "tailResponse\022h\n\033StartFestivalBeastChalle"
-    "nge\022#.StartFestivalBeastChallengeRequest"
-    "\032$.StartFestivalBeastChallengeResponse\022_"
-    "\n\030ClaimFestivalBeastReward\022 .ClaimFestiv"
-    "alBeastRewardRequest\032!.ClaimFestivalBeas"
-    "tRewardResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230"
-    "\324a\003b\006proto3"
+    "Y_FESTIVAL_BEAST\020\002\022%\n!PLAYER_ACTIVITY_EN"
+    "TRY_TRAVEL_PASS\020\003\022-\n)PLAYER_ACTIVITY_ENT"
+    "RY_APPEARANCE_SHOWCASE\020\004\022.\n*PLAYER_ACTIV"
+    "ITY_ENTRY_SPIRIT_SHOP_SHOWCASE\020\005*\355\001\n\022Fes"
+    "tivalBeastPhase\022$\n FESTIVAL_BEAST_PHASE_"
+    "UNSPECIFIED\020\000\022$\n FESTIVAL_BEAST_PHASE_UN"
+    "SCHEDULED\020\001\022!\n\035FESTIVAL_BEAST_PHASE_UPCO"
+    "MING\020\002\022\035\n\031FESTIVAL_BEAST_PHASE_OPEN\020\003\022\'\n"
+    "#FESTIVAL_BEAST_PHASE_CLAIM_SHOWCASE\020\004\022 "
+    "\n\034FESTIVAL_BEAST_PHASE_HISTORY\020\005*\237\004\n\034Fes"
+    "tivalBeastActionBlockCode\022\035\n\031FESTIVAL_BE"
+    "AST_BLOCK_NONE\020\000\022!\n\035FESTIVAL_BEAST_BLOCK"
+    "_NOT_OPEN\020\001\022\'\n#FESTIVAL_BEAST_BLOCK_CONF"
+    "IG_INVALID\020\002\022\037\n\033FESTIVAL_BEAST_BLOCK_FRO"
+    "ZEN\020\003\022\"\n\036FESTIVAL_BEAST_BLOCK_IN_BATTLE\020"
+    "\004\022%\n!FESTIVAL_BEAST_BLOCK_PET_REQUIRED\020\005"
+    "\022!\n\035FESTIVAL_BEAST_BLOCK_PET_DEAD\020\006\022)\n%F"
+    "ESTIVAL_BEAST_BLOCK_LAUNCH_IN_FLIGHT\020\007\022%"
+    "\n!FESTIVAL_BEAST_BLOCK_NOT_ELIGIBLE\020\010\022(\n"
+    "$FESTIVAL_BEAST_BLOCK_ALREADY_CLAIMED\020\t\022"
+    ")\n%FESTIVAL_BEAST_BLOCK_CLAIM_CONFIRMING"
+    "\020\n\0220\n,FESTIVAL_BEAST_BLOCK_EXCLUSIVE_SLO"
+    "T_OCCUPIED\020\013\022,\n(FESTIVAL_BEAST_BLOCK_SER"
+    "VICE_UNAVAILABLE\020\014*\321\001\n\030FestivalBeastLaun"
+    "chState\022%\n!FESTIVAL_BEAST_LAUNCH_UNSPECI"
+    "FIED\020\000\022#\n\037FESTIVAL_BEAST_LAUNCH_LAUNCHIN"
+    "G\020\001\022\"\n\036FESTIVAL_BEAST_LAUNCH_ADMITTED\020\002\022"
+    "\"\n\036FESTIVAL_BEAST_LAUNCH_REJECTED\020\003\022!\n\035F"
+    "ESTIVAL_BEAST_LAUNCH_UNKNOWN\020\004*\322\001\n\031Festi"
+    "valBeastClaimOutcome\022$\n FESTIVAL_BEAST_C"
+    "LAIM_UNSPECIFIED\020\000\022 \n\034FESTIVAL_BEAST_CLA"
+    "IM_APPLIED\020\001\022(\n$FESTIVAL_BEAST_CLAIM_ALR"
+    "EADY_CLAIMED\020\002\022!\n\035FESTIVAL_BEAST_CLAIM_R"
+    "EJECTED\020\003\022 \n\034FESTIVAL_BEAST_CLAIM_UNKNOW"
+    "N\020\004*\313\001\n\036FestivalBeastMaterialQuotaMode\022\'"
+    "\n#FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED\020\000\022"
+    "+\n\'FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETI"
+    "ME\020\001\022)\n%FESTIVAL_MATERIAL_QUOTA_STAGE2_W"
+    "EEKLY\020\002\022(\n$FESTIVAL_MATERIAL_QUOTA_DAILY"
+    "_LEGACY\020\0032\340\006\n\031SceneActivityClientPlayer\022"
+    "D\n\017GetActivityList\022\027.GetActivityListRequ"
+    "est\032\030.GetActivityListResponse\022h\n\033ClaimAc"
+    "tivityVitalityReward\022#.ClaimActivityVita"
+    "lityRewardRequest\032$.ClaimActivityVitalit"
+    "yRewardResponse\022Y\n\026GetFestivalBeastDetai"
+    "l\022\036.GetFestivalBeastDetailRequest\032\037.GetF"
+    "estivalBeastDetailResponse\022h\n\033StartFesti"
+    "valBeastChallenge\022#.StartFestivalBeastCh"
+    "allengeRequest\032$.StartFestivalBeastChall"
+    "engeResponse\022_\n\030ClaimFestivalBeastReward"
+    "\022 .ClaimFestivalBeastRewardRequest\032!.Cla"
+    "imFestivalBeastRewardResponse\022M\n\022GetTrav"
+    "elPassState\022\032.GetTravelPassStateRequest\032"
+    "\033.GetTravelPassStateResponse\022\\\n\027UnlockTr"
+    "avelPassPremium\022\037.UnlockTravelPassPremiu"
+    "mRequest\032 .UnlockTravelPassPremiumRespon"
+    "se\022V\n\025ClaimTravelPassReward\022\035.ClaimTrave"
+    "lPassRewardRequest\032\036.ClaimTravelPassRewa"
+    "rdResponse\022\\\n\027EquipTravelPassCosmetic\022\037."
+    "EquipTravelPassCosmeticRequest\032 .EquipTr"
+    "avelPassCosmeticResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005"
+    "scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto_deps[2] = {
+    descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto_deps[3] = {
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
+        &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto = {
     false,
     false,
-    7611,
+    10500,
     descriptor_table_protodef_proto_2fscene_2fplayer_5factivity_2eproto,
     "proto/scene/player_activity.proto",
     &descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto_deps,
-    2,
-    16,
+    3,
+    26,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5factivity_2eproto::offsets,
@@ -4134,7 +6451,7 @@ PlayerActivityEntryKind_descriptor() {
   return file_level_enum_descriptors_proto_2fscene_2fplayer_5factivity_2eproto[3];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerActivityEntryKind_internal_data_[] = {
-    196608u, 0u, };
+    393216u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 FestivalBeastPhase_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto);
@@ -11152,6 +13469,3941 @@ void ClaimFestivalBeastRewardResponse::InternalSwap(ClaimFestivalBeastRewardResp
 }
 // ===================================================================
 
+TravelPassTierView::TravelPassTierView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TravelPassTierView_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:TravelPassTierView)
+}
+PROTOBUF_NDEBUG_INLINE TravelPassTierView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::TravelPassTierView& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        free_item_name_(arena, from.free_item_name_),
+        free_item_icon_key_(arena, from.free_item_icon_key_),
+        free_cosmetic_key_(arena, from.free_cosmetic_key_),
+        free_cosmetic_name_(arena, from.free_cosmetic_name_),
+        premium_item_name_(arena, from.premium_item_name_),
+        premium_item_icon_key_(arena, from.premium_item_icon_key_),
+        premium_cosmetic_key_(arena, from.premium_cosmetic_key_),
+        premium_cosmetic_name_(arena, from.premium_cosmetic_name_) {}
+
+TravelPassTierView::TravelPassTierView(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const TravelPassTierView& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TravelPassTierView_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  TravelPassTierView* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, tier_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, tier_id_),
+           offsetof(Impl_, premium_can_claim_) -
+               offsetof(Impl_, tier_id_) +
+               sizeof(Impl_::premium_can_claim_));
+
+  // @@protoc_insertion_point(copy_constructor:TravelPassTierView)
+}
+PROTOBUF_NDEBUG_INLINE TravelPassTierView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        free_item_name_(arena),
+        free_item_icon_key_(arena),
+        free_cosmetic_key_(arena),
+        free_cosmetic_name_(arena),
+        premium_item_name_(arena),
+        premium_item_icon_key_(arena),
+        premium_cosmetic_key_(arena),
+        premium_cosmetic_name_(arena) {}
+
+inline void TravelPassTierView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, tier_id_),
+           0,
+           offsetof(Impl_, premium_can_claim_) -
+               offsetof(Impl_, tier_id_) +
+               sizeof(Impl_::premium_can_claim_));
+}
+TravelPassTierView::~TravelPassTierView() {
+  // @@protoc_insertion_point(destructor:TravelPassTierView)
+  SharedDtor(*this);
+}
+inline void TravelPassTierView::SharedDtor(MessageLite& self) {
+  TravelPassTierView& this_ = static_cast<TravelPassTierView&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.free_item_name_.Destroy();
+  this_._impl_.free_item_icon_key_.Destroy();
+  this_._impl_.free_cosmetic_key_.Destroy();
+  this_._impl_.free_cosmetic_name_.Destroy();
+  this_._impl_.premium_item_name_.Destroy();
+  this_._impl_.premium_item_icon_key_.Destroy();
+  this_._impl_.premium_cosmetic_key_.Destroy();
+  this_._impl_.premium_cosmetic_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TravelPassTierView_class_data_ =
+        TravelPassTierView::InternalGenerateClassData_(TravelPassTierView_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TravelPassTierView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TravelPassTierView_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TravelPassTierView_class_data_.tc_table);
+  return TravelPassTierView_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TravelPassTierView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TravelPassTierView_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TravelPassTierView_globals_));
+  return TravelPassTierView_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TravelPassTierView::ParseTableT_
+    TravelPassTierView::_table_ =
+        TravelPassTierView::InternalGenerateParseTable_(TravelPassTierView_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TravelPassTierView::Clear() {
+// @@protoc_insertion_point(message_clear_start:TravelPassTierView)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.free_item_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.free_item_icon_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.free_cosmetic_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.free_cosmetic_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.premium_item_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.premium_item_icon_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.premium_cosmetic_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      _impl_.premium_cosmetic_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.tier_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.free_claimed_) -
+        reinterpret_cast<char*>(&_impl_.tier_id_)) + sizeof(_impl_.free_claimed_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+    ::memset(&_impl_.free_can_claim_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.premium_can_claim_) -
+        reinterpret_cast<char*>(&_impl_.free_can_claim_)) + sizeof(_impl_.premium_can_claim_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TravelPassTierView::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TravelPassTierView& this_ = static_cast<const TravelPassTierView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TravelPassTierView::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TravelPassTierView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:TravelPassTierView)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 tier_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_tier_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_tier_id(), target);
+    }
+  }
+
+  // uint32 tier_index = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_tier_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_tier_index(), target);
+    }
+  }
+
+  // uint32 required_points = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_required_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_required_points(), target);
+    }
+  }
+
+  // bool reached = 4;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_reached() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_reached(), target);
+    }
+  }
+
+  // uint32 free_item_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_free_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_free_item_id(), target);
+    }
+  }
+
+  // uint32 free_item_count = 6;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_free_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_free_item_count(), target);
+    }
+  }
+
+  // string free_item_name = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_free_item_name().empty()) {
+      const ::std::string& _s = this_._internal_free_item_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.free_item_name");
+      target = stream->WriteStringMaybeAliased(7, _s, target);
+    }
+  }
+
+  // string free_item_icon_key = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_free_item_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_free_item_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.free_item_icon_key");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // uint64 free_gold = 9;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_free_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_free_gold(), target);
+    }
+  }
+
+  // string free_cosmetic_key = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_free_cosmetic_key().empty()) {
+      const ::std::string& _s = this_._internal_free_cosmetic_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.free_cosmetic_key");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // string free_cosmetic_name = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_free_cosmetic_name().empty()) {
+      const ::std::string& _s = this_._internal_free_cosmetic_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.free_cosmetic_name");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // bool free_claimed = 12;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_free_claimed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          12, this_._internal_free_claimed(), target);
+    }
+  }
+
+  // bool free_can_claim = 13;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_free_can_claim() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          13, this_._internal_free_can_claim(), target);
+    }
+  }
+
+  // uint32 premium_item_id = 14;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_premium_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_premium_item_id(), target);
+    }
+  }
+
+  // uint32 premium_item_count = 15;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_premium_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_premium_item_count(), target);
+    }
+  }
+
+  // string premium_item_name = 16;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_premium_item_name().empty()) {
+      const ::std::string& _s = this_._internal_premium_item_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.premium_item_name");
+      target = stream->WriteStringMaybeAliased(16, _s, target);
+    }
+  }
+
+  // string premium_item_icon_key = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_premium_item_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_premium_item_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.premium_item_icon_key");
+      target = stream->WriteStringMaybeAliased(17, _s, target);
+    }
+  }
+
+  // uint64 premium_gold = 18;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_premium_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_premium_gold(), target);
+    }
+  }
+
+  // string premium_cosmetic_key = 19;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_premium_cosmetic_key().empty()) {
+      const ::std::string& _s = this_._internal_premium_cosmetic_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.premium_cosmetic_key");
+      target = stream->WriteStringMaybeAliased(19, _s, target);
+    }
+  }
+
+  // string premium_cosmetic_name = 20;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (!this_._internal_premium_cosmetic_name().empty()) {
+      const ::std::string& _s = this_._internal_premium_cosmetic_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassTierView.premium_cosmetic_name");
+      target = stream->WriteStringMaybeAliased(20, _s, target);
+    }
+  }
+
+  // bool premium_claimed = 21;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_premium_claimed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          21, this_._internal_premium_claimed(), target);
+    }
+  }
+
+  // bool premium_can_claim = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_premium_can_claim() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          22, this_._internal_premium_can_claim(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:TravelPassTierView)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TravelPassTierView::ByteSizeLong(const MessageLite& base) {
+  const TravelPassTierView& this_ = static_cast<const TravelPassTierView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TravelPassTierView::ByteSizeLong() const {
+  const TravelPassTierView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:TravelPassTierView)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string free_item_name = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_free_item_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_free_item_name());
+      }
+    }
+    // string free_item_icon_key = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_free_item_icon_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_free_item_icon_key());
+      }
+    }
+    // string free_cosmetic_key = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_free_cosmetic_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_free_cosmetic_key());
+      }
+    }
+    // string free_cosmetic_name = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_free_cosmetic_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_free_cosmetic_name());
+      }
+    }
+    // string premium_item_name = 16;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_premium_item_name().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_premium_item_name());
+      }
+    }
+    // string premium_item_icon_key = 17;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_premium_item_icon_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_premium_item_icon_key());
+      }
+    }
+    // string premium_cosmetic_key = 19;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_premium_cosmetic_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_premium_cosmetic_key());
+      }
+    }
+    // string premium_cosmetic_name = 20;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!this_._internal_premium_cosmetic_name().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_premium_cosmetic_name());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint32 tier_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_tier_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tier_id());
+      }
+    }
+    // uint32 tier_index = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_tier_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tier_index());
+      }
+    }
+    // uint32 required_points = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_required_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_required_points());
+      }
+    }
+    // uint32 free_item_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_free_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_free_item_id());
+      }
+    }
+    // uint64 free_gold = 9;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_free_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_free_gold());
+      }
+    }
+    // uint32 free_item_count = 6;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_free_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_free_item_count());
+      }
+    }
+    // bool reached = 4;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_reached() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool free_claimed = 12;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_free_claimed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+    // bool free_can_claim = 13;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_free_can_claim() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool premium_claimed = 21;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_premium_claimed() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 premium_item_id = 14;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_premium_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_premium_item_id());
+      }
+    }
+    // uint32 premium_item_count = 15;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_premium_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_premium_item_count());
+      }
+    }
+    // uint64 premium_gold = 18;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_premium_gold() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_premium_gold());
+      }
+    }
+    // bool premium_can_claim = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_premium_can_claim() != 0) {
+        total_size += 3;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TravelPassTierView::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TravelPassTierView*>(&to_msg);
+  auto& from = static_cast<const TravelPassTierView&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:TravelPassTierView)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_free_item_name().empty()) {
+        _this->_internal_set_free_item_name(from._internal_free_item_name());
+      } else {
+        if (_this->_impl_.free_item_name_.IsDefault()) {
+          _this->_internal_set_free_item_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_free_item_icon_key().empty()) {
+        _this->_internal_set_free_item_icon_key(from._internal_free_item_icon_key());
+      } else {
+        if (_this->_impl_.free_item_icon_key_.IsDefault()) {
+          _this->_internal_set_free_item_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_free_cosmetic_key().empty()) {
+        _this->_internal_set_free_cosmetic_key(from._internal_free_cosmetic_key());
+      } else {
+        if (_this->_impl_.free_cosmetic_key_.IsDefault()) {
+          _this->_internal_set_free_cosmetic_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_free_cosmetic_name().empty()) {
+        _this->_internal_set_free_cosmetic_name(from._internal_free_cosmetic_name());
+      } else {
+        if (_this->_impl_.free_cosmetic_name_.IsDefault()) {
+          _this->_internal_set_free_cosmetic_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_premium_item_name().empty()) {
+        _this->_internal_set_premium_item_name(from._internal_premium_item_name());
+      } else {
+        if (_this->_impl_.premium_item_name_.IsDefault()) {
+          _this->_internal_set_premium_item_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_premium_item_icon_key().empty()) {
+        _this->_internal_set_premium_item_icon_key(from._internal_premium_item_icon_key());
+      } else {
+        if (_this->_impl_.premium_item_icon_key_.IsDefault()) {
+          _this->_internal_set_premium_item_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_premium_cosmetic_key().empty()) {
+        _this->_internal_set_premium_cosmetic_key(from._internal_premium_cosmetic_key());
+      } else {
+        if (_this->_impl_.premium_cosmetic_key_.IsDefault()) {
+          _this->_internal_set_premium_cosmetic_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!from._internal_premium_cosmetic_name().empty()) {
+        _this->_internal_set_premium_cosmetic_name(from._internal_premium_cosmetic_name());
+      } else {
+        if (_this->_impl_.premium_cosmetic_name_.IsDefault()) {
+          _this->_internal_set_premium_cosmetic_name("");
+        }
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_tier_id() != 0) {
+        _this->_impl_.tier_id_ = from._impl_.tier_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_tier_index() != 0) {
+        _this->_impl_.tier_index_ = from._impl_.tier_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_required_points() != 0) {
+        _this->_impl_.required_points_ = from._impl_.required_points_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_free_item_id() != 0) {
+        _this->_impl_.free_item_id_ = from._impl_.free_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_free_gold() != 0) {
+        _this->_impl_.free_gold_ = from._impl_.free_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_free_item_count() != 0) {
+        _this->_impl_.free_item_count_ = from._impl_.free_item_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_reached() != 0) {
+        _this->_impl_.reached_ = from._impl_.reached_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_free_claimed() != 0) {
+        _this->_impl_.free_claimed_ = from._impl_.free_claimed_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_free_can_claim() != 0) {
+        _this->_impl_.free_can_claim_ = from._impl_.free_can_claim_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_premium_claimed() != 0) {
+        _this->_impl_.premium_claimed_ = from._impl_.premium_claimed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_premium_item_id() != 0) {
+        _this->_impl_.premium_item_id_ = from._impl_.premium_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_premium_item_count() != 0) {
+        _this->_impl_.premium_item_count_ = from._impl_.premium_item_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_premium_gold() != 0) {
+        _this->_impl_.premium_gold_ = from._impl_.premium_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_premium_can_claim() != 0) {
+        _this->_impl_.premium_can_claim_ = from._impl_.premium_can_claim_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TravelPassTierView::CopyFrom(const TravelPassTierView& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:TravelPassTierView)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TravelPassTierView::InternalSwap(TravelPassTierView* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.free_item_name_, &other->_impl_.free_item_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.free_item_icon_key_, &other->_impl_.free_item_icon_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.free_cosmetic_key_, &other->_impl_.free_cosmetic_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.free_cosmetic_name_, &other->_impl_.free_cosmetic_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.premium_item_name_, &other->_impl_.premium_item_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.premium_item_icon_key_, &other->_impl_.premium_item_icon_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.premium_cosmetic_key_, &other->_impl_.premium_cosmetic_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.premium_cosmetic_name_, &other->_impl_.premium_cosmetic_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.premium_can_claim_)
+      + sizeof(TravelPassTierView::_impl_.premium_can_claim_)
+      - PROTOBUF_FIELD_OFFSET(TravelPassTierView, _impl_.tier_id_)>(
+          reinterpret_cast<char*>(&_impl_.tier_id_),
+          reinterpret_cast<char*>(&other->_impl_.tier_id_));
+}
+
+::google::protobuf::Metadata TravelPassTierView::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TravelPassSnapshot::TravelPassSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TravelPassSnapshot_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:TravelPassSnapshot)
+}
+PROTOBUF_NDEBUG_INLINE TravelPassSnapshot::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::TravelPassSnapshot& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        tiers_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::TravelPassSnapshot,
+              PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.tiers_)>()
+          , from.tiers_
+        }
+        ,
+        unlocked_cosmetic_keys_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::TravelPassSnapshot,
+              PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.unlocked_cosmetic_keys_)>()
+          , from.unlocked_cosmetic_keys_
+        }
+        ,
+        unavailable_reason_(arena, from.unavailable_reason_),
+        name_(arena, from.name_),
+        description_(arena, from.description_),
+        icon_key_(arena, from.icon_key_),
+        banner_asset_key_(arena, from.banner_asset_key_),
+        equipped_frame_key_(arena, from.equipped_frame_key_),
+        equipped_title_key_(arena, from.equipped_title_key_) {}
+
+TravelPassSnapshot::TravelPassSnapshot(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const TravelPassSnapshot& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TravelPassSnapshot_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  TravelPassSnapshot* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, server_now_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, server_now_ms_),
+           offsetof(Impl_, retroactive_premium_count_) -
+               offsetof(Impl_, server_now_ms_) +
+               sizeof(Impl_::retroactive_premium_count_));
+
+  // @@protoc_insertion_point(copy_constructor:TravelPassSnapshot)
+}
+PROTOBUF_NDEBUG_INLINE TravelPassSnapshot::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        tiers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::TravelPassSnapshot,
+            PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.tiers_)>()
+         }
+        ,
+        unlocked_cosmetic_keys_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::TravelPassSnapshot,
+            PROTOBUF_FIELD_OFFSET(::TravelPassSnapshot, _impl_.unlocked_cosmetic_keys_)>()
+         }
+        ,
+        unavailable_reason_(arena),
+        name_(arena),
+        description_(arena),
+        icon_key_(arena),
+        banner_asset_key_(arena),
+        equipped_frame_key_(arena),
+        equipped_title_key_(arena) {}
+
+inline void TravelPassSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, server_now_ms_),
+           0,
+           offsetof(Impl_, retroactive_premium_count_) -
+               offsetof(Impl_, server_now_ms_) +
+               sizeof(Impl_::retroactive_premium_count_));
+}
+TravelPassSnapshot::~TravelPassSnapshot() {
+  // @@protoc_insertion_point(destructor:TravelPassSnapshot)
+  SharedDtor(*this);
+}
+inline void TravelPassSnapshot::SharedDtor(MessageLite& self) {
+  TravelPassSnapshot& this_ = static_cast<TravelPassSnapshot&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.unavailable_reason_.Destroy();
+  this_._impl_.name_.Destroy();
+  this_._impl_.description_.Destroy();
+  this_._impl_.icon_key_.Destroy();
+  this_._impl_.banner_asset_key_.Destroy();
+  this_._impl_.equipped_frame_key_.Destroy();
+  this_._impl_.equipped_title_key_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TravelPassSnapshot_class_data_ =
+        TravelPassSnapshot::InternalGenerateClassData_(TravelPassSnapshot_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TravelPassSnapshot::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TravelPassSnapshot_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TravelPassSnapshot_class_data_.tc_table);
+  return TravelPassSnapshot_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TravelPassSnapshot::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TravelPassSnapshot_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TravelPassSnapshot_globals_));
+  return TravelPassSnapshot_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TravelPassSnapshot::ParseTableT_
+    TravelPassSnapshot::_table_ =
+        TravelPassSnapshot::InternalGenerateParseTable_(TravelPassSnapshot_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TravelPassSnapshot::Clear() {
+// @@protoc_insertion_point(message_clear_start:TravelPassSnapshot)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.tiers_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.unlocked_cosmetic_keys_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.unavailable_reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.description_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.icon_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.banner_asset_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      _impl_.equipped_frame_key_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    _impl_.equipped_title_key_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000fe00U)) {
+    ::memset(&_impl_.server_now_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.available_) -
+        reinterpret_cast<char*>(&_impl_.server_now_ms_)) + sizeof(_impl_.available_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    ::memset(&_impl_.open_for_progress_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.pvp_qualified_other_points_) -
+        reinterpret_cast<char*>(&_impl_.open_for_progress_)) + sizeof(_impl_.pvp_qualified_other_points_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    ::memset(&_impl_.premium_unlocked_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.retroactive_premium_count_) -
+        reinterpret_cast<char*>(&_impl_.premium_unlocked_at_ms_)) + sizeof(_impl_.retroactive_premium_count_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TravelPassSnapshot::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TravelPassSnapshot& this_ = static_cast<const TravelPassSnapshot&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TravelPassSnapshot::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TravelPassSnapshot& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:TravelPassSnapshot)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool available = 1;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_available() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_available(), target);
+    }
+  }
+
+  // string unavailable_reason = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_unavailable_reason().empty()) {
+      const ::std::string& _s = this_._internal_unavailable_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.unavailable_reason");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint64 server_now_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_server_now_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_server_now_ms(), target);
+    }
+  }
+
+  // uint64 pass_revision = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_pass_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_pass_revision(), target);
+    }
+  }
+
+  // uint32 pass_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_pass_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_pass_id(), target);
+    }
+  }
+
+  // uint32 config_revision = 6;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_config_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_config_revision(), target);
+    }
+  }
+
+  // string name = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.name");
+      target = stream->WriteStringMaybeAliased(7, _s, target);
+    }
+  }
+
+  // string description = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_description().empty()) {
+      const ::std::string& _s = this_._internal_description();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.description");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // string icon_key = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.icon_key");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // string banner_asset_key = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_banner_asset_key().empty()) {
+      const ::std::string& _s = this_._internal_banner_asset_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.banner_asset_key");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // uint64 starts_at_ms = 11;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_starts_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_starts_at_ms(), target);
+    }
+  }
+
+  // uint64 ends_at_ms = 12;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_ends_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          12, this_._internal_ends_at_ms(), target);
+    }
+  }
+
+  // bool open_for_progress = 13;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_open_for_progress() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          13, this_._internal_open_for_progress(), target);
+    }
+  }
+
+  // bool open_for_unlock = 14;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_open_for_unlock() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_open_for_unlock(), target);
+    }
+  }
+
+  // uint32 progress_points = 15;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_progress_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_progress_points(), target);
+    }
+  }
+
+  // uint32 max_points = 16;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_max_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_max_points(), target);
+    }
+  }
+
+  // uint32 pve_win_points = 17;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_pve_win_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_pve_win_points(), target);
+    }
+  }
+
+  // uint32 hard_or_pvp_win_points = 18;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_hard_or_pvp_win_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_hard_or_pvp_win_points(), target);
+    }
+  }
+
+  // uint32 pvp_qualified_other_points = 19;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_pvp_qualified_other_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_pvp_qualified_other_points(), target);
+    }
+  }
+
+  // bool premium_unlocked = 20;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_premium_unlocked() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          20, this_._internal_premium_unlocked(), target);
+    }
+  }
+
+  // uint64 premium_unlocked_at_ms = 21;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_premium_unlocked_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          21, this_._internal_premium_unlocked_at_ms(), target);
+    }
+  }
+
+  // uint32 premium_currency_type = 22;
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    if (this_._internal_premium_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_premium_currency_type(), target);
+    }
+  }
+
+  // uint64 premium_price = 23;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_premium_price() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          23, this_._internal_premium_price(), target);
+    }
+  }
+
+  // uint64 diamond_balance = 24;
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_diamond_balance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          24, this_._internal_diamond_balance(), target);
+    }
+  }
+
+  // uint64 bind_diamond_balance = 25;
+  if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+    if (this_._internal_bind_diamond_balance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          25, this_._internal_bind_diamond_balance(), target);
+    }
+  }
+
+  // uint32 claimable_free_count = 26;
+  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    if (this_._internal_claimable_free_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          26, this_._internal_claimable_free_count(), target);
+    }
+  }
+
+  // uint32 claimable_premium_count = 27;
+  if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+    if (this_._internal_claimable_premium_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          27, this_._internal_claimable_premium_count(), target);
+    }
+  }
+
+  // uint32 retroactive_premium_count = 28;
+  if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+    if (this_._internal_retroactive_premium_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          28, this_._internal_retroactive_premium_count(), target);
+    }
+  }
+
+  // repeated .TravelPassTierView tiers = 29;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_tiers_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_tiers().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              29, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated string unlocked_cosmetic_keys = 30;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (int i = 0, n = this_._internal_unlocked_cosmetic_keys_size(); i < n; ++i) {
+      const auto& s = this_._internal_unlocked_cosmetic_keys().Get(i);
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          s.data(), static_cast<int>(s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.unlocked_cosmetic_keys");
+      target = stream->WriteString(30, s, target);
+    }
+  }
+
+  // string equipped_frame_key = 31;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (!this_._internal_equipped_frame_key().empty()) {
+      const ::std::string& _s = this_._internal_equipped_frame_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.equipped_frame_key");
+      target = stream->WriteStringMaybeAliased(31, _s, target);
+    }
+  }
+
+  // string equipped_title_key = 32;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (!this_._internal_equipped_title_key().empty()) {
+      const ::std::string& _s = this_._internal_equipped_title_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "TravelPassSnapshot.equipped_title_key");
+      target = stream->WriteStringMaybeAliased(32, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:TravelPassSnapshot)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TravelPassSnapshot::ByteSizeLong(const MessageLite& base) {
+  const TravelPassSnapshot& this_ = static_cast<const TravelPassSnapshot&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TravelPassSnapshot::ByteSizeLong() const {
+  const TravelPassSnapshot& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:TravelPassSnapshot)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated .TravelPassTierView tiers = 29;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 2UL * this_._internal_tiers_size();
+      for (const auto& msg : this_._internal_tiers()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated string unlocked_cosmetic_keys = 30;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          2 * ::google::protobuf::internal::FromIntSize(this_._internal_unlocked_cosmetic_keys().size());
+      for (int i = 0, n = this_._internal_unlocked_cosmetic_keys().size(); i < n; ++i) {
+        total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
+            this_._internal_unlocked_cosmetic_keys().Get(i));
+      }
+    }
+    // string unavailable_reason = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_unavailable_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_unavailable_reason());
+      }
+    }
+    // string name = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // string description = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_description().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_description());
+      }
+    }
+    // string icon_key = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_icon_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_icon_key());
+      }
+    }
+    // string banner_asset_key = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_banner_asset_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_banner_asset_key());
+      }
+    }
+    // string equipped_frame_key = 31;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!this_._internal_equipped_frame_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_equipped_frame_key());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // string equipped_title_key = 32;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (!this_._internal_equipped_title_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_equipped_title_key());
+      }
+    }
+    // uint64 server_now_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_server_now_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_server_now_ms());
+      }
+    }
+    // uint64 pass_revision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_pass_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pass_revision());
+      }
+    }
+    // uint32 pass_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_pass_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pass_id());
+      }
+    }
+    // uint32 config_revision = 6;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_config_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_config_revision());
+      }
+    }
+    // uint64 starts_at_ms = 11;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_starts_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_starts_at_ms());
+      }
+    }
+    // uint64 ends_at_ms = 12;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_ends_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_ends_at_ms());
+      }
+    }
+    // bool available = 1;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_available() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    // bool open_for_progress = 13;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_open_for_progress() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool open_for_unlock = 14;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_open_for_unlock() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool premium_unlocked = 20;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_premium_unlocked() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 progress_points = 15;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_progress_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_progress_points());
+      }
+    }
+    // uint32 max_points = 16;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_max_points() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_max_points());
+      }
+    }
+    // uint32 pve_win_points = 17;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_pve_win_points() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_pve_win_points());
+      }
+    }
+    // uint32 hard_or_pvp_win_points = 18;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_hard_or_pvp_win_points() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_hard_or_pvp_win_points());
+      }
+    }
+    // uint32 pvp_qualified_other_points = 19;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_pvp_qualified_other_points() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_pvp_qualified_other_points());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    // uint64 premium_unlocked_at_ms = 21;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_premium_unlocked_at_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_premium_unlocked_at_ms());
+      }
+    }
+    // uint64 premium_price = 23;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_premium_price() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_premium_price());
+      }
+    }
+    // uint64 diamond_balance = 24;
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_diamond_balance() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_diamond_balance());
+      }
+    }
+    // uint32 premium_currency_type = 22;
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (this_._internal_premium_currency_type() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_premium_currency_type());
+      }
+    }
+    // uint32 claimable_free_count = 26;
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (this_._internal_claimable_free_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_claimable_free_count());
+      }
+    }
+    // uint64 bind_diamond_balance = 25;
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      if (this_._internal_bind_diamond_balance() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_bind_diamond_balance());
+      }
+    }
+    // uint32 claimable_premium_count = 27;
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      if (this_._internal_claimable_premium_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_claimable_premium_count());
+      }
+    }
+    // uint32 retroactive_premium_count = 28;
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (this_._internal_retroactive_premium_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_retroactive_premium_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TravelPassSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TravelPassSnapshot*>(&to_msg);
+  auto& from = static_cast<const TravelPassSnapshot&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:TravelPassSnapshot)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_tiers()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_tiers());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_unlocked_cosmetic_keys()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_unlocked_cosmetic_keys());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_unavailable_reason().empty()) {
+        _this->_internal_set_unavailable_reason(from._internal_unavailable_reason());
+      } else {
+        if (_this->_impl_.unavailable_reason_.IsDefault()) {
+          _this->_internal_set_unavailable_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_description().empty()) {
+        _this->_internal_set_description(from._internal_description());
+      } else {
+        if (_this->_impl_.description_.IsDefault()) {
+          _this->_internal_set_description("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_icon_key().empty()) {
+        _this->_internal_set_icon_key(from._internal_icon_key());
+      } else {
+        if (_this->_impl_.icon_key_.IsDefault()) {
+          _this->_internal_set_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_banner_asset_key().empty()) {
+        _this->_internal_set_banner_asset_key(from._internal_banner_asset_key());
+      } else {
+        if (_this->_impl_.banner_asset_key_.IsDefault()) {
+          _this->_internal_set_banner_asset_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (!from._internal_equipped_frame_key().empty()) {
+        _this->_internal_set_equipped_frame_key(from._internal_equipped_frame_key());
+      } else {
+        if (_this->_impl_.equipped_frame_key_.IsDefault()) {
+          _this->_internal_set_equipped_frame_key("");
+        }
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (!from._internal_equipped_title_key().empty()) {
+        _this->_internal_set_equipped_title_key(from._internal_equipped_title_key());
+      } else {
+        if (_this->_impl_.equipped_title_key_.IsDefault()) {
+          _this->_internal_set_equipped_title_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_server_now_ms() != 0) {
+        _this->_impl_.server_now_ms_ = from._impl_.server_now_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_pass_revision() != 0) {
+        _this->_impl_.pass_revision_ = from._impl_.pass_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_pass_id() != 0) {
+        _this->_impl_.pass_id_ = from._impl_.pass_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_config_revision() != 0) {
+        _this->_impl_.config_revision_ = from._impl_.config_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_starts_at_ms() != 0) {
+        _this->_impl_.starts_at_ms_ = from._impl_.starts_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_ends_at_ms() != 0) {
+        _this->_impl_.ends_at_ms_ = from._impl_.ends_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_available() != 0) {
+        _this->_impl_.available_ = from._impl_.available_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_open_for_progress() != 0) {
+        _this->_impl_.open_for_progress_ = from._impl_.open_for_progress_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_open_for_unlock() != 0) {
+        _this->_impl_.open_for_unlock_ = from._impl_.open_for_unlock_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_premium_unlocked() != 0) {
+        _this->_impl_.premium_unlocked_ = from._impl_.premium_unlocked_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_progress_points() != 0) {
+        _this->_impl_.progress_points_ = from._impl_.progress_points_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_max_points() != 0) {
+        _this->_impl_.max_points_ = from._impl_.max_points_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_pve_win_points() != 0) {
+        _this->_impl_.pve_win_points_ = from._impl_.pve_win_points_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_hard_or_pvp_win_points() != 0) {
+        _this->_impl_.hard_or_pvp_win_points_ = from._impl_.hard_or_pvp_win_points_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_pvp_qualified_other_points() != 0) {
+        _this->_impl_.pvp_qualified_other_points_ = from._impl_.pvp_qualified_other_points_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_premium_unlocked_at_ms() != 0) {
+        _this->_impl_.premium_unlocked_at_ms_ = from._impl_.premium_unlocked_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_premium_price() != 0) {
+        _this->_impl_.premium_price_ = from._impl_.premium_price_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_diamond_balance() != 0) {
+        _this->_impl_.diamond_balance_ = from._impl_.diamond_balance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (from._internal_premium_currency_type() != 0) {
+        _this->_impl_.premium_currency_type_ = from._impl_.premium_currency_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (from._internal_claimable_free_count() != 0) {
+        _this->_impl_.claimable_free_count_ = from._impl_.claimable_free_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      if (from._internal_bind_diamond_balance() != 0) {
+        _this->_impl_.bind_diamond_balance_ = from._impl_.bind_diamond_balance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      if (from._internal_claimable_premium_count() != 0) {
+        _this->_impl_.claimable_premium_count_ = from._impl_.claimable_premium_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (from._internal_retroactive_premium_count() != 0) {
+        _this->_impl_.retroactive_premium_count_ = from._impl_.retroactive_premium_count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TravelPassSnapshot::CopyFrom(const TravelPassSnapshot& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:TravelPassSnapshot)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TravelPassSnapshot::InternalSwap(TravelPassSnapshot* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.tiers_.InternalSwap(&other->_impl_.tiers_);
+  _impl_.unlocked_cosmetic_keys_.InternalSwap(&other->_impl_.unlocked_cosmetic_keys_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.unavailable_reason_, &other->_impl_.unavailable_reason_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.banner_asset_key_, &other->_impl_.banner_asset_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.equipped_frame_key_, &other->_impl_.equipped_frame_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.equipped_title_key_, &other->_impl_.equipped_title_key_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.retroactive_premium_count_)
+      + sizeof(TravelPassSnapshot::_impl_.retroactive_premium_count_)
+      - PROTOBUF_FIELD_OFFSET(TravelPassSnapshot, _impl_.server_now_ms_)>(
+          reinterpret_cast<char*>(&_impl_.server_now_ms_),
+          reinterpret_cast<char*>(&other->_impl_.server_now_ms_));
+}
+
+::google::protobuf::Metadata TravelPassSnapshot::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetTravelPassStateRequest::GetTravelPassStateRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetTravelPassStateRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:GetTravelPassStateRequest)
+}
+GetTravelPassStateRequest::GetTravelPassStateRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTravelPassStateRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetTravelPassStateRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GetTravelPassStateRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetTravelPassStateRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.pass_id_ = {};
+}
+GetTravelPassStateRequest::~GetTravelPassStateRequest() {
+  // @@protoc_insertion_point(destructor:GetTravelPassStateRequest)
+  SharedDtor(*this);
+}
+inline void GetTravelPassStateRequest::SharedDtor(MessageLite& self) {
+  GetTravelPassStateRequest& this_ = static_cast<GetTravelPassStateRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetTravelPassStateRequest_class_data_ =
+        GetTravelPassStateRequest::InternalGenerateClassData_(GetTravelPassStateRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetTravelPassStateRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetTravelPassStateRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetTravelPassStateRequest_class_data_.tc_table);
+  return GetTravelPassStateRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetTravelPassStateRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetTravelPassStateRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetTravelPassStateRequest_globals_));
+  return GetTravelPassStateRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetTravelPassStateRequest::ParseTableT_
+    GetTravelPassStateRequest::_table_ =
+        GetTravelPassStateRequest::InternalGenerateParseTable_(GetTravelPassStateRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetTravelPassStateRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:GetTravelPassStateRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.pass_id_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetTravelPassStateRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetTravelPassStateRequest& this_ = static_cast<const GetTravelPassStateRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetTravelPassStateRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetTravelPassStateRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:GetTravelPassStateRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 pass_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_pass_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_pass_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:GetTravelPassStateRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetTravelPassStateRequest::ByteSizeLong(const MessageLite& base) {
+  const GetTravelPassStateRequest& this_ = static_cast<const GetTravelPassStateRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetTravelPassStateRequest::ByteSizeLong() const {
+  const GetTravelPassStateRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:GetTravelPassStateRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 pass_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_pass_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pass_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetTravelPassStateRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetTravelPassStateRequest*>(&to_msg);
+  auto& from = static_cast<const GetTravelPassStateRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:GetTravelPassStateRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_pass_id() != 0) {
+      _this->_impl_.pass_id_ = from._impl_.pass_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetTravelPassStateRequest::CopyFrom(const GetTravelPassStateRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:GetTravelPassStateRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetTravelPassStateRequest::InternalSwap(GetTravelPassStateRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.pass_id_, other->_impl_.pass_id_);
+}
+
+::google::protobuf::Metadata GetTravelPassStateRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetTravelPassStateResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+GetTravelPassStateResponse::GetTravelPassStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetTravelPassStateResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:GetTravelPassStateResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetTravelPassStateResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::GetTravelPassStateResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+GetTravelPassStateResponse::GetTravelPassStateResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetTravelPassStateResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetTravelPassStateResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetTravelPassStateResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:GetTravelPassStateResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetTravelPassStateResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetTravelPassStateResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, snapshot_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::snapshot_));
+}
+GetTravelPassStateResponse::~GetTravelPassStateResponse() {
+  // @@protoc_insertion_point(destructor:GetTravelPassStateResponse)
+  SharedDtor(*this);
+}
+inline void GetTravelPassStateResponse::SharedDtor(MessageLite& self) {
+  GetTravelPassStateResponse& this_ = static_cast<GetTravelPassStateResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.snapshot_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetTravelPassStateResponse_class_data_ =
+        GetTravelPassStateResponse::InternalGenerateClassData_(GetTravelPassStateResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetTravelPassStateResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetTravelPassStateResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetTravelPassStateResponse_class_data_.tc_table);
+  return GetTravelPassStateResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetTravelPassStateResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetTravelPassStateResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetTravelPassStateResponse_globals_));
+  return GetTravelPassStateResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetTravelPassStateResponse::ParseTableT_
+    GetTravelPassStateResponse::_table_ =
+        GetTravelPassStateResponse::InternalGenerateParseTable_(GetTravelPassStateResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetTravelPassStateResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:GetTravelPassStateResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.snapshot_ != nullptr);
+      _impl_.snapshot_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetTravelPassStateResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetTravelPassStateResponse& this_ = static_cast<const GetTravelPassStateResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetTravelPassStateResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetTravelPassStateResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:GetTravelPassStateResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .TravelPassSnapshot snapshot = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.snapshot_, this_._impl_.snapshot_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:GetTravelPassStateResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetTravelPassStateResponse::ByteSizeLong(const MessageLite& base) {
+  const GetTravelPassStateResponse& this_ = static_cast<const GetTravelPassStateResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetTravelPassStateResponse::ByteSizeLong() const {
+  const GetTravelPassStateResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:GetTravelPassStateResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .TravelPassSnapshot snapshot = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetTravelPassStateResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetTravelPassStateResponse*>(&to_msg);
+  auto& from = static_cast<const GetTravelPassStateResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:GetTravelPassStateResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.snapshot_ != nullptr);
+      if (_this->_impl_.snapshot_ == nullptr) {
+        _this->_impl_.snapshot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_);
+      } else {
+        _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetTravelPassStateResponse::CopyFrom(const GetTravelPassStateResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:GetTravelPassStateResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetTravelPassStateResponse::InternalSwap(GetTravelPassStateResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_.snapshot_)
+      + sizeof(GetTravelPassStateResponse::_impl_.snapshot_)
+      - PROTOBUF_FIELD_OFFSET(GetTravelPassStateResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetTravelPassStateResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UnlockTravelPassPremiumRequest::UnlockTravelPassPremiumRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockTravelPassPremiumRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:UnlockTravelPassPremiumRequest)
+}
+UnlockTravelPassPremiumRequest::UnlockTravelPassPremiumRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnlockTravelPassPremiumRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockTravelPassPremiumRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UnlockTravelPassPremiumRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnlockTravelPassPremiumRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           0,
+           offsetof(Impl_, expected_config_revision_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::expected_config_revision_));
+}
+UnlockTravelPassPremiumRequest::~UnlockTravelPassPremiumRequest() {
+  // @@protoc_insertion_point(destructor:UnlockTravelPassPremiumRequest)
+  SharedDtor(*this);
+}
+inline void UnlockTravelPassPremiumRequest::SharedDtor(MessageLite& self) {
+  UnlockTravelPassPremiumRequest& this_ = static_cast<UnlockTravelPassPremiumRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnlockTravelPassPremiumRequest_class_data_ =
+        UnlockTravelPassPremiumRequest::InternalGenerateClassData_(UnlockTravelPassPremiumRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockTravelPassPremiumRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockTravelPassPremiumRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnlockTravelPassPremiumRequest_class_data_.tc_table);
+  return UnlockTravelPassPremiumRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockTravelPassPremiumRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockTravelPassPremiumRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnlockTravelPassPremiumRequest_globals_));
+  return UnlockTravelPassPremiumRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnlockTravelPassPremiumRequest::ParseTableT_
+    UnlockTravelPassPremiumRequest::_table_ =
+        UnlockTravelPassPremiumRequest::InternalGenerateParseTable_(UnlockTravelPassPremiumRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnlockTravelPassPremiumRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:UnlockTravelPassPremiumRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.expected_config_revision_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.expected_config_revision_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnlockTravelPassPremiumRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnlockTravelPassPremiumRequest& this_ = static_cast<const UnlockTravelPassPremiumRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnlockTravelPassPremiumRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnlockTravelPassPremiumRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:UnlockTravelPassPremiumRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 client_request_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // uint32 pass_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_pass_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_pass_id(), target);
+    }
+  }
+
+  // uint32 expected_currency_type = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_expected_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_expected_currency_type(), target);
+    }
+  }
+
+  // uint64 expected_price = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_expected_price() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_expected_price(), target);
+    }
+  }
+
+  // uint32 expected_config_revision = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_expected_config_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_expected_config_revision(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:UnlockTravelPassPremiumRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnlockTravelPassPremiumRequest::ByteSizeLong(const MessageLite& base) {
+  const UnlockTravelPassPremiumRequest& this_ = static_cast<const UnlockTravelPassPremiumRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnlockTravelPassPremiumRequest::ByteSizeLong() const {
+  const UnlockTravelPassPremiumRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:UnlockTravelPassPremiumRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // uint64 client_request_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint32 pass_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_pass_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pass_id());
+      }
+    }
+    // uint32 expected_currency_type = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_expected_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_expected_currency_type());
+      }
+    }
+    // uint64 expected_price = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_expected_price() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_price());
+      }
+    }
+    // uint32 expected_config_revision = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_expected_config_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_expected_config_revision());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnlockTravelPassPremiumRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnlockTravelPassPremiumRequest*>(&to_msg);
+  auto& from = static_cast<const UnlockTravelPassPremiumRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:UnlockTravelPassPremiumRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_pass_id() != 0) {
+        _this->_impl_.pass_id_ = from._impl_.pass_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_expected_currency_type() != 0) {
+        _this->_impl_.expected_currency_type_ = from._impl_.expected_currency_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_expected_price() != 0) {
+        _this->_impl_.expected_price_ = from._impl_.expected_price_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_expected_config_revision() != 0) {
+        _this->_impl_.expected_config_revision_ = from._impl_.expected_config_revision_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnlockTravelPassPremiumRequest::CopyFrom(const UnlockTravelPassPremiumRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:UnlockTravelPassPremiumRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnlockTravelPassPremiumRequest::InternalSwap(UnlockTravelPassPremiumRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.expected_config_revision_)
+      + sizeof(UnlockTravelPassPremiumRequest::_impl_.expected_config_revision_)
+      - PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumRequest, _impl_.client_request_id_)>(
+          reinterpret_cast<char*>(&_impl_.client_request_id_),
+          reinterpret_cast<char*>(&other->_impl_.client_request_id_));
+}
+
+::google::protobuf::Metadata UnlockTravelPassPremiumRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void UnlockTravelPassPremiumResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+UnlockTravelPassPremiumResponse::UnlockTravelPassPremiumResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockTravelPassPremiumResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:UnlockTravelPassPremiumResponse)
+}
+PROTOBUF_NDEBUG_INLINE UnlockTravelPassPremiumResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::UnlockTravelPassPremiumResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+UnlockTravelPassPremiumResponse::UnlockTravelPassPremiumResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const UnlockTravelPassPremiumResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockTravelPassPremiumResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  UnlockTravelPassPremiumResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
+                : nullptr;
+  _impl_.replayed_ = from._impl_.replayed_;
+
+  // @@protoc_insertion_point(copy_constructor:UnlockTravelPassPremiumResponse)
+}
+PROTOBUF_NDEBUG_INLINE UnlockTravelPassPremiumResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnlockTravelPassPremiumResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::replayed_));
+}
+UnlockTravelPassPremiumResponse::~UnlockTravelPassPremiumResponse() {
+  // @@protoc_insertion_point(destructor:UnlockTravelPassPremiumResponse)
+  SharedDtor(*this);
+}
+inline void UnlockTravelPassPremiumResponse::SharedDtor(MessageLite& self) {
+  UnlockTravelPassPremiumResponse& this_ = static_cast<UnlockTravelPassPremiumResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.snapshot_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnlockTravelPassPremiumResponse_class_data_ =
+        UnlockTravelPassPremiumResponse::InternalGenerateClassData_(UnlockTravelPassPremiumResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockTravelPassPremiumResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockTravelPassPremiumResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnlockTravelPassPremiumResponse_class_data_.tc_table);
+  return UnlockTravelPassPremiumResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockTravelPassPremiumResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockTravelPassPremiumResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnlockTravelPassPremiumResponse_globals_));
+  return UnlockTravelPassPremiumResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnlockTravelPassPremiumResponse::ParseTableT_
+    UnlockTravelPassPremiumResponse::_table_ =
+        UnlockTravelPassPremiumResponse::InternalGenerateParseTable_(UnlockTravelPassPremiumResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnlockTravelPassPremiumResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:UnlockTravelPassPremiumResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.snapshot_ != nullptr);
+      _impl_.snapshot_->Clear();
+    }
+  }
+  _impl_.replayed_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnlockTravelPassPremiumResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnlockTravelPassPremiumResponse& this_ = static_cast<const UnlockTravelPassPremiumResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnlockTravelPassPremiumResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnlockTravelPassPremiumResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:UnlockTravelPassPremiumResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .TravelPassSnapshot snapshot = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.snapshot_, this_._impl_.snapshot_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:UnlockTravelPassPremiumResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnlockTravelPassPremiumResponse::ByteSizeLong(const MessageLite& base) {
+  const UnlockTravelPassPremiumResponse& this_ = static_cast<const UnlockTravelPassPremiumResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnlockTravelPassPremiumResponse::ByteSizeLong() const {
+  const UnlockTravelPassPremiumResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:UnlockTravelPassPremiumResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .TravelPassSnapshot snapshot = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnlockTravelPassPremiumResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnlockTravelPassPremiumResponse*>(&to_msg);
+  auto& from = static_cast<const UnlockTravelPassPremiumResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:UnlockTravelPassPremiumResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.snapshot_ != nullptr);
+      if (_this->_impl_.snapshot_ == nullptr) {
+        _this->_impl_.snapshot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_);
+      } else {
+        _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnlockTravelPassPremiumResponse::CopyFrom(const UnlockTravelPassPremiumResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:UnlockTravelPassPremiumResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnlockTravelPassPremiumResponse::InternalSwap(UnlockTravelPassPremiumResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.replayed_)
+      + sizeof(UnlockTravelPassPremiumResponse::_impl_.replayed_)
+      - PROTOBUF_FIELD_OFFSET(UnlockTravelPassPremiumResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata UnlockTravelPassPremiumResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimTravelPassRewardRequest::ClaimTravelPassRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTravelPassRewardRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ClaimTravelPassRewardRequest)
+}
+ClaimTravelPassRewardRequest::ClaimTravelPassRewardRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimTravelPassRewardRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTravelPassRewardRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ClaimTravelPassRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimTravelPassRewardRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           0,
+           offsetof(Impl_, premium_track_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::premium_track_));
+}
+ClaimTravelPassRewardRequest::~ClaimTravelPassRewardRequest() {
+  // @@protoc_insertion_point(destructor:ClaimTravelPassRewardRequest)
+  SharedDtor(*this);
+}
+inline void ClaimTravelPassRewardRequest::SharedDtor(MessageLite& self) {
+  ClaimTravelPassRewardRequest& this_ = static_cast<ClaimTravelPassRewardRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimTravelPassRewardRequest_class_data_ =
+        ClaimTravelPassRewardRequest::InternalGenerateClassData_(ClaimTravelPassRewardRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTravelPassRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTravelPassRewardRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimTravelPassRewardRequest_class_data_.tc_table);
+  return ClaimTravelPassRewardRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTravelPassRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTravelPassRewardRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimTravelPassRewardRequest_globals_));
+  return ClaimTravelPassRewardRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimTravelPassRewardRequest::ParseTableT_
+    ClaimTravelPassRewardRequest::_table_ =
+        ClaimTravelPassRewardRequest::InternalGenerateParseTable_(ClaimTravelPassRewardRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimTravelPassRewardRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:ClaimTravelPassRewardRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.premium_track_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.premium_track_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimTravelPassRewardRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimTravelPassRewardRequest& this_ = static_cast<const ClaimTravelPassRewardRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimTravelPassRewardRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimTravelPassRewardRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ClaimTravelPassRewardRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 client_request_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // uint32 pass_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_pass_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_pass_id(), target);
+    }
+  }
+
+  // uint32 tier_index = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_tier_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_tier_index(), target);
+    }
+  }
+
+  // bool premium_track = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_premium_track() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_premium_track(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ClaimTravelPassRewardRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimTravelPassRewardRequest::ByteSizeLong(const MessageLite& base) {
+  const ClaimTravelPassRewardRequest& this_ = static_cast<const ClaimTravelPassRewardRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimTravelPassRewardRequest::ByteSizeLong() const {
+  const ClaimTravelPassRewardRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ClaimTravelPassRewardRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 client_request_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint32 pass_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_pass_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pass_id());
+      }
+    }
+    // uint32 tier_index = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_tier_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tier_index());
+      }
+    }
+    // bool premium_track = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_premium_track() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimTravelPassRewardRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimTravelPassRewardRequest*>(&to_msg);
+  auto& from = static_cast<const ClaimTravelPassRewardRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:ClaimTravelPassRewardRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_pass_id() != 0) {
+        _this->_impl_.pass_id_ = from._impl_.pass_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_tier_index() != 0) {
+        _this->_impl_.tier_index_ = from._impl_.tier_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_premium_track() != 0) {
+        _this->_impl_.premium_track_ = from._impl_.premium_track_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimTravelPassRewardRequest::CopyFrom(const ClaimTravelPassRewardRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ClaimTravelPassRewardRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimTravelPassRewardRequest::InternalSwap(ClaimTravelPassRewardRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.premium_track_)
+      + sizeof(ClaimTravelPassRewardRequest::_impl_.premium_track_)
+      - PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardRequest, _impl_.client_request_id_)>(
+          reinterpret_cast<char*>(&_impl_.client_request_id_),
+          reinterpret_cast<char*>(&other->_impl_.client_request_id_));
+}
+
+::google::protobuf::Metadata ClaimTravelPassRewardRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ClaimTravelPassRewardResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+void ClaimTravelPassRewardResponse::clear_bag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bag_ != nullptr) _impl_.bag_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+ClaimTravelPassRewardResponse::ClaimTravelPassRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTravelPassRewardResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ClaimTravelPassRewardResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimTravelPassRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::ClaimTravelPassRewardResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ClaimTravelPassRewardResponse::ClaimTravelPassRewardResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimTravelPassRewardResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimTravelPassRewardResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimTravelPassRewardResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
+                : nullptr;
+  _impl_.bag_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, replayed_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, replayed_),
+           offsetof(Impl_, claimed_count_) -
+               offsetof(Impl_, replayed_) +
+               sizeof(Impl_::claimed_count_));
+
+  // @@protoc_insertion_point(copy_constructor:ClaimTravelPassRewardResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimTravelPassRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimTravelPassRewardResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, claimed_count_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::claimed_count_));
+}
+ClaimTravelPassRewardResponse::~ClaimTravelPassRewardResponse() {
+  // @@protoc_insertion_point(destructor:ClaimTravelPassRewardResponse)
+  SharedDtor(*this);
+}
+inline void ClaimTravelPassRewardResponse::SharedDtor(MessageLite& self) {
+  ClaimTravelPassRewardResponse& this_ = static_cast<ClaimTravelPassRewardResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.snapshot_;
+  delete this_._impl_.bag_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimTravelPassRewardResponse_class_data_ =
+        ClaimTravelPassRewardResponse::InternalGenerateClassData_(ClaimTravelPassRewardResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTravelPassRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTravelPassRewardResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimTravelPassRewardResponse_class_data_.tc_table);
+  return ClaimTravelPassRewardResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimTravelPassRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimTravelPassRewardResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimTravelPassRewardResponse_globals_));
+  return ClaimTravelPassRewardResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimTravelPassRewardResponse::ParseTableT_
+    ClaimTravelPassRewardResponse::_table_ =
+        ClaimTravelPassRewardResponse::InternalGenerateParseTable_(ClaimTravelPassRewardResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimTravelPassRewardResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:ClaimTravelPassRewardResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.snapshot_ != nullptr);
+      _impl_.snapshot_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.bag_ != nullptr);
+      _impl_.bag_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.replayed_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.claimed_count_) -
+        reinterpret_cast<char*>(&_impl_.replayed_)) + sizeof(_impl_.claimed_count_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimTravelPassRewardResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimTravelPassRewardResponse& this_ = static_cast<const ClaimTravelPassRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimTravelPassRewardResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimTravelPassRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ClaimTravelPassRewardResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .TravelPassSnapshot snapshot = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.snapshot_, this_._impl_.snapshot_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .BagInfo bag = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.bag_, this_._impl_.bag_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool replayed = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint32 claimed_count = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_claimed_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_claimed_count(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ClaimTravelPassRewardResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimTravelPassRewardResponse::ByteSizeLong(const MessageLite& base) {
+  const ClaimTravelPassRewardResponse& this_ = static_cast<const ClaimTravelPassRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimTravelPassRewardResponse::ByteSizeLong() const {
+  const ClaimTravelPassRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ClaimTravelPassRewardResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .TravelPassSnapshot snapshot = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+    // .BagInfo bag = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.bag_);
+    }
+    // bool replayed = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 claimed_count = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_claimed_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_claimed_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimTravelPassRewardResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimTravelPassRewardResponse*>(&to_msg);
+  auto& from = static_cast<const ClaimTravelPassRewardResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:ClaimTravelPassRewardResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.snapshot_ != nullptr);
+      if (_this->_impl_.snapshot_ == nullptr) {
+        _this->_impl_.snapshot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_);
+      } else {
+        _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.bag_ != nullptr);
+      if (_this->_impl_.bag_ == nullptr) {
+        _this->_impl_.bag_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_);
+      } else {
+        _this->_impl_.bag_->MergeFrom(*from._impl_.bag_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_claimed_count() != 0) {
+        _this->_impl_.claimed_count_ = from._impl_.claimed_count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimTravelPassRewardResponse::CopyFrom(const ClaimTravelPassRewardResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ClaimTravelPassRewardResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimTravelPassRewardResponse::InternalSwap(ClaimTravelPassRewardResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.claimed_count_)
+      + sizeof(ClaimTravelPassRewardResponse::_impl_.claimed_count_)
+      - PROTOBUF_FIELD_OFFSET(ClaimTravelPassRewardResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata ClaimTravelPassRewardResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+EquipTravelPassCosmeticRequest::EquipTravelPassCosmeticRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipTravelPassCosmeticRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:EquipTravelPassCosmeticRequest)
+}
+PROTOBUF_NDEBUG_INLINE EquipTravelPassCosmeticRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::EquipTravelPassCosmeticRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        cosmetic_key_(arena, from.cosmetic_key_) {}
+
+EquipTravelPassCosmeticRequest::EquipTravelPassCosmeticRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EquipTravelPassCosmeticRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipTravelPassCosmeticRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EquipTravelPassCosmeticRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.cosmetic_slot_ = from._impl_.cosmetic_slot_;
+
+  // @@protoc_insertion_point(copy_constructor:EquipTravelPassCosmeticRequest)
+}
+PROTOBUF_NDEBUG_INLINE EquipTravelPassCosmeticRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        cosmetic_key_(arena) {}
+
+inline void EquipTravelPassCosmeticRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.cosmetic_slot_ = {};
+}
+EquipTravelPassCosmeticRequest::~EquipTravelPassCosmeticRequest() {
+  // @@protoc_insertion_point(destructor:EquipTravelPassCosmeticRequest)
+  SharedDtor(*this);
+}
+inline void EquipTravelPassCosmeticRequest::SharedDtor(MessageLite& self) {
+  EquipTravelPassCosmeticRequest& this_ = static_cast<EquipTravelPassCosmeticRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.cosmetic_key_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EquipTravelPassCosmeticRequest_class_data_ =
+        EquipTravelPassCosmeticRequest::InternalGenerateClassData_(EquipTravelPassCosmeticRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipTravelPassCosmeticRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipTravelPassCosmeticRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EquipTravelPassCosmeticRequest_class_data_.tc_table);
+  return EquipTravelPassCosmeticRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipTravelPassCosmeticRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipTravelPassCosmeticRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EquipTravelPassCosmeticRequest_globals_));
+  return EquipTravelPassCosmeticRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipTravelPassCosmeticRequest::ParseTableT_
+    EquipTravelPassCosmeticRequest::_table_ =
+        EquipTravelPassCosmeticRequest::InternalGenerateParseTable_(EquipTravelPassCosmeticRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EquipTravelPassCosmeticRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:EquipTravelPassCosmeticRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.cosmetic_key_.ClearNonDefaultToEmpty();
+  }
+  _impl_.cosmetic_slot_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EquipTravelPassCosmeticRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EquipTravelPassCosmeticRequest& this_ = static_cast<const EquipTravelPassCosmeticRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EquipTravelPassCosmeticRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EquipTravelPassCosmeticRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:EquipTravelPassCosmeticRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 cosmetic_slot = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_cosmetic_slot() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_cosmetic_slot(), target);
+    }
+  }
+
+  // string cosmetic_key = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_cosmetic_key().empty()) {
+      const ::std::string& _s = this_._internal_cosmetic_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipTravelPassCosmeticRequest.cosmetic_key");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:EquipTravelPassCosmeticRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EquipTravelPassCosmeticRequest::ByteSizeLong(const MessageLite& base) {
+  const EquipTravelPassCosmeticRequest& this_ = static_cast<const EquipTravelPassCosmeticRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EquipTravelPassCosmeticRequest::ByteSizeLong() const {
+  const EquipTravelPassCosmeticRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:EquipTravelPassCosmeticRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string cosmetic_key = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_cosmetic_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_cosmetic_key());
+      }
+    }
+    // uint32 cosmetic_slot = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_cosmetic_slot() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_cosmetic_slot());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EquipTravelPassCosmeticRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EquipTravelPassCosmeticRequest*>(&to_msg);
+  auto& from = static_cast<const EquipTravelPassCosmeticRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:EquipTravelPassCosmeticRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_cosmetic_key().empty()) {
+        _this->_internal_set_cosmetic_key(from._internal_cosmetic_key());
+      } else {
+        if (_this->_impl_.cosmetic_key_.IsDefault()) {
+          _this->_internal_set_cosmetic_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_cosmetic_slot() != 0) {
+        _this->_impl_.cosmetic_slot_ = from._impl_.cosmetic_slot_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EquipTravelPassCosmeticRequest::CopyFrom(const EquipTravelPassCosmeticRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:EquipTravelPassCosmeticRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EquipTravelPassCosmeticRequest::InternalSwap(EquipTravelPassCosmeticRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.cosmetic_key_, &other->_impl_.cosmetic_key_, arena);
+  swap(_impl_.cosmetic_slot_, other->_impl_.cosmetic_slot_);
+}
+
+::google::protobuf::Metadata EquipTravelPassCosmeticRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void EquipTravelPassCosmeticResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+EquipTravelPassCosmeticResponse::EquipTravelPassCosmeticResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipTravelPassCosmeticResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:EquipTravelPassCosmeticResponse)
+}
+PROTOBUF_NDEBUG_INLINE EquipTravelPassCosmeticResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::EquipTravelPassCosmeticResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+EquipTravelPassCosmeticResponse::EquipTravelPassCosmeticResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EquipTravelPassCosmeticResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipTravelPassCosmeticResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EquipTravelPassCosmeticResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:EquipTravelPassCosmeticResponse)
+}
+PROTOBUF_NDEBUG_INLINE EquipTravelPassCosmeticResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void EquipTravelPassCosmeticResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, snapshot_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::snapshot_));
+}
+EquipTravelPassCosmeticResponse::~EquipTravelPassCosmeticResponse() {
+  // @@protoc_insertion_point(destructor:EquipTravelPassCosmeticResponse)
+  SharedDtor(*this);
+}
+inline void EquipTravelPassCosmeticResponse::SharedDtor(MessageLite& self) {
+  EquipTravelPassCosmeticResponse& this_ = static_cast<EquipTravelPassCosmeticResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.snapshot_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EquipTravelPassCosmeticResponse_class_data_ =
+        EquipTravelPassCosmeticResponse::InternalGenerateClassData_(EquipTravelPassCosmeticResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipTravelPassCosmeticResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipTravelPassCosmeticResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EquipTravelPassCosmeticResponse_class_data_.tc_table);
+  return EquipTravelPassCosmeticResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipTravelPassCosmeticResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipTravelPassCosmeticResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EquipTravelPassCosmeticResponse_globals_));
+  return EquipTravelPassCosmeticResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipTravelPassCosmeticResponse::ParseTableT_
+    EquipTravelPassCosmeticResponse::_table_ =
+        EquipTravelPassCosmeticResponse::InternalGenerateParseTable_(EquipTravelPassCosmeticResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EquipTravelPassCosmeticResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:EquipTravelPassCosmeticResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.snapshot_ != nullptr);
+      _impl_.snapshot_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EquipTravelPassCosmeticResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EquipTravelPassCosmeticResponse& this_ = static_cast<const EquipTravelPassCosmeticResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EquipTravelPassCosmeticResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EquipTravelPassCosmeticResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:EquipTravelPassCosmeticResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .TravelPassSnapshot snapshot = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.snapshot_, this_._impl_.snapshot_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:EquipTravelPassCosmeticResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EquipTravelPassCosmeticResponse::ByteSizeLong(const MessageLite& base) {
+  const EquipTravelPassCosmeticResponse& this_ = static_cast<const EquipTravelPassCosmeticResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EquipTravelPassCosmeticResponse::ByteSizeLong() const {
+  const EquipTravelPassCosmeticResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:EquipTravelPassCosmeticResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .TravelPassSnapshot snapshot = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EquipTravelPassCosmeticResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EquipTravelPassCosmeticResponse*>(&to_msg);
+  auto& from = static_cast<const EquipTravelPassCosmeticResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:EquipTravelPassCosmeticResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.snapshot_ != nullptr);
+      if (_this->_impl_.snapshot_ == nullptr) {
+        _this->_impl_.snapshot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_);
+      } else {
+        _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EquipTravelPassCosmeticResponse::CopyFrom(const EquipTravelPassCosmeticResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:EquipTravelPassCosmeticResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EquipTravelPassCosmeticResponse::InternalSwap(EquipTravelPassCosmeticResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_.snapshot_)
+      + sizeof(EquipTravelPassCosmeticResponse::_impl_.snapshot_)
+      - PROTOBUF_FIELD_OFFSET(EquipTravelPassCosmeticResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata EquipTravelPassCosmeticResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL SceneActivityClientPlayer::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5factivity_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fplayer_5factivity_2eproto[0];
@@ -11196,6 +17448,34 @@ void SceneActivityClientPlayer::ClaimFestivalBeastReward(::google::protobuf::Rpc
   controller->SetFailed("Method ClaimFestivalBeastReward() not implemented.");
   done->Run();
 }
+void SceneActivityClientPlayer::GetTravelPassState(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::GetTravelPassStateRequest* PROTOBUF_NONNULL,
+                         ::GetTravelPassStateResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method GetTravelPassState() not implemented.");
+  done->Run();
+}
+void SceneActivityClientPlayer::UnlockTravelPassPremium(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::UnlockTravelPassPremiumRequest* PROTOBUF_NONNULL,
+                         ::UnlockTravelPassPremiumResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method UnlockTravelPassPremium() not implemented.");
+  done->Run();
+}
+void SceneActivityClientPlayer::ClaimTravelPassReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::ClaimTravelPassRewardRequest* PROTOBUF_NONNULL,
+                         ::ClaimTravelPassRewardResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method ClaimTravelPassReward() not implemented.");
+  done->Run();
+}
+void SceneActivityClientPlayer::EquipTravelPassCosmetic(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::EquipTravelPassCosmeticRequest* PROTOBUF_NONNULL,
+                         ::EquipTravelPassCosmeticResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method EquipTravelPassCosmetic() not implemented.");
+  done->Run();
+}
 
 void SceneActivityClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -11224,6 +17504,22 @@ void SceneActivityClientPlayer::CallMethod(
       this->ClaimFestivalBeastReward(controller, ::google::protobuf::DownCastMessage<::ClaimFestivalBeastRewardRequest>(request),
                    ::google::protobuf::DownCastMessage<::ClaimFestivalBeastRewardResponse>(response), done);
       break;
+    case 5:
+      this->GetTravelPassState(controller, ::google::protobuf::DownCastMessage<::GetTravelPassStateRequest>(request),
+                   ::google::protobuf::DownCastMessage<::GetTravelPassStateResponse>(response), done);
+      break;
+    case 6:
+      this->UnlockTravelPassPremium(controller, ::google::protobuf::DownCastMessage<::UnlockTravelPassPremiumRequest>(request),
+                   ::google::protobuf::DownCastMessage<::UnlockTravelPassPremiumResponse>(response), done);
+      break;
+    case 7:
+      this->ClaimTravelPassReward(controller, ::google::protobuf::DownCastMessage<::ClaimTravelPassRewardRequest>(request),
+                   ::google::protobuf::DownCastMessage<::ClaimTravelPassRewardResponse>(response), done);
+      break;
+    case 8:
+      this->EquipTravelPassCosmetic(controller, ::google::protobuf::DownCastMessage<::EquipTravelPassCosmeticRequest>(request),
+                   ::google::protobuf::DownCastMessage<::EquipTravelPassCosmeticResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -11245,6 +17541,14 @@ const ::google::protobuf::Message& SceneActivityClientPlayer::GetRequestPrototyp
       return ::StartFestivalBeastChallengeRequest::default_instance();
     case 4:
       return ::ClaimFestivalBeastRewardRequest::default_instance();
+    case 5:
+      return ::GetTravelPassStateRequest::default_instance();
+    case 6:
+      return ::UnlockTravelPassPremiumRequest::default_instance();
+    case 7:
+      return ::ClaimTravelPassRewardRequest::default_instance();
+    case 8:
+      return ::EquipTravelPassCosmeticRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -11267,6 +17571,14 @@ const ::google::protobuf::Message& SceneActivityClientPlayer::GetResponsePrototy
       return ::StartFestivalBeastChallengeResponse::default_instance();
     case 4:
       return ::ClaimFestivalBeastRewardResponse::default_instance();
+    case 5:
+      return ::GetTravelPassStateResponse::default_instance();
+    case 6:
+      return ::UnlockTravelPassPremiumResponse::default_instance();
+    case 7:
+      return ::ClaimTravelPassRewardResponse::default_instance();
+    case 8:
+      return ::EquipTravelPassCosmeticResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -11321,6 +17633,34 @@ void SceneActivityClientPlayer_Stub::ClaimFestivalBeastReward(
     const ::ClaimFestivalBeastRewardRequest* PROTOBUF_NONNULL request, ::ClaimFestivalBeastRewardResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(4), controller,
+                       request, response, done);
+}
+void SceneActivityClientPlayer_Stub::GetTravelPassState(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::GetTravelPassStateRequest* PROTOBUF_NONNULL request, ::GetTravelPassStateResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(5), controller,
+                       request, response, done);
+}
+void SceneActivityClientPlayer_Stub::UnlockTravelPassPremium(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::UnlockTravelPassPremiumRequest* PROTOBUF_NONNULL request, ::UnlockTravelPassPremiumResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(6), controller,
+                       request, response, done);
+}
+void SceneActivityClientPlayer_Stub::ClaimTravelPassReward(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::ClaimTravelPassRewardRequest* PROTOBUF_NONNULL request, ::ClaimTravelPassRewardResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(7), controller,
+                       request, response, done);
+}
+void SceneActivityClientPlayer_Stub::EquipTravelPassCosmetic(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::EquipTravelPassCosmeticRequest* PROTOBUF_NONNULL request, ::EquipTravelPassCosmeticResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(8), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

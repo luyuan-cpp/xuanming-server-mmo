@@ -1,5 +1,7 @@
 # 宝宝(宠物)系统 —— 核心线
 
+> **[2026-11-25 权威口径收口]** 本稿保留宝宝基础数据结构、四维资质推导与普通商店/野外捕捉的落地记录；以下两项后续已正式演进，请勿沿用旧述：① **宝宝战内已支持玩家按「攻击 / 障碍 / 辅助」三分类手动选招（每回合 1 招），并已扩展 3 套免费条目预设与五阶升阶（条目点 20→28 点）**，详见 [skill-planning/combat-rules.md](../planning/skill-planning/combat-rules.md) 与 [battle-skill-and-pet-cultivation-expansion.md](../planning/battle-skill-and-pet-cultivation-expansion.md)；② **已按 [project-vision.md](../planning/project-vision.md) 彻底废止“神兽充值抽奖”口径**，神兽（如春禧兽 `Pet.id = 101`）走免费定向活动领取与专属赠送容量（见 [battle-festival-beast-implementation-contract.md](../planning/battle-festival-beast-implementation-contract.md)）。
+
 > 核心线落地日期:2026-09-09；2026-11-16 已补齐普通商店与野外捕捉，并通过本机 Docker 严格获取冒烟。
 > §9 保留原始交接清单，当前实现与实际验证边界见 §10、§11。实现分布:
 > `proto/common/component/player_pet_comp.proto`、`proto/scene/player_pet.proto`、
@@ -114,7 +116,7 @@ AutoAllocate)现在都过 `IsPlayerPool()`,拿到宝宝池一律按"池不存在
     (`metric=allocation_reset_free_ineffective`),列表 `reset_cost_gold` 与实际扣费同一个函数;
   - 旧上限 / 新上限都按生效值算,从不生效状态洗点 HP/MP 不变;
   - `kLoad` 时对不生效 / 带未知键的宝宝各打一条 WARN(`metric=allocation_not_effective`),不写数据。
-  用例:`player_feature_handler_test.cpp` 的 `PetAllocationTest`(未编译,待 Codex 验证)。
+  用例:`player_feature_handler_test.cpp` 的 `PetAllocationTest`(未编译,待 Gemini 验证)。
 
 ## 4. 协议(`proto/scene/player_pet.proto`,service `ScenePetClientPlayer`)
 
@@ -232,7 +234,7 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 ## 8. 已知缺口 / 二期
 
 1. **普通获取渠道已接入（2026-11-15）**：银两商店及开放模板内的野外捕捉见文末。
-   变异令牌兑换和神兽充值抽奖的名单、数量与概率尚未制定，当前只预留分类并关闭发放。
+   变异令牌兑换的名单与数量尚未制定，当前只预留分类并关闭普通商店/捕捉发放；**2026-11-25 已正式废止旧版“神兽充值抽奖”预留**，神兽改为免费定向活动取得（如「瑞兽迎春」，详见 [battle-festival-beast-implementation-contract.md](../planning/battle-festival-beast-implementation-contract.md)）。
    以下为此前 GM 入口的收口记录：
    ~~**`GmGrantPet` 今天没有任何鉴权**,任何客户端都能自助发宝宝~~
    **2026-09-18 已收口(未编译)**:gate 侧有了「按消息号的 GM 白名单」
@@ -241,7 +243,7 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
    (`player_gm_guard.h`,判据 `SCENE_RUN_MODE`)。默认(未设置)= prod = 关闭,
    部署链从不注入这两个变量。见 `cpp/nodes/gate/SECURITY.md` §3。
    **注意这是"关掉",不是"给 GM 发宝宝做了鉴权"**；新普通渠道不依赖该 GM 开关。
-2. **宝宝不可指挥**:见 §5。
+2. ~~**宝宝不可指挥**:见 §5。~~（**已演进**：后续战斗引擎已实现宝宝按攻击/障碍/辅助三分类手动选招、每回合 1 招，并已支持 3 免费条目预设与五阶升阶，详见 [skill-planning/combat-rules.md](../planning/skill-planning/combat-rules.md) 与 [battle-skill-and-pet-cultivation-expansion.md](../planning/battle-skill-and-pet-cultivation-expansion.md)。）
 3. **宝宝没有服务器权威位置**:召唤只是一个状态位 + 下发给客户端,场景里不生 AOI 实体,
    跟随表现由各自客户端推算。别的玩家看到的宝宝位置因此不是权威的。
 4. **合宠 / 洗资质 / 洗成长 / 放生 / 技能书**:全部未做。资质字段已经就位,洗资质接上去
@@ -300,7 +302,7 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 
 ### 10.1 商店、档次与持久回执
 
-宝宝面板的「商店」读取服务端商品、价格、当前银两与最低携带等级。所有现有 22 种暂按普通宠物配置；`Pet.acquisition_tier` 的 0/1/2 分别表示普通/变异/神兽，独立于已有 `quality`。首版银两售价为 `1000 × quality × unlock_level`，由 `shop_price_gold` 控制，0 表示停售。变异令牌兑换、神兽充值抽奖的分类、令牌数量、充值额度和概率尚未制定，两类均拒绝普通商店与野外捕捉，未实现付费抽奖发放。
+宝宝面板的「商店」读取服务端商品、价格、当前银两与最低携带等级。所有现有 22 种暂按普通宠物配置；`Pet.acquisition_tier` 的 0/1/2 分别表示普通/变异/神兽，独立于已有 `quality`。首版银两售价为 `1000 × quality × unlock_level`，由 `shop_price_gold` 控制，0 表示停售。变异与神兽均拒绝普通商店与野外捕捉；旧稿预留的“神兽充值抽奖”已按 [project-vision.md](../planning/project-vision.md) 废止，神兽改为免费定向活动渠道（如 [battle-festival-beast-implementation-contract.md](../planning/battle-festival-beast-implementation-contract.md) 的春禧兽）。
 
 `BuyPet` 携带服务端下发的单调 `purchase_sequence`、种类和原报价 `price_gold`。最近成功的序号、种类、实例 ID、价格（`PlayerPetComp` 字段 3–6；Java 私有 `PetState` 对应字段）与银两、宠物一同持久化。原号原参数重试返回原实例；更旧序号、同号改参数或新购买报价不符时拒绝，不重复扣款或发放。Unity 超时、断线及刷新后保留待确认的原购买请求，重试不用新序号。
 

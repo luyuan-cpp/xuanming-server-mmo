@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "243c1949baf529dc";
+    public static final String SCHEMA_DIGEST = "55d900397a301fa1";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -34,6 +34,10 @@ public class TableLoader {
             "Skill",
             "SkillPermission",
             "SkillScrollCraft",
+            "SpiritShopGoods",
+            "SpiritShopLimitGroup",
+            "TravelPassSeason",
+            "TravelPassTier",
             "TrialJournalEntry",
             "TrialJournalMilestone",
             "TrialJournalSeal"
@@ -151,6 +155,8 @@ public class TableLoader {
 
         PetTableManager.getInstance().load(configDir, useBinary);
 
+        PetCosmeticTableManager.getInstance().load(configDir, useBinary);
+
         PetEntryTableManager.getInstance().load(configDir, useBinary);
 
         PetRuleTableManager.getInstance().load(configDir, useBinary);
@@ -177,6 +183,12 @@ public class TableLoader {
 
         SkillScrollCraftTableManager.getInstance().load(configDir, useBinary);
 
+        SkillVfxCosmeticTableManager.getInstance().load(configDir, useBinary);
+
+        SpiritShopGoodsTableManager.getInstance().load(configDir, useBinary);
+
+        SpiritShopLimitGroupTableManager.getInstance().load(configDir, useBinary);
+
         TestTableManager.getInstance().load(configDir, useBinary);
 
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
@@ -184,6 +196,10 @@ public class TableLoader {
         TournamentRewardTableManager.getInstance().load(configDir, useBinary);
 
         TournamentRuleTableManager.getInstance().load(configDir, useBinary);
+
+        TravelPassSeasonTableManager.getInstance().load(configDir, useBinary);
+
+        TravelPassTierTableManager.getInstance().load(configDir, useBinary);
 
         TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
 
@@ -210,7 +226,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(72);
+        CountDownLatch latch = new CountDownLatch(78);
 
         new Thread(() -> {
             try {
@@ -714,6 +730,16 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                PetCosmeticTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load PetCosmetic table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 PetEntryTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load PetEntry table", e);
@@ -844,6 +870,36 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                SkillVfxCosmeticTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load SkillVfxCosmetic table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                SpiritShopGoodsTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load SpiritShopGoods table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                SpiritShopLimitGroupTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load SpiritShopLimitGroup table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 TestTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Test table", e);
@@ -877,6 +933,26 @@ public class TableLoader {
                 TournamentRuleTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load TournamentRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                TravelPassSeasonTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TravelPassSeason table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                TravelPassTierTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TravelPassTier table", e);
             } finally {
                 latch.countDown();
             }
@@ -1052,6 +1128,8 @@ public class TableLoader {
 
         PetTableManager.getInstance().load(configDir, useBinary);
 
+        PetCosmeticTableManager.getInstance().load(configDir, useBinary);
+
         PetEntryTableManager.getInstance().load(configDir, useBinary);
 
         PetRuleTableManager.getInstance().load(configDir, useBinary);
@@ -1078,6 +1156,12 @@ public class TableLoader {
 
         SkillScrollCraftTableManager.getInstance().load(configDir, useBinary);
 
+        SkillVfxCosmeticTableManager.getInstance().load(configDir, useBinary);
+
+        SpiritShopGoodsTableManager.getInstance().load(configDir, useBinary);
+
+        SpiritShopLimitGroupTableManager.getInstance().load(configDir, useBinary);
+
         TestTableManager.getInstance().load(configDir, useBinary);
 
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
@@ -1085,6 +1169,10 @@ public class TableLoader {
         TournamentRewardTableManager.getInstance().load(configDir, useBinary);
 
         TournamentRuleTableManager.getInstance().load(configDir, useBinary);
+
+        TravelPassSeasonTableManager.getInstance().load(configDir, useBinary);
+
+        TravelPassTierTableManager.getInstance().load(configDir, useBinary);
 
         TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
 

@@ -11,6 +11,7 @@
 // (全局作用域、无 package、无 dllexport_decl),所以这行是合法的重复声明。
 class TournamentRuleTable;
 class DungeonTable;
+class ItemTable;
 
 // ---------------------------------------------------------------------------
 // Foreign key helpers for TournamentRuleTable
@@ -22,6 +23,12 @@ const DungeonTable* GetTournamentRuleBattleConfigIdRow(const TournamentRuleTable
 /// Resolve TournamentRule.battle_config_id -> Dungeon row (by TournamentRule id).
 const DungeonTable* GetTournamentRuleBattleConfigIdRow(uint32_t tableId);
 
+/// Resolve TournamentRule.salute_item_id -> Item row.
+const ItemTable* GetTournamentRuleSaluteItemIdRow(const TournamentRuleTable& row);
+
+/// Resolve TournamentRule.salute_item_id -> Item row (by TournamentRule id).
+const ItemTable* GetTournamentRuleSaluteItemIdRow(uint32_t tableId);
+
 // ---------------------------------------------------------------------------
 // Reverse FK (HasMany): find source rows by FK column value
 // 只碰本表的 manager,不需要任何目标表的类型。
@@ -29,3 +36,6 @@ const DungeonTable* GetTournamentRuleBattleConfigIdRow(uint32_t tableId);
 
 /// Reverse FK: find all TournamentRule rows whose battle_config_id == key.
 const std::vector<const TournamentRuleTable*>& FindTournamentRuleRowsByBattleConfigId(uint32_t key);
+
+/// Reverse FK: find all TournamentRule rows whose salute_item_id == key.
+const std::vector<const TournamentRuleTable*>& FindTournamentRuleRowsBySaluteItemId(uint32_t key);

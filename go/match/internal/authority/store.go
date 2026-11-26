@@ -57,7 +57,7 @@ type Store struct {
 }
 
 const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision,ranked_context"
-const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared,outcome_protocol_version,preflight_supported_version,preflight_instance_id,adopted_outcome_protocol_version,adopted_outcome_observed,release_track,ranked_context,ranked_season_id"
+const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared,outcome_protocol_version,preflight_supported_version,preflight_instance_id,adopted_outcome_protocol_version,adopted_outcome_observed,release_track,ranked_context,ranked_season_id,tournament_context,custom_duel_rules,is_wuxing_tower"
 
 var ErrJoinCancelled = errors.New("匹配请求已经撤销")
 
@@ -675,8 +675,14 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 	if f.RankedContext == nil {
 		f.RankedContext = []byte{}
 	}
+	if f.TournamentContext == nil {
+		f.TournamentContext = []byte{}
+	}
+	if f.CustomDuelRules == nil {
+		f.CustomDuelRules = []byte{}
+	}
 	// release_track 是选点时按选中 battle 节点记下的轨道(发布轨道设计 §2.6),写入后不再改。
-	_, e = tx.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES("+strings.TrimSuffix(strings.Repeat("?,", 25), ",")+")", f.BattleId, f.OperationId, 1, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, mb, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, f.ActivityContext, f.RequeueOnFailure, []byte{}, uint32(0), uint32(0), "", uint32(0), false, f.ReleaseTrack, f.RankedContext, f.RankedSeasonId)
+	_, e = tx.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES("+strings.TrimSuffix(strings.Repeat("?,", 28), ",")+")", f.BattleId, f.OperationId, 1, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, mb, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, f.ActivityContext, f.RequeueOnFailure, []byte{}, uint32(0), uint32(0), "", uint32(0), false, f.ReleaseTrack, f.RankedContext, f.RankedSeasonId, f.TournamentContext, f.CustomDuelRules, f.IsWuxingTower)
 	if e != nil {
 		return e
 	}
@@ -790,7 +796,7 @@ func (s *Store) findDirectOnce(ctx context.Context, key *pb.MatchDirectIntentRec
 	}
 	defer tx.Rollback()
 	actor := originalPlayer(ctx, key.OwnerId)
-	if key.Kind != 2 {
+	if key.Kind != 2 && key.Kind != 6 {
 		if e = s.lockActor(ctx, tx, key.OwnerId); e != nil {
 			return nil, nil, e
 		}
@@ -883,14 +889,18 @@ func scanFormation(s scanner) (*pb.MatchFormationRecord, error) {
 	var members, prepared []byte
 	// release_track 是迁移补出来的 MEDIUMTEXT 列(proto2mysql 对非键 string 列不写默认值):补列之前写的行读出来是 NULL,按空串处理,即 stable。
 	var releaseTrack sql.NullString
-	var rankedCtx []byte
+	var rankedCtx, tournamentCtx, customDuelRules []byte
 	var rankedSeason sql.NullInt64
-	e := s.Scan(&f.BattleId, &f.OperationId, &f.State, &f.PhysicalRegion, &f.TargetNodeId, &f.TargetInstanceId, &f.TargetEndpoint, &f.Mode, &f.ConfigId, &members, &f.CreateRequest, &f.CreatedMs, &f.DeadlineMs, &f.RetryAtMs, &f.ActivityContext, &f.RequeueOnFailure, &prepared, &f.OutcomeProtocolVersion, &f.PreflightSupportedVersion, &f.PreflightInstanceId, &f.AdoptedOutcomeProtocolVersion, &f.AdoptedOutcomeObserved, &releaseTrack, &rankedCtx, &rankedSeason)
+	var isWuxingTower sql.NullBool
+	e := s.Scan(&f.BattleId, &f.OperationId, &f.State, &f.PhysicalRegion, &f.TargetNodeId, &f.TargetInstanceId, &f.TargetEndpoint, &f.Mode, &f.ConfigId, &members, &f.CreateRequest, &f.CreatedMs, &f.DeadlineMs, &f.RetryAtMs, &f.ActivityContext, &f.RequeueOnFailure, &prepared, &f.OutcomeProtocolVersion, &f.PreflightSupportedVersion, &f.PreflightInstanceId, &f.AdoptedOutcomeProtocolVersion, &f.AdoptedOutcomeObserved, &releaseTrack, &rankedCtx, &rankedSeason, &tournamentCtx, &customDuelRules, &isWuxingTower)
 	if e != nil {
 		return nil, e
 	}
 	f.ReleaseTrack = releaseTrack.String
 	f.RankedContext = rankedCtx
+	f.TournamentContext = tournamentCtx
+	f.CustomDuelRules = customDuelRules
+	f.IsWuxingTower = isWuxingTower.Valid && isWuxingTower.Bool
 	if rankedSeason.Valid && rankedSeason.Int64 > 0 {
 		f.RankedSeasonId = uint32(rankedSeason.Int64)
 	}

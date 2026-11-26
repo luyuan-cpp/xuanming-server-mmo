@@ -3,6 +3,7 @@ option go_package = "robot/proto/scene";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
+import "proto/scene/player_bag.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -35,6 +36,9 @@ enum PlayerActivityEntryKind {
   PLAYER_ACTIVITY_ENTRY_UNSPECIFIED = 0;
   PLAYER_ACTIVITY_ENTRY_MISSION = 1;
   PLAYER_ACTIVITY_ENTRY_FESTIVAL_BEAST = 2;
+  PLAYER_ACTIVITY_ENTRY_TRAVEL_PASS = 3;
+  PLAYER_ACTIVITY_ENTRY_APPEARANCE_SHOWCASE = 4;
+  PLAYER_ACTIVITY_ENTRY_SPIRIT_SHOP_SHOWCASE = 5;
 }
 
 message PlayerActivityRewardItem {
@@ -293,10 +297,128 @@ message ClaimFestivalBeastRewardResponse {
   uint64 claimed_at_ms = 10;
 }
 
+// ---- 游历手记（不肝不逼氪双轨活动）客户端契约（docs/design/activity-travel-pass-and-showcase-v1.md）----
+
+message TravelPassTierView {
+  uint32 tier_id = 1;
+  uint32 tier_index = 2;
+  uint32 required_points = 3;
+  bool reached = 4;
+  // 免费轨
+  uint32 free_item_id = 5;
+  uint32 free_item_count = 6;
+  string free_item_name = 7;
+  string free_item_icon_key = 8;
+  uint64 free_gold = 9;
+  string free_cosmetic_key = 10;
+  string free_cosmetic_name = 11;
+  bool free_claimed = 12;
+  bool free_can_claim = 13;
+  // 典藏进阶轨（全部物品强制 bound=true，0 战力上限突破）
+  uint32 premium_item_id = 14;
+  uint32 premium_item_count = 15;
+  string premium_item_name = 16;
+  string premium_item_icon_key = 17;
+  uint64 premium_gold = 18;
+  string premium_cosmetic_key = 19;
+  string premium_cosmetic_name = 20;
+  bool premium_claimed = 21;
+  bool premium_can_claim = 22;
+}
+
+message TravelPassSnapshot {
+  bool available = 1;
+  string unavailable_reason = 2;
+  uint64 server_now_ms = 3;
+  uint64 pass_revision = 4;
+  uint32 pass_id = 5;
+  uint32 config_revision = 6;
+  string name = 7;
+  string description = 8;
+  string icon_key = 9;
+  string banner_asset_key = 10;
+  uint64 starts_at_ms = 11;
+  uint64 ends_at_ms = 12;
+  bool open_for_progress = 13;
+  bool open_for_unlock = 14;
+  uint32 progress_points = 15;
+  uint32 max_points = 16;
+  uint32 pve_win_points = 17;
+  uint32 hard_or_pvp_win_points = 18;
+  uint32 pvp_qualified_other_points = 19;
+  bool premium_unlocked = 20;
+  uint64 premium_unlocked_at_ms = 21;
+  uint32 premium_currency_type = 22;
+  uint64 premium_price = 23;
+  uint64 diamond_balance = 24;
+  uint64 bind_diamond_balance = 25;
+  uint32 claimable_free_count = 26;
+  uint32 claimable_premium_count = 27;
+  // 若玩家当前立即解锁典藏轨，当下即可直接领取的典藏档位数量（先玩后买直观反馈）。
+  uint32 retroactive_premium_count = 28;
+  repeated TravelPassTierView tiers = 29;
+  repeated string unlocked_cosmetic_keys = 30;
+  string equipped_frame_key = 31;
+  string equipped_title_key = 32;
+}
+
+message GetTravelPassStateRequest {
+  // 0 表示查询当前生效期次（或优先返回已解锁但尚未领完的历史期次）。
+  uint32 pass_id = 1;
+}
+
+message GetTravelPassStateResponse {
+  TipInfoMessage error_message = 1;
+  TravelPassSnapshot snapshot = 2;
+}
+
+message UnlockTravelPassPremiumRequest {
+  uint64 client_request_id = 1; // 必填非 0 客户端幂等键
+  uint32 pass_id = 2;
+  uint32 expected_currency_type = 3;
+  uint64 expected_price = 4;
+  uint32 expected_config_revision = 5;
+}
+
+message UnlockTravelPassPremiumResponse {
+  TipInfoMessage error_message = 1;
+  TravelPassSnapshot snapshot = 2;
+  bool replayed = 3;
+}
+
+message ClaimTravelPassRewardRequest {
+  uint64 client_request_id = 1; // 必填非 0 客户端幂等键
+  uint32 pass_id = 2;
+  // 0 表示一键领取当前所有可领免费/已解锁典藏档位；>0 表示精确领取指定档位序号（1..64）。
+  uint32 tier_index = 3;
+  // 仅当 tier_index > 0 时有效：false = 领免费轨，true = 领典藏轨。
+  bool premium_track = 4;
+}
+
+message ClaimTravelPassRewardResponse {
+  TipInfoMessage error_message = 1;
+  TravelPassSnapshot snapshot = 2;
+  BagInfo bag = 3;
+  bool replayed = 4;
+  uint32 claimed_count = 5;
+}
+
+message EquipTravelPassCosmeticRequest {
+  // 1 = 头像框（frame_ 前缀），2 = 称谓（title_ 前缀）。
+  uint32 cosmetic_slot = 1;
+  // 空串表示卸下当前佩戴的纪念外观。
+  string cosmetic_key = 2;
+}
+
+message EquipTravelPassCosmeticResponse {
+  TipInfoMessage error_message = 1;
+  TravelPassSnapshot snapshot = 2;
+}
+
 service SceneActivityClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
-  // 目录只读取 MissionTable.mission_type=2 及限时瑞兽迎春入口；无运营时间配置时一律未排期（永久未领资格仍展示）。
+  // 目录读取 MissionTable.mission_type=2、限时瑞兽迎春、游历手记及低打扰免费体验种草入口。
   rpc GetActivityList (GetActivityListRequest) returns (GetActivityListResponse);
   // 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
   rpc ClaimActivityVitalityReward (ClaimActivityVitalityRewardRequest) returns (ClaimActivityVitalityRewardResponse);
@@ -306,4 +428,13 @@ service SceneActivityClientPlayer {
   rpc StartFestivalBeastChallenge (StartFestivalBeastChallengeRequest) returns (StartFestivalBeastChallengeResponse);
   // 领取瑞兽迎春永久待领神兽奖励（同 UUID 重放，异 UUID 并发收敛至同一只宝宝，落盘确认后公开 durable=true）。
   rpc ClaimFestivalBeastReward (ClaimFestivalBeastRewardRequest) returns (ClaimFestivalBeastRewardResponse);
+  // 查询游历手记双轨进度、档位领取状态、双余额与纪念外观佩戴状态。纯读取。
+  rpc GetTravelPassState (GetTravelPassStateRequest) returns (GetTravelPassStateResponse);
+  // 使用真实充值灵石解锁本期游历手记典藏轨（强制非 0 幂等键 + 报价防呆，解锁后永不过期）。
+  rpc UnlockTravelPassPremium (UnlockTravelPassPremiumRequest) returns (UnlockTravelPassPremiumResponse);
+  // 领取游历手记单档或一键领取全部当前可领免费/典藏档位奖励（全部物品强制 bound=true）。
+  rpc ClaimTravelPassReward (ClaimTravelPassRewardRequest) returns (ClaimTravelPassRewardResponse);
+  // 零消耗切换佩戴或卸下已解锁的游历纪念头像框/称谓（零战力纯外显）。
+  rpc EquipTravelPassCosmetic (EquipTravelPassCosmeticRequest) returns (EquipTravelPassCosmeticResponse);
+  // ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
 }

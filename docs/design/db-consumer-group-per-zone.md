@@ -2,9 +2,9 @@
 
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 不再有存盘消费组。本文只作历史保留,不再描述现行行为。
 
-> **状态**：已落码，未编译、未测试，待 Codex 验证（截至 2026-10-16 工作区）。Kafka CLI 在钉版 4.3.1 上的行为（§11）同样没有实测。
-> **2026-10-17 增补**：R7 语义复核 scripts 区域的修复（显式交接前的交接闸能力校验、`kafka_offset_reset.ps1` 的参数约束与退出码、回档第 0 步 e 与按世代号推导 topic、合服 P3 全覆盖检查、「组不存在」白名单只在没有表头时认定）已写入 §1.3、§2.2、§2.3、§3(d)、§4、§5、§6、§7、§8、§10、§11、§13。状态同上：已落码，未编译、未测试，待 Codex 验证。回档的 Kafka 语义当时待负责人裁决（已于 2026-10-17 裁决，见下一条）。
-> **2026-10-18 增补**：负责人 2026-10-17 裁决回档语义为「丢弃 TargetTime 之后的写」，已落码（`k8s_zone_rollback.ps1` 的 Step 5 改 `-ToLatest`、不清游标、不再 FLUSHDB，读 MySQL / 写 Redis 交给尚未落地的回档工具 `go/db/cmd/zone_rollback_discard`）；同日回档复核 [0]–[11] 的修复一并落码，其中 [0] 把 `ConvertFrom-LiveDbConsumerGroup` 从 `k8s_deploy.ps1` 原样移到 `lib/kafka_consumer_groups.ps1`，回档第 0 步 f 与部署脚本共用同一份四种形状规则。改动写在 §1.3、§3(d)、§6、§11、§13；完整流程以 [回档方案](zone_data_rollback.md)「2026-10-18 修订」为准。状态：已落码，未编译、未测试，待 Codex 验证。
+> **状态**：已落码，未编译、未测试，待 Gemini 验证（截至 2026-10-16 工作区）。Kafka CLI 在钉版 4.3.1 上的行为（§11）同样没有实测。
+> **2026-10-17 增补**：R7 语义复核 scripts 区域的修复（显式交接前的交接闸能力校验、`kafka_offset_reset.ps1` 的参数约束与退出码、回档第 0 步 e 与按世代号推导 topic、合服 P3 全覆盖检查、「组不存在」白名单只在没有表头时认定）已写入 §1.3、§2.2、§2.3、§3(d)、§4、§5、§6、§7、§8、§10、§11、§13。状态同上：已落码，未编译、未测试，待 Gemini 验证。回档的 Kafka 语义当时待负责人裁决（已于 2026-10-17 裁决，见下一条）。
+> **2026-10-18 增补**：负责人 2026-10-17 裁决回档语义为「丢弃 TargetTime 之后的写」，已落码（`k8s_zone_rollback.ps1` 的 Step 5 改 `-ToLatest`、不清游标、不再 FLUSHDB，读 MySQL / 写 Redis 交给尚未落地的回档工具 `go/db/cmd/zone_rollback_discard`）；同日回档复核 [0]–[11] 的修复一并落码，其中 [0] 把 `ConvertFrom-LiveDbConsumerGroup` 从 `k8s_deploy.ps1` 原样移到 `lib/kafka_consumer_groups.ps1`，回档第 0 步 f 与部署脚本共用同一份四种形状规则。改动写在 §1.3、§3(d)、§6、§11、§13；完整流程以 [回档方案](zone_data_rollback.md)「2026-10-18 修订」为准。状态：已落码，未编译、未测试，待 Gemini 验证。
 > **范围**：交接（handoff）里的 ③「消费组按 zone 拆」，外加它的前置「Kafka 镜像钉版本」和回档 Step 2 的修正。
 > **依据**：`docs/handoff/godb-pipeline-impl-20261015/` 下的 S2 规格（`S2-consumer-group-per-zone-spec.md`）、复核（`…-review.md`）、修订稿（`…-addendum.md`，优先级最高），以及 `batch-reports.md` 的 A2 / B1 / B2 / B3 各节。接手方在落码时定下的事实以代码为准。**代码与规格冲突时以代码为准**，冲突处在正文里标「与规格的差异」，汇总见 §10.6。
 > **证据口径**：全部来自静态阅读代码，没有编译、没有运行，也没有连过集群。
@@ -127,7 +127,7 @@
   - `HeartbeatIntervalMs×3 > SessionTimeoutMs`
   - `RebalanceTimeoutMs < 15000`
 - 方法刻意不叫 `Validate`：go-zero 的 `conf.Load` 会在 `Normalize` 之前自动调用根结构的 `Validate()`。
-- 配置单测（都待 Codex 跑）：`TestPreHandoffBinaryRefusesZoneShapedConfig`（旧结构加载交接形状必须报错，且文本含 GroupID）、`TestPreHandoffBinaryLoadsFinalZoneShape`（旧结构能加载 final(Z)）、`TestPreHandoffBinaryIgnoresUnknownKeys`（旧结构忽略未知键）。
+- 配置单测（都待 Gemini 跑）：`TestPreHandoffBinaryRefusesZoneShapedConfig`（旧结构加载交接形状必须报错，且文本含 GroupID）、`TestPreHandoffBinaryLoadsFinalZoneShape`（旧结构能加载 final(Z)）、`TestPreHandoffBinaryIgnoresUnknownKeys`（旧结构忽略未知键）。
 
 **与规格的差异**：`ValidateConsumerGroup` 允许「只有 ConsumerGroup、没有 GroupHandoffFrom」，二进制会把它当最终形状运行。但生成器从不写这种形状，`ConvertFrom-LiveDbConsumerGroup` 读到它会 throw。脚本侧更严，属于 fail-closed，不影响正确性。
 
@@ -582,7 +582,7 @@ pwsh -File tools/scripts/kafka_offset_reset.ps1 -BootstrapServer <b> -Topic <T> 
 
 **2026-10-18：已裁决并落码（丢弃 TargetTime 之后的写）**
 
-状态：已落码，未编译、未测试，待 Codex 验证；读 MySQL、写 Redis 的回档工具 `go/db/cmd/zone_rollback_discard` 尚未落地，落地之前 `-Apply` 停在入口校验。完整流程、各状态族的处理、代价、残余风险与待拍板事项以 [回档方案](zone_data_rollback.md)「2026-10-18 修订」为准，这里只记与消费组相关的部分。
+状态：已落码，未编译、未测试，待 Gemini 验证；读 MySQL、写 Redis 的回档工具 `go/db/cmd/zone_rollback_discard` 尚未落地，落地之前 `-Apply` 停在入口校验。完整流程、各状态族的处理、代价、残余风险与待拍板事项以 [回档方案](zone_data_rollback.md)「2026-10-18 修订」为准，这里只记与消费组相关的部分。
 
 - **裁决**：负责人 2026-10-17 选方案 (A)：回档 = 回到 TargetTime 时刻 MySQL 里已经落库的状态。代价已接受：T 之后的合法存盘一并丢弃（含 T 时尚在 Kafka 里没落库的存盘）。
 - **Step 5**：`kafka_offset_reset.ps1 -Group <zone 组> -RetireGroup <legacy 组> -ToLatest -Partitions N -Apply`。拨到日志末端、逐分区复核、退役 legacy 组在本 topic 上的位点，再读 zone 组位点作为切点 O 存进 `run/logs/zone-rollback/<rid>/kafka-cut.json`。第 0 步 d 的预演同样 `-ToLatest`。
@@ -646,7 +646,7 @@ GROUP_ID_NOT_FOUND
 
 ### 8.1 发布顺序约束
 
-- 原规格的 PR 划分：A 钉版 → B go/db（Phase A）→ Codex 验证 → 发布 Phase A 镜像 → C 脚本与工具 → 金丝雀 → D 文档。
+- 原规格的 PR 划分：A 钉版 → B go/db（Phase A）→ Gemini 验证 → 发布 Phase A 镜像 → C 脚本与工具 → 金丝雀 → D 文档。
 - PR-C 只有一条硬前提：对某个 zone 做显式 zone|legacy 交接之前，这个 zone 必须已经在跑 Phase A 及以后的镜像。
   - **2026-10-17 起由脚本检查**（R7 复核 scripts [0]）：计划要渲染交接形状（Source=`explicit-handoff`）时，`Assert-LiveDbPodsHaveHandoffGate` 在任何写操作之前抓本 zone 每个 db Pod 的 `/metrics`，缺 `db_consumer_group_handoff_gate_total` 就拒绝（§4.3）。不满足时先以 keep 把 db 发布到带交接闸的镜像，等每个 Pod 都出现这条序列再切组。
   - 它证明的是**线上 Pod**，不证明本次 `-GoSvcTag` 指向的镜像。切组时 `-GoSvcTag` 保持与线上相同（§8.2 步骤 3 的命令就是这么写的）；万一指向了不带交接闸的镜像，新 Pod 拒启、rollout 卡住，旧 Pod 照常服务，按 §8.3 收回。
@@ -827,13 +827,13 @@ GROUP_ID_NOT_FOUND
 
 **若 V3(c) 证实不能为不存在的组建出位点，回档改动（PR-C 中 `k8s_zone_rollback.ps1` 的部分）不得发布，交负责人决策。** 不改用 `--to-offset` 或 `--from-file`：它们与 `--to-datetime` 走同一条组状态检查和 alterConsumerGroupOffsets 路径，换参数没有用。运行期另有两道 fail-closed：第 0 步 d 和 Step 5 的复核。
 
-**其它未核实项**（也交 Codex）：
+**其它未核实项**（也交 Gemini）：
 
 - **sarama v1.43.1 遇到不存在的组**：`DescribeConsumerGroups` 返回的是 Dead 加 ErrorCode 0，还是 `GROUP_ID_NOT_FOUND`？`ListConsumerGroupOffsets` 返回的是全部 -1，还是顶层 `GROUP_ID_NOT_FOUND`？代码两种都按「Dead / 全部 -1」处理（`peerViewFromDescription`、`saramaGroupInspector.CommittedOffsets`）。
 - **go-zero v1.10.0**：缺必填键时报错、且文本含 GroupID；未知键被忽略。由 `TestPreHandoffBinaryRefusesZoneShapedConfig`、`TestPreHandoffBinaryIgnoresUnknownKeys`、`TestPreHandoffBinaryLoadsFinalZoneShape` 钉住，失败时保留 go-zero 的原始错误文本。S5 的 F9（旧二进制遇到未知键 `RetentionBytes` 是否忽略）在 go/db（go-zero v1.10.0）上是同一行为，可用上述用例旁证；go/login 依赖 go-zero v1.9.2（`go/login/go.mod`），需单独核实，没有对应用例（见 [db-task-delivery-and-retention.md](db-task-delivery-and-retention.md) §B.8 与上线待做 §8 的 F9 行）。
 - **其余验证**：V0、V1（go/db、go/shared/kafkautil、go/data_service 的 vet / build / test，`-run` 包含 `GroupHandoff|HeldPartitions|PeerView|RebalanceGap|ConsumerClientID|ConsumerSetup|ConsumeClaim|NewKeyOrderedKafkaConsumer|Inspector|Settled|StateUnknown|ReplayAfterSeed`）、V2（go/login、tools/merge_zone）、V4（PowerShell 契约测试：`k8s_deploy_contract`、`k8s_migrate_gate`、`k8s_gate_drain`、`k8s_client_entry_contract`、`dev_tools_merge_zone_contract`、`dev_tools_kafka_offset_reset`、`k8s_zone_rollback_gate_router_mode`、`k8s_zone_rollback_flush_guard`、`kafka_offset_reset_output_guard`，以及 `test_stress_summarize.ps1`）、V5（本地正向 → 收尾 → 反向 → 收尾 → 正向的交接集成，加 final(Z) 实例续消费、旧二进制拒启和守望用例）、V6（kind 演练）。完整命令和通过标准见修订稿 §13，以及 `batch-reports.md` A2 / B1 / B2 / B3 各节的「验证命令」。
-- **R7 复核 scripts 修复的验证（2026-10-17，Claude 未执行，交 Codex）**：在仓库根逐个执行 `pwsh -NoProfile -File tools/scripts/tests/<名>.tests.ps1`，名字为 `kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、`k8s_zone_rollback_gate_router_mode`（需要 PATH 上有 git）、`k8s_zone_rollback_flush_guard`、`k8s_deploy_contract`、`k8s_migrate_gate`、`k8s_client_entry_contract`；再在 `tools/merge_zone` 下执行 `go vet ./...` 与 `go test ./...`。通过标准：每个 PowerShell 测试 `fail=0`，go test 全绿；失败时保留全部 `[FAIL]` 行和 go test 输出。
-- **回档语义落码与回档复核修正的验证（2026-10-18，Claude 未执行，交 Codex）**：`k8s_zone_rollback_flush_guard.tests.ps1` 已删除，由 `k8s_zone_rollback_discard.tests.ps1` 取代。命令与通过标准见 [回档方案](zone_data_rollback.md)「2026-10-18 修订」的「Codex 验证」；`k8s_deploy_contract` 必须一并跑（`ConvertFrom-LiveDbConsumerGroup` 移进了 lib，§③ 的用例改由 lib 提供该函数）。
+- **R7 复核 scripts 修复的验证（2026-10-17，Claude 未执行，交 Gemini）**：在仓库根逐个执行 `pwsh -NoProfile -File tools/scripts/tests/<名>.tests.ps1`，名字为 `kafka_offset_reset_output_guard`、`dev_tools_kafka_offset_reset`、`k8s_zone_rollback_gate_router_mode`（需要 PATH 上有 git）、`k8s_zone_rollback_flush_guard`、`k8s_deploy_contract`、`k8s_migrate_gate`、`k8s_client_entry_contract`；再在 `tools/merge_zone` 下执行 `go vet ./...` 与 `go test ./...`。通过标准：每个 PowerShell 测试 `fail=0`，go test 全绿；失败时保留全部 `[FAIL]` 行和 go test 输出。
+- **回档语义落码与回档复核修正的验证（2026-10-18，Claude 未执行，交 Gemini）**：`k8s_zone_rollback_flush_guard.tests.ps1` 已删除，由 `k8s_zone_rollback_discard.tests.ps1` 取代。命令与通过标准见 [回档方案](zone_data_rollback.md)「2026-10-18 修订」的「Gemini 验证」；`k8s_deploy_contract` 必须一并跑（`ConvertFrom-LiveDbConsumerGroup` 移进了 lib，§③ 的用例改由 lib 提供该函数）。
 
 ## 12. Java 版
 

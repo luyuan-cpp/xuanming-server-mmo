@@ -972,7 +972,7 @@ etcd Watch (事件驱动，不轮询)
 
 ## 负载刷新与 zone 登记集合(2026-10-16)
 
-**状态**:以「领导者按 zone 批量刷新 + 登记集合替代 SCAN」缓解(未编译、未测试,待 Codex 验证)。字面的「每个副本只读
+**状态**:以「领导者按 zone 批量刷新 + 登记集合替代 SCAN」缓解(未编译、未测试,待 Gemini 验证)。字面的「每个副本只读
 本 zone」、按 zone 选主与 etcd watch 收窄仍归 A1(`docs/design/capacity-model-hok-scale.md` §3)。容量数字均为公式推算,未压测。
 代码:`go/scene_manager/internal/logic/load_refresh.go`、`zone_registry.go`、`load_reporter.go`、`orphan_cleanup.go`、
 `world_autoscale.go`;`tools/merge_zone/scene_hot_state.go`。

@@ -47,4 +47,8 @@ message SeasonRuleTable {
   uint32 default_seal_id = 14;
   // 赛季简介说明
   string desc = 15;
+  // 本季满级永久解锁的零数值纪念称谓（如 破阵宗师）
+  string honor_title_name = 16;
+  // 本季满级永久解锁的零数值纪念徽章图标键（如 UI/SeasonHonors/honor_s1_pozhen）
+  string honor_badge_icon_key = 17;
 }

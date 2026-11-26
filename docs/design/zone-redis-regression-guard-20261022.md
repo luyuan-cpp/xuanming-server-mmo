@@ -6,7 +6,7 @@
 
 - **2026-10-24 方向变更（先读）**：用户 10-24 明确「玩家数据不要 redis 存储，其他改用的地方还是要用」，见 [TiDB 决策 §9](global-data-layer-tidb-decision.md)。本稿里只服务于 Redis 父快照与资产证据的部分（父快照回退检测、`verified_identity` 实例身份核验、资产放弃的 G5 闸读 Redis 副本）随新存盘路径重写，在途落码开工前先向用户确认是否还做；owner_epoch 铸造等协调键的防回退不受影响。只定了方向，未设计、未落码。
 - 日期：2026-10-22
-- 状态：**2026-10-23 起落码中，未编译、未测试**。负责人 2026-10-22 授权「按最标准的方式做完」，§13 各项按推荐取；项目未上线、玩家数据可以完全清空，§6 的混版与回退兼容不再实现。编译、测试、压测按 AGENTS §10.1 交 Codex。落码相对本稿的取舍见 §14。
+- 状态：**2026-10-23 起落码中，未编译、未测试**。负责人 2026-10-22 授权「按最标准的方式做完」，§13 各项按推荐取；项目未上线、玩家数据可以完全清空，§6 的混版与回退兼容不再实现。编译、测试、压测按 AGENTS §10.1 交 Gemini。落码相对本稿的取舍见 §14。
 - 来源：[数据一致性等级核对](data-consistency-guarantee-map-20261020.md) §2.2 的 6 条 low（player-save#1、identity-routing-redis-v#2、cross-service-assets-v#1、player-save#2 / identity-routing-redis-v#1、identity-routing-redis#1）。
 - 关联：[存盘围栏](db-write-fencing-mysql.md) §9.1（B1）与 §14 第 7、15 条；[再入屏障与 owner_epoch](scene-owner-reentry-barrier.md)；[共享 Redis 按用途拆分](shared-redis-split-by-purpose.md)；`deploy/k8s/manifests/infra/redis-ha.yaml`；路由就绪标记的身份判据 `go/shared/placement/route_ready.go`。
 - 取证方式：只读源码，未运行任何命令。行号以 2026-10-22 工作区为准。
@@ -169,7 +169,7 @@ V2 / V7 自动采纳的依据：
 
 有歧义的情形（V4、V5）一律不自动处理。
 
-> **2026-10-22 修复（r2-mz#1 评审跟进，未编译、未测试，待 Codex 验证）**：合服工具 `tools/merge_zone` 的 `-verify-merged` 有一行 `verify:save_barrier`，在合服 Step 5 按本表预判每名玩家开服后的第一次冷加载（独立 go.mod，镜像 `savebarrier.Reconcile` 而不引用它）。两份判定共用样例表 `go/shared/savebarrier/testdata/merge_copy_cold_load_cases.json`，login 一侧由 `merge_copy_cold_load_test.go` 走真实冷加载入口对表。**改本表或 `Reconcile` 时同步改样例表**，否则 merge_zone 或 login 的单测会变红。细节见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md)「2026-10-22 修复（r2-mz#1 评审跟进）」。
+> **2026-10-22 修复（r2-mz#1 评审跟进，未编译、未测试，待 Gemini 验证）**：合服工具 `tools/merge_zone` 的 `-verify-merged` 有一行 `verify:save_barrier`，在合服 Step 5 按本表预判每名玩家开服后的第一次冷加载（独立 go.mod，镜像 `savebarrier.Reconcile` 而不引用它）。两份判定共用样例表 `go/shared/savebarrier/testdata/merge_copy_cold_load_cases.json`，login 一侧由 `merge_copy_cold_load_test.go` 走真实冷加载入口对表。**改本表或 `Reconcile` 时同步改样例表**，否则 merge_zone 或 login 的单测会变红。细节见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md)「2026-10-22 修复（r2-mz#1 评审跟进）」。
 
 #### 4.1.5 采纳脚本
 
@@ -223,7 +223,7 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 
 #### 4.3.1 G3a：墙钟地板（落实 §14 第 7 条）
 
-> **2026-10-30 落码定形（未编译、未测试，待 Codex 验证）**：目标值在 **Go 里一次算好**，不在 Lua 里算。location 字节在 EVAL 之前就要带上新 epoch，两处必须同值；铸造通道重发时带的是同一份 ARGV，重放识别才比得上。
+> **2026-10-30 落码定形（未编译、未测试，待 Gemini 验证）**：目标值在 **Go 里一次算好**，不在 Lua 里算。location 字节在 EVAL 之前就要带上新 epoch，两处必须同值；铸造通道重发时带的是同一份 ARGV，重放识别才比得上。
 > - `mintTargetEpoch(observed, nowMs)` = max(observed + 1, nowMs)，nowMs 只经 `svc.OwnerEpochMinter.NowMs()` 取（生产 `WallClockMs`，单测注入），每次落点只取一次。目标值超过 2^53 − 2（`maxMintedOwnerEpoch`，回滚再 +1 仍在 Lua double 精确范围内）时 fail-closed，一个字节都不写、回 3。
 > - 目标值作为 `ARGV[9]` 必传。Lua 只校验并 SET：`ARGV[1]` 规范十进制、`ARGV[9]` 无前导零、严格大于 `ARGV[1]`、不超过上限，否则 `error_reply`。比较一律按十进制串逐字节比，不用 Lua double，也不用 Lua 的串 `<`（Lua 5.1 走 strcoll，Redis 按环境设了 LC_COLLATE）。
 > - 重放识别改成 `cur == ARGV[9]`。回滚仍是 `INCR`。`clock_behind` 只对真的写进 Redis 的铸造计。
@@ -264,7 +264,7 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 - **配置**：`OwnerEpochMint.WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`（`go/scene_manager/internal/config/config.go` 的 `OwnerEpochMintConfig`）：两项都写 0 等于不发 WAITAOF，启动时打一行 ERROR；开启时启动先探一次，失败拒启。探针在每个主节点的同一条连接上先写一个探针键（`scene_manager:owner_epoch_mint_probe:{n}`，Cluster 下挑落在该节点 slot 上的 tag，TTL 60s），再发 WAITAOF，等待取 max(配置值, 5s)。2026-11-10 起这样做：新连接没写过东西时偏移为 0，副本记的刷盘偏移初值也是 0，没开 AOF 的副本从不上报，0 ≥ 0 照样计数，不先写的探针查不出「副本没开 AOF」（Claude 审核第 3 条，第二轮审核会话同意）。
 - **连接总账**：在 `k8s_deploy.ps1` 的池表里给 scene_manager 加 Fixed 连接，写法同 db 行的 `Fixed 2`。
 
-#### 4.3.3 G3b 落码定稿（2026-10-24，未编译、未测试，待 Codex 验证）
+#### 4.3.3 G3b 落码定稿（2026-10-24，未编译、未测试，待 Gemini 验证）
 
 本节补齐 §4.3.2 落码时定下的细节，同时答复[玩家态 Redis 集群化](redis-player-store-cluster.md) §7 与 §16 第 1 条「铸造后同一节点连接上发 WAITAOF」。G3a 墙钟地板**不在本次**，见本节末。
 
@@ -345,7 +345,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 - `k8s_deploy_contract.tests.ps1` 两条：总账 Fixed 与源码常量一致；ConfigMap 镜像 yaml 并按拓扑渲染 numreplicas。
 - 真 Redis 上的 AOF 与切主演练仍按 §8.1 G3b、§8.2 D2。§9 提到的 `k8s_deploy.ps1` 重启提示原文是「在存盘关键写补上 WAITAOF 之前」，C++ 存盘 Lua 至今没加，提示仍然成立，不改。
 
-#### 4.3.4 两段回执（2026-11-10 落码，未编译、未测试，待 Codex 验证）
+#### 4.3.4 两段回执（2026-11-10 落码，未编译、未测试，待 Gemini 验证）
 
 来源：2026-11-10 Claude Code 独立审核第 1 条（交接（原 `docs/handoff/owner-epoch-claude-review-20261106.md`，已清理，见 `ccf2840b2`）「Claude Code 审核结论」），负责人选方案 A；同日又定推路由失败的回滚同样两段，不留一段式的例外。
 
@@ -421,7 +421,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 - 跨语言：前缀逐字核对 C++。
 - C++ `cross_zone_test`：B5′ 纯判定（交叉校验全成立也不采纳、epoch 未变仍最先判、location 解析不了不看回执）；真实取证入口的 B5′ 收口；名字表与汇总行字段。
 
-#### 4.3.5 结果未知的作废与已确认位点（2026-11-12 落码，未编译、未测试，待 Codex 验证）
+#### 4.3.5 结果未知的作废与已确认位点（2026-11-12 落码，未编译、未测试，待 Gemini 验证）
 
 来源：第二轮独立审核登记的两条残余（「首发晚于回滚才执行」「dev 旁路下发观察值」），负责人要求现在修。修的时候顺着同一类问题又查出两条没登记的，一并收口。
 
@@ -528,7 +528,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
   - G4 无开关。
   - G5 有开关，关 G1 时的注意事项见 §4.5。
 - **上线前门禁**（负责人确认后写进开服清单）：
-  - P1、P2 落码，Codex 验证通过；
+  - P1、P2 落码，Gemini 验证通过；
   - §8.3 R-a 冷读突发压测有对比表；
   - R-G1-1 的处置（§14 第 15 条落码，或接受）有结论；
   - P3 是否上线以 R-b 压测结论为准。
@@ -557,7 +557,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 | `SceneManagerOwnerEpochMintNotDurable` | 10 分钟内出现 `result!="confirmed"`（not_durable / error）即报：健康的 AOF everysec + 同步副本上它应为 0，不用比例阈值（2026-11-12 定，见 `deploy/k8s/owner-epoch-alerts.yaml`） | warning |
 | `SceneOwnerCounterBehind` | LogQL `owner_counter_behind` > 0 | critical |
 
-## 8. 回归测试清单（交 Codex）
+## 8. 回归测试清单（交 Gemini）
 
 ### 8.1 单元与真库
 
@@ -669,7 +669,7 @@ INFO 相关的 Lua 只能在真 Redis 上测（miniredis 不支持 `INFO server`
 - 第 3 条：G3b 做，R-b 压测之后再定池大小与告警阈值；2026-11-12 负责人改为不等压测：池按 Little 定律定为每节点 130、不上组提交、zrpc Timeout 按逐段预算之和定为 11500（§4.3.3），告警阈值见 §7 与 `deploy/k8s/owner-epoch-alerts.yaml`；
 - 第 4、5 条：接受，理由见本节「与 TiDB 方向的关系」。
 
-全部改动都没有编译、没有测试，验证清单见 `docs/PROGRESS.md` 的「2026-10-30 zone Redis 回退防护落码收尾」条目，交 Codex 执行。
+全部改动都没有编译、没有测试，验证清单见 `docs/PROGRESS.md` 的「2026-10-30 zone Redis 回退防护落码收尾」条目，交 Gemini 执行。
 
 ### 14.1 各件落点
 
@@ -680,7 +680,7 @@ INFO 相关的 Lua 只能在真 Redis 上测（miniredis 不支持 `INFO server`
 | G3a 铸造墙钟地板 | 已落码（2026-10-30，「owner_epoch 铸造后同节点 WAITAOF 防代次回退」会话；验证清单见 PROGRESS「2026-10-30 Claude：owner_epoch 铸造墙钟地板 G3a 落码」） | `go/scene_manager/internal/logic/{owner_epoch,changesceneutil}.go`；C++ `player_lifecycle.h` 的 `travel_outcome::ClassifyOwnership`、`player_lifecycle.cpp` 的 `ResumeTravelAfterRevocation`、`handoff_sql_barrier.h` 的 `kResumeFenceLua`；跨语言金样副本 `owner_epoch_crosslang_test.go` |
 | G3b 铸造后 WAITAOF | 已落码；两段回执（§4.3.4）2026-11-10 落码、未编译 | `go/scene_manager/internal/svc/owner_epoch_mint.go`（专用连接、同一 pipeline、自管重发）、`internal/config`（`OwnerEpochMint`）、`internal/logic/enterscenelogic.go`（没确认就单调回滚、回 7；下发待确认回执的 epoch 之前先确认）、`internal/logic/owner_epoch.go`（两段回执）、`internal/metrics`、`go/shared/ownerepoch`（回执两种形态）、C++ `player_ownership_comp.h`、`player_lifecycle.{h,cpp}`、`travel_freeze_cap.h`（判定表 B5′）、`tools/scripts/k8s_deploy.ps1`（连接总账） |
 | G4 C++ 计数器落后检测 | 已落码 | `redis_client.h`（严格屏障 Lua 回 `{4, 存储值}`、回包解析、被拒原因）、`player_lifecycle.{h,cpp}`（`owner_counter_behind` 计数与处置）、`core/system/redis.cpp`（统计行） |
-| G5 资产放弃闸 | 已落码 | `go/shared/assetop/{abandon,reconcile,ledger_dataservice,metrics}.go`；`go/data_service/internal/logic/asset_op_ledger_verified.go`、`internal/server/dataserviceserver.go`；`proto/data_service/data_service.proto`（`verify_redis_copy` / `redis_copy_verified`，**需要 Codex 重新生成协议**） |
+| G5 资产放弃闸 | 已落码 | `go/shared/assetop/{abandon,reconcile,ledger_dataservice,metrics}.go`；`go/data_service/internal/logic/asset_op_ledger_verified.go`、`internal/server/dataserviceserver.go`；`proto/data_service/data_service.proto`（`verify_redis_copy` / `redis_copy_verified`，**需要 Gemini 重新生成协议**） |
 | 告警 | 已落码 | `deploy/k8s/owner-epoch-alerts.yaml` 的 `owner-epoch.redis-regression` 组（指标名已与实现核对） |
 
 ### 14.2 相对设计稿的取舍

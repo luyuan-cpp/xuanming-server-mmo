@@ -53,3 +53,33 @@ void SceneAfkPassClientPlayerHandler::GmSetAfkPass(entt::entity player,const ::G
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneAfkPassClientPlayerHandler::SetAfkPassSettings(entt::entity player,const ::SetAfkPassSettingsRequest* request,
+	::SetAfkPassSettingsResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = AfkPassSystem::SetSettings(player, request->auto_return_city_on_team_end(),
+													TimeSystem::NowSecondsUTC(), *response->mutable_info());
+		err != kSuccess)
+	{
+		response->clear_info();
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAfkPassClientPlayerHandler::AckHostedRecap(entt::entity player,const ::AckHostedRecapRequest* request,
+	::AckHostedRecapResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = AfkPassSystem::AckHostedRecap(player, request->started_at(), TimeSystem::NowSecondsUTC(),
+													   *response->mutable_info());
+		err != kSuccess)
+	{
+		response->clear_info();
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}

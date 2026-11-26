@@ -18,7 +18,7 @@
 > **依据**:2026-09-20 对客户端仓(HEAD `d2b165a`)与服务端仓(HEAD `d9e471b80`)的**只读**核对,用户已授权只读客户端仓。全程没有跑任何构建 / 生成 / 测试命令,两个仓都没有被修改。(同日按客户端 `120e2d8` + 工作区复核,见上方复核说明。)
 > **还没有的授权**:**修改**客户端仓。本文落在服务端仓正是因为这个原因;开工前先向用户要客户端任务授权(`AGENTS.md §9`)。客户端仓自己的惯例是每个功能在 `Docs/` 下一篇(如 `Docs/team-ui.md`,新近功能则用 `Docs/GuildUI.md` / `Docs/SocialUI.md` 这类命名),开工后应把本文的 UI 部分沉淀成 `Docs/FriendUI.md`。(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
 > **行号只是辅助坐标,定位一律按符号名 grep。** 标「未核实」的条目没有读到证据,接手人需自行确认。
-> **纪律**:按服务端 `AGENTS.md §10.1`,Claude 不执行编译 / 生成 / 测试命令,这些交给 Codex 或人工;没有运行结果之前不得声称"编译通过""测试绿"。
+> **纪律**:按服务端 `AGENTS.md §10.1`,Claude 不执行编译 / 生成 / 测试命令,这些交给 Gemini 或人工;没有运行结果之前不得声称"编译通过""测试绿"。
 
 ---
 
@@ -83,7 +83,7 @@
 - **消息号一致性基线**:以客户端 `120e2d8` 已提交的内容为准,92 个桩的 `MessageId`,以及 `Net/MessageIds.cs` 的 102 个常量(`d2b165a` 时是 72 / 73),与服务端 `proto/message_id.txt` 逐一比对,**当前零漂移**。重生成后再比一次:这 92 + 102 个值**应当一个都不变**,新增的 11 个 Friend 桩的号也应与 message_id.txt 一致。有任何一个变了就是出了意外,停下来查。不要拿工作区当基线:工作区已被人跑过一次 handler 生成,多了 11 个未跟踪的 Friend 桩。(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
 - 期望新增的 friend 桩(按生成器规则 `Service+Method+"Handler"` 推导):`ClientPlayerFriendGetFriendListHandler.cs` … `ClientPlayerFriendNotifyFriendEventHandler.cs`,共 11 个。截至复核时,它们已作为未跟踪文件出现在工作区,但不是出自一次完整的同批生成,见 §9。
 
-### 1.4 生成侧操作清单(交给 Codex / 人工执行)
+### 1.4 生成侧操作清单(交给 Gemini / 人工执行)
 
 0. 先确认以下事项。(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
    - 客户端工作区里 `proto/friend/friend.proto`(以及按 §1.2 补的 friend tip 行)还在。
@@ -181,7 +181,7 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
   2. **friend 服务自己的每分钟配额**(仅 `AddFriend`)回**响应体** 1008(`go/friend/internal/constants/constants.go` 的 `ErrRateLimited`)。
 - 其他会出现的 common 码:1005 `kInvalidParameter`;1003 `kServiceUnavailable`(服务端存储故障,以及路由服把一切 gRPC 错误翻成的信封码)。
   - 客户端调 `NotifyFriendEvent` **不会有任何回包**,既没有 1003 也没有别的码。它是推送号(`CLIENT_RPC_PUSH`),gate 的上行白名单 `IsClientMessageId` 只收客户端能发起的方法(REQUEST / ONE_WAY),这个号发上来按非法包丢弃:计一次非法包,累计到阈值 gate 直接断线;请求到不了路由服和 friend,`Call` 只会等到超时。所以客户端不得上行任何推送号(§7 第 1 条)。
-  - 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4(2026-11-05 已落码,未编译,待 Codex 重新生成 gate 白名单并验证;Java 版待做)。R4 之前 gate 按服务放行,这个号会被转给 friend、由会话拦截器拒绝,客户端拿到的是信封 1003;现在拦在 gate,原因是推送号本来就不该有上行语义,不该让业务服替 gate 兜底。
+  - 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4(2026-11-05 已落码,未编译,待 Gemini 重新生成 gate 白名单并验证;Java 版待做)。R4 之前 gate 按服务放行,这个号会被转给 friend、由会话拦截器拒绝,客户端拿到的是信封 1003;现在拦在 gate,原因是推送号本来就不该有上行语义,不该让业务服替 gate 兜底。
 - friend 段的码:客户端代码按 `friend_error` 枚举名引用,编号由导表器发,客户端不关心具体数字。下表的数字只供服务端对照,客户端不得抄。(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
 
 | 码 | 枚举名 | 表里的文案 |
@@ -369,7 +369,7 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
 
 ## 7. 不要做的事
 
-1. **不要调用 `NotifyFriendEvent`,客户端不得上行任何推送号。** 它的消息号只许出现在 `RegisterNotify` 的第一个参数里,不许传给 `Call` / `SendOneWay`。它和 C2S 同 service,但标的是 `CLIENT_RPC_PUSH`,不在 gate 的上行白名单里:发上来**不会有任何回包**,gate 计一次非法包,累计到阈值直接断线,请求到不了路由服和 friend。friend 会话拦截器的方法白名单也刻意排除了它(否则客户端可以伪造好友事件),这是第二道防线,由 `go/friend/internal/session/session_test.go` 的 `TestClientCannotCallNotifyFriendEvent` 守住。(2026-11-05 依 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改,已落码,未编译,待 Codex 重新生成并验证;R4 之前 gate 按服务放行,调了会拿到信封码 1003)
+1. **不要调用 `NotifyFriendEvent`,客户端不得上行任何推送号。** 它的消息号只许出现在 `RegisterNotify` 的第一个参数里,不许传给 `Call` / `SendOneWay`。它和 C2S 同 service,但标的是 `CLIENT_RPC_PUSH`,不在 gate 的上行白名单里:发上来**不会有任何回包**,gate 计一次非法包,累计到阈值直接断线,请求到不了路由服和 friend。friend 会话拦截器的方法白名单也刻意排除了它(否则客户端可以伪造好友事件),这是第二道防线,由 `go/friend/internal/session/session_test.go` 的 `TestClientCannotCallNotifyFriendEvent` 守住。(2026-11-05 依 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改,已落码,未编译,待 Gemini 重新生成并验证;R4 之前 gate 按服务放行,调了会拿到信封码 1003)
 2. **不要调用 `HandlerRegistry.Register`,也不要写 `*.user.cs` partial** —— 会静默盖掉 `GameClient` 手写的 `RedirectToGate` / `NotifyEnterScene` 处理器。
 3. **不要在请求里带自己的 player_id**,也不要用客户端推断"我是谁"。
 4. **不要本地推算列表**(点了同意就把行挪到好友页、点了删除就删行)。只认拉回来的快照。
@@ -429,7 +429,7 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
 - 同意后双方好友页互见;拉黑后对方再次申请被拒,客户端展示中性文案。
 - 连点「换一批」不掉线,gate 日志里的非法包计数不增长。
 
-**给 Codex 的命令**(两步都过才算过,不能拿第 1 步的绿灯代替第 2 步):(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
+**给 Gemini 的命令**(两步都过才算过,不能拿第 1 步的绿灯代替第 2 步):(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
 1. `pwsh -File <客户端仓根>\tools\client_compile_check.ps1`,期望退出码 0。**注意:它只用离线 Roslyn 编 `Assets/Scripts/**`(MmorpgClient 运行时程序集)**,不编 `Assets/Tests/**`(EditMode 程序集里的 `FriendClientTests` / `FriendWindowTests`、PlayMode 程序集里的 `FriendWindowPlayModeTests`),也不编 `Assets/Editor/**`(可选的 `FriendUiVerification.cs`)。退出码 0 只说明运行时代码能编译。
 2. Unity Test Runner:EditMode 按名字过滤,方案 A 用 `MmorpgClient.Tests.EditMode.Friend`,方案 B 用 `MmorpgClient.Tests.EditMode.Battle.Friend`(两者都同时覆盖 FriendClientTests 与 FriendWindowTests);PlayMode 过滤 `FriendWindowPlayModeTests`。判据:测试程序集和 Editor 程序集编译成功(Console 没有编译错误),**过滤命中的用例数大于 0**,并且全部通过。测试或 Editor 脚本的编译错误只会在这一步出现,这时 Runner 一个用例都不跑,不能把"0 失败"当成通过。
 
@@ -441,7 +441,7 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
 - 15007–15009 三个 tip 码的实际数值(导表器未跑)。〔2026-09-20 复核:仍未核实。服务端 `friend_error_tip.proto` 目前只到 15006。客户端改用 `friend_error` 枚举名后,这一条只影响 gen_proto 的时序(§1.2),不影响客户端代码。〕
 - protoc 35.1 生成的 C# 与客户端 Google.Protobuf 3.28.3 运行时的兼容性;现有 `Proto/Generated` 当初是哪个 protoc 版本出的。
 - ~~`Trade` / `Teampb` / `Friendpb` 三个 C# namespace 与现有手写代码是否撞名;`team.proto` / `jubaozhai.proto` 加进清单后是否还有缺失的 import。~~ **已关闭(客户端 `120e2d8` + 2026-09-20 工作区)**:`Trade`(`Proto/Generated/Jubaozhai.cs`)和 `Teampb`(`Proto/Generated/Team.cs`)已随新基线落地,手写层已经在用,例如 `JubaozhaiClient.cs` 里的 `using TradePb = Trade;`。team / jubaozhai 及各自的 tip proto 都已在 `tools/gen_proto.ps1` 的 `$files` 里,import 问题关闭。在 Assets 下搜索,手写代码里没有名为 `Friendpb`、`Friend` 的命名空间或类型,撞名风险可以排除。
-  - **新增待办(工作区状态,未提交)**:handler 生成器已经跑过。`Net/Generated/Handlers/` 多了 11 个未跟踪的 `ClientPlayerFriend*Handler.cs`(没有 .meta),`HandlerRegistry.cs` 也多了 11 行注册,它们都引用 `Friendpb.*`。但 `Proto/Generated/Friend.cs` 还不存在,也就是 proto 消息类那一步(`tools/gen_proto.ps1`)还没跑或没落盘。在补齐之前,客户端工作区预计编译不过,会报 `Friendpb` 命名空间找不到。开工第一步要先把 `Friend.cs` 生成出来,再编译确认(未编译,待 Codex 验证)。
+  - **新增待办(工作区状态,未提交)**:handler 生成器已经跑过。`Net/Generated/Handlers/` 多了 11 个未跟踪的 `ClientPlayerFriend*Handler.cs`(没有 .meta),`HandlerRegistry.cs` 也多了 11 行注册,它们都引用 `Friendpb.*`。但 `Proto/Generated/Friend.cs` 还不存在,也就是 proto 消息类那一步(`tools/gen_proto.ps1`)还没跑或没落盘。在补齐之前,客户端工作区预计编译不过,会报 `Friendpb` 命名空间找不到。开工第一步要先把 `Friend.cs` 生成出来,再编译确认(未编译,待 Gemini 验证)。
 - 〔已核实〕(68,600) 已被帮会入口占用,左右两列都已排满,入口位置待用户/美术拍板(见 §3 HUD 入口),落位后截图确认。快捷键 `F` 在代码层无冲突,是否与策划规划的按键冲突仍需确认。
 - 〔已核实(客户端 120e2d8 工作区)〕客户端运行时**没有加载任何配置表**。`MessageLimiterTableManager.Instance.Load*` 只在生成文件 `Assets/Scripts/Table/Generated/TableLoader.cs`(2026-11-19 前叫 `AllTable.cs`,核实时的名字)的两个 `LoadTables` 重载里被调用(:98 / :172)。`TableLoader.LoadTables` / `ReloadTables` / `OnTablesLoadSuccess` 在 `Assets/Scripts` 和 `Assets/Editor` 的手写代码里都没有调用方,客户端仓里也没有 MessageLimiter 表的 json/bin 数据文件。因此 `MessagelimiterTable` 不能直接用于本地节流;要用它,得先补上表加载入口(启动时调用 `TableLoader.LoadTables`)并随包带上表数据,这不在本规格范围内。本规格不依赖它,客户端侧的节流以服务端返回的限流 tip 为准。
 - 「新好友」是否需要红点;`REQUEST_ACCEPTED` 的 Toast 文案(没有昵称,只能用 id 或泛称)。

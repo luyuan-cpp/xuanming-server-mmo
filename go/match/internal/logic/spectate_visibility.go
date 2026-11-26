@@ -21,6 +21,10 @@ import (
 // 活动局一律私密、不看模式;其余按 spectateVisibilityOfMode 的显式决策表,表外的值按私密处理。
 func spectateVisibilityFor(mode matchpb.MatchMode, activity *battlepb.BattleActivityContext) battlepb.ESpectateVisibility {
 	if activity != nil && activity.GetKind() != battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE {
+		// 帮会全天帮战 V2 对局默认全服公开观战（现场路过/并发抢点转观战均依赖 PUBLIC）。
+		if activity.GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR {
+			return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PUBLIC
+		}
 		// 活动局(帮会同道历练等)的名单与 battle_id 归活动方:历练在开局前就把 battle_id 回给了 guild,
 		// 不是公开对局。未知的活动类型同样落在这里(fail-closed)。
 		return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PRIVATE
@@ -30,6 +34,17 @@ func spectateVisibilityFor(mode matchpb.MatchMode, activity *battlepb.BattleActi
 	}
 	// 表外的值(proto 新增了模式却没进表,或收到未知枚举值):判不了就不放行。
 	return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PRIVATE
+}
+
+// spectateVisibilityForBattle 扩展道友切磋坊的公开观战开关：仅在非活动切磋局且双方显式约定 allow_public_spectate=true 时公开。
+func spectateVisibilityForBattle(mode matchpb.MatchMode, activity *battlepb.BattleActivityContext, customDuelRules *battlepb.CustomDuelRules) battlepb.ESpectateVisibility {
+	if activity != nil && activity.GetKind() != battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE {
+		return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PRIVATE
+	}
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE && customDuelRules != nil && customDuelRules.GetAllowPublicSpectate() {
+		return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PUBLIC
+	}
+	return spectateVisibilityFor(mode, activity)
 }
 
 // spectateVisibilityOfMode 是按对局模式的显式决策表:每个 MatchMode 枚举值各占一行、各写理由。decided=false
@@ -55,6 +70,10 @@ func spectateVisibilityOfMode(mode matchpb.MatchMode) (visibility battlepb.ESpec
 		return private, true // 真人人数档 PVP:没有公开依据,默认拒绝
 	case matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
 		return private, true // 轮换娱乐物法易势 5V5:非公开观战模式,默认私密
+	case matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP:
+		return public, true // 帮会全天帮战真人对局:支持公开观战与并发抢点转观战
+	case matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE:
+		return public, true // 帮会灵脉守旗阵踢馆:支持敌我帮会成员公开观战
 	case matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
 		return public, true // 全服赛季战队锦标赛:全服公开观战,优先升 L2 赛事广播
 	case matchpb.MatchMode_MATCH_MODE_3V3:

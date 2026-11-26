@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+// SpiritShopGoods 表的权威 schema。源表 data/SpiritShopGoods.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 官方灵石百宝阁货架表(docs/design/spirit-shop-and-starter-packs-v1.md §2.3):
+// 每行对应一件可直购的灵石商品,支持单物品或双物品(如绑定 3001 + 3002 提速包)原子直发入包。
+// 行 id 一经上线不要改义或复用;下架将 enabled 置 0。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message SpiritShopGoodsTable {
+  option (cfg_sheet)       = "SpiritShopGoods";
+  option (cfg_source_file) = "SpiritShopGoods.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 商品 ID（上线后只停用不复用旧 ID）
+  uint32 id = 1;
+  // 分页：1 = 首套提速，2 = 精进配套，3 = 外观便利
+  uint32 tab_id = 2;
+  // 展示排序（升序）
+  uint32 sort_order = 3;
+  // 上架开关：0 = 下架/停售，1 = 在售
+  uint32 enabled = 4;
+  // 商品展示名（留空时仅允许单物品商品回退物品表名）
+  string name = 5;
+  // 商品简述（明码写清绑定仅自用、不加战力上限等说明）
+  string description = 6;
+  // 图标资源键（留空回退 item_id_1 的 icon_key）
+  string icon_key = 7;
+  // 结算货币：0 银两 / 1 灵石 / 2 绑定灵石（首批核心创收项统一填 1 = 灵石）
+  uint32 currency_type = 8;
+  // 单份价格（1..1000000000，防乘法溢出）
+  uint64 price = 9;
+  // 单次请求最大购买份数（1..99）
+  uint32 max_buy_per_request = 10;
+  // 物品 1（必填）：FK -> Item.id
+  uint32 item_id_1 = 11 [(cfg_fk) = "Item"];
+  // 物品 1 每份数量（>= 1）
+  uint32 item_count_1 = 12;
+  // 物品 1 是否绑定：1 = 绑定仅自用，0 = 非绑定
+  uint32 item_bound_1 = 13;
+  // 物品 2（可选，0 = 无第二个物品；非 0 时启动/热更强校 Item.Exists）
+  uint32 item_id_2 = 14;
+  // 物品 2 每份数量（item_id_2 > 0 时必须 >= 1）
+  uint32 item_count_2 = 15;
+  // 物品 2 是否绑定：1 = 绑定仅自用，0 = 非绑定
+  uint32 item_bound_2 = 16;
+  // 单商品个人限购重置周期：0 = 终身，1 = 每周（UTC+8 周一 05:00）
+  uint32 limit_reset_kind = 17;
+  // 单商品限购份数（0 = 不限购；>0 = 每周期或终身最多买多少份）
+  uint32 limit_count = 18;
+  // 所属共享限购组 ID（0 = 不参与共享组；>0 时须存在对应 SpiritShopLimitGroup 行）
+  uint32 limit_group_id = 19;
+  // 买 1 份消耗的共享组权重（limit_group_id > 0 时必须 >= 1）
+  uint32 limit_group_weight = 20;
+  // 客户端角标标签（如「终身限额」「保底配套」，可为空）
+  string badge_text = 21;
+}

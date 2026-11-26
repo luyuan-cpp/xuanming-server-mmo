@@ -164,7 +164,7 @@
 | `consumer:applied_epoch:{topic}:{id}:{msgType}` | 每个写任务读一次,单键 Lua 推进 | **无** | 单键 | `:547-596` |
 | `distributed:lock:kafka:ordering:{topic}:{id}:{msgType}` | 每个写任务 SETNX / 续期 / 释放 | 有(租约) | 单键 | `go/db/internal/locker/locker.go:29`;`key_ordered_consumer.go:1852` |
 | `kafka:retry:queue\|processing:{topic}[:{inst}]`、`kafka:retry:instances:{topic}`、`kafka:dead:queue:{topic}` | 重试路径 | **无** | 多键 Lua,只在本族内 | `key_ordered_consumer.go:903-908`、`:1079`、`:1089-1104`;`retry_ownership.go:63-66`、`:107-146` |
-| `kafka:retry:instance_mode:{topic}`(HASH,field = 实例名,值 = 生效模式 `owner` / `shared`)、`kafka:retry:guard:{claim\|ack}:<本实例 processing 键>:<nonce>`(STRING,认领 / 收据 ack 的防重记录)。2026-10-17 登记(R7 复核),已落码,未编译、未测试,待 Codex 验证 | 模式 HASH:续租与认领脚本在 ZADD 登记表的同一个原子操作里 HSET,回收脚本摘掉登记时 HDEL;`go/db/cmd/retry_requeue` 经 `RetryQueueDepths` 的 HMGET 读,登记着 owner 实例就以退出码 5 拒绝。防重记录:每次认领 / ack 带随机 nonce,第一次执行写入,go-redis 原样重发同一个 EVAL 时据此不再 POP、不再多删一份 | 模式 HASH **无**(与登记表同生共死);防重记录 **5 分钟**(`retryGuardTTL`) | 多键 Lua,只在本族内(认领脚本同时碰 ready、本实例 processing、登记表、防重记录与模式 HASH) | `go/db/internal/kafka/retry_ownership.go` 的 `retryInstanceModesKey`、`retryGuardKey`、`retryGuardTTL`、`retryLeaseScript`、`retryClaimScript`;`retry_routing.go` 的 `claimFrom`;`key_ordered_consumer.go` 的 `ackRetryReceiptScript` |
+| `kafka:retry:instance_mode:{topic}`(HASH,field = 实例名,值 = 生效模式 `owner` / `shared`)、`kafka:retry:guard:{claim\|ack}:<本实例 processing 键>:<nonce>`(STRING,认领 / 收据 ack 的防重记录)。2026-10-17 登记(R7 复核),已落码,未编译、未测试,待 Gemini 验证 | 模式 HASH:续租与认领脚本在 ZADD 登记表的同一个原子操作里 HSET,回收脚本摘掉登记时 HDEL;`go/db/cmd/retry_requeue` 经 `RetryQueueDepths` 的 HMGET 读,登记着 owner 实例就以退出码 5 拒绝。防重记录:每次认领 / ack 带随机 nonce,第一次执行写入,go-redis 原样重发同一个 EVAL 时据此不再 POP、不再多删一份 | 模式 HASH **无**(与登记表同生共死);防重记录 **5 分钟**(`retryGuardTTL`) | 多键 Lua,只在本族内(认领脚本同时碰 ready、本实例 processing、登记表、防重记录与模式 HASH) | `go/db/internal/kafka/retry_ownership.go` 的 `retryInstanceModesKey`、`retryGuardKey`、`retryGuardTTL`、`retryLeaseScript`、`retryClaimScript`;`retry_routing.go` 的 `claimFrom`;`key_ordered_consumer.go` 的 `ackRetryReceiptScript` |
 | `distributed:lock:kafka:consumer:lock:{playerID}`、`kafka:expand:status:{topic}` | 锁只在在线扩分区期间(或读扩分区状态出错时)用;状态每个任务读一次 | 有(5s)/ 无 | 单键 | `key_ordered_consumer.go:1820-1832`、`:1959`;`go/shared/kafkautil/expand_utils.go:104-105`。**锁键经 locker 加了 `distributed:lock:` 前缀(`locker.go:29`),而且只含 player_id、不含 topic**:它是全服共享的一把键,不能按 zone 过滤(§3.2.3、§5.2) |
 
 只读方:merge_zone 的 preflight 与审计检查重试 / 死信队列(`tools/merge_zone/preflight.go:164-199`、`:260-270`;`audit_checks.go:153-165`);relocate 的 R2 步骤等排序锁释放(`relocate.go:367-372`)。
@@ -360,7 +360,7 @@ merge_zone 合服与撤销时会按玩家删缓存（`playerCacheKeys`）；清�
    - 现状:`node.cpp:541-557` 建连时不发;`config.cpp:295-301` 读了 password / db,但没有任何代码使用;K8s 写的是空串(`k8s_deploy.ps1:1869`)。
    - 冲突:release 档注入 ≥12 位密码(`:452-453`),`redis.yaml:93-97` 随之开 requirepass。这时 C++ 节点的所有命令都会 NOAUTH。
    - `docs/PROGRESS.md:5440` 的 release 实测清单也没有列 C++ 和 Java。
-   - **(2026-10-15 更正,上面三行原文保留)AUTH 已落码,两批都未经 Codex 编译 / 测试**(P0-A,`docs/handoff/global-singletons-p0-findings-20261014.md`):
+   - **(2026-10-15 更正,上面三行原文保留)AUTH 已落码,两批都未经 Gemini 编译 / 测试**(P0-A,`docs/handoff/global-singletons-p0-findings-20261014.md`):
      - 第一批(C++):`RedisManager` 每条新连接先 AUTH,回 `+OK` 才对业务可见;认证被拒 / 超时 fail-closed(zone Redis 保持不可用,按重连间隔重试)。口令来自 `zoneredis.password`,环境变量 `ZONE_REDIS_PASSWORD` 可覆盖;空口令不发 AUTH。SELECT 仍不发,库号钉在 0。
      - 第二批(K8s,方案 A):`k8s_deploy.ps1` 的 `New-NodeConfigMapYaml` 把 `MMORPG_REDIS_PASSWORD` 明文写进 `node-config` / `battle-node-config` 的 `zoneredis.password`(与 Go 服务 / gateway 的 ConfigMap 同一做法);C++ 工作负载 Pod 模板带只哈希口令的指纹注解 `mmorpg.io/zone-redis-auth-hash`,换口令即滚动。上线顺序见 `deploy/k8s/README.md`「C++ 节点的 zone Redis 口令」。
 4. **Java gateway 的 K8s ConfigMap 没写 `spring.data.redis.password`**(`k8s_deploy.ps1:4935-4938`)。release 档一开限流就 NOAUTH,限流按设计 fail-open。
@@ -372,7 +372,7 @@ merge_zone 合服与撤销时会按玩家删缓存（`playerCacheKeys`）；清�
    - **(2026-10-22 更正,上面几行原文保留)** README friend 段与 `k8s_deploy.ps1` friend ConfigMap here-string 两处的原句连同 10-18 括注,已于 2026-10-19 改写为现状口径(共享库 noeviction、不设 maxmemory、回落只是过渡,附 10-19 更正说明);`match_service.yaml` 评分段改写为限定条件(GlobalMatch 关闭、回落共享库、共享库被配成 allkeys-* 三者同时成立)。随 `c35e1133d` 入库。`redis-rank.yaml` :4-5「字面不错」的判定只对 allkeys-lfu 那半句的条件读法成立:volatile-lru 不淘汰无 TTL 键,那半句有误,已在该文件追加 2026-10-22 更正注。行号会漂移,以锚定文字为准。
 6. `redis-ha.yaml:3` 提到的 `-RedisReplicas` 参数在部署脚本里不存在(`tidb-phase1-and-launch-readiness.md:727`)。
    - **(2026-10-19 更正,上面一行原文保留)已不成立**:`k8s_deploy.ps1 -RedisReplicas`(0 / 1 / 3,0 = 按档位)已接入,核心实例取 3 时 apply `redis-ha.yaml` 代替 `redis.yaml`;
-     origin `43284eb0b`(10-16)接入,本地 10-19 补齐。`redis-ha.yaml` 文件头已改写为接入说明。已落码,契约测试未运行、未在 kind 复测,待 Codex 验证;
+     origin `43284eb0b`(10-16)接入,本地 10-19 补齐。`redis-ha.yaml` 文件头已改写为接入说明。已落码,契约测试未运行、未在 kind 复测,待 Gemini 验证;
      详见 `no-single-node-horizontal-scaling-20261001.md` §5.1。
 7. merge_zone 的 `-notice-redis-*` 一个句柄混了四类:合服提示、`player:session`、go/db 重试队列、go/db 排序锁(`tools/merge_zone/preflight.go:211`;`relocate_run.go:339`)。
 8. K8s 给 login `Node.RedisClient` 写了 Dial / Read / WriteTimeout(`k8s_deploy.ps1:3587-3590`),但构造 client 时没传(`go/login/internal/svc/servicecontext.go:111-116`),实际用的是 go-redis 缺省值。
@@ -922,7 +922,7 @@ type Family struct {
 前提:
 - 从第一个 zone 开始到最后一个 zone 切完,**全服禁止在线扩分区**(§3.2.3),也禁止运行 merge_zone(它的 `-dbctl-redis` 句柄只能指向一个实例)。
 - **与 L-09 的关系**:K8s 上所有 zone 的 go/db 共用一个消费组 `db_rpc_consumer_group`(`tidb-phase1-and-launch-readiness.md` L-09,`k8s_deploy.ps1:3437`)。缩容和扩回各触发一次全组 rebalance,**全服**存盘各停几秒,Z 个 zone 一共 2Z 次。建议先做 L-09(消费组按 zone 命名)再做第 2 批;做不到就把每个 zone 的两次 rebalance 都排进维护窗口,并在 robot / 监控里确认每次之后各 zone 的 lag 都追平。
-  - (2026-10-16 更新,③;上文不删)L-09 已落码,未编译、未测试,待 Codex 验证(设计见 [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md))。各 zone 逐个从共享组 `db_rpc_consumer_group` 交接到本 zone 组 `db_rpc_consumer_group_z<ZoneId>`:`k8s_deploy.ps1 -Command zone-up -DbConsumerGroup zone` → `kafka_offset_reset.ps1 -FinalizeHandoff` → 以缺省 keep 再跑一次 zone-up(去掉 `GroupHandoffFrom`)。切组并收尾之后,该 zone 第 2 步的缩容与扩回只让本 zone 组再平衡,不再让全服存盘停顿。线上 db ConfigMap 仍是 `GroupID: "db_rpc_consumer_group"` 的 zone 照旧会触发全组 rebalance。所以「先做 L-09」现在的含义是:先把要做第 2 批的 zone 切组并收尾;交接没收尾的 zone,go/db 每个新进程入组前都要过交接闸并读 legacy 组,不要在这种 zone 上做第 2 批。
+  - (2026-10-16 更新,③;上文不删)L-09 已落码,未编译、未测试,待 Gemini 验证(设计见 [db-consumer-group-per-zone.md](db-consumer-group-per-zone.md))。各 zone 逐个从共享组 `db_rpc_consumer_group` 交接到本 zone 组 `db_rpc_consumer_group_z<ZoneId>`:`k8s_deploy.ps1 -Command zone-up -DbConsumerGroup zone` → `kafka_offset_reset.ps1 -FinalizeHandoff` → 以缺省 keep 再跑一次 zone-up(去掉 `GroupHandoffFrom`)。切组并收尾之后,该 zone 第 2 步的缩容与扩回只让本 zone 组再平衡,不再让全服存盘停顿。线上 db ConfigMap 仍是 `GroupID: "db_rpc_consumer_group"` 的 zone 照旧会触发全组 rebalance。所以「先做 L-09」现在的含义是:先把要做第 2 批的 zone 切组并收尾;交接没收尾的 zone,go/db 每个新进程入组前都要过交接闸并读 legacy 组,不要在这种 zone 上做第 2 批。
 
 步骤:
 1. 部署第 2 批代码。此时 `CacheRedis` 缺省等于 `RedisClient`,行为不变。
@@ -1184,7 +1184,7 @@ type Family struct {
 > - 「先到瓶颈的不是映射本身,而是第 2 批并进来的存盘控制面」作废:控制面不并入 mapping(§18)。
 > - 「要集群化,得把三族改成同一个 hash tag……D1 P2 之后的事,本稿不做」改为:原则已由负责人 2026-10-13 定为「以按 player_id 分片为准」,剩下的时机、形态与键名见 §21。
 
-## 10. 交给 Codex 的验证命令与通过标准
+## 10. 交给 Gemini 的验证命令与通过标准
 
 工作目录都是仓库根。C++ 不涉及,不需要 MSBuild。任何一步失败都保留输出摘要并停下,不要连续自动重试。
 
@@ -1293,7 +1293,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 2. **killswitch 是 fail-open 的**:由 delta 兜住;delta 发现冲突就交给人处理。
 3. **核心内存没有上界**(§2.5 第 1、2 条)。这与拆分无关,但决定了 maxmemory 能不能设:设了 noeviction + maxmemory 之后,满了就拒写,全服存盘和登录都会失败。
 4. **C++ 不发 AUTH**:release 档核心一开 requirepass,C++ 全线 NOAUTH。本稿的新实例都没有 C++ 客户端,可以开密码;核心怎么处理待拍板。
-   **(2026-10-15 结论,上句原文保留)** 已拍板为「给 `RedisManager` 加 AUTH」(§13 第 7 条),C++ 与 K8s 两批都已落码、未经 Codex 编译 / 测试,详见 §2.5 第 3 条的更正。剩余风险:口令配错时 C++ 节点 fail-closed(zone Redis 不可用、Pod 仍 Ready),「zone Redis 已认证」的就绪条件另起一项,不在本次最小修复内。
+   **(2026-10-15 结论,上句原文保留)** 已拍板为「给 `RedisManager` 加 AUTH」(§13 第 7 条),C++ 与 K8s 两批都已落码、未经 Gemini 编译 / 测试,详见 §2.5 第 3 条的更正。剩余风险:口令配错时 C++ 节点 fail-closed(zone Redis 不可用、Pod 仍 Ready),「zone Redis 已认证」的就绪条件另起一项,不在本次最小修复内。
 5. **实例变多,运维面变大**:PVC、备份都要多管几份。Redis 今天没有任何备份,AOF 只在 PVC 上。映射在 D1 之后有库里的真源,控制面在库侧没有备份。
 6. **第 2 批逐 zone 停 go/db**:存盘暂停期间,新号首次进场冷读会失败(8s 超时)。而且在 L-09 之前,每次缩容与扩回都会让**全服**存盘停几秒(共用消费组的 rebalance),Z 个 zone 一共 2Z 次。
 7. **迁移期间必须禁用 merge_zone 和 relocate,第 2 批期间还要全服禁止在线扩分区**,目前只靠运维纪律和手册约束;墓碑只能拦住「连错实例」,拦不住「在窗口里运行」。
@@ -1325,7 +1325,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 6. Redis 监控:先做 INFO 快照(不引入新镜像),还是直接上 redis_exporter sidecar。
 7. C++ AUTH:给 `RedisManager` 加 AUTH,还是核心不开 requirepass、改用 NetworkPolicy 限制访问。
    **(2026-10-15 已拍板,原文保留)结论:选 AUTH,已落码**(P0-A,`docs/handoff/global-singletons-p0-findings-20261014.md`)。理由:release 档已强制 Redis 口令,Go 与 Java 也已接线;不开 requirepass 等于把核心交给同网段任何 Pod。
-   K8s 侧选方案 A(口令明文进 `node-config`,与 Go 服务 / gateway 的 ConfigMap 同一做法;C++ 工作负载带只哈希口令的指纹注解)。两批都未经 Codex 编译 / 测试;取值与上线步骤待实测复核,见 `deploy/k8s/README.md`「C++ 节点的 zone Redis 口令」。
+   K8s 侧选方案 A(口令明文进 `node-config`,与 Go 服务 / gateway 的 ConfigMap 同一做法;C++ 工作负载带只哈希口令的指纹注解)。两批都未经 Gemini 编译 / 测试;取值与上线步骤待实测复核,见 `deploy/k8s/README.md`「C++ 节点的 zone Redis 口令」。
 8. AGENTS §6.2 中 Redis 清库口径的改写(由负责人改 AGENTS.md)。
 9. `stress_summarize` 增加 Redis 表(会改 §6.1 规定的输出口径)。
 10. 拆分与 L-02 的先后。建议先拆 queue,再打开排队与限流。
@@ -1333,7 +1333,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 12. purge 前的浸泡时长(缺省 24h),以及由谁执行。
 13. 新实例是否也用 redis-ha 形态(`redis-mapping` 优先),以及补上 `-RedisReplicas` 的 apply 路径(`tidb-phase1-and-launch-readiness.md` §9.5)。
    - **(2026-10-19 更正,上句原文保留)后半句已完成**:核心实例 `redis` 已有高可用形态与 `-RedisReplicas` 的 apply 路径(origin `43284eb0b` 10-16 接入;
-     本地 10-19 补齐 WAITAOF 副本份数按拓扑渲染、zone 写路径跟随线上 `sts/redis` 等;已落码,契约测试未运行、未在 kind 复测,待 Codex 验证;
+     本地 10-19 补齐 WAITAOF 副本份数按拓扑渲染、zone 写路径跟随线上 `sts/redis` 等;已落码,契约测试未运行、未在 kind 复测,待 Gemini 验证;
      见 `no-single-node-horizontal-scaling-20261001.md` §5.1)。它只管核心一个实例。
    - **前半句仍待定**:按用途拆出的新实例是否也用高可用形态。若用,§4.4 第 3 条的 `kubectl exec svc/<target>` 要改为 exec 节点 StatefulSet 的 redis 容器
      (高可用形态下 Service 指向 haproxy,代理镜像没有 redis-cli;`k8s_gate_drain.ps1` 10-19 已这样改)。
@@ -1349,7 +1349,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 > - 第 3 条:后半句(先做分频道)已答复并落码(B0-3,§17);前半句改为必做(§19),形态进 §25。
 > - 第 5 条:改为 S1 前必须拍板(§23、§25)。
 > - 第 11 条:规模后只能走路径 B(§5.4 的更正),与 mapping 改 tag 的时机一起进 §25(§21)。
-> - 第 13 条:后半句「补上 `-RedisReplicas` 的 apply 路径」已于 2026-10-19 落码:非 dev 档缺省 3 副本,即 1 主 2 从、3 个哨兵、2 个入口代理。契约测试还没跑,也没在 kind 复测,待 Codex 验证,见 §2.5 第 6 条的 2026-10-19 更正。核实之前,§12 第 9 条的单点风险不能视为已消除;HA 也只解决可用性,不解决容量(§16)。前半句「新实例是否也用 HA」进 §25.2 第 18 条。
+> - 第 13 条:后半句「补上 `-RedisReplicas` 的 apply 路径」已于 2026-10-19 落码:非 dev 档缺省 3 副本,即 1 主 2 从、3 个哨兵、2 个入口代理。契约测试还没跑,也没在 kind 复测,待 Gemini 验证,见 §2.5 第 6 条的 2026-10-19 更正。核实之前,§12 第 9 条的单点风险不能视为已消除;HA 也只解决可用性,不解决容量(§16)。前半句「新实例是否也用 HA」进 §25.2 第 18 条。
 > - 第 14 条:`deploy/k8s/AGENTS.md` 的 Redis 拓扑描述还要加上「单元化 + 单元内 Cluster」的方向,仍由负责人确认是否改。
 
 ## 14. Java 版(AGENTS §12)
@@ -1432,7 +1432,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 | go/db `cmd/verifier`、`cmd/data_stress`;robot `data_stress.go`;data_service `cmd/debug_fetch` | 参数或 yaml |
 | `tools/scripts/k8s_deploy.ps1`、契约测试 | cache 渲染 |
 
-**改动面**:第 1a 批约 22 个文件,第 1b 批约 20 个文件,合计超过 AGENTS §10.2 的 30 个文件门槛。落码前需要负责人授权;授权后也按 1a、1b 严格分两次提交,每次单独由 Codex 验证。
+**改动面**:第 1a 批约 22 个文件,第 1b 批约 20 个文件,合计超过 AGENTS §10.2 的 30 个文件门槛。落码前需要负责人授权;授权后也按 1a、1b 严格分两次提交,每次单独由 Gemini 验证。
 
 > **(2026-10-18 更正,本节原文保留)** 本节只对第 1a、1b 批还有参考价值,而且要去掉已失效的两项:`k8s_zone_rollback.ps1` 的守卫补核心族,以及 `k8s_zone_rollback_flush_guard.tests.ps1`(回档已不再 FLUSHDB,该测试文件已删除,§4.6 的更正)。第 2、3 批的文件清单作废,由各自的落码规格按 §18、§19 重列。第 0 批已落码的文件见 §17 引的 PROGRESS 条目,第 4 批见 §24。
 
@@ -1493,7 +1493,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 
 ## 17. 第 0 批五项的定位与现状(2026-10-18 新增)
 
-**状态**:五项都已落码,**全部未编译、未测试、未验证**,交 Codex 的命令在各自的 PROGRESS 条目里。它们不改键族归属,不需要 `-RedisSplit`。规格都在 `docs/handoff/launch-readiness-20261013/`,每份后半是核实意见。下表最后一列写的是它们对 §20 Cluster 化的接缝。
+**状态**:五项都已落码,**全部未编译、未测试、未验证**,交 Gemini 的命令在各自的 PROGRESS 条目里。它们不改键族归属,不需要 `-RedisSplit`。规格都在 `docs/handoff/launch-readiness-20261013/`,每份后半是核实意见。下表最后一列写的是它们对 §20 Cluster 化的接缝。
 
 | 项 | 做了什么 | 规格 / PROGRESS 条目 | 新键、频道与跨槽绑定 | 上 Cluster 时怎么改形 |
 |---|---|---|---|---|
@@ -1505,7 +1505,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 
 另外两项现状:
 - **P0-E** 已落码,未验证:`redis.yaml` 显式 `MAXCLIENTS=40000`;`k8s_deploy.ps1`「Redis 连接总账」(`Get-RedisConnectionLedgerInputs` / `Get-RedisConnectionLedger`);改动核心 Pod 模板必须带 `-ConfirmRedisCoreRestart`(`Assert-RedisCoreRestartConfirmed`)。见 `docs/handoff/global-singletons-p0-findings-20261014.md`「## P0-E」、PROGRESS「2026-10-15 补充:全局单点 P0 部署侧四批落码与交接新账号」,以及 2026-10-16 的 P0-E 第 3 批各条。
-- **redis-ha 已接入部署脚本**:由 `k8s_deploy.ps1 -RedisReplicas` 接入(origin `43284eb0b` 10-16 接入,本地 10-19 补齐;10-22 订正,原写「2026-10-19 接入」),可取 0 / 1 / 3,其中 0 表示按档位,非 dev 档按 3 部署 `redis-ha.yaml`。已落码,契约测试未跑,也没在 kind 复测,待 Codex 验证。详见 §2.5 第 6 条的 2026-10-19 更正与 `no-single-node-horizontal-scaling-20261001.md` §5.1。本稿 10-18 初稿写的「尚无部署路径」同此更正。
+- **redis-ha 已接入部署脚本**:由 `k8s_deploy.ps1 -RedisReplicas` 接入(origin `43284eb0b` 10-16 接入,本地 10-19 补齐;10-22 订正,原写「2026-10-19 接入」),可取 0 / 1 / 3,其中 0 表示按档位,非 dev 档按 3 部署 `redis-ha.yaml`。已落码,契约测试未跑,也没在 kind 复测,待 Gemini 验证。详见 §2.5 第 6 条的 2026-10-19 更正与 `no-single-node-horizontal-scaling-20261001.md` §5.1。本稿 10-18 初稿写的「尚无部署路径」同此更正。
 
 ## 18. 控制面按 zone 组分实例(2026-10-18 新增,取代 §3.2.3)
 
@@ -1875,7 +1875,7 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
 
 | 批 | 内容 | 前置门禁 | 要改的运维脚本 | Java |
 |---|---|---|---|---|
-| 0(已落码,见 §17) | B0-1~B0-5;另有 P0-E | 交 Codex 编译 / 测试;B0-4 发布前读各节点池的 nofile 硬限;B0-1 的 player-locator ConfigMap Prometheus 段与 manifest 9190 端口同批;B0-3 若 login 已是第 1 批,按 zone 金丝雀 go/db;`dirty_keys_set` 存量清理等负责人指定环境 | release-checklist §6.1;`deploy-staging.sh`、`stress-linux-tier.sh` 的清理清单;player-locator 告警与 manifest;task-result-notify 告警;scene-manager 告警 | B0-4 Java 待做(PARITY「C++ 节点 RLIMIT_NOFILE」行);B0-3 第 1 批在 PARITY 有一行,状态是不适用,作为 db_task.proto 的 ContractSync 同步项保留;P0-E 见 PARITY「共享 Redis 连接上限」两行;B0-1、B0-2、B0-5 不适用,按开服线 10-19 交接 §4 的约定不进 PARITY(见 §26)。(10-22 订正) |
+| 0(已落码,见 §17) | B0-1~B0-5;另有 P0-E | 交 Gemini 编译 / 测试;B0-4 发布前读各节点池的 nofile 硬限;B0-1 的 player-locator ConfigMap Prometheus 段与 manifest 9190 端口同批;B0-3 若 login 已是第 1 批,按 zone 金丝雀 go/db;`dirty_keys_set` 存量清理等负责人指定环境 | release-checklist §6.1;`deploy-staging.sh`、`stress-linux-tier.sh` 的清理清单;player-locator 告警与 manifest;task-result-notify 告警;scene-manager 告警 | B0-4 Java 待做(PARITY「C++ 节点 RLIMIT_NOFILE」行);B0-3 第 1 批在 PARITY 有一行,状态是不适用,作为 db_task.proto 的 ContractSync 同步项保留;P0-E 见 PARITY「共享 Redis 连接上限」两行;B0-1、B0-2、B0-5 不适用,按开服线 10-19 交接 §4 的约定不进 PARITY(见 §26)。(10-22 订正) |
 | 1a | 原 §3.4 第 1a 批,去掉「回档守卫补核心族」(回档已不再 FLUSHDB);拓扑函数按 zone 返回 DbCtl 的骨架;每个新实例显式 `--maxclients` 并进总账 | 与 L-02(打开排队与限流)的先后(时机待原 §13 第 10 条拍板);超过 30 文件需授权 | `k8s_deploy.ps1`、`dev_tools.ps1`(`k8s-redis-split-status`、`k8s-redis-wipe`)、`k8s_gate_drain.ps1`、`stress_snap.ps1` / `stress_summarize.ps1` | 待做(Java 没有 K8s 生产形态,§26) |
 | 1b | 迁移工具 `tools/redis_split` 与墓碑检查;族表按 §2.2 的更正补齐新键 | 1a | merge_zone、data_consistency_check、route_tool;redis-split runbook | 待做 |
 | 1c | 切 queue、mapping;mapping 三族是否同窗口改名按 §21 拍板;核心显式 maxmemory 按 §23 拍板 | 路径 A 只在开服前或 S1 以内可行,规模后走路径 B(§5.4 的更正);回档契约按拆分拓扑重写(映射复核改走 mapping 句柄加维护围栏;今天的契约要求 MappingRedis 与 go/db RedisClient 同实例同 DB,1c 之后回档 -Apply 必然拒绝,§2.3 的例外)。首次上线前做 1c 不阻塞,但契约要在上线前按新拓扑定稿 | 同 1a;核心重启走 `-ConfirmRedisCoreRestart`;`k8s_zone_rollback.ps1` 的部署事实核对与 `zone_rollback_discard` 契约 | 不适用 |
@@ -1956,7 +1956,7 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
 | 4(单元规模)、15(C++ 集群客户端)、18-子项2(Cluster 故障转移)、20(a)(b)(单元边界语义) | 玩家域稿自研 C++ 路由层,不用 hiredis-cluster。第 20 条原推荐「跨单元 = 转区」**作废**:负责人 10-22 的需求写明保留跨区位置透明,不改成转区体验(`docs/handoff/redis-horizontal-scaling-requirements-20261022.md` §1) | 玩家域线 |
 | 6、6-子项(redis-cache / 子表缓存) | 随第 1 条的选择,以玩家域稿为准 | 玩家域线 |
 | 7、7-子项(mapping 三族 hash tag) | 被取代:映射改为直读 TiDB | 映射线 |
-| 8(账号目录落库) | 追认已落码的方案(`7d9208237`,`account-role-authority.md`):全局 TiDB 薄层,主键是 account 原文,密码表不并入 | 已落码,待 Codex 验证 |
+| 8(账号目录落库) | 追认已落码的方案(`7d9208237`,`account-role-authority.md`):全局 TiDB 薄层,主键是 account 原文,密码表不并入 | 已落码,待 Gemini 验证 |
 | 9(核心 maxmemory 与冷卸载) | 核心即玩家域,以玩家域稿为准。控制域实例按第 19 条第 4 项 | 玩家域线 |
 | 9-子项(补投意图常驻) | 补投在玩家域核心上,以玩家域稿为准 | 玩家域线 |
 | 10(redis-queue 形态) | **按 zone 组分实例**(`redis-queue-g<N>`),不改排队键名,不上 Cluster。zones 配置加组字段,首发 1 组;非 dev 档的高可用形态与核心同一套 `-RedisReplicas` 档位规则。**两轮分析的分歧与取舍**:另一轮推荐 Cluster + `{zone}` tag,水平扩展同样成立,但要改 login、scene_manager、Java gateway 三处客户端和全部排队键名;排队键天然按 zone,按组分实例不改任何键、loginqueue 包不改,与 dbctl 组同一机制,取后者(KISS) | 本会话,第 1a 批 |
@@ -1985,8 +1985,8 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
 - **(2026-10-23 落码时订正,上面几条原文保留)**:
   - **gate 排空标记 `gate:{gm:<zone>}:<id>:draining` / `drained` 留在核心,不随 queue 拆走**,上一条作废。排空标记是运维置位的低频标志,读方有 login 的 AssignGate 过滤与排空监视器、`k8s_gate_drain.ps1`、scene_manager 的跨 zone 重定向,与排队键之间没有原子操作。留在核心后:scene_manager 与 `k8s_gate_drain.ps1` 不用改;也不需要「按目标 zone 找它所属的 queue 组」这种跨组寻址;§4.4 第 5 条「核心上没有正在进行的排空」的闸也随之不需要。queue 实例只放 `queue:*` / `admit:*` / `admitted:*`、放行锁和 gateway 的 `rl:*` 限流桶。
   - **`-RedisSplit` 在所有档位缺省都解析为不拆**,第 19 条原 §13 第 16 条「非 dev 缺省拆 queue」改为:首次上线显式 `-RedisSplit queue` 部署;不带参数时渲染逐字节不变;zone 写路径跟随线上,与线上不同须 `-ConfirmRedisSplitSwitch`。
-  - **(2026-10-24)第 1a 批已落码,未编译、未测试**:login 的 `Node.QueueRedis`、`k8s_deploy.ps1 -RedisSplit queue`、模板 `redis-purpose.yaml`、`redis-split-status` / `redis-wipe`,以及 dev_tools / k8s_image / 回档脚本的转发;文件清单与 Codex 验证命令见 PROGRESS「2026-10-24 G4a 第 1a 批落码」。
-  - **queue 实例的形态(第 18 条子项 1;2026-11-01 落地说明)**:dev 档单实例,非 dev 档高可用,与核心同一个 `-RedisReplicas`。第 1a 批(10-24)只落了单实例,因为 `redis-ha.yaml` 的对象名(redis、redis-proxy、mymaster、redis-ha-scripts)写死;高可用形态 11-01 落码,未编译、未跑测试、未上集群,待 Codex 验证。
+  - **(2026-10-24)第 1a 批已落码,未编译、未测试**:login 的 `Node.QueueRedis`、`k8s_deploy.ps1 -RedisSplit queue`、模板 `redis-purpose.yaml`、`redis-split-status` / `redis-wipe`,以及 dev_tools / k8s_image / 回档脚本的转发;文件清单与 Gemini 验证命令见 PROGRESS「2026-10-24 G4a 第 1a 批落码」。
+  - **queue 实例的形态(第 18 条子项 1;2026-11-01 落地说明)**:dev 档单实例,非 dev 档高可用,与核心同一个 `-RedisReplicas`。第 1a 批(10-24)只落了单实例,因为 `redis-ha.yaml` 的对象名(redis、redis-proxy、mymaster、redis-ha-scripts)写死;高可用形态 11-01 落码,未编译、未跑测试、未上集群,待 Gemini 验证。
     - **做法**:`redis-ha.yaml` 没有参数化,新增 `manifests/infra/redis-purpose-ha.yaml`,对象名、Pod 名前缀、headless 域名与哨兵 master 名都由实例名渲染。全部生效行与 `redis-ha.yaml` 逐行同源,差别只有模板文件头列的几条,由 `k8s_redis_split_contract.tests.ps1` 比对。客户端入口仍是同名 Service `redis-queue-g<N>`,高可用时它指向代理,所以地址不随形态变,换形态不触发 `-ConfirmRedisSplitSwitch`。
     - **取舍**:形态不单独设参数(同一次部署里 queue 与核心一致)。1 → 3 只告警、不要确认开关,3 → 1 与线上 0 / 2 副本拒绝并写明手工步骤;queue 实例不走核心的重启闸。理由都是排队数据带 TTL、可以丢,重启只影响本组新登录。代价:不带 `-RedisSplit queue` 的 infra-up 不碰 queue 实例,核心切到高可用之后 queue 要到下一次带这个参数才跟上,这期间两者形态不同。
     - **连接账**:`MAXCLIENTS` 与单实例同值 10000,总账只读 `redis-purpose.yaml`;`PROXY_MAXCONN=3000`,3000 × (2 + 1) + 预留 1000 = 10000,渲染与总账两处核对。容量初值(每组 1gb)不变,仍待 L-14 压测复核。

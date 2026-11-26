@@ -231,7 +231,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     kDescFieldNumber = 20,
     kIdFieldNumber = 1,
     kRuleVersionFieldNumber = 2,
-    kEnabledFieldNumber = 3,
     kBattleConfigIdFieldNumber = 4,
     kBattleTeamSizeFieldNumber = 5,
     kRosterMaxSizeFieldNumber = 6,
@@ -247,7 +246,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     kQualifierWinPointsFieldNumber = 16,
     kQualifierDrawPointsFieldNumber = 17,
     kQualifierLossPointsFieldNumber = 18,
+    kEnabledFieldNumber = 3,
+    kBo3Top4EnabledFieldNumber = 21,
+    kPublicKnockoutReplayFieldNumber = 23,
+    kWarmupSparEnabledFieldNumber = 27,
     kInviteTtlSecondsFieldNumber = 19,
+    kIntermissionSecondsFieldNumber = 22,
+    kSaluteGoldAmountFieldNumber = 24,
+    kSaluteItemIdFieldNumber = 25,
+    kSaluteItemCountFieldNumber = 26,
+    kPredictionRewardMinHitsFieldNumber = 29,
+    kPredictionEnabledFieldNumber = 28,
+    kThirdPlaceMatchEnabledFieldNumber = 30,
+    kLeylineBanEnabledFieldNumber = 31,
   };
   // string desc = 20;
   void clear_desc() ;
@@ -282,16 +293,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
   private:
   ::uint32_t _internal_rule_version() const;
   void _internal_set_rule_version(::uint32_t value);
-
-  public:
-  // bool enabled = 3;
-  void clear_enabled() ;
-  [[nodiscard]] bool enabled() const;
-  void set_enabled(bool value);
-
-  private:
-  bool _internal_enabled() const;
-  void _internal_set_enabled(bool value);
 
   public:
   // uint32 battle_config_id = 4;
@@ -444,6 +445,46 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
   void _internal_set_qualifier_loss_points(::uint32_t value);
 
   public:
+  // bool enabled = 3;
+  void clear_enabled() ;
+  [[nodiscard]] bool enabled() const;
+  void set_enabled(bool value);
+
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+
+  public:
+  // bool bo3_top4_enabled = 21;
+  void clear_bo3_top4_enabled() ;
+  [[nodiscard]] bool bo3_top4_enabled() const;
+  void set_bo3_top4_enabled(bool value);
+
+  private:
+  bool _internal_bo3_top4_enabled() const;
+  void _internal_set_bo3_top4_enabled(bool value);
+
+  public:
+  // bool public_knockout_replay = 23;
+  void clear_public_knockout_replay() ;
+  [[nodiscard]] bool public_knockout_replay() const;
+  void set_public_knockout_replay(bool value);
+
+  private:
+  bool _internal_public_knockout_replay() const;
+  void _internal_set_public_knockout_replay(bool value);
+
+  public:
+  // bool warmup_spar_enabled = 27;
+  void clear_warmup_spar_enabled() ;
+  [[nodiscard]] bool warmup_spar_enabled() const;
+  void set_warmup_spar_enabled(bool value);
+
+  private:
+  bool _internal_warmup_spar_enabled() const;
+  void _internal_set_warmup_spar_enabled(bool value);
+
+  public:
   // uint32 invite_ttl_seconds = 19;
   void clear_invite_ttl_seconds() ;
   [[nodiscard]] ::uint32_t invite_ttl_seconds() const;
@@ -454,12 +495,92 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
   void _internal_set_invite_ttl_seconds(::uint32_t value);
 
   public:
+  // uint32 intermission_seconds = 22;
+  void clear_intermission_seconds() ;
+  [[nodiscard]] ::uint32_t intermission_seconds() const;
+  void set_intermission_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_intermission_seconds() const;
+  void _internal_set_intermission_seconds(::uint32_t value);
+
+  public:
+  // uint32 salute_gold_amount = 24;
+  void clear_salute_gold_amount() ;
+  [[nodiscard]] ::uint32_t salute_gold_amount() const;
+  void set_salute_gold_amount(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_salute_gold_amount() const;
+  void _internal_set_salute_gold_amount(::uint32_t value);
+
+  public:
+  // uint32 salute_item_id = 25;
+  void clear_salute_item_id() ;
+  [[nodiscard]] ::uint32_t salute_item_id() const;
+  void set_salute_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_salute_item_id() const;
+  void _internal_set_salute_item_id(::uint32_t value);
+
+  public:
+  // uint32 salute_item_count = 26;
+  void clear_salute_item_count() ;
+  [[nodiscard]] ::uint32_t salute_item_count() const;
+  void set_salute_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_salute_item_count() const;
+  void _internal_set_salute_item_count(::uint32_t value);
+
+  public:
+  // uint32 prediction_reward_min_hits = 29;
+  void clear_prediction_reward_min_hits() ;
+  [[nodiscard]] ::uint32_t prediction_reward_min_hits() const;
+  void set_prediction_reward_min_hits(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_prediction_reward_min_hits() const;
+  void _internal_set_prediction_reward_min_hits(::uint32_t value);
+
+  public:
+  // bool prediction_enabled = 28;
+  void clear_prediction_enabled() ;
+  [[nodiscard]] bool prediction_enabled() const;
+  void set_prediction_enabled(bool value);
+
+  private:
+  bool _internal_prediction_enabled() const;
+  void _internal_set_prediction_enabled(bool value);
+
+  public:
+  // bool third_place_match_enabled = 30;
+  void clear_third_place_match_enabled() ;
+  [[nodiscard]] bool third_place_match_enabled() const;
+  void set_third_place_match_enabled(bool value);
+
+  private:
+  bool _internal_third_place_match_enabled() const;
+  void _internal_set_third_place_match_enabled(bool value);
+
+  public:
+  // bool leyline_ban_enabled = 31;
+  void clear_leyline_ban_enabled() ;
+  [[nodiscard]] bool leyline_ban_enabled() const;
+  void set_leyline_ban_enabled(bool value);
+
+  private:
+  bool _internal_leyline_ban_enabled() const;
+  void _internal_set_leyline_ban_enabled(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TournamentRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 20,
-                          0, 48,
+      ::google::protobuf::internal::TcParseTable<5, 31,
+                          0, 56,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -490,7 +611,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     ::google::protobuf::internal::ArenaStringPtr desc_;
     ::uint32_t id_;
     ::uint32_t rule_version_;
-    bool enabled_;
     ::uint32_t battle_config_id_;
     ::uint32_t battle_team_size_;
     ::uint32_t roster_max_size_;
@@ -506,7 +626,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     ::uint32_t qualifier_win_points_;
     ::uint32_t qualifier_draw_points_;
     ::uint32_t qualifier_loss_points_;
+    bool enabled_;
+    bool bo3_top4_enabled_;
+    bool public_knockout_replay_;
+    bool warmup_spar_enabled_;
     ::uint32_t invite_ttl_seconds_;
+    ::uint32_t intermission_seconds_;
+    ::uint32_t salute_gold_amount_;
+    ::uint32_t salute_item_id_;
+    ::uint32_t salute_item_count_;
+    ::uint32_t prediction_reward_min_hits_;
+    bool prediction_enabled_;
+    bool third_place_match_enabled_;
+    bool leyline_ban_enabled_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -793,7 +925,7 @@ inline void TournamentRuleTable::_internal_set_rule_version(::uint32_t value) {
 inline void TournamentRuleTable::clear_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline bool TournamentRuleTable::enabled() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.enabled)
@@ -801,7 +933,7 @@ inline bool TournamentRuleTable::enabled() const {
 }
 inline void TournamentRuleTable::set_enabled(bool value) {
   _internal_set_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.enabled)
 }
 inline bool TournamentRuleTable::_internal_enabled() const {
@@ -817,7 +949,7 @@ inline void TournamentRuleTable::_internal_set_enabled(bool value) {
 inline void TournamentRuleTable::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t TournamentRuleTable::battle_config_id() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.battle_config_id)
@@ -825,7 +957,7 @@ inline ::uint32_t TournamentRuleTable::battle_config_id() const {
 }
 inline void TournamentRuleTable::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.battle_config_id)
 }
 inline ::uint32_t TournamentRuleTable::_internal_battle_config_id() const {
@@ -841,7 +973,7 @@ inline void TournamentRuleTable::_internal_set_battle_config_id(::uint32_t value
 inline void TournamentRuleTable::clear_battle_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t TournamentRuleTable::battle_team_size() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.battle_team_size)
@@ -849,7 +981,7 @@ inline ::uint32_t TournamentRuleTable::battle_team_size() const {
 }
 inline void TournamentRuleTable::set_battle_team_size(::uint32_t value) {
   _internal_set_battle_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.battle_team_size)
 }
 inline ::uint32_t TournamentRuleTable::_internal_battle_team_size() const {
@@ -865,7 +997,7 @@ inline void TournamentRuleTable::_internal_set_battle_team_size(::uint32_t value
 inline void TournamentRuleTable::clear_roster_max_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.roster_max_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t TournamentRuleTable::roster_max_size() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.roster_max_size)
@@ -873,7 +1005,7 @@ inline ::uint32_t TournamentRuleTable::roster_max_size() const {
 }
 inline void TournamentRuleTable::set_roster_max_size(::uint32_t value) {
   _internal_set_roster_max_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.roster_max_size)
 }
 inline ::uint32_t TournamentRuleTable::_internal_roster_max_size() const {
@@ -889,7 +1021,7 @@ inline void TournamentRuleTable::_internal_set_roster_max_size(::uint32_t value)
 inline void TournamentRuleTable::clear_min_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.min_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t TournamentRuleTable::min_level() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.min_level)
@@ -897,7 +1029,7 @@ inline ::uint32_t TournamentRuleTable::min_level() const {
 }
 inline void TournamentRuleTable::set_min_level(::uint32_t value) {
   _internal_set_min_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.min_level)
 }
 inline ::uint32_t TournamentRuleTable::_internal_min_level() const {
@@ -913,7 +1045,7 @@ inline void TournamentRuleTable::_internal_set_min_level(::uint32_t value) {
 inline void TournamentRuleTable::clear_registration_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.registration_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t TournamentRuleTable::registration_days() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.registration_days)
@@ -921,7 +1053,7 @@ inline ::uint32_t TournamentRuleTable::registration_days() const {
 }
 inline void TournamentRuleTable::set_registration_days(::uint32_t value) {
   _internal_set_registration_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.registration_days)
 }
 inline ::uint32_t TournamentRuleTable::_internal_registration_days() const {
@@ -937,7 +1069,7 @@ inline void TournamentRuleTable::_internal_set_registration_days(::uint32_t valu
 inline void TournamentRuleTable::clear_qualifier_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.qualifier_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t TournamentRuleTable::qualifier_days() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.qualifier_days)
@@ -945,7 +1077,7 @@ inline ::uint32_t TournamentRuleTable::qualifier_days() const {
 }
 inline void TournamentRuleTable::set_qualifier_days(::uint32_t value) {
   _internal_set_qualifier_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.qualifier_days)
 }
 inline ::uint32_t TournamentRuleTable::_internal_qualifier_days() const {
@@ -961,7 +1093,7 @@ inline void TournamentRuleTable::_internal_set_qualifier_days(::uint32_t value) 
 inline void TournamentRuleTable::clear_knockout_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.knockout_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t TournamentRuleTable::knockout_days() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.knockout_days)
@@ -969,7 +1101,7 @@ inline ::uint32_t TournamentRuleTable::knockout_days() const {
 }
 inline void TournamentRuleTable::set_knockout_days(::uint32_t value) {
   _internal_set_knockout_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.knockout_days)
 }
 inline ::uint32_t TournamentRuleTable::_internal_knockout_days() const {
@@ -985,7 +1117,7 @@ inline void TournamentRuleTable::_internal_set_knockout_days(::uint32_t value) {
 inline void TournamentRuleTable::clear_settle_display_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.settle_display_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t TournamentRuleTable::settle_display_days() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.settle_display_days)
@@ -993,7 +1125,7 @@ inline ::uint32_t TournamentRuleTable::settle_display_days() const {
 }
 inline void TournamentRuleTable::set_settle_display_days(::uint32_t value) {
   _internal_set_settle_display_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.settle_display_days)
 }
 inline ::uint32_t TournamentRuleTable::_internal_settle_display_days() const {
@@ -1009,7 +1141,7 @@ inline void TournamentRuleTable::_internal_set_settle_display_days(::uint32_t va
 inline void TournamentRuleTable::clear_qualifier_max_matches() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.qualifier_max_matches_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t TournamentRuleTable::qualifier_max_matches() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.qualifier_max_matches)
@@ -1017,7 +1149,7 @@ inline ::uint32_t TournamentRuleTable::qualifier_max_matches() const {
 }
 inline void TournamentRuleTable::set_qualifier_max_matches(::uint32_t value) {
   _internal_set_qualifier_max_matches(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.qualifier_max_matches)
 }
 inline ::uint32_t TournamentRuleTable::_internal_qualifier_max_matches() const {
@@ -1033,7 +1165,7 @@ inline void TournamentRuleTable::_internal_set_qualifier_max_matches(::uint32_t 
 inline void TournamentRuleTable::clear_participation_min_matches() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.participation_min_matches_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t TournamentRuleTable::participation_min_matches() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.participation_min_matches)
@@ -1041,7 +1173,7 @@ inline ::uint32_t TournamentRuleTable::participation_min_matches() const {
 }
 inline void TournamentRuleTable::set_participation_min_matches(::uint32_t value) {
   _internal_set_participation_min_matches(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.participation_min_matches)
 }
 inline ::uint32_t TournamentRuleTable::_internal_participation_min_matches() const {
@@ -1057,7 +1189,7 @@ inline void TournamentRuleTable::_internal_set_participation_min_matches(::uint3
 inline void TournamentRuleTable::clear_knockout_max_teams() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.knockout_max_teams_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t TournamentRuleTable::knockout_max_teams() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.knockout_max_teams)
@@ -1065,7 +1197,7 @@ inline ::uint32_t TournamentRuleTable::knockout_max_teams() const {
 }
 inline void TournamentRuleTable::set_knockout_max_teams(::uint32_t value) {
   _internal_set_knockout_max_teams(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.knockout_max_teams)
 }
 inline ::uint32_t TournamentRuleTable::_internal_knockout_max_teams() const {
@@ -1081,7 +1213,7 @@ inline void TournamentRuleTable::_internal_set_knockout_max_teams(::uint32_t val
 inline void TournamentRuleTable::clear_knockout_round_timeout_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.knockout_round_timeout_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t TournamentRuleTable::knockout_round_timeout_seconds() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.knockout_round_timeout_seconds)
@@ -1089,7 +1221,7 @@ inline ::uint32_t TournamentRuleTable::knockout_round_timeout_seconds() const {
 }
 inline void TournamentRuleTable::set_knockout_round_timeout_seconds(::uint32_t value) {
   _internal_set_knockout_round_timeout_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.knockout_round_timeout_seconds)
 }
 inline ::uint32_t TournamentRuleTable::_internal_knockout_round_timeout_seconds() const {
@@ -1105,7 +1237,7 @@ inline void TournamentRuleTable::_internal_set_knockout_round_timeout_seconds(::
 inline void TournamentRuleTable::clear_qualifier_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.qualifier_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t TournamentRuleTable::qualifier_win_points() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.qualifier_win_points)
@@ -1113,7 +1245,7 @@ inline ::uint32_t TournamentRuleTable::qualifier_win_points() const {
 }
 inline void TournamentRuleTable::set_qualifier_win_points(::uint32_t value) {
   _internal_set_qualifier_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.qualifier_win_points)
 }
 inline ::uint32_t TournamentRuleTable::_internal_qualifier_win_points() const {
@@ -1129,7 +1261,7 @@ inline void TournamentRuleTable::_internal_set_qualifier_win_points(::uint32_t v
 inline void TournamentRuleTable::clear_qualifier_draw_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.qualifier_draw_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t TournamentRuleTable::qualifier_draw_points() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.qualifier_draw_points)
@@ -1137,7 +1269,7 @@ inline ::uint32_t TournamentRuleTable::qualifier_draw_points() const {
 }
 inline void TournamentRuleTable::set_qualifier_draw_points(::uint32_t value) {
   _internal_set_qualifier_draw_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.qualifier_draw_points)
 }
 inline ::uint32_t TournamentRuleTable::_internal_qualifier_draw_points() const {
@@ -1153,7 +1285,7 @@ inline void TournamentRuleTable::_internal_set_qualifier_draw_points(::uint32_t 
 inline void TournamentRuleTable::clear_qualifier_loss_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.qualifier_loss_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t TournamentRuleTable::qualifier_loss_points() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.qualifier_loss_points)
@@ -1161,7 +1293,7 @@ inline ::uint32_t TournamentRuleTable::qualifier_loss_points() const {
 }
 inline void TournamentRuleTable::set_qualifier_loss_points(::uint32_t value) {
   _internal_set_qualifier_loss_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.qualifier_loss_points)
 }
 inline ::uint32_t TournamentRuleTable::_internal_qualifier_loss_points() const {
@@ -1177,7 +1309,7 @@ inline void TournamentRuleTable::_internal_set_qualifier_loss_points(::uint32_t 
 inline void TournamentRuleTable::clear_invite_ttl_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.invite_ttl_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t TournamentRuleTable::invite_ttl_seconds() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.invite_ttl_seconds)
@@ -1185,7 +1317,7 @@ inline ::uint32_t TournamentRuleTable::invite_ttl_seconds() const {
 }
 inline void TournamentRuleTable::set_invite_ttl_seconds(::uint32_t value) {
   _internal_set_invite_ttl_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.invite_ttl_seconds)
 }
 inline ::uint32_t TournamentRuleTable::_internal_invite_ttl_seconds() const {
@@ -1261,6 +1393,270 @@ inline void TournamentRuleTable::set_allocated_desc(::std::string* PROTOBUF_NULL
   // @@protoc_insertion_point(field_set_allocated:TournamentRuleTable.desc)
 }
 
+// bool bo3_top4_enabled = 21;
+inline void TournamentRuleTable::clear_bo3_top4_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bo3_top4_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline bool TournamentRuleTable::bo3_top4_enabled() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.bo3_top4_enabled)
+  return _internal_bo3_top4_enabled();
+}
+inline void TournamentRuleTable::set_bo3_top4_enabled(bool value) {
+  _internal_set_bo3_top4_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.bo3_top4_enabled)
+}
+inline bool TournamentRuleTable::_internal_bo3_top4_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bo3_top4_enabled_;
+}
+inline void TournamentRuleTable::_internal_set_bo3_top4_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bo3_top4_enabled_ = value;
+}
+
+// uint32 intermission_seconds = 22;
+inline void TournamentRuleTable::clear_intermission_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.intermission_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t TournamentRuleTable::intermission_seconds() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.intermission_seconds)
+  return _internal_intermission_seconds();
+}
+inline void TournamentRuleTable::set_intermission_seconds(::uint32_t value) {
+  _internal_set_intermission_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.intermission_seconds)
+}
+inline ::uint32_t TournamentRuleTable::_internal_intermission_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.intermission_seconds_;
+}
+inline void TournamentRuleTable::_internal_set_intermission_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.intermission_seconds_ = value;
+}
+
+// bool public_knockout_replay = 23;
+inline void TournamentRuleTable::clear_public_knockout_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.public_knockout_replay_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline bool TournamentRuleTable::public_knockout_replay() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.public_knockout_replay)
+  return _internal_public_knockout_replay();
+}
+inline void TournamentRuleTable::set_public_knockout_replay(bool value) {
+  _internal_set_public_knockout_replay(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.public_knockout_replay)
+}
+inline bool TournamentRuleTable::_internal_public_knockout_replay() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.public_knockout_replay_;
+}
+inline void TournamentRuleTable::_internal_set_public_knockout_replay(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.public_knockout_replay_ = value;
+}
+
+// uint32 salute_gold_amount = 24;
+inline void TournamentRuleTable::clear_salute_gold_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.salute_gold_amount_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t TournamentRuleTable::salute_gold_amount() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.salute_gold_amount)
+  return _internal_salute_gold_amount();
+}
+inline void TournamentRuleTable::set_salute_gold_amount(::uint32_t value) {
+  _internal_set_salute_gold_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.salute_gold_amount)
+}
+inline ::uint32_t TournamentRuleTable::_internal_salute_gold_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.salute_gold_amount_;
+}
+inline void TournamentRuleTable::_internal_set_salute_gold_amount(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.salute_gold_amount_ = value;
+}
+
+// uint32 salute_item_id = 25;
+inline void TournamentRuleTable::clear_salute_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.salute_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t TournamentRuleTable::salute_item_id() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.salute_item_id)
+  return _internal_salute_item_id();
+}
+inline void TournamentRuleTable::set_salute_item_id(::uint32_t value) {
+  _internal_set_salute_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.salute_item_id)
+}
+inline ::uint32_t TournamentRuleTable::_internal_salute_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.salute_item_id_;
+}
+inline void TournamentRuleTable::_internal_set_salute_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.salute_item_id_ = value;
+}
+
+// uint32 salute_item_count = 26;
+inline void TournamentRuleTable::clear_salute_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.salute_item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t TournamentRuleTable::salute_item_count() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.salute_item_count)
+  return _internal_salute_item_count();
+}
+inline void TournamentRuleTable::set_salute_item_count(::uint32_t value) {
+  _internal_set_salute_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.salute_item_count)
+}
+inline ::uint32_t TournamentRuleTable::_internal_salute_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.salute_item_count_;
+}
+inline void TournamentRuleTable::_internal_set_salute_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.salute_item_count_ = value;
+}
+
+// bool warmup_spar_enabled = 27;
+inline void TournamentRuleTable::clear_warmup_spar_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.warmup_spar_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline bool TournamentRuleTable::warmup_spar_enabled() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.warmup_spar_enabled)
+  return _internal_warmup_spar_enabled();
+}
+inline void TournamentRuleTable::set_warmup_spar_enabled(bool value) {
+  _internal_set_warmup_spar_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.warmup_spar_enabled)
+}
+inline bool TournamentRuleTable::_internal_warmup_spar_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.warmup_spar_enabled_;
+}
+inline void TournamentRuleTable::_internal_set_warmup_spar_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.warmup_spar_enabled_ = value;
+}
+
+// bool prediction_enabled = 28;
+inline void TournamentRuleTable::clear_prediction_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prediction_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline bool TournamentRuleTable::prediction_enabled() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.prediction_enabled)
+  return _internal_prediction_enabled();
+}
+inline void TournamentRuleTable::set_prediction_enabled(bool value) {
+  _internal_set_prediction_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.prediction_enabled)
+}
+inline bool TournamentRuleTable::_internal_prediction_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.prediction_enabled_;
+}
+inline void TournamentRuleTable::_internal_set_prediction_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prediction_enabled_ = value;
+}
+
+// uint32 prediction_reward_min_hits = 29;
+inline void TournamentRuleTable::clear_prediction_reward_min_hits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prediction_reward_min_hits_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint32_t TournamentRuleTable::prediction_reward_min_hits() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.prediction_reward_min_hits)
+  return _internal_prediction_reward_min_hits();
+}
+inline void TournamentRuleTable::set_prediction_reward_min_hits(::uint32_t value) {
+  _internal_set_prediction_reward_min_hits(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.prediction_reward_min_hits)
+}
+inline ::uint32_t TournamentRuleTable::_internal_prediction_reward_min_hits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.prediction_reward_min_hits_;
+}
+inline void TournamentRuleTable::_internal_set_prediction_reward_min_hits(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prediction_reward_min_hits_ = value;
+}
+
+// bool third_place_match_enabled = 30;
+inline void TournamentRuleTable::clear_third_place_match_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.third_place_match_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+}
+inline bool TournamentRuleTable::third_place_match_enabled() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.third_place_match_enabled)
+  return _internal_third_place_match_enabled();
+}
+inline void TournamentRuleTable::set_third_place_match_enabled(bool value) {
+  _internal_set_third_place_match_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.third_place_match_enabled)
+}
+inline bool TournamentRuleTable::_internal_third_place_match_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.third_place_match_enabled_;
+}
+inline void TournamentRuleTable::_internal_set_third_place_match_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.third_place_match_enabled_ = value;
+}
+
+// bool leyline_ban_enabled = 31;
+inline void TournamentRuleTable::clear_leyline_ban_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leyline_ban_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline bool TournamentRuleTable::leyline_ban_enabled() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.leyline_ban_enabled)
+  return _internal_leyline_ban_enabled();
+}
+inline void TournamentRuleTable::set_leyline_ban_enabled(bool value) {
+  _internal_set_leyline_ban_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.leyline_ban_enabled)
+}
+inline bool TournamentRuleTable::_internal_leyline_ban_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.leyline_ban_enabled_;
+}
+inline void TournamentRuleTable::_internal_set_leyline_ban_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leyline_ban_enabled_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // TournamentRuleTableData
@@ -1294,42 +1690,4 @@ inline ::TournamentRuleTable* PROTOBUF_NONNULL TournamentRuleTableData::add_data
       _internal_mutable_data()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:TournamentRuleTableData.data)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>& TournamentRuleTableData::data() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:TournamentRuleTableData.data)
-  return _internal_data();
-}
-inline ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>* PROTOBUF_NONNULL
-TournamentRuleTableData::mutable_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:TournamentRuleTableData.data)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_data();
-}
-inline const ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>&
-TournamentRuleTableData::_internal_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.data_;
-}
-inline ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>* PROTOBUF_NONNULL
-TournamentRuleTableData::_internal_mutable_data() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.data_;
-}
-
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif  // __GNUC__
-
-// @@protoc_insertion_point(namespace_scope)
-
-
-// @@protoc_insertion_point(global_scope)
-
-#include "google/protobuf/port_undef.inc"
-// clang-format on
-
-#endif  // tournamentrule_5ftable_2eproto_2epb_2eh
+  // @@protoc_in

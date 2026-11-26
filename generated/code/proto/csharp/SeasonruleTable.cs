@@ -22,7 +22,7 @@ public static partial class SeasonruleTableReflection {
   static SeasonruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChZzZWFzb25ydWxlX3RhYmxlLnByb3RvIuUCCg9TZWFzb25SdWxlVGFibGUS",
+          "ChZzZWFzb25ydWxlX3RhYmxlLnByb3RvIp0DCg9TZWFzb25SdWxlVGFibGUS",
           "CgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIUCgxzdGFydHNfYXRfbXMYAyAB",
           "KAQSEgoKZW5kc19hdF9tcxgEIAEoBBIPCgdlbmFibGVkGAUgASgIEhcKD3Nl",
           "YWxfbWF4X3BvaW50cxgGIAEoDRIWCg5wdmVfd2luX3BvaW50cxgHIAEoDRIW",
@@ -30,14 +30,15 @@ public static partial class SeasonruleTableReflection {
           "ASgNEhoKEm1heF9oZWFsdGhfYnBzX2NhcBgKIAEoDRIXCg9kZWZlbnNlX2Jw",
           "c19jYXAYCyABKA0SHQoVY2F0Y2h1cF9jdXJyZW5jeV90eXBlGAwgASgNEh8K",
           "F2NhdGNodXBfcHJpY2VfcGVyX3BvaW50GA0gASgEEhcKD2RlZmF1bHRfc2Vh",
-          "bF9pZBgOIAEoDRIMCgRkZXNjGA8gASgJIjUKE1NlYXNvblJ1bGVUYWJsZURh",
-          "dGESHgoEZGF0YRgBIAMoCzIQLlNlYXNvblJ1bGVUYWJsZUJBCg5jb20uZ2Ft",
-          "ZS50YWJsZUIZU2Vhc29uUnVsZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0",
-          "ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "bF9pZBgOIAEoDRIMCgRkZXNjGA8gASgJEhgKEGhvbm9yX3RpdGxlX25hbWUY",
+          "ECABKAkSHAoUaG9ub3JfYmFkZ2VfaWNvbl9rZXkYESABKAkiNQoTU2Vhc29u",
+          "UnVsZVRhYmxlRGF0YRIeCgRkYXRhGAEgAygLMhAuU2Vhc29uUnVsZVRhYmxl",
+          "QkEKDmNvbS5nYW1lLnRhYmxlQhlTZWFzb25SdWxlVGFibGVPdXRlckNsYXNz",
+          "UAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::SeasonRuleTable), global::SeasonRuleTable.Parser, new[]{ "Id", "Name", "StartsAtMs", "EndsAtMs", "Enabled", "SealMaxPoints", "PveWinPoints", "PvpWinPoints", "PvpOtherPoints", "MaxHealthBpsCap", "DefenseBpsCap", "CatchupCurrencyType", "CatchupPricePerPoint", "DefaultSealId", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SeasonRuleTable), global::SeasonRuleTable.Parser, new[]{ "Id", "Name", "StartsAtMs", "EndsAtMs", "Enabled", "SealMaxPoints", "PveWinPoints", "PvpWinPoints", "PvpOtherPoints", "MaxHealthBpsCap", "DefenseBpsCap", "CatchupCurrencyType", "CatchupPricePerPoint", "DefaultSealId", "Desc", "HonorTitleName", "HonorBadgeIconKey" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SeasonRuleTableData), global::SeasonRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -95,6 +96,8 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
     catchupPricePerPoint_ = other.catchupPricePerPoint_;
     defaultSealId_ = other.defaultSealId_;
     desc_ = other.desc_;
+    honorTitleName_ = other.honorTitleName_;
+    honorBadgeIconKey_ = other.honorBadgeIconKey_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -284,6 +287,30 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
     }
   }
 
+  /// <summary>Field number for the "honor_title_name" field.</summary>
+  public const int HonorTitleNameFieldNumber = 16;
+  private string honorTitleName_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string HonorTitleName {
+    get { return honorTitleName_; }
+    set {
+      honorTitleName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "honor_badge_icon_key" field.</summary>
+  public const int HonorBadgeIconKeyFieldNumber = 17;
+  private string honorBadgeIconKey_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string HonorBadgeIconKey {
+    get { return honorBadgeIconKey_; }
+    set {
+      honorBadgeIconKey_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -314,6 +341,8 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
     if (CatchupPricePerPoint != other.CatchupPricePerPoint) return false;
     if (DefaultSealId != other.DefaultSealId) return false;
     if (Desc != other.Desc) return false;
+    if (HonorTitleName != other.HonorTitleName) return false;
+    if (HonorBadgeIconKey != other.HonorBadgeIconKey) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -336,6 +365,8 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
     if (CatchupPricePerPoint != 0UL) hash ^= CatchupPricePerPoint.GetHashCode();
     if (DefaultSealId != 0) hash ^= DefaultSealId.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (HonorTitleName.Length != 0) hash ^= HonorTitleName.GetHashCode();
+    if (HonorBadgeIconKey.Length != 0) hash ^= HonorBadgeIconKey.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -414,6 +445,14 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
       output.WriteRawTag(122);
       output.WriteString(Desc);
     }
+    if (HonorTitleName.Length != 0) {
+      output.WriteRawTag(130, 1);
+      output.WriteString(HonorTitleName);
+    }
+    if (HonorBadgeIconKey.Length != 0) {
+      output.WriteRawTag(138, 1);
+      output.WriteString(HonorBadgeIconKey);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -484,6 +523,14 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
       output.WriteRawTag(122);
       output.WriteString(Desc);
     }
+    if (HonorTitleName.Length != 0) {
+      output.WriteRawTag(130, 1);
+      output.WriteString(HonorTitleName);
+    }
+    if (HonorBadgeIconKey.Length != 0) {
+      output.WriteRawTag(138, 1);
+      output.WriteString(HonorBadgeIconKey);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -538,6 +585,12 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (HonorTitleName.Length != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeStringSize(HonorTitleName);
+    }
+    if (HonorBadgeIconKey.Length != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeStringSize(HonorBadgeIconKey);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -595,6 +648,12 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.HonorTitleName.Length != 0) {
+      HonorTitleName = other.HonorTitleName;
+    }
+    if (other.HonorBadgeIconKey.Length != 0) {
+      HonorBadgeIconKey = other.HonorBadgeIconKey;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -675,6 +734,14 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
           Desc = input.ReadString();
           break;
         }
+        case 130: {
+          HonorTitleName = input.ReadString();
+          break;
+        }
+        case 138: {
+          HonorBadgeIconKey = input.ReadString();
+          break;
+        }
       }
     }
   #endif
@@ -752,6 +819,14 @@ public sealed partial class SeasonRuleTable : pb::IMessage<SeasonRuleTable>
         }
         case 122: {
           Desc = input.ReadString();
+          break;
+        }
+        case 130: {
+          HonorTitleName = input.ReadString();
+          break;
+        }
+        case 138: {
+          HonorBadgeIconKey = input.ReadString();
           break;
         }
       }

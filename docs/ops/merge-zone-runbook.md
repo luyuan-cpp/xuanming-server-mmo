@@ -285,7 +285,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZ
 | 不得靠删门禁、跳检查或改成功口径声称支持不停服 | §1「旧门禁去哪了」逐条说明;成功口径见 §4 第 4、5 步和 §11 |
 | 交付验证要求,完成前保留「未实现／未验证」状态 | §11;开头状态行 |
 
-## 11. 给 Codex 的验证要求
+## 11. 给 Gemini 的验证要求
 
 **以下都没有跑过。** 按顺序执行,前一项不过就停下来报告,保留证据:工具的完整输出和退出码、审计输出、相关服务日志、SQL 和 Redis 查询结果、`git rev-parse HEAD`。
 

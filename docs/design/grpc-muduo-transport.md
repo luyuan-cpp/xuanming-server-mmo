@@ -309,7 +309,7 @@ Go 侧没有任何服务配置 `KeepaliveEnforcementPolicy`,即 grpc-go 默认:�
 | 4 | 服务端:muduo `TcpServer` + nghttp2 server session;scene / battle handler 模板改为 loop 内异步完成;Agones 许可改异步;关机改 GOAWAY 排空,删关机线程 | 3 |
 | 5 | 删除官方 gRPC:proto-gen 停用 `grpc_cpp_plugin`、删 `*.grpc.pb.cc`、28 个工程去掉 grpc 链接项、Linux 改独立构建 protobuf 35.1 / abseil、文档同步 | 4 |
 
-每批完成后交 Codex 编译与验证,通过再开下一批。
+每批完成后交 Gemini 编译与验证,通过再开下一批。
 
 第 3 批的前置(2026-10-15 与「C++ RPC 异步回调链式调用设计」会话约定):生成客户端的**每次调用回调**(`done` + 可选 deadline,
 签名不含 grpc 类型,向后兼容现有全局 handler)由该会话先在官方 CQ 模板上落地,设计见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §8.4 / §14;
@@ -358,9 +358,9 @@ Go 侧没有任何服务配置 `KeepaliveEnforcementPolicy`,即 grpc-go 默认:�
 回退开关:第 2 批沿用第 1 批的做法,新实现走开关、验证通过前默认仍是旧 CQ 版;**回退到旧实现时上述缺陷依然存在**,
 运维手册与启动日志都要写明,回退只用于新实现自身出问题的场景。
 
-## 11. 第 1 批验证(交 Codex,未执行)
+## 11. 第 1 批验证(交 Gemini,未执行)
 
-见 `docs/PROGRESS.md`「2026-10-15 C++ gRPC 传输改由 muduo 驱动·第 1 批」条目的「交 Codex」一节:依赖构建 → 单测(不链 grpc、线程检查)→
+见 `docs/PROGRESS.md`「2026-10-15 C++ gRPC 传输改由 muduo 驱动·第 1 批」条目的「交 Gemini」一节:依赖构建 → 单测(不链 grpc、线程检查)→
 对真实 Go 路由服的互通用例 → gate 两种传输分别跑登录 / 进场 / 断线通知 → 新旧实现**分别**用隔离输入,
 不对同一有副作用请求双发。
 
@@ -371,7 +371,7 @@ Java 版用 Java gRPC,**不适用**。PARITY.md 不登记功能行。
 
 ## 13. 第 2 批:etcd 迁到新传输(设计,2026-10-15)
 
-负责人 10-15「做完之后开始落地代码」:第 1 批交付后继续落第 2 批。第 2 批**同样未编译**,与第 1 批一起交 Codex。
+负责人 10-15「做完之后开始落地代码」:第 1 批交付后继续落第 2 批。第 2 批**同样未编译**,与第 1 批一起交 Gemini。
 验收条件见 §10.1(C008)与 §10.2(P0-D 全部条目)。
 
 ### 13.1 范围
@@ -655,7 +655,7 @@ EtcdHelper(唯一出口,EtcdManager 的 keepalive 也收进来)
   - 其余业务错误照旧放在应答字段里,status 为 OK。
 - **不删依赖。** grpc 库和 `*.grpc.pb.*` 都保留,服务端只是不再 include 它们。
 - **不设回退开关**(见 §15.3 Q1)。
-- 本节只是静态设计,未编译;验证按 §15.14 交 Codex 执行。
+- 本节只是静态设计,未编译;验证按 §15.14 交 Gemini 执行。
 
 ### 15.2 现状核对(以 2026-10-16 工作区为准,survey 中过时的说法在此更正)
 
@@ -1437,7 +1437,7 @@ FinalizeShutdownInLoop(阶段 0)
 - **保留** `~Node` 的兜底循环,注释改为「loop 异常退出时重新驱动 loop 内的 gRPC 排空与收尾」。
 - **改注释**:`node.h:184-186`(RequestShutdown:handler 不能同步等待 drain,否则 drain 永远等不到 loop)、`node.h:202`(删掉「gRPC 线程上的许可阶段」)、`node_entry.h:144-147`、scene `main.cpp:202-203 / :287-288`(以 OnGrpcServerDrained 为界)、battle `main.cpp:341-353`(「框架随后关 gRPC」改为本节语义)。
 - **与看门狗的关系**:并行运行;`MaybeFinalize` 仍要求「gRPC 已排空」且「业务已排空或已超时」。gRPC 排空完成之后不会再有 gRPC 来源的新工作。
-- **拆除前钩子(2026-10-17 补,R7;已落码,未编译、未测试,待 Codex 验证)**:上图「queueInLoop(FinalizeTeardownInLoop)」之后,`FinalizeTeardownInLoop` 在 `kafkaManager.Shutdown()`(producer 最后一次有界 flush)之后、`tlsRedis.Shutdown()` 之前调用 `Node::SetBeforeTeardown` 登记的钩子,用成员 `beforeTeardownRan_` 保证每个 Node **只调一次**。`GrpcClientLocalCompletionsDrained()` 为假时本函数会 `queueInLoop` 重入自身让一轮(等 gRPC 本地延后完成在 ECS / 日志仍活着时跑完),重入时不再调钩子。钩子跑在 loop 线程,此时 Redis、ECS、节点注册表与异步日志都还活着;它不得再发起需要等待的异步工作,也不得同步阻塞。目前只有 scene 设置(`cpp/nodes/scene/main.cpp`:`tlsRedisSystem.StopDbTaskDispatch()`,停 DBTask 回执 Pump 并打未落定玩家清单,见 [db-task-delivery-and-retention.md](db-task-delivery-and-retention.md) §A.5「停机」),gate / battle 不设,两跳 quit 与本节其余顺序不变。
+- **拆除前钩子(2026-10-17 补,R7;已落码,未编译、未测试,待 Gemini 验证)**:上图「queueInLoop(FinalizeTeardownInLoop)」之后,`FinalizeTeardownInLoop` 在 `kafkaManager.Shutdown()`(producer 最后一次有界 flush)之后、`tlsRedis.Shutdown()` 之前调用 `Node::SetBeforeTeardown` 登记的钩子,用成员 `beforeTeardownRan_` 保证每个 Node **只调一次**。`GrpcClientLocalCompletionsDrained()` 为假时本函数会 `queueInLoop` 重入自身让一轮(等 gRPC 本地延后完成在 ECS / 日志仍活着时跑完),重入时不再调钩子。钩子跑在 loop 线程,此时 Redis、ECS、节点注册表与异步日志都还活着;它不得再发起需要等待的异步工作,也不得同步阻塞。目前只有 scene 设置(`cpp/nodes/scene/main.cpp`:`tlsRedisSystem.StopDbTaskDispatch()`,停 DBTask 回执 Pump 并打未落定玩家清单,见 [db-task-delivery-and-retention.md](db-task-delivery-and-retention.md) §A.5「停机」),gate / battle 不设,两跳 quit 与本节其余顺序不变。
 
 ### 15.11 运维与可观测
 
@@ -1495,7 +1495,7 @@ FinalizeShutdownInLoop(阶段 0)
 | 并行会话冲突(battle main.cpp、reconcile.go、k8s_deploy.ps1、muduo_grpc_test.vcxproj、rpc_controller_test.vcxproj、本文档) | 按组的文件清单操作;注释只做局部替换;vcxproj 等第 3 批提交后再追加 |
 | 2ms 的每轮预算与 1024 的在途上限没有压测数据 | 统计里有 `max_dispatched_per_turn`、`max_backlog`;按 AGENTS §6 跑一轮 ReleasePlayer 突发压测并做对比表之后再调,没有对比表之前不宣称任何性能结论 |
 
-### 15.14 验证(交 Codex;Claude 未执行,全部未编译)
+### 15.14 验证(交 Gemini;Claude 未执行,全部未编译)
 
 1. **生成器**:在仓库根目录执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`;然后在 `tools/proto_generator/protogen` 下执行 `go test ./internal/... ./cmd`。要求全绿,包括 `LegacyNonEmptySectionsRefuseGeneration` 和头文件预检用例。
 2. **迁移前的拒绝验证**:在 `tools/proto_generator/protogen` 下设 `$env:PROTO_GEN_CONFIG_PATH=(Resolve-Path etc/proto_gen.no-unity.yaml)`,执行 `./proto-gen.exe --grpc-handler proto/battle/battle_node.proto`。期望:非零退出,报错恰好列出 battle 的 4 段;4 个 handler 文件的 `git diff` 为空。保留完整报错文本。
@@ -1531,7 +1531,7 @@ FinalizeShutdownInLoop(阶段 0)
 | G5 | scene / battle 手写段迁移、相关注释、定向重生成 | G1–G4 |
 | G6 | 部署脚本、文档、Go 注释、PROGRESS | 定稿跟随 G1–G5 |
 
-先后:G1、G2、G3 并行 → G4 → G5 → G6 → Codex 按 §15.14 验证。
+先后:G1、G2、G3 并行 → G4 → G5 → G6 → Gemini 按 §15.14 验证。
 
 双版本(AGENTS §12):本批只替换 C++ 服务端的内部传输,客户端契约、proto、tip 码、配置表都不变。Java 版不适用,PARITY 不登记功能行;PROGRESS 条目里注明这一点。
 
@@ -1596,7 +1596,7 @@ FinalizeShutdownInLoop(阶段 0)
   `ShuttingDown` 守不住挂起的 allocate、`RequestShutdown` 不幂等;`codeParser` 不跟踪函数体(函数体内顶格的 `Impl::HandleX(` 或前置声明行会劫持)、
   `handler_gen` / `player_service_gen` 缺结构预检、`event.go` 的 `extractUserCodeBlocks` 有同类查找键劫持;服务端 `headersReceivedAt_` 超限修剪后,
   慢上传的流排空到期时不能立即 REFUSED(最坏等 closeGrace 硬上限);Windows `Channel.cc` 对只设读写回调的 channel(Hiredis)只有 POLLHUP 时仍提前返回,
-  需先实测 WSAPoll 的 revents(交 Codex)。
+  需先实测 WSAPoll 的 revents(交 Gemini)。
   → 2026-10-17 已落码时尚未编译、未测试,Windows `Channel.cc` 当时留待实测。其余项见下面「边角问题落地记录」;2026-10-18 Codex 的 HUP 修复与红绿证据见下文及 §15.18。
   → 2026-10-18 Codex 已完成本机原生测量:纯 FIN 与数据读尽后的 FIN 均持续报告单独 `POLLHUP`(`0x0002`),`recv` 返回 0;
   数据尚未读尽时报告 `POLLRDNORM|POLLHUP`(`0x0102`)。随后链接真实 `muduo.lib` / Hiredis 的 8 例两次稳定出现同样 3 例失败,

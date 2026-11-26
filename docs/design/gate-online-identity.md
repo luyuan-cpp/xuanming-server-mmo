@@ -1,6 +1,6 @@
 # Gate 在线身份：login 认证、gate 持有、签名传递、提交点复核
 
-日期：2026-11-05（美东）。状态：已落码。C++/Go 版链路由 Codex 编译与真连接验收（见 审核交接（原 `docs/handoff/gate-auth-role-fence-review-20261104.md`，已清理，见 `ccf2840b2`））；同日删除在线域的 login Redis 回退，未编译，待 Codex 按 执行清单（原 `docs/handoff/gate-online-identity-single-source-20261105/CODEX.md`，已清理，见 `ccf2840b2`） 验证。同日另定简化方案（§9）：第 1 批（统一在线域客户端入口、关闭 guild 无会话冒名口）2026-11-06 已落码，**未编译**，与上一批合并由 Codex 按 [第 1 批执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 验证；第 2 批（删 friend 入口重复预检）2026-11-06 已落码，**未编译**，验收见同一清单的第 2 批一节，计划见 简化计划（原 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`，已清理，见 `ccf2840b2`）；§9.6 第 1 条（guild 三个读方法删无会话分支）2026-11-06 已落码，`go/guild` 的 build / vet / test 2026-11-10 已由 Codex 跑通（集成用例未跑），见同一清单第 7 节；§9.6 第 2、3 条（删 guild 请求体里被忽略的身份与区字段、删全服帮会榜）2026-11-10 已落码，**未编译**，验收见同一清单第 8 节。§7 的四条已知边界 2026-11-11 定了处理方案（§10）：批 1（gate 改 Ed25519 签名、验证方只持公钥）当日已落码，**未编译**，验收见同一清单第 9 节；批 2～4（在线服务端口白名单、Pod 间加密的部署前检、gate 续租登录态）与 §9.3 的读路径归属预检（match、trade 补上，三个服务共用一份）2026-11-12 已落码，**未编译、未运行**，验收见同一清单第 10 节。同日第二批收掉第 10 节报出的残余（§7.1、§7.3、§9.3）：续租在登录态过期后按绑定记录重建、guild 的入口预检与 match / trade 统一为只判归属、预检补不连库的用例、Pod 间加密前检改为逐节点核对 WireGuard 公钥、补集群实测脚本 `k8s_netpol_probe.ps1` 与专用 kind 配置，同样**未编译、未运行**，验收见同一清单第 11 节。本文留作「以后再定」的事项到此都已定案。Java 版待做（§8）。
+日期：2026-11-05（美东）。状态：已落码。C++/Go 版链路由 Codex 编译与真连接验收（见 审核交接（原 `docs/handoff/gate-auth-role-fence-review-20261104.md`，已清理，见 `ccf2840b2`））；同日删除在线域的 login Redis 回退，未编译，待 Gemini 按 执行清单（原 `docs/handoff/gate-online-identity-single-source-20261105/CODEX.md`，已清理，见 `ccf2840b2`） 验证。同日另定简化方案（§9）：第 1 批（统一在线域客户端入口、关闭 guild 无会话冒名口）2026-11-06 已落码，**未编译**，与上一批合并由 Gemini 按 [第 1 批执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 验证；第 2 批（删 friend 入口重复预检）2026-11-06 已落码，**未编译**，验收见同一清单的第 2 批一节，计划见 简化计划（原 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`，已清理，见 `ccf2840b2`）；§9.6 第 1 条（guild 三个读方法删无会话分支）2026-11-06 已落码，`go/guild` 的 build / vet / test 2026-11-10 已由 Codex 跑通（集成用例未跑），见同一清单第 7 节；§9.6 第 2、3 条（删 guild 请求体里被忽略的身份与区字段、删全服帮会榜）2026-11-10 已落码，**未编译**，验收见同一清单第 8 节。§7 的四条已知边界 2026-11-11 定了处理方案（§10）：批 1（gate 改 Ed25519 签名、验证方只持公钥）当日已落码，**未编译**，验收见同一清单第 9 节；批 2～4（在线服务端口白名单、Pod 间加密的部署前检、gate 续租登录态）与 §9.3 的读路径归属预检（match、trade 补上，三个服务共用一份）2026-11-12 已落码，**未编译、未运行**，验收见同一清单第 10 节。同日第二批收掉第 10 节报出的残余（§7.1、§7.3、§9.3）：续租在登录态过期后按绑定记录重建、guild 的入口预检与 match / trade 统一为只判归属、预检补不连库的用例、Pod 间加密前检改为逐节点核对 WireGuard 公钥、补集群实测脚本 `k8s_netpol_probe.ps1` 与专用 kind 配置，同样**未编译、未运行**，验收见同一清单第 11 节。本文留作「以后再定」的事项到此都已定案。Java 版待做（§8）。
 
 ## 1. 分工
 
@@ -113,7 +113,7 @@ login 与在线域都没有「验签失败告警放行」的宽松档：2026-11-
 
 ## 9. 简化方案（2026-11-05 定；第 1～3 批 2026-11-06、第 4 批 2026-11-10 落码，均未编译）
 
-目标：在线域只有一处取身份、一条准入规则；不降低 §1～§3 的任何安全属性，并关闭 §7.5 的缺口。落码顺序、文件清单与 Codex 验收见 简化计划（原 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`，已清理，见 `ccf2840b2`）。
+目标：在线域只有一处取身份、一条准入规则；不降低 §1～§3 的任何安全属性，并关闭 §7.5 的缺口。落码顺序、文件清单与 Gemini 验收见 简化计划（原 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`，已清理，见 `ccf2840b2`）。
 
 ### 9.1 现状的重复
 
@@ -238,12 +238,12 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
 ### 9.6 剩余（2026-11-06 记；2026-11-10 三条都已落码，未编译）
 
 1. **guild 三个读方法的无会话分支**（2026-11-06 已删；`go/guild` 单测 2026-11-10 已由 Codex 跑通，集成用例未跑，见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 7 节）：GetGuild、GetGuildRank、GetGuildRankByGuild 原先对不带会话的调用不查归属区、沿用请求体 `zone_id`（全服榜 `zone_id=0`）、不夹页长。生产里入口准入早已拒绝这类调用，只有单测故意走这条路径。现在三个方法与四个写方法一样先过 `requireClientSession`，区一律取 `clientZone`，榜单页长夹到 `MaxRankPageSize`。随之没有调用者的两处一并收掉：`viewerOf`（只为无会话调用回 0，CreateGuild / SetAnnouncement / GetGuild 现在直接传会话里的 player_id）与 `visibleIn` 的「`zoneID==0` 不按区过滤」；`expected_guild.go` 里「只给客户端来源计 absent」的判断同理删掉（五个调用方都只受理客户端来源）。测试改成客户端来源：请求者用本区旁观者（不在被查的帮里），`guildInfoFor` 不给他现算待审数，所以不需要待审数替身，也不用为测试给 `GuildLogic` 新开接缝；「内部调用保留全服榜」改为断言无会话被拒，另加三个读方法无会话被拒的表驱动用例。运维要全服榜，另设带 `serviceauth` 的内部 RPC，不复活这条分支。
-2. **guild 请求体里的身份与区字段**（2026-11-10 已删，未编译，验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 8 节）：CreateGuild 的 `player_id` / `zone_id`，LeaveGuild、DisbandGuild、SetAnnouncement 的 `player_id`，GetGuildRank、GetGuildRankByGuild 的 `zone_id`，服务端早已一律忽略（身份取会话、区取归属）。项目未上线，按标准做法从协议删掉并把字段号写成 `reserved`，不再给读代码的人留「也许会被采信」的误会。唯一还带 `player_id` 的客户端请求是 GetPlayerGuild，只在不带会话的内部只读调用（mail 领附件）时采信。仓库内的 robot 冒烟同步：建帮不再故意填错区、别区查榜不再伪造区、第 8 步改为按会话身份退帮。这是客户端契约变更：Unity 客户端与协议生成由 Codex 处理；Java 版本轮只在 `PARITY.md` 记 TODO（§8）。
-3. **全服帮会榜**（2026-11-10 负责人定删除，当日已删，未编译，验收同上第 8 节）：负责人 2026-11-10 答复：运维 / GM 都不需要全服帮会榜，删掉；现在就做，不等第 1 条的 Codex 回执。问之前逐处核过读者：第 1 条之后全服榜 ZSET `guild_rank` 只写不读，客户端只看本区榜，`tools/merge_zone`、`tools/data_consistency_check`、合服运维手册、robot 与 Java 网关后台都只碰分区榜 `guild_rank:zone:*`，Java 版本来就不提供全服榜。留着它，每次推分多一次 ZADD，全部帮会挤在一个键上，上 Redis Cluster 就是单槽热点。删除范围：`UpdateGuildScore` 只写最终区的分区榜；`RebuildRanks` 只重建分区榜；`RemoveGuildFromRank` 只从各分区榜摘除；data 层 `GetGuildRankPage` / `GetGuildRank` 不给区直接回 `ErrRankZoneRequired`，不再有「`zoneID=0` 读全服榜」的口径。`zone_id=0` 的帮会行是坏数据（帮会都按归属区建），分数照常落库、不进任何榜并打错误日志。三份[帮会排行架构](guild_ranking_architecture_zh.md)文档已按只有分区榜重写。旧环境里残留的 `guild_rank` 键不再有人读写，`RebuildRanks` 只扫 `guild_rank:zone:*`，不会顺手删它；项目未上线，不写迁移代码：压测前清库（`dev_tools.ps1 -Command redis-wipe-local` 或 `-Command k8s-redis-wipe`，都要带 `-ConfirmWipeAllRedis`）时一并清掉，只删这一个键用 `redis-cli -h <guild 的 RedisClient 地址> -n 0 DEL guild_rank`。
+2. **guild 请求体里的身份与区字段**（2026-11-10 已删，未编译，验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 8 节）：CreateGuild 的 `player_id` / `zone_id`，LeaveGuild、DisbandGuild、SetAnnouncement 的 `player_id`，GetGuildRank、GetGuildRankByGuild 的 `zone_id`，服务端早已一律忽略（身份取会话、区取归属）。项目未上线，按标准做法从协议删掉并把字段号写成 `reserved`，不再给读代码的人留「也许会被采信」的误会。唯一还带 `player_id` 的客户端请求是 GetPlayerGuild，只在不带会话的内部只读调用（mail 领附件）时采信。仓库内的 robot 冒烟同步：建帮不再故意填错区、别区查榜不再伪造区、第 8 步改为按会话身份退帮。这是客户端契约变更：Unity 客户端与协议生成由 Gemini 处理；Java 版本轮只在 `PARITY.md` 记 TODO（§8）。
+3. **全服帮会榜**（2026-11-10 负责人定删除，当日已删，未编译，验收同上第 8 节）：负责人 2026-11-10 答复：运维 / GM 都不需要全服帮会榜，删掉；现在就做，不等第 1 条的 Gemini 回执。问之前逐处核过读者：第 1 条之后全服榜 ZSET `guild_rank` 只写不读，客户端只看本区榜，`tools/merge_zone`、`tools/data_consistency_check`、合服运维手册、robot 与 Java 网关后台都只碰分区榜 `guild_rank:zone:*`，Java 版本来就不提供全服榜。留着它，每次推分多一次 ZADD，全部帮会挤在一个键上，上 Redis Cluster 就是单槽热点。删除范围：`UpdateGuildScore` 只写最终区的分区榜；`RebuildRanks` 只重建分区榜；`RemoveGuildFromRank` 只从各分区榜摘除；data 层 `GetGuildRankPage` / `GetGuildRank` 不给区直接回 `ErrRankZoneRequired`，不再有「`zoneID=0` 读全服榜」的口径。`zone_id=0` 的帮会行是坏数据（帮会都按归属区建），分数照常落库、不进任何榜并打错误日志。三份[帮会排行架构](guild_ranking_architecture_zh.md)文档已按只有分区榜重写。旧环境里残留的 `guild_rank` 键不再有人读写，`RebuildRanks` 只扫 `guild_rank:zone:*`，不会顺手删它；项目未上线，不写迁移代码：压测前清库（`dev_tools.ps1 -Command redis-wipe-local` 或 `-Command k8s-redis-wipe`，都要带 `-ConfirmWipeAllRedis`）时一并清掉，只删这一个键用 `redis-cli -h <guild 的 RedisClient 地址> -n 0 DEL guild_rank`。
 
 ## 10. 已知边界的处理方案（2026-11-11 定；批 1 当日落码，批 2～4 2026-11-12 落码；均未编译）
 
-负责人 2026-11-11 要求开始处理 §7 的已知边界。逐条结论如下，按批落码；每批落码后改写 §2～§7 的正文，不在旧文上加「已取代」标注。批 1 的 Codex 验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 9 节，批 2～4 与 §9.3 的读路径归属预检见第 10 节。
+负责人 2026-11-11 要求开始处理 §7 的已知边界。逐条结论如下，按批落码；每批落码后改写 §2～§7 的正文，不在旧文上加「已取代」标注。批 1 的 Gemini 验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 9 节，批 2～4 与 §9.3 的读路径归属预检见第 10 节。
 
 | 边界 | 结论 | 批次 |
 |---|---|---|
@@ -276,7 +276,7 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
   - 本机开发：开发密钥对取 RFC 8032 §7.1 TEST 1 的公开测试向量，单测钉住二者配对。本机启动器、docker 调试栈、`k8s_deploy.ps1` 的 dev 档都用这一对，只在 dev/test 用。本机启动器只给 gate 注入私钥，Go 服务只拿公钥。
 - **删除**：v1 HMAC、`MMORPG_INTERNAL_AUTH_SECRET` 及其 `_ADDITIONAL_ENVS` 轮换口、login 配置里的 `Secrets.InternalAuth`，以及部署脚本里以它为由的「排队令牌不得与之复用」检查（改为与签名私钥比较）。项目未上线，不留混跑窗口，gate 与全部验证方同批上线。
 - **性能**：
-  - Ed25519 的签名和验签都比一次 HMAC 贵一到两个数量级。OpenSSL 与 Go 标准库公开的量级都是每次数十微秒，以 Codex 跑出的基准为准，先不宣称结论。
+  - Ed25519 的签名和验签都比一次 HMAC 贵一到两个数量级。OpenSSL 与 Go 标准库公开的量级都是每次数十微秒，以 Gemini 跑出的基准为准，先不宣称结论。
   - 只有经 gate 发往 Go 服务、带会话头的请求才签名和验签；场景、战斗流量不经过这里。
   - 验签放在调用方、时间窗、nonce 形状这些字符串检查之后，格式不对的流量不消耗验签 CPU。
   - 加了 Go 基准 `BenchmarkPublicKeysVerify`。gate 侧由 `routing_identity_test` 的 `SigningCostPerRequestIsReported` 量出单次签名（一次 SHA-256、一次 Ed25519、一个随机 nonce）的平均耗时并打进测试日志（`[caller_auth] sign cost: … us/request`），给容量估算用；它只设一个 2 毫秒的宽上限拦数量级退化，不当性能结论。私钥只在启动时解析一次，每次签名不重建。
@@ -353,13 +353,13 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
   - 间隔夹在 5 秒到 24 小时之间，再按会话号提前至多五分之一，开服时成批登录的连接不会每个周期都在同一秒续租。
   - 应答 `renewed`：按间隔排下一次。应答 `renewed=false`：停止，直到这条连接再次登录成功；在途期间又登录成功过的，立刻再问一次。调用失败或没发出：30 秒后重试。
   - 连接断开后续租随之作废：到期项按会话号与会话代次核对，对不上就丢弃。回调只带会话号与代次，不持有连接（AGENTS.md §11.7）。
-- **断线通知**（2026-11-19 落码，未编译、未测试，待 Codex 验证；至少送达一次，[断线重连原则](infra-reconnect-overview.md) §1.2、§1.3）：Disconnect 是 login 关会话栅栏、清登录态、给 player_locator 会话挂断线租约的唯一入口，player_locator 的会话键没有 TTL，以前 gate 只发一次、发完就删本地会话，丢一次玩家就一直停在 ONLINE。现在：
+- **断线通知**（2026-11-19 落码，未编译、未测试，待 Gemini 验证；至少送达一次，[断线重连原则](infra-reconnect-overview.md) §1.2、§1.3）：Disconnect 是 login 关会话栅栏、清登录态、给 player_locator 会话挂断线租约的唯一入口，player_locator 的会话键没有 TTL，以前 gate 只发一次、发完就删本地会话，丢一次玩家就一直停在 ONLINE。现在：
   - 断开回调把这条连接转成一条待送达的通知交给本模块，带断线当下序列化好的 `SessionDetails`（含会话代次），按会话代次记一条；本拍预算有余量就当场发出，否则排到下一拍。
   - login 回成功才移出。调用失败、login 回错误（路由模式下是带 tip 的信封）、没发出（直连模式挑不到 login、路由模式挑不到路由服或缺通道）、结果未知，都在退避之后原样重发，不限次数：1 秒起翻倍、封顶 30 秒，乘 0.8～1.2 的系数；系数由会话代次与次数算出，同一时刻失败的一批通知各退各的。每拍先发到期的断线通知、再发续租。
   - login 只在关栅栏与每个要收尾的玩家的 `SetDisconnecting` 都成功之后才回成功，任何一步失败回 `Unavailable`，自己不重试（重试只有 gate 一层）。重放安全：栅栏 `Close` 重放返回同一个绑定的玩家，清登录态按连接身份删键，`SetDisconnecting` 对已是 DISCONNECTING 的会话不延长租约。
   - 待送达表上限 131071 条（一个 gate 进程的会话号空间，也是连接数的硬上限，满表约 40 MB）。满了新来的不入表，打带 player_id 的 ERROR 并计数；待送达满一分钟仍没确认的打一次 ERROR（带 player_id）；重发后送达打一行 INFO。
   - 停机关源时不停这一拍：排空期间照样重发；拆除前还没确认的随进程退出，由 player_locator 的死 gate 清扫补投 DISCONNECTING，拆除前 gate 打一行剩余条数。
-  - player_locator 按会话代次认断线（2026-11-19 落码，未生成协议、未编译、未测试，待 Codex 验证）：重发让旧连接的通知可以迟到任意久，同一个 gate 进程里会话号又每 131072 次建连回绕一圈。只按会话号与 gate 实例认会话时，玩家恰好在同号新连接上重新登录、旧连接的通知这时才送达，就会把新会话转成 DISCONNECTING，30 秒后被踢。现在：
+  - player_locator 按会话代次认断线（2026-11-19 落码，未生成协议、未编译、未测试，待 Gemini 验证）：重发让旧连接的通知可以迟到任意久，同一个 gate 进程里会话号又每 131072 次建连回绕一圈。只按会话号与 gate 实例认会话时，玩家恰好在同号新连接上重新登录、旧连接的通知这时才送达，就会把新会话转成 DISCONNECTING，30 秒后被踢。现在：
     - 会话记录 `PlayerSession.session_incarnation` 记写下它的那条连接的会话代次：首登、顶号经 `SetSession` 带上，短线重连经 `ReconnectRequest.session_incarnation` 带上，都按请求如实写，不从旧记录继承（请求为 0 就写 0）。
     - `SetDisconnectingRequest.session_incarnation` 带发起断线的那条连接的代次：Disconnect 取会话头的；栅栏里绑定、会话头没有的玩家来自同一条连接，用同一个；入场链的补偿取本链连接的。
     - 规则同实例号：请求与记录的代次都非 0 且不等，判为同号旧连接迟到的上报，忽略并回成功（gate 随之移出这条通知），记录一个字节都不改；任一方为 0（旧版 login 写入或发出）不比较，照旧按会话号与实例号处理。判定落在 GET 到的同一份字节上，与随后的整字节 CAS 之间没有窗口。

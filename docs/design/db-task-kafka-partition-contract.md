@@ -4,7 +4,7 @@
 
 > 2026-10-16 订正(① 读写分区对齐,S3):「原因」、代码门禁 3 / 6、离线扩容第 3 步、「已知边界」第 2 条按已落码的代码订正;
 > 文末新增「分区函数契约」「golden 向量」「滚动对齐步骤与观测」「屏障覆盖范围与剩余缺口」四节。
-> 状态:**已落码,未编译、未测试,待 Codex 验证**。与落码规格(`docs/handoff/godb-pipeline-impl-20261015/S3-partition-align-spec.md`)
+> 状态:**已落码,未编译、未测试,待 Gemini 验证**。与落码规格(`docs/handoff/godb-pipeline-impl-20261015/S3-partition-align-spec.md`)
 > 不一致处以代码为准,差异集中写在「分区函数契约」末尾的「与规格的差异」。
 
 ## 结论
@@ -86,12 +86,12 @@ map 使用枚举键；日志和指标仍映射成原有 `read/write/unknown`，�
    `ServerConfig.Kafka.RetryRouting: owner` 时写入；键名见 `go/db/internal/kafka/retry_routing.go` 的
    `retryPartitionReadyKey`），同样都要为 0：用 `redis-cli --scan --pattern 'kafka:retry:queue:{topic}:p*'`
    列出后逐个 `LLEN`；或在 `go/db` 下跑 `go run ./cmd/retry_requeue -f etc/db.yaml -zone <zone> -check`（只读盘点，
-   有非空的按分区 ready 列表时以退出码 3 结束）。已落码，未编译、未测试，待 Codex 验证。
+   有非空的按分区 ready 列表时以退出码 3 结束）。已落码，未编译、未测试，待 Gemini 验证。
    2026-10-17 更正（R7 复核）：`-zone` 必填：R7 之前缺省取配置文件里的 ZoneId，漏了会盘点别的 zone 的 topic 并以 0 退出（fail-open）；现在不给 `-zone` 直接以退出码 1 退出，一条不动（`resolveTarget`）；
    代次取 `-f` 配置的 `TopicGeneration`，这一步查的是旧 generation，配置已改成新代时加 `-topic-generation <旧代>`。
    只有退出码 0 才算通过：目标看起来没在用（登记表为空、所有重试列表都是 0，多半是参数指错）以 4 结束，
    登记表里还有登记为 owner 模式的实例以 5 结束，参数 / 配置 / Redis 出错以 1 结束（`go/db/cmd/retry_requeue/main.go` 的
-   `exitTargetUnused` = 4、`exitOwnerInstances` = 5、`exitError` = 1，p* 非 0 是 `exitResidual` = 3）。已落码，未编译、未测试，待 Codex 验证。
+   `exitTargetUnused` = 4、`exitOwnerInstances` = 5、`exitError` = 1，p* 非 0 是 `exitResidual` = 3）。已落码，未编译、未测试，待 Gemini 验证。
 4. 停止旧 db consumer。此时 MySQL 已包含旧 generation 的最终状态。
 5. 在 login 与 db 配置中同时设置 `TopicGeneration: 2`、`PartitionCnt: 20`、
    `InitialPartition: 20`（login），并在同一次提交里把 C++ 的
@@ -130,7 +130,7 @@ map 使用枚举键；日志和指标仍映射成原有 `read/write/unknown`，�
 
 ## 分区函数契约（2026-10-16，① 读写分区对齐）
 
-> 状态：已落码，未编译、未测试，待 Codex 验证。Go 与 C++ 代码已随 `a7c510d65` / `592d7e718` / `0f6690604` 等快照提交入库；
+> 状态：已落码，未编译、未测试，待 Gemini 验证。Go 与 C++ 代码已随 `a7c510d65` / `592d7e718` / `0f6690604` 等快照提交入库；
 > 告警文件 `deploy/k8s/db-task-partition-alerts.yaml` 随 `e76f6f747` 入库。验证与上线清单见 [上线待做](../ops/godb-pipeline-launch-todo.md) §5。
 
 ### 契约
@@ -217,12 +217,12 @@ C++ 发送路径；**以后若加「从 yaml 透传 librdkafka 参数」的能�
    没全入队时先有逐条的 ERROR `[SavePlayerToRedis] Kafka send failed: …` 与汇总 ERROR `not every DB write task was queued to Kafka`，
    再打 INFO `saved to Redis, DB write tasks NOT all queued (see the ERROR above)`，不再出现 `DB write tasks enqueued`。
    全部入队也只说明进了 librdkafka 本地队列、不等于 acks=all，所以第 2 步仍以 Kafka 侧的 end offset 与抽样复核为准，不变。
-   已落码，未编译、未测试，待 Codex 验证。
+   已落码，未编译、未测试，待 Gemini 验证。
    **2026-10-20 更正（存盘日志降级）**：成功那行 `saved to Redis, DB write tasks enqueued` 与 `HandlePlayerAsyncSaved: Saving complete` 已从 INFO 降为 DEBUG
    （每次真写盘都打两条，会把 INFO 刷满）；没全入队时那行 INFO `DB write tasks NOT all queued (see the ERROR above)` 已删，只剩逐条 ERROR `Kafka send failed`
    与汇总 ERROR `not every DB write task was queued to Kafka (topic=…, home_zone=…, owner_epoch=…, save_seq=…)`，原 INFO 里的字段并进了汇总 ERROR。
    本地 `bin/etc/base_deploy_config.yaml` 默认 `LogLevel: 2`（muduo 枚举，2=INFO、1=DEBUG），要看成功那行须临时调到 `1` 并重启 scene。
-   第 2 步本来就以 Kafka 侧 end offset 为准，判据不变。已落码，未编译、未测试，待 Codex 验证。
+   第 2 步本来就以 Kafka 侧 end offset 为准，判据不变。已落码，未编译、未测试，待 Gemini 验证。
 
 ---
 
@@ -238,7 +238,7 @@ C++ 发送路径；**以后若加「从 yaml 透传 librdkafka 参数」的能�
     `sarama.NewConsistentCRCHashPartitioner`、`NewDBTaskPartitioner`）对每条断言，并要求 ≥45 条；
   - C++：`cpp/tests/kafka_command_test/kafka_partition_contract_test.cpp` 的 `DbTaskPartitionContract.LibrdkafkaConsistentRandomMatchesSharedVectors`
     直接调 `rd_kafka_msg_partitioner_consistent_random`，并用 `check.crc32 % N` 间接核对自检值、要求覆盖上述五个 N。
-- 数值来源：规格附录作者与复核者各用独立手写 CRC-32 算出且一致，**没有用机器算过**。必须由 Codex 用 Go `crc32`、sarama、librdkafka
+- 数值来源：规格附录作者与复核者各用独立手写 CRC-32 算出且一致，**没有用机器算过**。必须由 Gemini 用 Go `crc32`、sarama、librdkafka
   三方机械复核；不一致时以机器结果回报，**不直接改表**。
 - 相关用例：`TestNewDBTaskPartitionerMatchesDBTaskPartition`（≥1e5 个 key、多个 N，分区器与契约函数逐个相等）、`TestDBTaskKeyEncoding`、
   `TestDBTaskPartitionRejectsEmptyKeyAndBadCount`、`TestIsDBTaskTopic`；C++ `DbTaskPartitionContract.KafkaKeyMatchesGoFormatUint`
@@ -249,12 +249,12 @@ C++ 发送路径；**以后若加「从 yaml 透传 librdkafka 参数」的能�
 ## 滚动对齐步骤与观测
 
 写侧不改一行、不迁移分区、不换代；只把 login 的读搬到写所在的分区。各步之间没有硬依赖，login 与 go/db 谁先上都安全。
-**执行人**：生产与预发上的抽样、kubectl apply 只由负责人执行；Codex 只在本机或负责人明确指定的 dev 环境执行（AGENTS.md §9）。
+**执行人**：生产与预发上的抽样、kubectl apply 只由负责人执行；Gemini 只在本机或负责人明确指定的 dev 环境执行（AGENTS.md §9）。
 每一步的命令与通过标准见[上线待做](../ops/godb-pipeline-launch-todo.md) §5。
 
 | 步 | 做什么 | 看什么 | 回滚 |
 |---|---|---|---|
-| 0 | Codex 本机编译与单测（Go 三个模块、C++ 串行 `/m:1`、golden 三方复核） | 全绿；golden 不一致时保留输出回报，不改表 | — |
+| 0 | Gemini 本机编译与单测（Go 三个模块、C++ 串行 `/m:1`、golden 三方复核） | 全绿；golden 不一致时保留输出回报，不改表 | — |
 | 1 | **只读抽样门槛**（每个 zone，在 login 切换之前）：console consumer 按分区抽最近 M 条，离线跑 `TestDBTaskPartitionAuditDump` | 写的非 ok 计数为 0、解析失败为 0、抽样里有写；读不符比例记作基线（旧 login 下推断约 1−1/N） | 无需；不满足就停在这一步，按输出的不符行找出不守契约的写入方 |
 | 2 | staging 按生产顺序走一遍，做冷读冒烟（下文） | 同上；冒烟全部有结论且通过 | 回滚 staging |
 | 3 | **生产 login 逐副本滚动**（核心切换） | 读不符比例单调降到 0、read ok 上升（go/db 观测已上线时）；EnterGame 成功率、`entergame_total{result="preload_failed"}` 速率、`dataloader_preload_callback_wait_seconds`、`db_task_stage_seconds{op="read"}` 与基线持平；按分区 lag 无持续堆积；login 日志没有 "producer routing fenced" | 回滚 login 镜像，读回到 FNV（即旧状），无数据要清理。**前置**：回滚目标提交必须包含 `d5cbb8a8e`（G0 自锁修复），用 `git merge-base --is-ancestor d5cbb8a8e <commit>` 核验 |

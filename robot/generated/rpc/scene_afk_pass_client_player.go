@@ -100,3 +100,49 @@ func (sceneAfkPassClientPlayerRpc) decodeGmSetAfkPass(reply *base.MessageContent
 	}
 	return resp, nil
 }
+
+// SetAfkPassSettings 异步调用 SceneAfkPassClientPlayer.SetAfkPassSettings(REQUEST),done 的契约见 SceneAfkPassClientPlayer。
+func (r sceneAfkPassClientPlayerRpc) SetAfkPassSettings(c *pkg.GameClient, req *scene.SetAfkPassSettingsRequest, timeout time.Duration, done func(*scene.SetAfkPassSettingsResponse, error)) {
+	c.Call(game.SceneAfkPassClientPlayerSetAfkPassSettingsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSetAfkPassSettings(reply, err))
+	})
+}
+
+// SetAfkPassSettingsSync 同步调用 SceneAfkPassClientPlayer.SetAfkPassSettings(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAfkPassClientPlayerRpc) SetAfkPassSettingsSync(ctx context.Context, c *pkg.GameClient, req *scene.SetAfkPassSettingsRequest, timeout time.Duration) (*scene.SetAfkPassSettingsResponse, error) {
+	return r.decodeSetAfkPassSettings(c.CallSync(ctx, game.SceneAfkPassClientPlayerSetAfkPassSettingsMessageId, req, timeout))
+}
+
+func (sceneAfkPassClientPlayerRpc) decodeSetAfkPassSettings(reply *base.MessageContent, err error) (*scene.SetAfkPassSettingsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SetAfkPassSettingsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAfkPassClientPlayer.SetAfkPassSettings reply: %w", err)
+	}
+	return resp, nil
+}
+
+// AckHostedRecap 异步调用 SceneAfkPassClientPlayer.AckHostedRecap(REQUEST),done 的契约见 SceneAfkPassClientPlayer。
+func (r sceneAfkPassClientPlayerRpc) AckHostedRecap(c *pkg.GameClient, req *scene.AckHostedRecapRequest, timeout time.Duration, done func(*scene.AckHostedRecapResponse, error)) {
+	c.Call(game.SceneAfkPassClientPlayerAckHostedRecapMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeAckHostedRecap(reply, err))
+	})
+}
+
+// AckHostedRecapSync 同步调用 SceneAfkPassClientPlayer.AckHostedRecap(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAfkPassClientPlayerRpc) AckHostedRecapSync(ctx context.Context, c *pkg.GameClient, req *scene.AckHostedRecapRequest, timeout time.Duration) (*scene.AckHostedRecapResponse, error) {
+	return r.decodeAckHostedRecap(c.CallSync(ctx, game.SceneAfkPassClientPlayerAckHostedRecapMessageId, req, timeout))
+}
+
+func (sceneAfkPassClientPlayerRpc) decodeAckHostedRecap(reply *base.MessageContent, err error) (*scene.AckHostedRecapResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.AckHostedRecapResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAfkPassClientPlayer.AckHostedRecap reply: %w", err)
+	}
+	return resp, nil
+}

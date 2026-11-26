@@ -331,14 +331,14 @@ matcher 在校验(票据缺失 → 单不完整)或推进 matched(CAS 失败 →
 - 变异检查:把 14 条服务端修订逐个关掉(压回后复读、入队后复读、撤单原因入口登记、放回失败收尾、撤单复读、搁置缓存、压回失败删票、视图读票熔断、
   入队后复读成员失败时的撤单、回队首看战斗锁 ×2、熔断不认调用方超时、熔断按读自身耗时、入队方收尾静默),对应用例全部变红;检查后文件逐字节恢复。
 - Go 版本:合入时主干的 go.mod 已要求 Go 1.27.2,落码这台机器只有 1.26.5、未安装新版本。最终一轮是把 match / proto / shared 三个 go.mod
-  的版本行临时改成 1.26.5、离线(`GOPROXY=off`、`-mod=readonly`)跑的,跑完原样改回;请 Codex 用 1.27.2 复跑(§7.2)。
+  的版本行临时改成 1.26.5、离线(`GOPROXY=off`、`-mod=readonly`)跑的,跑完原样改回;请 Gemini 用 1.27.2 复跑(§7.2)。
 - 客户端:运行时程序集(419 个文件)与 Battle / Tianyong 两个 EditMode 测试程序集离线 Roslyn 编译 0 error;
   纯逻辑用例在 Unity 之外用反射执行器实跑 —— 队伍侧 87 条(`TeamBackfillQueueSyncTests` 15、`TeamClientTests` 45、`TeamUiStateTests` 17、`TeamViewMapperTests` 10)全过,
   战斗侧 115 条里 114 条过(`BattleClientAdoptQueueTests` 18 条全过;失败的 1 条是需要引擎贴图接口的既有用例,与本改动无关)。
   客户端 5 条新修订(会话序号、单飞、空闲探测撤销 ×2、有界重拉)同样做了变异检查,对应用例全部变红。
   `TeamWindowTests` 新增 4 条、以及 `BattleUiRoot` / `TeamUiRoot` 的界面改动只做了编译(要 Unity 的 UI 才能跑)。
 
-### 7.2 给 Codex 的复验清单
+### 7.2 给 Gemini 的复验清单
 
 工作目录与环境同 pve-team-size-matching.md §7.1。
 

@@ -5,7 +5,7 @@
 
 # S2 管理与审批 + 推送(批次 B2)— 第 1 部分:范围、现状、角色与权限、配表、Tip
 
-> 状态:设计稿,未落码、未编译,待 Codex 验证。遵守 `00_contract.md`;依赖 B1(`mmorpg_guild` 库、`guild_db.proto`、`GuildData.Funds`、`MemberData.ContributionTotal/Balance`、`resetGuildSchemaViaMigrate`、全库锁序 §2.1)。行号为 2026-09-15/16 核对值,并行会话在改同一工作树,落码按函数名重新定位。
+> 状态:设计稿,未落码、未编译,待 Gemini 验证。遵守 `00_contract.md`;依赖 B1(`mmorpg_guild` 库、`guild_db.proto`、`GuildData.Funds`、`MemberData.ContributionTotal/Balance`、`resetGuildSchemaViaMigrate`、全库锁序 §2.1)。行号为 2026-09-15/16 核对值,并行会话在改同一工作树,落码按函数名重新定位。
 
 ## 0. 范围与结论
 
@@ -217,7 +217,7 @@ message GuildLevelTable {
 - `cpp/generated/table/CMakeLists.txt`:SOURCE_FILES 中,`code/guildlevel_table.cpp`、`code/guildrule_table.cpp` 按字母序插入 `code/` 段;`proto/guildlevel_table.pb.cc`、`proto/guildrule_table.pb.cc` 插入 `proto/` 段。两表无外键,不生成 `_fk.cpp`。
 - `table.vcxproj`:ClInclude 增 `code\guildlevel_table.h`、`code\guildlevel_table_comp.h`、`code\guildrule_table.h`、`code\guildrule_table_comp.h`、`proto\guildlevel_table.pb.h`、`proto\guildrule_table.pb.h`;ClCompile 增 `code\guildlevel_table.cpp`、`code\guildrule_table.cpp`、`proto\guildlevel_table.pb.cc`、`proto\guildrule_table.pb.cc`。
 - `table.vcxproj.filters`:上述 10 项按现有 `code` / `proto` 过滤器登记。
-- **落码前以 `dev.bat gen` 实际生成的文件名为准**。若 Codex 发现 `_comp.h` 未生成,删除对应条目。已存在的 ActivitySchedule CMake 缺口不在本批修(由 C++ 表负责人另行处理,见第 9b 部分 §30)。
+- **落码前以 `dev.bat gen` 实际生成的文件名为准**。若 Gemini 发现 `_comp.h` 未生成,删除对应条目。已存在的 ActivitySchedule CMake 缺口不在本批修(由 C++ 表负责人另行处理,见第 9b 部分 §30)。
 
 ## 4. Tip 码(`data/tip/Tip.xlsx`,`//guild_error` 组)
 
@@ -500,9 +500,9 @@ service GuildService {
 ### 5.6 生成与 id
 
 - proto-gen 为 9 个新方法分配 message id(预计从 201 起,但**不得假定**:组队 / 聚宝斋会话可能先占号)。所有代码只引用生成常量,例如 `game.GuildServiceApplyJoinGuildMessageId`、`game.GuildServiceNotifyGuildChangedMessageId`。
-- `JoinGuild` 的 19 号在 `message_id.txt` 中的去留由生成器决定(`service_register_info.go:148-214` 保留已有行、优先回填空号)。Codex 须记录 `git diff proto/message_id.txt`,不得手改,并记录 19 号是否被**任何**方法(含其它会话的新方法)占用。MessageLimiter 在 B2c 开工时按该记录填写(第 9b 部分 §28 B2c 第 1 步);B2s 与 B2c 之间新方法按限流器缺省行为运行(无专属行;缺省值以 gate 实现为准,robot 冒烟每个方法每秒 ≤2 次,不受影响)。
+- `JoinGuild` 的 19 号在 `message_id.txt` 中的去留由生成器决定(`service_register_info.go:148-214` 保留已有行、优先回填空号)。Gemini 须记录 `git diff proto/message_id.txt`,不得手改,并记录 19 号是否被**任何**方法(含其它会话的新方法)占用。MessageLimiter 在 B2c 开工时按该记录填写(第 9b 部分 §28 B2c 第 1 步);B2s 与 B2c 之间新方法按限流器缺省行为运行(无专属行;缺省值以 gate 实现为准,robot 冒烟每个方法每秒 ≤2 次,不受影响)。
 - 生成物(不手改):`go/proto/guild/guild.pb.go`、`guild_grpc.pb.go`;各服务 `generated/pb/game/message_id.go`;`cpp/generated/rpc/service_metadata/rpc_event_registry.{h,cpp}`;`go/client_rpc_router/generated/pb/game/route_table.go`;`robot/generated/pb/game/*`。
-- 生成期检查 `kMaxRpcMethodCount`(critic.md 未决项):如生成器因方法数增长报错,由 Codex 报告,不自行改上限。
+- 生成期检查 `kMaxRpcMethodCount`(critic.md 未决项):如生成器因方法数增长报错,由 Gemini 报告,不自行改上限。
 
 ### 5.7 `guild_server.go` 薄委托(追加,删除 `JoinGuild`)
 
@@ -646,7 +646,7 @@ err := r.inTx(ctx, "disband", func(tx *sql.Tx) error {
 
 ### 6.2a 锁等待封顶(DSN 会话变量)
 
-InnoDB 默认 `innodb_lock_wait_timeout=50`。RPC 的 ctx 到期后 go-sql-driver 只关闭连接;服务端等锁线程在锁等待期间一般不检测对端断连(推断,Codex 以 §22 用例实测),会继续占着本事务已拿到的 `guild` 行锁,最长 50s,该帮后续写全部连锁超时。
+InnoDB 默认 `innodb_lock_wait_timeout=50`。RPC 的 ctx 到期后 go-sql-driver 只关闭连接;服务端等锁线程在锁等待期间一般不检测对端断连(推断,Gemini 以 §22 用例实测),会继续占着本事务已拿到的 `guild` 行锁,最长 50s,该帮后续写全部连锁超时。
 
 做法:guild 在代码里强制给 DSN 加会话变量,不依赖 yaml(K8s ConfigMap 与本地 yaml 都无需改):
 
@@ -975,7 +975,7 @@ B5/B6 以 guild_id 为键的新表由对应批次加进第 3 步之后。
 
 ### 8.7 公告写:`UpdateAnnouncement(ctx, guildID, playerID uint64, text string) (*GuildData, error)`
 
-新方法放 `guild_manage_repo.go`,事务 `op=announcement`,步骤与现 `UpdateAnnouncementAuthorized` 相同(锁 guild 行 → 锁操作者行 → `canSetAnnouncement` → UPDATE),UPDATE 之后 `loadGuild(tx)` 取快照 → 提交 → `invalidateAfterCommit("announcement", guildID)`。存量 `UpdateAnnouncementAuthorized` 改为薄包装 `_, err := r.UpdateAnnouncement(...); return err`,`guild_repo_test.go` 的三处调用不动(若其中有断言“失效失败要报错”的用例,Codex 报告后按新语义改断言)。
+新方法放 `guild_manage_repo.go`,事务 `op=announcement`,步骤与现 `UpdateAnnouncementAuthorized` 相同(锁 guild 行 → 锁操作者行 → `canSetAnnouncement` → UPDATE),UPDATE 之后 `loadGuild(tx)` 取快照 → 提交 → `invalidateAfterCommit("announcement", guildID)`。存量 `UpdateAnnouncementAuthorized` 改为薄包装 `_, err := r.UpdateAnnouncement(...); return err`,`guild_repo_test.go` 的三处调用不动(若其中有断言“失效失败要报错”的用例,Gemini 报告后按新语义改断言)。
 
 ### 8.8 建帮:`CreateGuild` 改造(`guild_repo.go`)
 
@@ -1892,7 +1892,7 @@ B2 不涉及 C++ 业务代码,无 gtest;C++ 只做表库登记后的编译验证
 ### 23.4 新增到 `GuildWindowTests`(7 条)
 14. `LeaderSeesActionsButNotOnSelf`;15. `OfficerOnlySeesKickForMembers`;16. `PromoteDisabledAtOfficerCap`;17. `KickRequiresConfirmation`;18. `ApplicationsToggleOnlyForOfficersAndRequestsList`;19. `ApplicationRowsDriveReview`;20. `RankingShowsApplyAndCancel` —— 内容同原稿(按钮名 `GuildMemberPromote_2` / `GuildMemberTransfer_2` / `GuildMemberKick_2`、`ConfirmGuildAction`、`GuildApplicationsToggle`、`GuildApplicationApprove_20001`、`ApplyGuild_{id}`)。
 
-**通过标准**:两个类合计 30 + 28 + 7 = **65 条**全部 PASS(改名 2 条不改变条数)。Codex 以 `editmode.xml` 的 `test-run total="65"`(按 `-testFilter "GuildClientTests;GuildWindowTests"`)核对;若其它会话同期在这两个类里加了用例,以 Codex 列出的差异名单为准。
+**通过标准**:两个类合计 30 + 28 + 7 = **65 条**全部 PASS(改名 2 条不改变条数)。Gemini 以 `editmode.xml` 的 `test-run total="65"`(按 `-testFilter "GuildClientTests;GuildWindowTests"`)核对;若其它会话同期在这两个类里加了用例,以 Codex 列出的差异名单为准。
 
 ## 24. robot 冒烟(`robot/guild_smoke_scenario.go`)
 
@@ -1978,7 +1978,7 @@ B2s 与 B2c 之间:客户端在重跑 `gen_proto.ps1 / gen_messageids.ps1` 前�
 | 31 | go/guild/go.mod | 改 | 落码时补:`replace` 有而 `require` 没有的 proto2mysql(经 `replace schemamigrate => ../schemamigrate` 进入模块图),以及 4 条 gorm 系传递依赖 |
 | 32 | go/guild/go.sum | 改 | 同上,外加 B1 漏补的 `go-sql-driver/mysql v1.9.3` 哈希(go.mod 已要求 v1.9.3,go.sum 里只有 v1.9.0)。哈希逐行取自 `go/schemamigrate/go.sum`,未跑 `go mod tidy` |
 
-`guild_repo_test.go` 不在清单:`UpdateAnnouncementAuthorized` 签名不变。若 Codex 发现其中有断言“提交后失效失败要返回错误”的用例,报告后在 B2c 或后续批次改,不在 B2s 里超额修改。`fakeHomeZones` 定义在 `client_zone_test.go:30`(已核对),保持不变;按玩家的并发安全替身 `perPlayerZones` 新建在 #28。
+`guild_repo_test.go` 不在清单:`UpdateAnnouncementAuthorized` 签名不变。若 Gemini 发现其中有断言“提交后失效失败要返回错误”的用例,报告后在 B2c 或后续批次改,不在 B2s 里超额修改。`fakeHomeZones` 定义在 `client_zone_test.go:30`(已核对),保持不变;按玩家的并发安全替身 `perPlayerZones` 新建在 #28。
 
 ## 27. B2c 手改文件(9)
 
@@ -2000,9 +2000,9 @@ B2s 与 B2c 之间:客户端在重跑 `gen_proto.ps1 / gen_messageids.ps1` 前�
 
 <!-- s2_management_part9b.md -->
 
-# S2 管理与审批 + 推送(B2)— 第 9b 部分:Codex 验证、契约偏差、风险
+# S2 管理与审批 + 推送(B2)— 第 9b 部分:Gemini 验证、契约偏差、风险
 
-## 28. Codex 验证(串行;Claude 未执行任何一步)
+## 28. Gemini 验证(串行;Claude 未执行任何一步)
 
 **前置**:B1 已落地并验证通过;buildenv 提供 Go 1.26.5、protoc 35.1、protoc-gen-go 在 PATH;Docker 中 MySQL / Redis / Kafka / etcd 已起。执行 `git status --short` 并记录:Tip.xlsx、MessageLimiter.xlsx、servicecontext.go、table.vcxproj、gen_messageids.ps1、guild_smoke_scenario.go 若有他人未提交改动,只合并不覆盖;与聚宝斋、组队会话确认本时段无人跑导表 / proto-gen。
 
@@ -2089,7 +2089,7 @@ tip 发号结果(同一轮):`kGuildZoneMerging=14013`、`kGuildApplicationNotFou
 ## 30. 风险与未验证项
 
 - **message id 竞争**:组队 / 聚宝斋会话可能在 B2s 期间跑 proto-gen;若 19 号被复用,B2s 与 B2c 之间旧客户端的 JoinGuild 包(`guild_id`)会被按新方法解码。旧客户端未入帮时点“加入”才会发出,多数落到 `kGuildNotInGuild`,仍建议该窗口内不用旧客户端操作帮会。
-- **锁等待与断连**:“ctx 取消后服务端等锁线程不感知断连”是推断,由 `TestLockWaitTimeoutBounded` 实测;若实测 1s 封顶不生效(如账号无权设会话变量),Codex 报告,不得自行调大。
+- **锁等待与断连**:“ctx 取消后服务端等锁线程不感知断连”是推断,由 `TestLockWaitTimeoutBounded` 实测;若实测 1s 封顶不生效(如账号无权设会话变量),Gemini 报告,不得自行调大。
 - **C++ 表登记**:CMakeLists 已缺 ActivitySchedule(critic.md),本批只保证 Windows MSBuild。
 - **被踢 / 退帮帮贡清零**:成员行删除即丢失 `contribution_total/balance`;B5 若要求保留,须另立表。
 - **推送断言依赖本地 Kafka / gate 命令 topic 代次**(`gate-cmd_g2`,PROGRESS.md:4261);代次不一致时推送步骤超时,需核对 `KAFKA_COMMAND_TOPIC_GENERATION`。

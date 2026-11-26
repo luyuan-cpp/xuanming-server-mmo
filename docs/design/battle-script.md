@@ -1,6 +1,6 @@
 # 战斗剧本(battle script)
 
-> **状态(2026-11-12)**:服务端(C++ battle 引擎 + Go match)与客户端代码已落码,**未生成协议、未编译、未测试**,待 Codex 按 §11 验证(AGENTS §10.1)。Java 版只登记待做(§8)。
+> **状态(2026-11-12)**:服务端(C++ battle 引擎 + Go match)与客户端代码已落码,**未生成协议、未编译、未测试**,待 Gemini 按 §11 验证(AGENTS §10.1)。Java 版只登记待做(§8)。
 > **来源**:负责人 2026-11-11 提出「战斗剧本:不同 PVP / PVE 有不同剧本,剧本自己定逻辑(先打哪个怪、先封、谁毒、谁冰、组合什么技能),玩家可以上传、由我们审核」;同日按推荐拍板:剧本是 protobuf 定义的规则表,不嵌脚本语言;整队一份、按角色位分工;只管挂机 / 托管 / 超时的人,手动出手永远优先;评分 PVP 先只开官方剧本(§12 第 3 条)。
 > **取代**:[configurable-templates.md](configurable-templates.md) §4(战斗策略模板)与 §8.6.5(自动战斗策略)的方案,该文对应正文已改成指向本文。
 > **相关**:[turn-based-battle-server.md](turn-based-battle-server.md)(确定性引擎)、[class-skills.md](class-skills.md) §6.5(挂机职业选技,剧本落空时的兜底)、[battle-report-replay.md](battle-report-replay.md)(建房原件即回放材料)。
@@ -191,7 +191,7 @@ BattleScript { schema_version = 1, script_id(官方)/0(玩家), name, descriptio
 - Go:`go/match/internal/battlescript/*`(新)、`internal/authority/battle_script.go`(新)与 `schema.go`、`store.go`、`internal/logic/battle_script_gather.go` / `battlescriptlogic.go` / `battlescriptreviewlogic.go`(新)与 `gather.go`、`global_pool_matcher.go`、`queue.go`(注释)、`internal/server/*`、`internal/svc/servicecontext.go`、`battle_id.go`(注释)、`internal/metrics/battle_script.go`(新)与 `metrics.go`、`internal/constants/errors.go(_test)`、`cmd/battlescriptreview`(新)、`etc/match_service.yaml`。
 - 客户端:见客户端仓 `Docs/BattleScriptUI.md`。
 
-## 11. 验证(交 Codex,AGENTS §10.1;任一步红即停,保留首个错误)
+## 11. 验证(交 Gemini,AGENTS §10.1;任一步红即停,保留首个错误)
 
 1. 导表(tip 码):`dev.bat gen`;核对 `generated/code/proto/tip/match_error_tip.proto` 出现 8 个 `kMatchBattleScript*`,已有码号不变。
 2. 协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`(客户端另按客户端文档用带 Unity 的配置生成)。核对生成 `cpp/generated/proto/battle/battle_script.pb.{h,cc}`、`go/proto/battle/battle_script.pb.go`,proto.vcxproj / CMakeLists 已登记新文件,`shared/generated/clientrpc/methods.go` 含四个新方法。

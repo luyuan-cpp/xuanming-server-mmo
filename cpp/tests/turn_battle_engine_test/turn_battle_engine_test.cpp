@@ -4289,3 +4289,143 @@ TEST(TurnBattleCapture, SameTargetOnlyBelongsToFirstSuccessfulPlayer) {
     ASSERT_EQ(1, engine.BuildSettlement(kPlayerA).captured_pet_table_ids_size());
     EXPECT_EQ(0, engine.BuildSettlement(kPlayerB).captured_pet_table_ids_size());
 }
+
+TEST(TurnBattleEngineTest, TournamentV2LeylinesAndSnapshotPropagation) {
+    const auto runSingleAttackDamage = [](TournamentLeylineElement element, uint64_t* outShieldAfter = nullptr) -> uint64_t {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9950 + static_cast<uint64_t>(element), turnbattle::kMatchModeSeasonTournament, 1);
+        auto* ctx = request.mutable_tournament_context();
+        ctx->set_season_id(1);
+        ctx->set_match_id(88001);
+        ctx->set_best_of(3);
+        ctx->set_game_index(2);
+        ctx->set_wins_a(1);
+        ctx->set_wins_b(0);
+        ctx->set_leyline_element(element);
+        ctx->set_squad_a_id(101);
+        ctx->set_squad_a_name("青云剑派");
+        ctx->set_squad_b_id(102);
+        ctx->set_squad_b_name("天墉问道");
+
+        auto* attacker = AddPlayer(request, kPlayerA, 0, 10000, 10000, 0, 0, 0, 200);
+        attacker->set_physical_attack(1000);
+        AddPlayer(request, kPlayerB, 1, 10000, 10000, 0, 0, 0, 50);
+        EXPECT_TRUE(engine.Initialize(request));
+
+        auto snap = engine.BuildStateSnapshot();
+        TurnBattleEngine::StripEngineOnlyState(snap);
+        EXPECT_EQ(snap.tournament_context().match_id(), 88001u);
+        EXPECT_EQ(snap.tournament_context().best_of(), 3u);
+        EXPECT_EQ(snap.tournament_context().leyline_element(), element);
+        EXPECT_EQ(snap.tournament_context().squad_a_name(), "青云剑派");
+
+        const auto result = ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+        if (outShieldAfter != nullptr) {
+            *outShieldAfter = engine.TournamentEarthShieldOf(kPlayerB);
+        }
+        const auto hits = DamageEventsFrom(result, kPlayerA);
+        EXPECT_EQ(hits.size(), 1u);
+        return hits.empty() ? 0 : hits[0]->value();
+    };
+
+    const uint64_t baseDmg = runSingleAttackDamage(TOURNAMENT_LEYLINE_UNSPECIFIED);
+    const uint64_t metalDmg = runSingleAttackDamage(TOURNAMENT_LEYLINE_METAL);
+    const uint64_t fireDmg = runSingleAttackDamage(TOURNAMENT_LEYLINE_FIRE);
+    uint64_t earthShieldAfter = 99999;
+    const uint64_t earthDmg = runSingleAttackDamage(TOURNAMENT_LEYLINE_EARTH, &earthShieldAfter);
+
+    EXPECT_GT(baseDmg, 0u);
+    EXPECT_GT(metalDmg, baseDmg);
+    EXPECT_GT(fireDmg, metalDmg);
+    // 土厚灵脉首回合 8% 气血护盾(800)完整吸收了 1000 攻的普攻伤害(约 288 点), 实际掉血为 0 且剩余护盾下降
+    EXPECT_EQ(earthDmg, 0u);
+    EXPECT_LT(earthShieldAfter, 800u);
+    EXPECT_GT(earthShieldAfter, 0u);
+
+    // 木生灵脉: 治疗量 +10% (基础 100 点药水 -> 110 点)
+    {
+        TurnBattleEngine woodEngine(MakeProvider());
+        auto req = MakeRequest(9960, turnbattle::kMatchModeSeasonTournament, 1);
+        req.mutable_tournament_context()->set_match_id(88002);
+        req.mutable_tournament_context()->set_leyline_element(TOURNAMENT_LEYLINE_WOOD);
+        auto* pA = AddPlayer(req, kPlayerA, 0, 500, 1000, 0, 0, 0, 200);
+        auto* item = pA->add_items();
+        item->set_item_table_id(kItemPotion);
+        item->set_count(1);
+        AddPlayer(req, kPlayerB, 1, 1000, 1000, 0, 0, 0, 50);
+        ASSERT_TRUE(woodEngine.Initialize(req));
+        const auto res = ResolveDuelRound(woodEngine, MakeAction(BATTLE_ACTION_ITEM, kPlayerA, 0, kItemPotion));
+        const auto* itemEv = FindFirstEvent(res, BATTLE_EVENT_ITEM);
+        ASSERT_NE(itemEv, nullptr);
+        EXPECT_EQ(itemEv->value(), 110u);
+    }
+
+    // 水润灵脉: 回合初额外恢复 5% 最大法力 (200 最大法力 -> +10 法力)
+    {
+        TurnBattleEngine waterEngine(MakeProvider());
+        auto req = MakeRequest(9961, turnbattle::kMatchModeSeasonTournament, 1);
+        req.mutable_tournament_context()->set_match_id(88003);
+        req.mutable_tournament_context()->set_leyline_element(TOURNAMENT_LEYLINE_WATER);
+        auto* pA = AddPlayer(req, kPlayerA, 0, 1000, 1000, 0, 0, 0, 200);
+        pA->mutable_base_attributes()->set_mana(50);
+        pA->set_max_mana(200);
+        AddPlayer(req, kPlayerB, 1, 1000, 1000, 0, 0, 0, 50);
+        ASSERT_TRUE(waterEngine.Initialize(req));
+        waterEngine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND));
+        waterEngine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+        const auto res = waterEngine.ResolveCurrentRound();
+        const auto* actorA = FindStateActor(res.state(), kPlayerA);
+        ASSERT_NE(actorA, nullptr);
+        EXPECT_EQ(actorA->attributes().mana(), 60u);
+    }
+}
+
+TEST(TurnBattleEngineTest, TournamentV3SettlementMvpMetricsAccumulateDamageHealAndControl) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kSkillSilenceCtrl = 109;
+    auto& silenceSkill = provider->AddSkill(kSkillSilenceCtrl);
+    silenceSkill.add_targeting_mode(1);
+    silenceSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    silenceSkill.add_effect(kBuffSilence);
+
+    constexpr uint32_t kSkillRegenAlly = 110;
+    auto& regenSkill = provider->AddSkill(kSkillRegenAlly);
+    regenSkill.add_targeting_mode(1);
+    regenSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    regenSkill.add_effect(kBuffRegen);
+
+    TurnBattleEngine engine(provider);
+    auto req = MakeRequest(9970, turnbattle::kMatchModeSeasonTournament, 1);
+    auto* ctx = req.mutable_tournament_context();
+    ctx->set_season_id(1);
+    ctx->set_match_id(88010);
+    ctx->set_best_of(1);
+    ctx->set_game_index(1);
+    ctx->set_squad_a_emblem_id(2);
+    ctx->set_squad_b_emblem_id(5);
+    ctx->set_is_third_place(true);
+
+    auto* pA = AddPlayer(req, kPlayerA, 0, 500, 1000, 0, 0, 0, 200);
+    pA->set_physical_attack(1000);
+    pA->add_skill_table_ids(kSkillSilenceCtrl);
+    pA->add_skill_table_ids(kSkillRegenAlly);
+    AddPlayer(req, kPlayerB, 1, 1000, 1000, 0, 0, 0, 50);
+    ASSERT_TRUE(engine.Initialize(req));
+
+    // 第 1 回合：A 普攻打 B
+    ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    // 第 2 回合：A 沉默控制 B
+    ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillSilenceCtrl));
+    // 第 3 回合：A 对自己挂周期回血（回合末 tick 生效）
+    ResolveDuelRound(engine, MakeAction(BATTLE_ACTION_SKILL, kPlayerA, kSkillRegenAlly));
+
+    const auto settlementA = engine.BuildSettlement(kPlayerA);
+    EXPECT_GT(settlementA.total_damage_dealt(), 0u);
+    EXPECT_GT(settlementA.total_healing_done(), 0u);
+    EXPECT_EQ(settlementA.total_controls_landed(), 1u);
+
+    auto snap = engine.BuildStateSnapshot();
+    EXPECT_EQ(snap.tournament_context().squad_a_emblem_id(), 2u);
+    EXPECT_EQ(snap.tournament_context().squad_b_emblem_id(), 5u);
+    EXPECT_TRUE(snap.tournament_context().is_third_place());
+}

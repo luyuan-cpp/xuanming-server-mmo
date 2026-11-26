@@ -330,3 +330,49 @@ func (clientPlayerTeamRpc) decodeConfirmRankedPreset(reply *base.MessageContent,
 	}
 	return resp, nil
 }
+
+// SetTeamFormation 异步调用 ClientPlayerTeam.SetTeamFormation(REQUEST),done 的契约见 ClientPlayerTeam。
+func (r clientPlayerTeamRpc) SetTeamFormation(c *pkg.GameClient, req *team.SetTeamFormationRequest, timeout time.Duration, done func(*team.TeamResponse, error)) {
+	c.Call(game.ClientPlayerTeamSetTeamFormationMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSetTeamFormation(reply, err))
+	})
+}
+
+// SetTeamFormationSync 同步调用 ClientPlayerTeam.SetTeamFormation(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerTeamRpc) SetTeamFormationSync(ctx context.Context, c *pkg.GameClient, req *team.SetTeamFormationRequest, timeout time.Duration) (*team.TeamResponse, error) {
+	return r.decodeSetTeamFormation(c.CallSync(ctx, game.ClientPlayerTeamSetTeamFormationMessageId, req, timeout))
+}
+
+func (clientPlayerTeamRpc) decodeSetTeamFormation(reply *base.MessageContent, err error) (*team.TeamResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &team.TeamResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerTeam.SetTeamFormation reply: %w", err)
+	}
+	return resp, nil
+}
+
+// RecallTeamMembers 异步调用 ClientPlayerTeam.RecallTeamMembers(REQUEST),done 的契约见 ClientPlayerTeam。
+func (r clientPlayerTeamRpc) RecallTeamMembers(c *pkg.GameClient, req *team.RecallTeamMembersRequest, timeout time.Duration, done func(*team.TeamResponse, error)) {
+	c.Call(game.ClientPlayerTeamRecallTeamMembersMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRecallTeamMembers(reply, err))
+	})
+}
+
+// RecallTeamMembersSync 同步调用 ClientPlayerTeam.RecallTeamMembers(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerTeamRpc) RecallTeamMembersSync(ctx context.Context, c *pkg.GameClient, req *team.RecallTeamMembersRequest, timeout time.Duration) (*team.TeamResponse, error) {
+	return r.decodeRecallTeamMembers(c.CallSync(ctx, game.ClientPlayerTeamRecallTeamMembersMessageId, req, timeout))
+}
+
+func (clientPlayerTeamRpc) decodeRecallTeamMembers(reply *base.MessageContent, err error) (*team.TeamResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &team.TeamResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerTeam.RecallTeamMembers reply: %w", err)
+	}
+	return resp, nil
+}

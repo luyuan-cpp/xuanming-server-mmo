@@ -111,8 +111,10 @@ type ServiceContext struct {
 	Ranked     *ranked.Catalog
 	liveRanked atomic.Pointer[ranked.Catalog]
 	// Tournament 是启动时由 TournamentRule / TournamentReward 编译校验的全服赛季战队锦标赛目录(热更时经 liveTournament 原子切换)。
-	Tournament     *tournament.Catalog
-	liveTournament atomic.Pointer[tournament.Catalog]
+	Tournament       *tournament.Catalog
+	liveTournament   atomic.Pointer[tournament.Catalog]
+	TournamentCheers *tournament.SpectateCheerHub
+	cheerHubOnce     sync.Once
 	// ContentGuard 用于战队名称等 UGC 文本审核(未装配时为 nil,保留本地字符集与唯一键校验)。
 	ContentGuard contentguard.Checker
 	// MailAdmin / MailSecret 用于向玩家邮箱幂等投递锦标赛赛季奖励附件(可选装配)。
@@ -776,6 +778,19 @@ func (sc *ServiceContext) ActiveTournament() *tournament.Catalog {
 		return sc.Tournament
 	}
 	return tournament.DefaultFallback()
+}
+
+// ActiveTournamentCheers 返回锦标赛观战预设喝彩聚合器(首次访问懒初始化,并发安全)。
+func (sc *ServiceContext) ActiveTournamentCheers() *tournament.SpectateCheerHub {
+	if sc == nil {
+		return tournament.NewSpectateCheerHub()
+	}
+	sc.cheerHubOnce.Do(func() {
+		if sc.TournamentCheers == nil {
+			sc.TournamentCheers = tournament.NewSpectateCheerHub()
+		}
+	})
+	return sc.TournamentCheers
 }
 
 // ValidateTables 是 match 的 --validate-tables 预检钩子:与生产运行期热更使用完全相同的目录与剧本编译校验。

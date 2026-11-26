@@ -24,8 +24,11 @@
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "proto/battle/battle_data.pb.h"
 #include "proto/common/base/node.pb.h"
 #include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_pet_comp.pb.h"
+#include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/data_service/data_service.pb.h"
@@ -36,8 +39,13 @@
 #include "table/code/appearanceseries_table.h"
 #include "table/code/characterappearance_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
+#include "table/code/petcosmetic_table.h"
+#include "table/code/skill_table.h"
+#include "table/code/skillvfxcosmetic_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
 
@@ -326,6 +334,54 @@ namespace
 				   ? std::numeric_limits<uint32_t>::max()
 				   : static_cast<uint32_t>(count);
 	}
+
+	// 检查目标技能是否对当前玩家可用(需存在于 Skill 表、职业匹配且已习得或为赛季免学技能)。
+	bool PlayerHasUsableSkill(entt::entity player, uint32_t skillTableId)
+	{
+		if (skillTableId == 0)
+		{
+			return false;
+		}
+		const auto *skillRow = SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
+		if (skillRow == nullptr)
+		{
+			return false;
+		}
+		const auto &registry = tlsEcs.actorRegistry;
+		if (!registry.valid(player))
+		{
+			return false;
+		}
+		const uint32_t skillClassId = skillRow->class_id();
+		if (skillClassId != 0)
+		{
+			if (const auto *cls = registry.try_get<PlayerUint32Comp>(player); cls != nullptr && cls->class_() != 0 && cls->class_() != skillClassId)
+			{
+				return false;
+			}
+		}
+		if (skillRow->season_id() != 0)
+		{
+			return true;
+		}
+		const auto *skills = registry.try_get<PlayerSkillListComp>(player);
+		if (skills == nullptr)
+		{
+			return false;
+		}
+		for (const auto &entry : skills->skill_list())
+		{
+			if (entry.skill_table_id() != skillTableId)
+			{
+				continue;
+			}
+			if (skillClassId == 0 || entry.rank() > 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 } // namespace
 
 bool PlayerAppearanceSystem::ValidateTables()
@@ -408,6 +464,81 @@ bool PlayerAppearanceSystem::ValidateTables()
 		LOG_ERROR << "[PlayerAppearance] table validation failed: enabled=" << enabledCount
 				  << " starter_creatable=" << starterCount;
 		return false;
+	}
+
+	// 校验灵宠幻化目录表(空表允许存在;有行时所有字段、外键与 bit_index 必须合法)。
+	std::unordered_set<std::string> enabledPetKeys;
+	for (const auto &row : PetCosmeticTableManager::Instance().FindAll().data())
+	{
+		if (row.id() == 0 || player_appearance::IsBlankText(row.cosmetic_key()) || player_appearance::IsBlankText(row.name()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: invalid PetCosmetic row id=" << row.id();
+			return false;
+		}
+		if (!player_appearance::PetCosmeticBitIndex(row.id()).has_value())
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: missing PetCosmetic bit_index id=" << row.id();
+			return false;
+		}
+		if (row.target_pet_table_id() != 0 && !PetTableManager::Instance().Exists(row.target_pet_table_id()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: PetCosmetic id=" << row.id()
+					  << " references unknown target_pet_table_id=" << row.target_pet_table_id();
+			return false;
+		}
+		if (row.visual_pet_table_id() == 0 && player_appearance::IsBlankText(row.visual_art_key()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: PetCosmetic id=" << row.id()
+					  << " missing both visual_pet_table_id and visual_art_key";
+			return false;
+		}
+		if (row.visual_pet_table_id() != 0 && !PetTableManager::Instance().Exists(row.visual_pet_table_id()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: PetCosmetic id=" << row.id()
+					  << " references unknown visual_pet_table_id=" << row.visual_pet_table_id();
+			return false;
+		}
+		if (row.enabled() != 0 && !enabledPetKeys.insert(row.cosmetic_key()).second)
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: duplicate enabled PetCosmetic key="
+					  << row.cosmetic_key();
+			return false;
+		}
+	}
+
+	// 校验技能特效目录表(空表允许存在;有行时技能外键、帧条键、色调与 bit_index 必须合法)。
+	std::unordered_set<std::string> enabledVfxKeys;
+	for (const auto &row : SkillVfxCosmeticTableManager::Instance().FindAll().data())
+	{
+		if (row.id() == 0 || player_appearance::IsBlankText(row.vfx_key()) ||
+			player_appearance::IsBlankText(row.name()) || player_appearance::IsBlankText(row.fx_id()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: invalid SkillVfxCosmetic row id=" << row.id();
+			return false;
+		}
+		if (!player_appearance::SkillVfxBitIndex(row.id()).has_value())
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: missing SkillVfxCosmetic bit_index id=" << row.id();
+			return false;
+		}
+		if (!SkillTableManager::Instance().Exists(row.skill_table_id()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: SkillVfxCosmetic id=" << row.id()
+					  << " references unknown skill_table_id=" << row.skill_table_id();
+			return false;
+		}
+		if (!player_appearance::IsValidTintHex(row.tint_hex()))
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: SkillVfxCosmetic id=" << row.id()
+					  << " invalid tint_hex=" << row.tint_hex();
+			return false;
+		}
+		if (row.enabled() != 0 && !enabledVfxKeys.insert(row.vfx_key()).second)
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: duplicate enabled SkillVfxCosmetic key="
+					  << row.vfx_key();
+			return false;
+		}
 	}
 	return true;
 }
@@ -609,6 +740,180 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		for (const auto &memberId : s.memberAppearanceIds)
 		{
 			out->add_member_appearance_ids(memberId);
+		}
+	}
+
+	// ── 灵宠幻化目录与当前实例穿戴快照（纯外观零数值） ──
+	const std::string_view petOwnedBits =
+		profile != nullptr ? std::string_view(profile->pet_cosmetic_owned_bits()) : std::string_view();
+	if (profile != nullptr)
+	{
+		info.set_pet_cosmetic_owned_bits(profile->pet_cosmetic_owned_bits());
+	}
+	struct PetCosmeticRow
+	{
+		uint32_t configId;
+		std::string cosmeticKey;
+		std::string name;
+		uint32_t targetPetTableId;
+		uint32_t visualPetTableId;
+		std::string visualArtKey;
+		uint32_t sortOrder;
+		bool owned;
+		uint64_t mallSkuId;
+		std::string acquireHint;
+		std::string desc;
+	};
+	std::vector<PetCosmeticRow> petCosmetics;
+	const auto &petCosmeticRows = PetCosmeticTableManager::Instance().FindAll().data();
+	petCosmetics.reserve(static_cast<std::size_t>(petCosmeticRows.size()));
+	for (const auto &row : petCosmeticRows)
+	{
+		if (row.enabled() == 0)
+		{
+			continue;
+		}
+		petCosmetics.push_back(PetCosmeticRow{
+			row.id(),
+			row.cosmetic_key(),
+			row.name(),
+			row.target_pet_table_id(),
+			row.visual_pet_table_id(),
+			row.visual_art_key(),
+			row.sort_order(),
+			player_appearance::IsPetCosmeticOwned(petOwnedBits, row.id()),
+			row.mall_sku_id(),
+			row.acquire_hint(),
+			row.desc(),
+		});
+	}
+	std::sort(petCosmetics.begin(), petCosmetics.end(), [](const PetCosmeticRow &a, const PetCosmeticRow &b)
+			  {
+				  if (a.sortOrder != b.sortOrder)
+				  {
+					  return a.sortOrder < b.sortOrder;
+				  }
+				  return a.configId < b.configId;
+			  });
+	for (const auto &item : petCosmetics)
+	{
+		auto *out = info.add_pet_cosmetics();
+		out->set_config_id(item.configId);
+		out->set_cosmetic_key(item.cosmeticKey);
+		out->set_name(item.name);
+		out->set_target_pet_table_id(item.targetPetTableId);
+		out->set_visual_pet_table_id(item.visualPetTableId);
+		out->set_visual_art_key(item.visualArtKey);
+		out->set_sort_order(item.sortOrder);
+		out->set_owned(item.owned);
+		out->set_mall_sku_id(item.mallSkuId);
+		out->set_acquire_hint(item.acquireHint);
+		out->set_desc(item.desc);
+	}
+	if (const auto *pets = registry.valid(player) ? registry.try_get<PlayerPetComp>(player) : nullptr; pets != nullptr)
+	{
+		for (const auto &pet : pets->pets())
+		{
+			uint32_t resolvedCosmeticId = 0;
+			std::string resolvedArtKey;
+			ResolvePetCosmeticVisual(player, pet, resolvedCosmeticId, resolvedArtKey);
+			auto *equipped = info.add_equipped_pet_cosmetics();
+			equipped->set_pet_id(pet.pet_id());
+			equipped->set_cosmetic_id(resolvedCosmeticId);
+		}
+	}
+
+	// ── 技能特效目录与当前启用映射（纯战斗画面零数值） ──
+	const std::string_view vfxOwnedBits =
+		profile != nullptr ? std::string_view(profile->skill_vfx_owned_bits()) : std::string_view();
+	if (profile != nullptr)
+	{
+		info.set_skill_vfx_owned_bits(profile->skill_vfx_owned_bits());
+	}
+	struct SkillVfxRow
+	{
+		uint32_t configId;
+		std::string vfxKey;
+		std::string name;
+		uint32_t skillTableId;
+		std::string fxId;
+		std::string projectileFxId;
+		std::string telegraphFxId;
+		std::string tintHex;
+		uint32_t sortOrder;
+		bool owned;
+		uint64_t mallSkuId;
+		std::string acquireHint;
+		std::string desc;
+	};
+	std::vector<SkillVfxRow> vfxList;
+	const auto &vfxRows = SkillVfxCosmeticTableManager::Instance().FindAll().data();
+	vfxList.reserve(static_cast<std::size_t>(vfxRows.size()));
+	for (const auto &row : vfxRows)
+	{
+		if (row.enabled() == 0)
+		{
+			continue;
+		}
+		vfxList.push_back(SkillVfxRow{
+			row.id(),
+			row.vfx_key(),
+			row.name(),
+			row.skill_table_id(),
+			row.fx_id(),
+			row.projectile_fx_id(),
+			row.telegraph_fx_id(),
+			row.tint_hex(),
+			row.sort_order(),
+			player_appearance::IsSkillVfxOwned(vfxOwnedBits, row.id()),
+			row.mall_sku_id(),
+			row.acquire_hint(),
+			row.desc(),
+		});
+	}
+	std::sort(vfxList.begin(), vfxList.end(), [](const SkillVfxRow &a, const SkillVfxRow &b)
+			  {
+				  if (a.sortOrder != b.sortOrder)
+				  {
+					  return a.sortOrder < b.sortOrder;
+				  }
+				  return a.configId < b.configId;
+			  });
+	for (const auto &item : vfxList)
+	{
+		auto *out = info.add_skill_vfx_cosmetics();
+		out->set_config_id(item.configId);
+		out->set_vfx_key(item.vfxKey);
+		out->set_name(item.name);
+		out->set_skill_table_id(item.skillTableId);
+		out->set_fx_id(item.fxId);
+		out->set_projectile_fx_id(item.projectileFxId);
+		out->set_telegraph_fx_id(item.telegraphFxId);
+		out->set_tint_hex(item.tintHex);
+		out->set_sort_order(item.sortOrder);
+		out->set_owned(item.owned);
+		out->set_mall_sku_id(item.mallSkuId);
+		out->set_acquire_hint(item.acquireHint);
+		out->set_desc(item.desc);
+	}
+	if (profile != nullptr)
+	{
+		for (const auto &[skillId, cosmeticId] : profile->equipped_skill_vfx())
+		{
+			if (skillId == 0 || cosmeticId == 0)
+			{
+				continue;
+			}
+			const auto *row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+			if (row == nullptr || row->enabled() == 0 || row->skill_table_id() != skillId)
+			{
+				continue;
+			}
+			if (!player_appearance::IsSkillVfxOwned(vfxOwnedBits, cosmeticId))
+			{
+				continue;
+			}
+			(*info.mutable_equipped_skill_vfx())[skillId] = cosmeticId;
 		}
 	}
 }
@@ -981,6 +1286,353 @@ uint32_t PlayerAppearanceSystem::CancelTrial(entt::entity player, uint64_t nowUn
 
 	BroadcastAppearanceChanged(player, playerId, profile->appearance_id(), /*isTrial=*/false, /*trialExpiresAt=*/0);
 	FillInfo(player, nowUnixSec, info);
+	return kSuccess;
+}
+
+void PlayerAppearanceSystem::ResolvePetCosmeticVisual(entt::entity player,
+													  const PetInstance &pet,
+													  uint32_t &outCosmeticId,
+													  std::string &outArtKey)
+{
+	outCosmeticId = 0;
+	outArtKey.clear();
+	if (pet.cosmetic_id() == 0)
+	{
+		return;
+	}
+	const auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return;
+	}
+	const auto *profile = registry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		return;
+	}
+	const auto *row = PetCosmeticTableManager::Instance().FindByIdSilent(pet.cosmetic_id()).first;
+	if (row == nullptr || row->enabled() == 0)
+	{
+		return;
+	}
+	if (!player_appearance::IsPetSpeciesCompatible(row->target_pet_table_id(), pet.pet_table_id()))
+	{
+		return;
+	}
+	if (!player_appearance::IsPetCosmeticOwned(profile->pet_cosmetic_owned_bits(), row->id()))
+	{
+		return;
+	}
+	outCosmeticId = row->id();
+	outArtKey = row->visual_art_key();
+}
+
+void PlayerAppearanceSystem::FillBattleSkillVfx(entt::entity player, BattlePlayerSnapshot &snapshot)
+{
+	snapshot.clear_equipped_skill_vfx();
+	const auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return;
+	}
+	const auto *profile = registry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr || profile->equipped_skill_vfx().empty())
+	{
+		return;
+	}
+	const std::string_view ownedBits = profile->skill_vfx_owned_bits();
+	for (const auto &[skillId, cosmeticId] : profile->equipped_skill_vfx())
+	{
+		if (skillId == 0 || cosmeticId == 0)
+		{
+			continue;
+		}
+		const auto *row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+		if (row == nullptr || row->enabled() == 0 || row->skill_table_id() != skillId)
+		{
+			continue;
+		}
+		if (!player_appearance::IsSkillVfxOwned(ownedBits, cosmeticId))
+		{
+			continue;
+		}
+		(*snapshot.mutable_equipped_skill_vfx())[skillId] = cosmeticId;
+	}
+}
+
+uint32_t PlayerAppearanceSystem::EquipPetCosmetic(entt::entity player,
+												  const EquipPetCosmeticRequest &request,
+												  uint64_t nowUnixSec,
+												  EquipPetCosmeticResponse &response)
+{
+	response.Clear();
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	if (request.client_request_id() == 0 || request.pet_id() == 0)
+	{
+		return kInvalidParameter;
+	}
+	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
+	{
+		return mutTip;
+	}
+	const auto *guid = registry.try_get<PlayerGuidComp>(player);
+	const Guid playerId = guid != nullptr ? guid->value : kInvalidGuid;
+	const auto *profile = registry.try_get<PlayerProfileComp>(player);
+	auto *petComp = registry.try_get<PlayerPetComp>(player);
+	if (profile == nullptr || petComp == nullptr)
+	{
+		LOG_ERROR << "[PlayerAppearance] equip pet cosmetic refused: missing profile or pet comp player_id=" << playerId;
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+
+	int petIndex = -1;
+	for (int i = 0; i < petComp->pets_size(); ++i)
+	{
+		if (petComp->pets(i).pet_id() == request.pet_id())
+		{
+			petIndex = i;
+			break;
+		}
+	}
+	if (petIndex < 0)
+	{
+		return static_cast<uint32_t>(kPetNotFound);
+	}
+	auto *pet = petComp->mutable_pets(petIndex);
+
+	const uint32_t targetCosmeticId = request.cosmetic_id();
+	if (targetCosmeticId != 0)
+	{
+		const auto *row = PetCosmeticTableManager::Instance().FindByIdSilent(targetCosmeticId).first;
+		if (row == nullptr || row->enabled() == 0)
+		{
+			return static_cast<uint32_t>(kAppearanceInvalid);
+		}
+		if (!player_appearance::PetCosmeticBitIndex(row->id()).has_value())
+		{
+			LOG_ERROR << "[PlayerAppearance] equip pet cosmetic refused: missing bit_index id=" << row->id()
+					  << " player_id=" << playerId;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		if (!player_appearance::IsPetCosmeticOwned(profile->pet_cosmetic_owned_bits(), row->id()))
+		{
+			return static_cast<uint32_t>(kAppearanceNotOwned);
+		}
+		if (!player_appearance::IsPetSpeciesCompatible(row->target_pet_table_id(), pet->pet_table_id()))
+		{
+			return static_cast<uint32_t>(kAppearanceInvalid);
+		}
+	}
+
+	response.set_pet_id(pet->pet_id());
+	if (pet->cosmetic_id() == targetCosmeticId)
+	{
+		response.set_equipped_cosmetic_id(targetCosmeticId);
+		response.set_replayed(true);
+		FillInfo(player, nowUnixSec, *response.mutable_info());
+		return kSuccess;
+	}
+
+	pet->set_cosmetic_id(targetCosmeticId);
+	RequestSave(player, targetCosmeticId == 0 ? "pet_cosmetic_cleared" : "pet_cosmetic_equipped");
+	LOG_INFO << "[PlayerAppearance] metric=pet_cosmetic_updated player_id=" << playerId
+			 << " pet_id=" << pet->pet_id() << " cosmetic_id=" << targetCosmeticId;
+
+	response.set_equipped_cosmetic_id(targetCosmeticId);
+	FillInfo(player, nowUnixSec, *response.mutable_info());
+	AppearanceStateNotify notify;
+	*notify.mutable_info() = response.info();
+	PushStateNotify(player, notify);
+	return kSuccess;
+}
+
+uint32_t PlayerAppearanceSystem::EquipSkillVfx(entt::entity player,
+											   const EquipSkillVfxRequest &request,
+											   uint64_t nowUnixSec,
+											   EquipSkillVfxResponse &response)
+{
+	response.Clear();
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	if (request.client_request_id() == 0 || request.skill_table_id() == 0)
+	{
+		return kInvalidParameter;
+	}
+	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
+	{
+		return mutTip;
+	}
+	const auto *guid = registry.try_get<PlayerGuidComp>(player);
+	const Guid playerId = guid != nullptr ? guid->value : kInvalidGuid;
+	auto *profile = registry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		LOG_ERROR << "[PlayerAppearance] equip skill vfx refused: missing PlayerProfileComp player_id=" << playerId;
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+
+	const uint32_t skillTableId = request.skill_table_id();
+	const uint32_t targetCosmeticId = request.cosmetic_id();
+	if (targetCosmeticId != 0)
+	{
+		const auto *row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(targetCosmeticId).first;
+		if (row == nullptr || row->enabled() == 0 || row->skill_table_id() != skillTableId)
+		{
+			return static_cast<uint32_t>(kAppearanceInvalid);
+		}
+		if (!player_appearance::SkillVfxBitIndex(row->id()).has_value())
+		{
+			LOG_ERROR << "[PlayerAppearance] equip skill vfx refused: missing bit_index id=" << row->id()
+					  << " player_id=" << playerId;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		if (!player_appearance::IsSkillVfxOwned(profile->skill_vfx_owned_bits(), row->id()))
+		{
+			return static_cast<uint32_t>(kAppearanceNotOwned);
+		}
+		if (!PlayerHasUsableSkill(player, skillTableId))
+		{
+			return static_cast<uint32_t>(kAppearanceInvalid);
+		}
+	}
+
+	const auto it = profile->equipped_skill_vfx().find(skillTableId);
+	const uint32_t currentId = it != profile->equipped_skill_vfx().end() ? it->second : 0;
+	response.set_skill_table_id(skillTableId);
+	if (currentId == targetCosmeticId)
+	{
+		response.set_equipped_cosmetic_id(targetCosmeticId);
+		response.set_replayed(true);
+		FillInfo(player, nowUnixSec, *response.mutable_info());
+		return kSuccess;
+	}
+
+	if (targetCosmeticId == 0)
+	{
+		profile->mutable_equipped_skill_vfx()->erase(skillTableId);
+	}
+	else
+	{
+		(*profile->mutable_equipped_skill_vfx())[skillTableId] = targetCosmeticId;
+	}
+	RequestSave(player, targetCosmeticId == 0 ? "skill_vfx_cleared" : "skill_vfx_equipped");
+	LOG_INFO << "[PlayerAppearance] metric=skill_vfx_updated player_id=" << playerId
+			 << " skill_table_id=" << skillTableId << " cosmetic_id=" << targetCosmeticId;
+
+	response.set_equipped_cosmetic_id(targetCosmeticId);
+	FillInfo(player, nowUnixSec, *response.mutable_info());
+	AppearanceStateNotify notify;
+	*notify.mutable_info() = response.info();
+	PushStateNotify(player, notify);
+	return kSuccess;
+}
+
+uint32_t PlayerAppearanceSystem::GrantPetCosmetic(entt::entity player,
+												  uint32_t cosmeticId,
+												  uint64_t nowUnixSec,
+												  bool *alreadyOwned)
+{
+	if (alreadyOwned != nullptr)
+	{
+		*alreadyOwned = false;
+	}
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
+	{
+		return mutTip;
+	}
+	const auto *row = PetCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+	if (row == nullptr || row->enabled() == 0)
+	{
+		return static_cast<uint32_t>(kAppearanceInvalid);
+	}
+	if (!player_appearance::PetCosmeticBitIndex(row->id()).has_value())
+	{
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	auto *profile = registry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	if (player_appearance::IsPetCosmeticOwned(profile->pet_cosmetic_owned_bits(), row->id()))
+	{
+		if (alreadyOwned != nullptr)
+		{
+			*alreadyOwned = true;
+		}
+		return kSuccess;
+	}
+	if (!player_appearance::MarkPetCosmeticOwned(*profile->mutable_pet_cosmetic_owned_bits(), row->id()))
+	{
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	RequestSave(player, "pet_cosmetic_granted");
+	AppearanceStateNotify notify;
+	FillInfo(player, nowUnixSec, *notify.mutable_info());
+	PushStateNotify(player, notify);
+	return kSuccess;
+}
+
+uint32_t PlayerAppearanceSystem::GrantSkillVfx(entt::entity player,
+											   uint32_t cosmeticId,
+											   uint64_t nowUnixSec,
+											   bool *alreadyOwned)
+{
+	if (alreadyOwned != nullptr)
+	{
+		*alreadyOwned = false;
+	}
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
+	{
+		return mutTip;
+	}
+	const auto *row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+	if (row == nullptr || row->enabled() == 0)
+	{
+		return static_cast<uint32_t>(kAppearanceInvalid);
+	}
+	if (!player_appearance::SkillVfxBitIndex(row->id()).has_value())
+	{
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	auto *profile = registry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	if (player_appearance::IsSkillVfxOwned(profile->skill_vfx_owned_bits(), row->id()))
+	{
+		if (alreadyOwned != nullptr)
+		{
+			*alreadyOwned = true;
+		}
+		return kSuccess;
+	}
+	if (!player_appearance::MarkSkillVfxOwned(*profile->mutable_skill_vfx_owned_bits(), row->id()))
+	{
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	RequestSave(player, "skill_vfx_granted");
+	AppearanceStateNotify notify;
+	FillInfo(player, nowUnixSec, *notify.mutable_info());
+	PushStateNotify(player, notify);
 	return kSuccess;
 }
 

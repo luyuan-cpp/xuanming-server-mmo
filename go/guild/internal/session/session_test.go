@@ -91,7 +91,7 @@ func TestBrokenSessionMetadataFailsClosed(t *testing.T) {
 // 客户端能调哪些 GuildService 方法由生成的客户端方法集合决定(与 gate 上行白名单同源),新增 RPC 必须在 proto 上表态:
 // 只有 UpdateGuildScore(SERVER_ONLY)与 NotifyGuildChanged(PUSH)不可调,其余全部可调。
 func TestGeneratedClientSetCoversEveryGuildRPCExceptScoreWritesAndPushes(t *testing.T) {
-	internalOnly := map[string]bool{"UpdateGuildScore": true, "NotifyGuildChanged": true}
+	internalOnly := map[string]bool{"UpdateGuildScore": true, "NotifyGuildChanged": true, "NotifyGuildWarAlert": true}
 	for _, method := range pb.GuildService_ServiceDesc.Methods {
 		fullMethod := "/" + pb.GuildService_ServiceDesc.ServiceName + "/" + method.MethodName
 		assert.Equal(t, !internalOnly[method.MethodName], clientrpc.Callable(fullMethod), "%s 的客户端准入与预期不符", fullMethod)

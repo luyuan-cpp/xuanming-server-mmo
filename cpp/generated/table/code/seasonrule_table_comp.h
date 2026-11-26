@@ -74,6 +74,14 @@ struct SeasonRuleDescComp {
     std::string_view value;
 };
 
+struct SeasonRuleHonor_title_nameComp {
+    std::string_view value;
+};
+
+struct SeasonRuleHonor_badge_icon_keyComp {
+    std::string_view value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -123,4 +131,10 @@ inline SeasonRuleDefault_seal_idComp MakeSeasonRuleDefault_seal_idComp(const Sea
 }
 inline SeasonRuleDescComp MakeSeasonRuleDescComp(const SeasonRuleTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline SeasonRuleHonor_title_nameComp MakeSeasonRuleHonor_title_nameComp(const SeasonRuleTable& row) {
+    return { std::string_view(row.honor_title_name()) };
+}
+inline SeasonRuleHonor_badge_icon_keyComp MakeSeasonRuleHonor_badge_icon_keyComp(const SeasonRuleTable& row) {
+    return { std::string_view(row.honor_badge_icon_key()) };
 }

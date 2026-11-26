@@ -1,6 +1,6 @@
 # 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)
 
-状态:**第 1、2a、2b、3、4、5 批已落码(未编译、未测试,待 Codex 验证);第 6a、6b-1、6b-2 批代码写完、未运行;第 7 批(文档)2026-11-19 已完成。代码与文档都已写完,只剩 Codex 验证。** 负责人 2026-11-10 定:「我要分布式水平扩展」。服务器里每一套 Redis 都要能靠加主节点扩写入。按 zone 组分单主实例(排队 `redis-queue-g<N>`、控制域 `redis-ctl-g<N>`)和核心单主(`redis` / `redis-ha`)都不算完成。登记为[缺口清单](../handoff/server-gap-audit-20261101.md)第 34 条。
+状态:**第 1、2a、2b、3、4、5 批已落码(未编译、未测试,待 Gemini 验证);第 6a、6b-1、6b-2 批代码写完、未运行;第 7 批(文档)2026-11-19 已完成。代码与文档都已写完,只剩 Gemini 验证。** 负责人 2026-11-10 定:「我要分布式水平扩展」。服务器里每一套 Redis 都要能靠加主节点扩写入。按 zone 组分单主实例(排队 `redis-queue-g<N>`、控制域 `redis-ctl-g<N>`)和核心单主(`redis` / `redis-ha`)都不算完成。登记为[缺口清单](../handoff/server-gap-audit-20261101.md)第 34 条。
 
 依据:2026-11-10 三路只读盘点(控制域;排队、gate 标记与网关限流;核心其余用途),行号以当天工作区为准,落码时按函数名复核。证据等级:[C] 读代码或配置确认;[D] 文档记载;[I] 推算;[M] 实测。本稿没有 [M]。
 
@@ -441,7 +441,7 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
   - 首次上线就是集群形态。
 - **上线后**:再改任何键形都要停写切换(全部写者排空后一次切换),禁止双读双写。围栏类原语在新旧键名上会各自「成功」。
 
-## 9. 验证(交 Codex,按 AGENTS §10.1)
+## 9. 验证(交 Gemini,按 AGENTS §10.1)
 
 1. **单元与契约**(每批):
    - 两种语言的键金样表逐字一致;
@@ -462,7 +462,7 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 
 ## 10. 分批
 
-每批不超过 30 个文件(含测试),批间做语义评审;构建、测试、压测由 Codex 执行;动手前在缺口清单第 34 条认领、核对工作区。
+每批不超过 30 个文件(含测试),批间做语义评审;构建、测试、压测由 Gemini 执行;动手前在缺口清单第 34 条认领、核对工作区。
 
 | 批 | 内容 | 约文件数 | 依赖与协调 | 状态 |
 |---|---|---|---|---|
@@ -495,7 +495,7 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
   - 不新增 Redis 键:`drainWorkerKey` 只是进程内 map 的键,不改形。
   - 改法提示:`enter_evacuation.go` 的 `evacuationOwnerOf` 手里有 zoneID,可以直接传;`node_drain_test.go` 里的 `sceneNodeKey(555)` 改用 `testZoneId`。
 - **「Returning scene node」**(缺口第 33 条残余):
-  - 代码已改完,不再动;Codex 报错要回改时先找第 2a 批。只剩文档在改:收尾以 PROGRESS 出现「缺口第 33 条残余收尾」条目为准,之前不要动它的文档。
+  - 代码已改完,不再动;Gemini 报错要回改时先找第 2a 批。只剩文档在改:收尾以 PROGRESS 出现「缺口第 33 条残余收尾」条目为准,之前不要动它的文档。
   - 新增三把控制域键,同批改形:`node:zone:<z>:<n>:holder_epoch`(与 holder 同写同过期,只有 scene_manager 读写)、`scene_manager:etcd_revision_seen:zone:<z>`、`scene_manager:etcd_epoch:zone:<z>`。
   - 同槽约束:`luaPublishNodeHolder` 的 KEYS 是 [holder, holder_epoch, etcd_epoch],`luaStartNewEtcdEpoch` 是 [etcd_revision_seen, etcd_epoch],同一个 zone 都用 `{ctl:<z>}` 就同槽。
   - 要跟着改的用例:`TestNodeHolderKeyShape`、`TestControlDomainKeysCarryNoHashTag` 的名单、C++ 的 `SceneOwnershipRules.KeysMatchTheSceneManagerKeys`。

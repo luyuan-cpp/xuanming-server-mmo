@@ -400,10 +400,16 @@
     <ClCompile Include="player\system\player_activity_schedule.cpp" />
     <ClCompile Include="player\system\player_activity.cpp" />
     <ClCompile Include="player\system\player_festival_beast.cpp" />
+    <ClCompile Include="player\system\player_spirit_shop.cpp" />
+    <ClCompile Include="player\system\player_travel_pass.cpp" />
     <ClInclude Include="player\system\player_activity.h" />
     <ClInclude Include="player\system\player_activity_schedule.h" />
     <ClInclude Include="player\system\festival_beast_rules.h" />
     <ClInclude Include="player\system\player_festival_beast.h" />
+    <ClInclude Include="player\system\spirit_shop_rules.h" />
+    <ClInclude Include="player\system\player_spirit_shop.h" />
+    <ClInclude Include="player\system\travel_pass_rules.h" />
+    <ClInclude Include="player\system\player_travel_pass.h" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

@@ -51,6 +51,8 @@
 #include "proto/common/component/player_trial_journal_comp.pb.h"
 #include "proto/common/component/player_craft_comp.pb.h"
 #include "proto/common/component/player_festival_beast_comp.pb.h"
+#include "proto/common/component/player_spirit_shop_comp.pb.h"
+#include "proto/common/component/player_travel_pass_comp.pb.h"
 #include "proto/common/component/time_comp.pb.h"
 #include "proto/common/component/buff_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
@@ -2555,6 +2557,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kTrialJournalComponentFieldNumber = 31,
     kCraftComponentFieldNumber = 32,
     kFestivalBeastComponentFieldNumber = 33,
+    kSpiritShopFieldNumber = 34,
+    kTravelPassFieldNumber = 35,
     kPlayerIdFieldNumber = 1,
     kPersistSchemaGenFieldNumber = 21,
   };
@@ -2995,6 +2999,38 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerFestivalBeastComp* PROTOBUF_NONNULL _internal_mutable_festival_beast_component();
 
   public:
+  // .PlayerSpiritShopComp spirit_shop = 34 [(.OptionPersistGroup) = 7];
+  [[nodiscard]] bool has_spirit_shop()
+      const;
+  void clear_spirit_shop() ;
+  [[nodiscard]] const ::PlayerSpiritShopComp& spirit_shop() const;
+  [[nodiscard]] ::PlayerSpiritShopComp* PROTOBUF_NULLABLE release_spirit_shop();
+  ::PlayerSpiritShopComp* PROTOBUF_NONNULL mutable_spirit_shop();
+  void set_allocated_spirit_shop(::PlayerSpiritShopComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_spirit_shop(::PlayerSpiritShopComp* PROTOBUF_NULLABLE value);
+  ::PlayerSpiritShopComp* PROTOBUF_NULLABLE unsafe_arena_release_spirit_shop();
+
+  private:
+  const ::PlayerSpiritShopComp& _internal_spirit_shop() const;
+  ::PlayerSpiritShopComp* PROTOBUF_NONNULL _internal_mutable_spirit_shop();
+
+  public:
+  // .PlayerTravelPassComp travel_pass = 35 [(.OptionPersistGroup) = 7];
+  [[nodiscard]] bool has_travel_pass()
+      const;
+  void clear_travel_pass() ;
+  [[nodiscard]] const ::PlayerTravelPassComp& travel_pass() const;
+  [[nodiscard]] ::PlayerTravelPassComp* PROTOBUF_NULLABLE release_travel_pass();
+  ::PlayerTravelPassComp* PROTOBUF_NONNULL mutable_travel_pass();
+  void set_allocated_travel_pass(::PlayerTravelPassComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_travel_pass(::PlayerTravelPassComp* PROTOBUF_NULLABLE value);
+  ::PlayerTravelPassComp* PROTOBUF_NULLABLE unsafe_arena_release_travel_pass();
+
+  private:
+  const ::PlayerTravelPassComp& _internal_travel_pass() const;
+  ::PlayerTravelPassComp* PROTOBUF_NONNULL _internal_mutable_travel_pass();
+
+  public:
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -3019,8 +3055,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 29,
-                          27, 0,
+      ::google::protobuf::internal::TcParseTable<5, 31,
+                          29, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3075,6 +3111,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::PlayerTrialJournalComp* PROTOBUF_NULLABLE trial_journal_component_;
     ::PlayerCraftComp* PROTOBUF_NULLABLE craft_component_;
     ::PlayerFestivalBeastComp* PROTOBUF_NULLABLE festival_beast_component_;
+    ::PlayerSpiritShopComp* PROTOBUF_NULLABLE spirit_shop_;
+    ::PlayerTravelPassComp* PROTOBUF_NULLABLE travel_pass_;
     ::uint64_t player_id_;
     ::uint32_t persist_schema_gen_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4093,7 +4131,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -4101,7 +4139,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -5512,7 +5550,7 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
 inline void player_database::clear_persist_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline ::uint32_t player_database::persist_schema_gen() const {
   // @@protoc_insertion_point(field_get:player_database.persist_schema_gen)
@@ -5520,7 +5558,7 @@ inline ::uint32_t player_database::persist_schema_gen() const {
 }
 inline void player_database::set_persist_schema_gen(::uint32_t value) {
   _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_set:player_database.persist_schema_gen)
 }
 inline ::uint32_t player_database::_internal_persist_schema_gen() const {
@@ -6603,6 +6641,192 @@ inline void player_database::set_allocated_festival_beast_component(::PlayerFest
 
   _impl_.festival_beast_component_ = reinterpret_cast<::PlayerFestivalBeastComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.festival_beast_component)
+}
+
+// .PlayerSpiritShopComp spirit_shop = 34 [(.OptionPersistGroup) = 7];
+inline bool player_database::has_spirit_shop() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x08000000U);
+  PROTOBUF_ASSUME(!value || _impl_.spirit_shop_ != nullptr);
+  return value;
+}
+inline const ::PlayerSpiritShopComp& player_database::_internal_spirit_shop() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerSpiritShopComp* p = _impl_.spirit_shop_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerSpiritShopComp>(&::PlayerSpiritShopComp_globals_);
+}
+inline const ::PlayerSpiritShopComp& player_database::spirit_shop() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.spirit_shop)
+  return _internal_spirit_shop();
+}
+inline void player_database::unsafe_arena_set_allocated_spirit_shop(
+    ::PlayerSpiritShopComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.spirit_shop_);
+  }
+  _impl_.spirit_shop_ = reinterpret_cast<::PlayerSpiritShopComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.spirit_shop)
+}
+inline ::PlayerSpiritShopComp* PROTOBUF_NULLABLE player_database::release_spirit_shop() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ::PlayerSpiritShopComp* released = _impl_.spirit_shop_;
+  _impl_.spirit_shop_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerSpiritShopComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_spirit_shop() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.spirit_shop)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ::PlayerSpiritShopComp* temp = _impl_.spirit_shop_;
+  _impl_.spirit_shop_ = nullptr;
+  return temp;
+}
+inline ::PlayerSpiritShopComp* PROTOBUF_NONNULL player_database::_internal_mutable_spirit_shop() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.spirit_shop_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerSpiritShopComp>(GetArena());
+    _impl_.spirit_shop_ = reinterpret_cast<::PlayerSpiritShopComp*>(p);
+  }
+  return _impl_.spirit_shop_;
+}
+inline ::PlayerSpiritShopComp* PROTOBUF_NONNULL player_database::mutable_spirit_shop()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ::PlayerSpiritShopComp* _msg = _internal_mutable_spirit_shop();
+  // @@protoc_insertion_point(field_mutable:player_database.spirit_shop)
+  return _msg;
+}
+inline void player_database::set_allocated_spirit_shop(::PlayerSpiritShopComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.spirit_shop_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  }
+
+  _impl_.spirit_shop_ = reinterpret_cast<::PlayerSpiritShopComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.spirit_shop)
+}
+
+// .PlayerTravelPassComp travel_pass = 35 [(.OptionPersistGroup) = 7];
+inline bool player_database::has_travel_pass() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x10000000U);
+  PROTOBUF_ASSUME(!value || _impl_.travel_pass_ != nullptr);
+  return value;
+}
+inline const ::PlayerTravelPassComp& player_database::_internal_travel_pass() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerTravelPassComp* p = _impl_.travel_pass_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerTravelPassComp>(&::PlayerTravelPassComp_globals_);
+}
+inline const ::PlayerTravelPassComp& player_database::travel_pass() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.travel_pass)
+  return _internal_travel_pass();
+}
+inline void player_database::unsafe_arena_set_allocated_travel_pass(
+    ::PlayerTravelPassComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.travel_pass_);
+  }
+  _impl_.travel_pass_ = reinterpret_cast<::PlayerTravelPassComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.travel_pass)
+}
+inline ::PlayerTravelPassComp* PROTOBUF_NULLABLE player_database::release_travel_pass() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ::PlayerTravelPassComp* released = _impl_.travel_pass_;
+  _impl_.travel_pass_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerTravelPassComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_travel_pass() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.travel_pass)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ::PlayerTravelPassComp* temp = _impl_.travel_pass_;
+  _impl_.travel_pass_ = nullptr;
+  return temp;
+}
+inline ::PlayerTravelPassComp* PROTOBUF_NONNULL player_database::_internal_mutable_travel_pass() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.travel_pass_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerTravelPassComp>(GetArena());
+    _impl_.travel_pass_ = reinterpret_cast<::PlayerTravelPassComp*>(p);
+  }
+  return _impl_.travel_pass_;
+}
+inline ::PlayerTravelPassComp* PROTOBUF_NONNULL player_database::mutable_travel_pass()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ::PlayerTravelPassComp* _msg = _internal_mutable_travel_pass();
+  // @@protoc_insertion_point(field_mutable:player_database.travel_pass)
+  return _msg;
+}
+inline void player_database::set_allocated_travel_pass(::PlayerTravelPassComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.travel_pass_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  }
+
+  _impl_.travel_pass_ = reinterpret_cast<::PlayerTravelPassComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.travel_pass)
 }
 
 // -------------------------------------------------------------------

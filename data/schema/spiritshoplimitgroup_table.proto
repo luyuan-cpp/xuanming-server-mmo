@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+// SpiritShopLimitGroup 表的权威 schema。源表 data/SpiritShopLimitGroup.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 官方灵石百宝阁的共享限购组(docs/design/spirit-shop-and-starter-packs-v1.md §2.3):
+// 多个提速包档位共享同一份终身或每周权重上限(例如 60 / 180 / 300 份三档共用 300 份终身配额)。
+// 行 id 一经上线不要改义或复用:玩家存档 PlayerSpiritShopComp.group_records 按 group_id 永久记账。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message SpiritShopLimitGroupTable {
+  option (cfg_sheet)       = "SpiritShopLimitGroup";
+  option (cfg_source_file) = "SpiritShopLimitGroup.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 共享限购组 ID（上线后不复用旧 ID）
+  uint32 id = 1;
+  // 展示名称（如「首套修行提速终身限额」）
+  string name = 2;
+  // 重置周期：0 = 终身不重置；1 = 每周重置（UTC+8 周一 05:00）
+  uint32 reset_kind = 3;
+  // 该组总可用权重上限（如首套提速 = 300 份，必须 >= 1）
+  uint32 max_weight = 4;
+}

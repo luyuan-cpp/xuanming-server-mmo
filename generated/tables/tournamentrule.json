@@ -3,15 +3,21 @@
   {
    "battle_config_id": 5,
    "battle_team_size": 3,
-   "desc": "全服赛季战队锦标赛《群仙问道赛》首测规则：3人出战+1替补、真实养成、7天宽窗海选+周末淘汰赛",
+   "bo3_top4_enabled": true,
+   "desc": "全服赛季战队锦标赛《群仙问道赛》V2规则：3人出战+1替补、真实养成、半决赛/决赛BO3+五行灵脉、淘汰赛公开回放、每日免费观道致敬",
    "enabled": true,
    "id": 1,
+   "intermission_seconds": 60,
    "invite_ttl_seconds": 259200,
    "knockout_days": 2,
    "knockout_max_teams": 16,
    "knockout_round_timeout_seconds": 1800,
+   "leyline_ban_enabled": true,
    "min_level": 15,
    "participation_min_matches": 2,
+   "prediction_enabled": true,
+   "prediction_reward_min_hits": 2,
+   "public_knockout_replay": true,
    "qualifier_days": 7,
    "qualifier_draw_points": 1,
    "qualifier_loss_points": 0,
@@ -19,8 +25,10 @@
    "qualifier_win_points": 3,
    "registration_days": 42,
    "roster_max_size": 4,
-   "rule_version": 1,
-   "settle_display_days": 5
-  }
- ]
-}
+   "rule_version": 4,
+   "salute_gold_amount": 5000,
+   "salute_item_count": 3,
+   "salute_item_id": 20,
+   "settle_display_days": 5,
+   "third_place_match_enabled": true,
+   "war

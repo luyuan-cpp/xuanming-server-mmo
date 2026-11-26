@@ -111,4 +111,28 @@ public interface SeasonRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>string honor_title_name = 16;</code>
+   * @return The honorTitleName.
+   */
+  java.lang.String getHonorTitleName();
+  /**
+   * <code>string honor_title_name = 16;</code>
+   * @return The bytes for honorTitleName.
+   */
+  com.google.protobuf.ByteString
+      getHonorTitleNameBytes();
+
+  /**
+   * <code>string honor_badge_icon_key = 17;</code>
+   * @return The honorBadgeIconKey.
+   */
+  java.lang.String getHonorBadgeIconKey();
+  /**
+   * <code>string honor_badge_icon_key = 17;</code>
+   * @return The bytes for honorBadgeIconKey.
+   */
+  com.google.protobuf.ByteString
+      getHonorBadgeIconKeyBytes();
 }

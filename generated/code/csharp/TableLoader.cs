@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 72;
+        public const int TableCount = 78;
 
         private static Action s_loadSuccessCallback;
 
@@ -88,6 +88,7 @@ namespace MmorpgClient.Table
                 MysteryMerchantRuleTableManager.FileName(useBinary),
                 MysteryMerchantSpotTableManager.FileName(useBinary),
                 PetTableManager.FileName(useBinary),
+                PetCosmeticTableManager.FileName(useBinary),
                 PetEntryTableManager.FileName(useBinary),
                 PetRuleTableManager.FileName(useBinary),
                 PetTierTableManager.FileName(useBinary),
@@ -101,10 +102,15 @@ namespace MmorpgClient.Table
                 SkillTableManager.FileName(useBinary),
                 SkillPermissionTableManager.FileName(useBinary),
                 SkillScrollCraftTableManager.FileName(useBinary),
+                SkillVfxCosmeticTableManager.FileName(useBinary),
+                SpiritShopGoodsTableManager.FileName(useBinary),
+                SpiritShopLimitGroupTableManager.FileName(useBinary),
                 TestTableManager.FileName(useBinary),
                 TestMultiKeyTableManager.FileName(useBinary),
                 TournamentRewardTableManager.FileName(useBinary),
                 TournamentRuleTableManager.FileName(useBinary),
+                TravelPassSeasonTableManager.FileName(useBinary),
+                TravelPassTierTableManager.FileName(useBinary),
                 TrialJournalEntryTableManager.FileName(useBinary),
                 TrialJournalMilestoneTableManager.FileName(useBinary),
                 TrialJournalSealTableManager.FileName(useBinary),
@@ -167,6 +173,7 @@ namespace MmorpgClient.Table
             MysteryMerchantRuleTableManager.Instance.Load(configDir, useBinary);
             MysteryMerchantSpotTableManager.Instance.Load(configDir, useBinary);
             PetTableManager.Instance.Load(configDir, useBinary);
+            PetCosmeticTableManager.Instance.Load(configDir, useBinary);
             PetEntryTableManager.Instance.Load(configDir, useBinary);
             PetRuleTableManager.Instance.Load(configDir, useBinary);
             PetTierTableManager.Instance.Load(configDir, useBinary);
@@ -180,10 +187,15 @@ namespace MmorpgClient.Table
             SkillTableManager.Instance.Load(configDir, useBinary);
             SkillPermissionTableManager.Instance.Load(configDir, useBinary);
             SkillScrollCraftTableManager.Instance.Load(configDir, useBinary);
+            SkillVfxCosmeticTableManager.Instance.Load(configDir, useBinary);
+            SpiritShopGoodsTableManager.Instance.Load(configDir, useBinary);
+            SpiritShopLimitGroupTableManager.Instance.Load(configDir, useBinary);
             TestTableManager.Instance.Load(configDir, useBinary);
             TestMultiKeyTableManager.Instance.Load(configDir, useBinary);
             TournamentRewardTableManager.Instance.Load(configDir, useBinary);
             TournamentRuleTableManager.Instance.Load(configDir, useBinary);
+            TravelPassSeasonTableManager.Instance.Load(configDir, useBinary);
+            TravelPassTierTableManager.Instance.Load(configDir, useBinary);
             TrialJournalEntryTableManager.Instance.Load(configDir, useBinary);
             TrialJournalMilestoneTableManager.Instance.Load(configDir, useBinary);
             TrialJournalSealTableManager.Instance.Load(configDir, useBinary);
@@ -313,6 +325,8 @@ namespace MmorpgClient.Table
                 MysteryMerchantSpotTableManager.Instance.LoadFromBytes, MysteryMerchantSpotTableManager.Instance.LoadFromJson);
             LoadOne(PetTableManager.FileName(useBinary), byteProvider, useBinary,
                 PetTableManager.Instance.LoadFromBytes, PetTableManager.Instance.LoadFromJson);
+            LoadOne(PetCosmeticTableManager.FileName(useBinary), byteProvider, useBinary,
+                PetCosmeticTableManager.Instance.LoadFromBytes, PetCosmeticTableManager.Instance.LoadFromJson);
             LoadOne(PetEntryTableManager.FileName(useBinary), byteProvider, useBinary,
                 PetEntryTableManager.Instance.LoadFromBytes, PetEntryTableManager.Instance.LoadFromJson);
             LoadOne(PetRuleTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -339,6 +353,12 @@ namespace MmorpgClient.Table
                 SkillPermissionTableManager.Instance.LoadFromBytes, SkillPermissionTableManager.Instance.LoadFromJson);
             LoadOne(SkillScrollCraftTableManager.FileName(useBinary), byteProvider, useBinary,
                 SkillScrollCraftTableManager.Instance.LoadFromBytes, SkillScrollCraftTableManager.Instance.LoadFromJson);
+            LoadOne(SkillVfxCosmeticTableManager.FileName(useBinary), byteProvider, useBinary,
+                SkillVfxCosmeticTableManager.Instance.LoadFromBytes, SkillVfxCosmeticTableManager.Instance.LoadFromJson);
+            LoadOne(SpiritShopGoodsTableManager.FileName(useBinary), byteProvider, useBinary,
+                SpiritShopGoodsTableManager.Instance.LoadFromBytes, SpiritShopGoodsTableManager.Instance.LoadFromJson);
+            LoadOne(SpiritShopLimitGroupTableManager.FileName(useBinary), byteProvider, useBinary,
+                SpiritShopLimitGroupTableManager.Instance.LoadFromBytes, SpiritShopLimitGroupTableManager.Instance.LoadFromJson);
             LoadOne(TestTableManager.FileName(useBinary), byteProvider, useBinary,
                 TestTableManager.Instance.LoadFromBytes, TestTableManager.Instance.LoadFromJson);
             LoadOne(TestMultiKeyTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -347,6 +367,10 @@ namespace MmorpgClient.Table
                 TournamentRewardTableManager.Instance.LoadFromBytes, TournamentRewardTableManager.Instance.LoadFromJson);
             LoadOne(TournamentRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 TournamentRuleTableManager.Instance.LoadFromBytes, TournamentRuleTableManager.Instance.LoadFromJson);
+            LoadOne(TravelPassSeasonTableManager.FileName(useBinary), byteProvider, useBinary,
+                TravelPassSeasonTableManager.Instance.LoadFromBytes, TravelPassSeasonTableManager.Instance.LoadFromJson);
+            LoadOne(TravelPassTierTableManager.FileName(useBinary), byteProvider, useBinary,
+                TravelPassTierTableManager.Instance.LoadFromBytes, TravelPassTierTableManager.Instance.LoadFromJson);
             LoadOne(TrialJournalEntryTableManager.FileName(useBinary), byteProvider, useBinary,
                 TrialJournalEntryTableManager.Instance.LoadFromBytes, TrialJournalEntryTableManager.Instance.LoadFromJson);
             LoadOne(TrialJournalMilestoneTableManager.FileName(useBinary), byteProvider, useBinary,

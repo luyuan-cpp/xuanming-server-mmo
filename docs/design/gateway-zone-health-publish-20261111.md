@@ -1,6 +1,6 @@
 # 网关区服健康:每 zone 发布汇总记录,网关只读汇总(2026-11-11)
 
-> 状态:**已落码,未编译、未测试,待 Codex 验证**(命令见 §9;指标与告警见 §4.7;2026-11-12 复查又改三处,见 §8 末段)。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 29 条残余:健康探测与 login 发现 11-05 已改成 list + watch 镜像,但每个网关副本仍 watch 全服的 gate / scene 前缀,事件扇出随 zone 数平方增长。
+> 状态:**已落码,未编译、未测试,待 Gemini 验证**(命令见 §9;指标与告警见 §4.7;2026-11-12 复查又改三处,见 §8 末段)。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 29 条残余:健康探测与 login 发现 11-05 已改成 list + watch 镜像,但每个网关副本仍 watch 全服的 gate / scene 前缀,事件扇出随 zone 数平方增长。
 > 相关:[区服列表静态发布提案](serverlist-static-publish-2026-05.md)(未实施)、[连接与发现扇出](connection-fanout-subsetting-20261106.md)、[控制面按 zone 化](control-plane-zone-scoping-20261105.md)。
 
 ## 1. 结论
@@ -183,7 +183,7 @@
 - `EtcdPrefixMirror` 的重新同步改成串行(§5)。原来假定一个镜像只有一个线程读,两个线程撞上时先发起的一方失败;login 的镜像现在有两个读者、各有线程。
 - 删掉没人读的配置 `zone-probe.gate-stale-threshold-seconds`(gate 停写由 login 判,网关从没读过这个键)。
 
-## 9. 文件与验证(交 Codex)
+## 9. 文件与验证(交 Gemini)
 
 改动(都在主工作区,未编译):
 

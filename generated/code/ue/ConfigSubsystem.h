@@ -79,6 +79,7 @@
 #include "MysteryMerchantRuleTable.h"
 #include "MysteryMerchantSpotTable.h"
 #include "PetTable.h"
+#include "PetCosmeticTable.h"
 #include "PetEntryTable.h"
 #include "PetRuleTable.h"
 #include "PetTierTable.h"
@@ -92,10 +93,15 @@
 #include "SkillTable.h"
 #include "SkillPermissionTable.h"
 #include "SkillScrollCraftTable.h"
+#include "SkillVfxCosmeticTable.h"
+#include "SpiritShopGoodsTable.h"
+#include "SpiritShopLimitGroupTable.h"
 #include "TestTable.h"
 #include "TestMultiKeyTable.h"
 #include "TournamentRewardTable.h"
 #include "TournamentRuleTable.h"
+#include "TravelPassSeasonTable.h"
+#include "TravelPassTierTable.h"
 #include "TrialJournalEntryTable.h"
 #include "TrialJournalMilestoneTable.h"
 #include "TrialJournalSealTable.h"
@@ -139,7 +145,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 72;
+	static constexpr int32 TableCount = 78;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -341,6 +347,9 @@ public:
 	UPetTable* GetPetTable() const { return PetTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UPetCosmeticTable* GetPetCosmeticTable() const { return PetCosmeticTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UPetEntryTable* GetPetEntryTable() const { return PetEntryTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -380,6 +389,15 @@ public:
 	USkillScrollCraftTable* GetSkillScrollCraftTable() const { return SkillScrollCraftTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	USkillVfxCosmeticTable* GetSkillVfxCosmeticTable() const { return SkillVfxCosmeticTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	USpiritShopGoodsTable* GetSpiritShopGoodsTable() const { return SpiritShopGoodsTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	USpiritShopLimitGroupTable* GetSpiritShopLimitGroupTable() const { return SpiritShopLimitGroupTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UTestTable* GetTestTable() const { return TestTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -390,6 +408,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UTournamentRuleTable* GetTournamentRuleTable() const { return TournamentRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTravelPassSeasonTable* GetTravelPassSeasonTable() const { return TravelPassSeasonTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTravelPassTierTable* GetTravelPassTierTable() const { return TravelPassTierTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UTrialJournalEntryTable* GetTrialJournalEntryTable() const { return TrialJournalEntryTable; }
@@ -508,6 +532,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UPetTable> PetTable;
 	UPROPERTY(Transient)
+	TObjectPtr<UPetCosmeticTable> PetCosmeticTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UPetEntryTable> PetEntryTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UPetRuleTable> PetRuleTable;
@@ -534,6 +560,12 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<USkillScrollCraftTable> SkillScrollCraftTable;
 	UPROPERTY(Transient)
+	TObjectPtr<USkillVfxCosmeticTable> SkillVfxCosmeticTable;
+	UPROPERTY(Transient)
+	TObjectPtr<USpiritShopGoodsTable> SpiritShopGoodsTable;
+	UPROPERTY(Transient)
+	TObjectPtr<USpiritShopLimitGroupTable> SpiritShopLimitGroupTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UTestTable> TestTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UTestMultiKeyTable> TestMultiKeyTable;
@@ -541,6 +573,10 @@ private:
 	TObjectPtr<UTournamentRewardTable> TournamentRewardTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UTournamentRuleTable> TournamentRuleTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTravelPassSeasonTable> TravelPassSeasonTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTravelPassTierTable> TravelPassTierTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UTrialJournalEntryTable> TrialJournalEntryTable;
 	UPROPERTY(Transient)

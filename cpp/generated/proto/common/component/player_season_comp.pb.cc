@@ -31,11 +31,490 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::PlayerSeasonSealRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::WuxingTowerCompState
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::SavedBattleBuildBookmark
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerSeasonComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class WuxingTowerCompState::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<WuxingTowerCompState>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_._has_bits_);
+};
+
+constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_._has_bits_),
+      0, // no _extensions_
+      11, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294965248,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      11,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::WuxingTowerCompState>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 week_key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.week_key_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.week_key_)}},
+      // bool run_active = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(WuxingTowerCompState, _impl_.run_active_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_active_)}},
+      // uint64 run_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerCompState, _impl_.run_id_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_id_)}},
+      // uint32 current_floor = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.current_floor_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_floor_)}},
+      // uint32 run_total_rounds = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.run_total_rounds_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_total_rounds_)}},
+      // repeated uint32 active_sigil_ids = 6;
+      {::_pbi::TcParser::FastV32P1,
+       {50, 0, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.active_sigil_ids_)}},
+      // repeated uint32 pending_offer_sigil_ids = 7;
+      {::_pbi::TcParser::FastV32P1,
+       {58, 1, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pending_offer_sigil_ids_)}},
+      // uint32 weekly_cleared_mask = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_cleared_mask_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_cleared_mask_)}},
+      // uint32 weekly_best_floor = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_best_floor_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_)}},
+      // uint32 weekly_best_rounds = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_best_rounds_), 10>(),
+       {80, 10, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_)}},
+      // uint64 revision = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerCompState, _impl_.revision_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.revision_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 week_key = 1;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.week_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool run_active = 2;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_active_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 run_id = 3;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 current_floor = 4;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_floor_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 run_total_rounds = 5;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_total_rounds_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 active_sigil_ids = 6;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.active_sigil_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // repeated uint32 pending_offer_sigil_ids = 7;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pending_offer_sigil_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint32 weekly_cleared_mask = 8;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_cleared_mask_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_best_floor = 9;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_best_rounds = 10;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 revision = 11;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr WuxingTowerCompState::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        active_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::WuxingTowerCompState,
+            PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.active_sigil_ids_)>()
+         }
+        ,
+        _active_sigil_ids_cached_byte_size_{0},
+        pending_offer_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::WuxingTowerCompState,
+            PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.pending_offer_sigil_ids_)>()
+         }
+        ,
+        _pending_offer_sigil_ids_cached_byte_size_{0},
+        week_key_{0u},
+        run_active_{false},
+        run_id_{::uint64_t{0u}},
+        current_floor_{0u},
+        run_total_rounds_{0u},
+        weekly_cleared_mask_{0u},
+        weekly_best_floor_{0u},
+        revision_{::uint64_t{0u}},
+        weekly_best_rounds_{0u} {}
+
+template <typename>
+constexpr WuxingTowerCompState::WuxingTowerCompState(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL WuxingTowerCompState::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) WuxingTowerCompState(arena);
+}
+constexpr auto WuxingTowerCompState::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(WuxingTowerCompState), alignof(WuxingTowerCompState));
+}
+constexpr auto WuxingTowerCompState::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &WuxingTowerCompState::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<WuxingTowerCompState>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &WuxingTowerCompState::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<WuxingTowerCompState>(), &WuxingTowerCompState::ByteSizeLong,
+              &WuxingTowerCompState::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct WuxingTowerCompStateGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr WuxingTowerCompStateGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 WuxingTowerCompState_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(WuxingTowerCompState::InternalGenerateClassData_(
+            _default, &WuxingTowerCompState_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<WuxingTowerCompState>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~WuxingTowerCompStateGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) WuxingTowerCompState _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<WuxingTowerCompState>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(WuxingTowerCompStateGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST WuxingTowerCompStateGlobalsTypeInternal WuxingTowerCompState_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* WuxingTowerCompState_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return WuxingTowerCompState_globals_.GetClassData();
+#else
+  return WuxingTowerCompState_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SavedBattleBuildBookmark::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SavedBattleBuildBookmark>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_._has_bits_);
+};
+
+constexpr SavedBattleBuildBookmark::ParseTableT_ SavedBattleBuildBookmark::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_._has_bits_),
+      0, // no _extensions_
+      13, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294959104,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      13,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SavedBattleBuildBookmark>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 bookmark_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavedBattleBuildBookmark, _impl_.bookmark_id_), 5>(),
+       {8, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.bookmark_id_)}},
+      // string title = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.title_)}},
+      // uint64 source_battle_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavedBattleBuildBookmark, _impl_.source_battle_id_), 6>(),
+       {24, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.source_battle_id_)}},
+      // uint64 source_player_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavedBattleBuildBookmark, _impl_.source_player_id_), 7>(),
+       {32, 7, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.source_player_id_)}},
+      // string source_player_name = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.source_player_name_)}},
+      // uint32 class_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavedBattleBuildBookmark, _impl_.class_id_), 8>(),
+       {48, 8, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.class_id_)}},
+      // uint32 formation_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavedBattleBuildBookmark, _impl_.formation_id_), 9>(),
+       {56, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.formation_id_)}},
+      // uint32 season_seal_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavedBattleBuildBookmark, _impl_.season_seal_id_), 10>(),
+       {64, 10, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.season_seal_id_)}},
+      // uint32 active_pet_table_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavedBattleBuildBookmark, _impl_.active_pet_table_id_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.active_pet_table_id_)}},
+      // string active_pet_name = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.active_pet_name_)}},
+      // repeated uint32 skill_table_ids = 11;
+      {::_pbi::TcParser::FastV32P1,
+       {90, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.skill_table_ids_)}},
+      // repeated uint32 wuxing_sigil_ids = 12;
+      {::_pbi::TcParser::FastV32P1,
+       {98, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_)}},
+      // uint64 saved_at_ms = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavedBattleBuildBookmark, _impl_.saved_at_ms_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.saved_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 bookmark_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.bookmark_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string title = 2;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.title_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 source_battle_id = 3;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.source_battle_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 source_player_id = 4;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.source_player_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string source_player_name = 5;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.source_player_name_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 class_id = 6;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.class_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 formation_id = 7;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.formation_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_seal_id = 8;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.season_seal_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 active_pet_table_id = 9;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.active_pet_table_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string active_pet_name = 10;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.active_pet_name_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // repeated uint32 skill_table_ids = 11;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.skill_table_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // repeated uint32 wuxing_sigil_ids = 12;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint64 saved_at_ms = 13;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.saved_at_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\30\0\5\0\0\22\0\0\0\0\17\0\0\0\0\0"
+      "SavedBattleBuildBookmark"
+      "title"
+      "source_player_name"
+      "active_pet_name"
+    }},
+  };
+}
+
+
+inline constexpr SavedBattleBuildBookmark::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        skill_table_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SavedBattleBuildBookmark,
+            PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.skill_table_ids_)>()
+         }
+        ,
+        _skill_table_ids_cached_byte_size_{0},
+        wuxing_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SavedBattleBuildBookmark,
+            PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_)>()
+         }
+        ,
+        _wuxing_sigil_ids_cached_byte_size_{0},
+        title_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        source_player_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        active_pet_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        bookmark_id_{::uint64_t{0u}},
+        source_battle_id_{::uint64_t{0u}},
+        source_player_id_{::uint64_t{0u}},
+        class_id_{0u},
+        formation_id_{0u},
+        season_seal_id_{0u},
+        active_pet_table_id_{0u},
+        saved_at_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr SavedBattleBuildBookmark::SavedBattleBuildBookmark(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SavedBattleBuildBookmark::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SavedBattleBuildBookmark(arena);
+}
+constexpr auto SavedBattleBuildBookmark::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SavedBattleBuildBookmark), alignof(SavedBattleBuildBookmark));
+}
+constexpr auto SavedBattleBuildBookmark::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SavedBattleBuildBookmark::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SavedBattleBuildBookmark>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SavedBattleBuildBookmark::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SavedBattleBuildBookmark>(), &SavedBattleBuildBookmark::ByteSizeLong,
+              &SavedBattleBuildBookmark::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SavedBattleBuildBookmarkGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SavedBattleBuildBookmarkGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SavedBattleBuildBookmark_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SavedBattleBuildBookmark::InternalGenerateClassData_(
+            _default, &SavedBattleBuildBookmark_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SavedBattleBuildBookmark>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SavedBattleBuildBookmarkGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SavedBattleBuildBookmark _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SavedBattleBuildBookmark>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmarkGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SavedBattleBuildBookmarkGlobalsTypeInternal SavedBattleBuildBookmark_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SavedBattleBuildBookmark_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SavedBattleBuildBookmark_globals_.GetClassData();
+#else
+  return SavedBattleBuildBookmark_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PlayerSeasonSealRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<PlayerSeasonSealRecord>()._impl_._has_bits_);
@@ -226,12 +705,12 @@ constexpr PlayerSeasonComp::ParseTableT_ PlayerSeasonComp::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      1,  // num_aux_entries
+      4,  // num_field_entries
+      3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -240,21 +719,49 @@ constexpr PlayerSeasonComp::ParseTableT_ PlayerSeasonComp::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::PlayerSeasonComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // repeated .SavedBattleBuildBookmark saved_builds = 4;
+      {::_pbi::TcParser::FastMtR1,
+       {34, 1, 2,
+        PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.saved_builds_)}},
       // repeated .PlayerSeasonSealRecord records = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.records_)}},
+      // uint32 equipped_formation_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSeasonComp, _impl_.equipped_formation_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.equipped_formation_id_)}},
+      // .WuxingTowerCompState wuxing_tower = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 2, 1,
+        PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.wuxing_tower_)}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated .PlayerSeasonSealRecord records = 1;
       {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.records_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 equipped_formation_id = 2;
+      {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.equipped_formation_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .WuxingTowerCompState wuxing_tower = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.wuxing_tower_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .SavedBattleBuildBookmark saved_builds = 4;
+      {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.saved_builds_), _Internal::kHasBitsOffset + 1, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::PlayerSeasonSealRecord>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PlayerSeasonSealRecord_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::WuxingTowerCompState>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::WuxingTowerCompState_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SavedBattleBuildBookmark>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SavedBattleBuildBookmark_globals_},
         #endif
     }},
     {{
@@ -271,7 +778,14 @@ inline constexpr PlayerSeasonComp::Impl_::Impl_(
             ::PlayerSeasonComp,
             PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.records_)>()
          }
-     {}
+        ,
+        saved_builds_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerSeasonComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.saved_builds_)>()
+         }
+        ,
+        wuxing_tower_{nullptr},
+        equipped_formation_id_{0u} {}
 
 template <typename>
 constexpr PlayerSeasonComp::PlayerSeasonComp(::_pbi::ConstantInitialized,
@@ -314,7 +828,7 @@ constexpr auto PlayerSeasonComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
@@ -388,20 +902,84 @@ const ::uint32_t
         5,
         4,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_._has_bits_),
-        4, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.records_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_._has_bits_),
+        14, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.week_key_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_active_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_id_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.current_floor_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_total_rounds_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.active_sigil_ids_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.pending_offer_sigil_ids_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_cleared_mask_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_floor_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_rounds_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.revision_),
+        2,
+        3,
+        4,
+        5,
+        6,
         0,
+        1,
+        7,
+        8,
+        10,
+        9,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_._has_bits_),
+        16, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.bookmark_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.title_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.source_battle_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.source_player_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.source_player_name_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.class_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.formation_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.season_seal_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.active_pet_table_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.active_pet_name_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.skill_table_ids_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.saved_at_ms_),
+        5,
+        2,
+        6,
+        7,
+        3,
+        8,
+        9,
+        10,
+        11,
+        4,
+        0,
+        1,
+        12,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.records_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.equipped_formation_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.wuxing_tower_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.saved_builds_),
+        0,
+        3,
+        2,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PlayerSeasonSealRecord)},
-        {15, sizeof(::PlayerSeasonComp)},
+        {15, sizeof(::WuxingTowerCompState)},
+        {40, sizeof(::SavedBattleBuildBookmark)},
+        {69, sizeof(::PlayerSeasonComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::PlayerSeasonSealRecord_globals_,
+        &::WuxingTowerCompState_globals_,
+        &::SavedBattleBuildBookmark_globals_,
         &::PlayerSeasonComp_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
@@ -411,21 +989,40 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseaso
     "season_id\030\001 \001(\r\022\030\n\020equipped_seal_id\030\002 \001("
     "\r\022\027\n\017progress_points\030\003 \001(\r\022\025\n\rbattle_poi"
     "nts\030\004 \001(\r\022\026\n\016catchup_points\030\005 \001(\r\022\020\n\010rev"
-    "ision\030\006 \001(\004\"<\n\020PlayerSeasonComp\022(\n\007recor"
-    "ds\030\001 \003(\0132\027.PlayerSeasonSealRecordB\022Z\020com"
-    "mon/componentb\006proto3"
+    "ision\030\006 \001(\004\"\236\002\n\024WuxingTowerCompState\022\020\n\010"
+    "week_key\030\001 \001(\r\022\022\n\nrun_active\030\002 \001(\010\022\016\n\006ru"
+    "n_id\030\003 \001(\004\022\025\n\rcurrent_floor\030\004 \001(\r\022\030\n\020run"
+    "_total_rounds\030\005 \001(\r\022\030\n\020active_sigil_ids\030"
+    "\006 \003(\r\022\037\n\027pending_offer_sigil_ids\030\007 \003(\r\022\033"
+    "\n\023weekly_cleared_mask\030\010 \001(\r\022\031\n\021weekly_be"
+    "st_floor\030\t \001(\r\022\032\n\022weekly_best_rounds\030\n \001"
+    "(\r\022\020\n\010revision\030\013 \001(\004\"\314\002\n\030SavedBattleBuil"
+    "dBookmark\022\023\n\013bookmark_id\030\001 \001(\004\022\r\n\005title\030"
+    "\002 \001(\t\022\030\n\020source_battle_id\030\003 \001(\004\022\030\n\020sourc"
+    "e_player_id\030\004 \001(\004\022\032\n\022source_player_name\030"
+    "\005 \001(\t\022\020\n\010class_id\030\006 \001(\r\022\024\n\014formation_id\030"
+    "\007 \001(\r\022\026\n\016season_seal_id\030\010 \001(\r\022\033\n\023active_"
+    "pet_table_id\030\t \001(\r\022\027\n\017active_pet_name\030\n "
+    "\001(\t\022\027\n\017skill_table_ids\030\013 \003(\r\022\030\n\020wuxing_s"
+    "igil_ids\030\014 \003(\r\022\023\n\013saved_at_ms\030\r \001(\004\"\271\001\n\020"
+    "PlayerSeasonComp\022(\n\007records\030\001 \003(\0132\027.Play"
+    "erSeasonSealRecord\022\035\n\025equipped_formation"
+    "_id\030\002 \001(\r\022+\n\014wuxing_tower\030\003 \001(\0132\025.Wuxing"
+    "TowerCompState\022/\n\014saved_builds\030\004 \003(\0132\031.S"
+    "avedBattleBuildBookmarkB\022Z\020common/compon"
+    "entb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto = {
     false,
     false,
-    301,
+    1051,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
     "proto/common/component/player_season_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto_once,
     nullptr,
     0,
-    2,
+    4,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto::offsets,
@@ -746,6 +1343,1053 @@ void PlayerSeasonSealRecord::InternalSwap(PlayerSeasonSealRecord* PROTOBUF_RESTR
 }
 // ===================================================================
 
+WuxingTowerCompState::WuxingTowerCompState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, WuxingTowerCompState_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:WuxingTowerCompState)
+}
+PROTOBUF_NDEBUG_INLINE WuxingTowerCompState::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::WuxingTowerCompState& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        active_sigil_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::WuxingTowerCompState,
+              PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.active_sigil_ids_)>()
+          , from.active_sigil_ids_
+        }
+        ,
+        _active_sigil_ids_cached_byte_size_{0},
+        pending_offer_sigil_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::WuxingTowerCompState,
+              PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.pending_offer_sigil_ids_)>()
+          , from.pending_offer_sigil_ids_
+        }
+        ,
+        _pending_offer_sigil_ids_cached_byte_size_{0} {}
+
+WuxingTowerCompState::WuxingTowerCompState(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const WuxingTowerCompState& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, WuxingTowerCompState_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  WuxingTowerCompState* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, week_key_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, week_key_),
+           offsetof(Impl_, weekly_best_rounds_) -
+               offsetof(Impl_, week_key_) +
+               sizeof(Impl_::weekly_best_rounds_));
+
+  // @@protoc_insertion_point(copy_constructor:WuxingTowerCompState)
+}
+PROTOBUF_NDEBUG_INLINE WuxingTowerCompState::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        active_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::WuxingTowerCompState,
+            PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.active_sigil_ids_)>()
+         }
+        ,
+        _active_sigil_ids_cached_byte_size_{0},
+        pending_offer_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::WuxingTowerCompState,
+            PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.pending_offer_sigil_ids_)>()
+         }
+        ,
+        _pending_offer_sigil_ids_cached_byte_size_{0} {}
+
+inline void WuxingTowerCompState::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, week_key_),
+           0,
+           offsetof(Impl_, weekly_best_rounds_) -
+               offsetof(Impl_, week_key_) +
+               sizeof(Impl_::weekly_best_rounds_));
+}
+WuxingTowerCompState::~WuxingTowerCompState() {
+  // @@protoc_insertion_point(destructor:WuxingTowerCompState)
+  SharedDtor(*this);
+}
+inline void WuxingTowerCompState::SharedDtor(MessageLite& self) {
+  WuxingTowerCompState& this_ = static_cast<WuxingTowerCompState&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull WuxingTowerCompState_class_data_ =
+        WuxingTowerCompState::InternalGenerateClassData_(WuxingTowerCompState_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+WuxingTowerCompState::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&WuxingTowerCompState_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(WuxingTowerCompState_class_data_.tc_table);
+  return WuxingTowerCompState_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+WuxingTowerCompState::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&WuxingTowerCompState_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&WuxingTowerCompState_globals_));
+  return WuxingTowerCompState_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const WuxingTowerCompState::ParseTableT_
+    WuxingTowerCompState::_table_ =
+        WuxingTowerCompState::InternalGenerateParseTable_(WuxingTowerCompState_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
+// @@protoc_insertion_point(message_clear_start:WuxingTowerCompState)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.active_sigil_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.pending_offer_sigil_ids_.Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.week_key_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.weekly_cleared_mask_) -
+        reinterpret_cast<char*>(&_impl_.week_key_)) + sizeof(_impl_.weekly_cleared_mask_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.weekly_best_floor_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.weekly_best_rounds_) -
+        reinterpret_cast<char*>(&_impl_.weekly_best_floor_)) + sizeof(_impl_.weekly_best_rounds_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL WuxingTowerCompState::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const WuxingTowerCompState& this_ = static_cast<const WuxingTowerCompState&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL WuxingTowerCompState::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const WuxingTowerCompState& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:WuxingTowerCompState)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 week_key = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_week_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_week_key(), target);
+    }
+  }
+
+  // bool run_active = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_run_active() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_run_active(), target);
+    }
+  }
+
+  // uint64 run_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_run_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_run_id(), target);
+    }
+  }
+
+  // uint32 current_floor = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_current_floor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_current_floor(), target);
+    }
+  }
+
+  // uint32 run_total_rounds = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_run_total_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_run_total_rounds(), target);
+    }
+  }
+
+  // repeated uint32 active_sigil_ids = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._active_sigil_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            6, this_._internal_active_sigil_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint32 pending_offer_sigil_ids = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._pending_offer_sigil_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            7, this_._internal_pending_offer_sigil_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // uint32 weekly_cleared_mask = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_weekly_cleared_mask() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_weekly_cleared_mask(), target);
+    }
+  }
+
+  // uint32 weekly_best_floor = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_weekly_best_floor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_weekly_best_floor(), target);
+    }
+  }
+
+  // uint32 weekly_best_rounds = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_weekly_best_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_weekly_best_rounds(), target);
+    }
+  }
+
+  // uint64 revision = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_revision(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:WuxingTowerCompState)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t WuxingTowerCompState::ByteSizeLong(const MessageLite& base) {
+  const WuxingTowerCompState& this_ = static_cast<const WuxingTowerCompState&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t WuxingTowerCompState::ByteSizeLong() const {
+  const WuxingTowerCompState& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:WuxingTowerCompState)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated uint32 active_sigil_ids = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_active_sigil_ids(), 1,
+              this_._impl_._active_sigil_ids_cached_byte_size_);
+    }
+    // repeated uint32 pending_offer_sigil_ids = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_pending_offer_sigil_ids(), 1,
+              this_._impl_._pending_offer_sigil_ids_cached_byte_size_);
+    }
+    // uint32 week_key = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_week_key() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_week_key());
+      }
+    }
+    // bool run_active = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_run_active() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 run_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_run_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_run_id());
+      }
+    }
+    // uint32 current_floor = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_current_floor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_current_floor());
+      }
+    }
+    // uint32 run_total_rounds = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_run_total_rounds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_run_total_rounds());
+      }
+    }
+    // uint32 weekly_cleared_mask = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_weekly_cleared_mask() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_weekly_cleared_mask());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // uint32 weekly_best_floor = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_weekly_best_floor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_weekly_best_floor());
+      }
+    }
+    // uint64 revision = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_revision());
+      }
+    }
+    // uint32 weekly_best_rounds = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_weekly_best_rounds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_weekly_best_rounds());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void WuxingTowerCompState::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<WuxingTowerCompState*>(&to_msg);
+  auto& from = static_cast<const WuxingTowerCompState&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:WuxingTowerCompState)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_active_sigil_ids()->MergeFrom(from._internal_active_sigil_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_pending_offer_sigil_ids()->MergeFrom(from._internal_pending_offer_sigil_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_week_key() != 0) {
+        _this->_impl_.week_key_ = from._impl_.week_key_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_run_active() != 0) {
+        _this->_impl_.run_active_ = from._impl_.run_active_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_run_id() != 0) {
+        _this->_impl_.run_id_ = from._impl_.run_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_current_floor() != 0) {
+        _this->_impl_.current_floor_ = from._impl_.current_floor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_run_total_rounds() != 0) {
+        _this->_impl_.run_total_rounds_ = from._impl_.run_total_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_weekly_cleared_mask() != 0) {
+        _this->_impl_.weekly_cleared_mask_ = from._impl_.weekly_cleared_mask_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_weekly_best_floor() != 0) {
+        _this->_impl_.weekly_best_floor_ = from._impl_.weekly_best_floor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_weekly_best_rounds() != 0) {
+        _this->_impl_.weekly_best_rounds_ = from._impl_.weekly_best_rounds_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void WuxingTowerCompState::CopyFrom(const WuxingTowerCompState& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:WuxingTowerCompState)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void WuxingTowerCompState::InternalSwap(WuxingTowerCompState* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.active_sigil_ids_.InternalSwap(&other->_impl_.active_sigil_ids_);
+  _impl_.pending_offer_sigil_ids_.InternalSwap(&other->_impl_.pending_offer_sigil_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_)
+      + sizeof(WuxingTowerCompState::_impl_.weekly_best_rounds_)
+      - PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.week_key_)>(
+          reinterpret_cast<char*>(&_impl_.week_key_),
+          reinterpret_cast<char*>(&other->_impl_.week_key_));
+}
+
+::google::protobuf::Metadata WuxingTowerCompState::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SavedBattleBuildBookmark::SavedBattleBuildBookmark(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavedBattleBuildBookmark_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SavedBattleBuildBookmark)
+}
+PROTOBUF_NDEBUG_INLINE SavedBattleBuildBookmark::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SavedBattleBuildBookmark& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        skill_table_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SavedBattleBuildBookmark,
+              PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.skill_table_ids_)>()
+          , from.skill_table_ids_
+        }
+        ,
+        _skill_table_ids_cached_byte_size_{0},
+        wuxing_sigil_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SavedBattleBuildBookmark,
+              PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_)>()
+          , from.wuxing_sigil_ids_
+        }
+        ,
+        _wuxing_sigil_ids_cached_byte_size_{0},
+        title_(arena, from.title_),
+        source_player_name_(arena, from.source_player_name_),
+        active_pet_name_(arena, from.active_pet_name_) {}
+
+SavedBattleBuildBookmark::SavedBattleBuildBookmark(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SavedBattleBuildBookmark& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavedBattleBuildBookmark_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SavedBattleBuildBookmark* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, bookmark_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, bookmark_id_),
+           offsetof(Impl_, saved_at_ms_) -
+               offsetof(Impl_, bookmark_id_) +
+               sizeof(Impl_::saved_at_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:SavedBattleBuildBookmark)
+}
+PROTOBUF_NDEBUG_INLINE SavedBattleBuildBookmark::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        skill_table_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SavedBattleBuildBookmark,
+            PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.skill_table_ids_)>()
+         }
+        ,
+        _skill_table_ids_cached_byte_size_{0},
+        wuxing_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SavedBattleBuildBookmark,
+            PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_)>()
+         }
+        ,
+        _wuxing_sigil_ids_cached_byte_size_{0},
+        title_(arena),
+        source_player_name_(arena),
+        active_pet_name_(arena) {}
+
+inline void SavedBattleBuildBookmark::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, bookmark_id_),
+           0,
+           offsetof(Impl_, saved_at_ms_) -
+               offsetof(Impl_, bookmark_id_) +
+               sizeof(Impl_::saved_at_ms_));
+}
+SavedBattleBuildBookmark::~SavedBattleBuildBookmark() {
+  // @@protoc_insertion_point(destructor:SavedBattleBuildBookmark)
+  SharedDtor(*this);
+}
+inline void SavedBattleBuildBookmark::SharedDtor(MessageLite& self) {
+  SavedBattleBuildBookmark& this_ = static_cast<SavedBattleBuildBookmark&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.title_.Destroy();
+  this_._impl_.source_player_name_.Destroy();
+  this_._impl_.active_pet_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SavedBattleBuildBookmark_class_data_ =
+        SavedBattleBuildBookmark::InternalGenerateClassData_(SavedBattleBuildBookmark_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavedBattleBuildBookmark::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavedBattleBuildBookmark_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SavedBattleBuildBookmark_class_data_.tc_table);
+  return SavedBattleBuildBookmark_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavedBattleBuildBookmark::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavedBattleBuildBookmark_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SavedBattleBuildBookmark_globals_));
+  return SavedBattleBuildBookmark_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SavedBattleBuildBookmark::ParseTableT_
+    SavedBattleBuildBookmark::_table_ =
+        SavedBattleBuildBookmark::InternalGenerateParseTable_(SavedBattleBuildBookmark_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SavedBattleBuildBookmark::Clear() {
+// @@protoc_insertion_point(message_clear_start:SavedBattleBuildBookmark)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.skill_table_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.wuxing_sigil_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.title_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.source_player_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.active_pet_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
+    ::memset(&_impl_.bookmark_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.source_player_id_) -
+        reinterpret_cast<char*>(&_impl_.bookmark_id_)) + sizeof(_impl_.source_player_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    ::memset(&_impl_.class_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.saved_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.class_id_)) + sizeof(_impl_.saved_at_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SavedBattleBuildBookmark::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SavedBattleBuildBookmark& this_ = static_cast<const SavedBattleBuildBookmark&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SavedBattleBuildBookmark::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SavedBattleBuildBookmark& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SavedBattleBuildBookmark)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 bookmark_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_bookmark_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_bookmark_id(), target);
+    }
+  }
+
+  // string title = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_title().empty()) {
+      const ::std::string& _s = this_._internal_title();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SavedBattleBuildBookmark.title");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint64 source_battle_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_source_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_source_battle_id(), target);
+    }
+  }
+
+  // uint64 source_player_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_source_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_source_player_id(), target);
+    }
+  }
+
+  // string source_player_name = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_source_player_name().empty()) {
+      const ::std::string& _s = this_._internal_source_player_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SavedBattleBuildBookmark.source_player_name");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint32 class_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_class_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_class_id(), target);
+    }
+  }
+
+  // uint32 formation_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_formation_id(), target);
+    }
+  }
+
+  // uint32 season_seal_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_season_seal_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_season_seal_id(), target);
+    }
+  }
+
+  // uint32 active_pet_table_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_active_pet_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_active_pet_table_id(), target);
+    }
+  }
+
+  // string active_pet_name = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_active_pet_name().empty()) {
+      const ::std::string& _s = this_._internal_active_pet_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SavedBattleBuildBookmark.active_pet_name");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // repeated uint32 skill_table_ids = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._skill_table_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            11, this_._internal_skill_table_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint32 wuxing_sigil_ids = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._wuxing_sigil_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            12, this_._internal_wuxing_sigil_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // uint64 saved_at_ms = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_saved_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_saved_at_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SavedBattleBuildBookmark)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SavedBattleBuildBookmark::ByteSizeLong(const MessageLite& base) {
+  const SavedBattleBuildBookmark& this_ = static_cast<const SavedBattleBuildBookmark&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SavedBattleBuildBookmark::ByteSizeLong() const {
+  const SavedBattleBuildBookmark& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SavedBattleBuildBookmark)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated uint32 skill_table_ids = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_skill_table_ids(), 1,
+              this_._impl_._skill_table_ids_cached_byte_size_);
+    }
+    // repeated uint32 wuxing_sigil_ids = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_wuxing_sigil_ids(), 1,
+              this_._impl_._wuxing_sigil_ids_cached_byte_size_);
+    }
+    // string title = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_title().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_title());
+      }
+    }
+    // string source_player_name = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_source_player_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_source_player_name());
+      }
+    }
+    // string active_pet_name = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_active_pet_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_active_pet_name());
+      }
+    }
+    // uint64 bookmark_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_bookmark_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_bookmark_id());
+      }
+    }
+    // uint64 source_battle_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_source_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_source_battle_id());
+      }
+    }
+    // uint64 source_player_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_source_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_source_player_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    // uint32 class_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_class_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_class_id());
+      }
+    }
+    // uint32 formation_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_formation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_formation_id());
+      }
+    }
+    // uint32 season_seal_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_season_seal_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_seal_id());
+      }
+    }
+    // uint32 active_pet_table_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_active_pet_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_pet_table_id());
+      }
+    }
+    // uint64 saved_at_ms = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_saved_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_saved_at_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SavedBattleBuildBookmark::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SavedBattleBuildBookmark*>(&to_msg);
+  auto& from = static_cast<const SavedBattleBuildBookmark&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SavedBattleBuildBookmark)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_skill_table_ids()->MergeFrom(from._internal_skill_table_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_wuxing_sigil_ids()->MergeFrom(from._internal_wuxing_sigil_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_title().empty()) {
+        _this->_internal_set_title(from._internal_title());
+      } else {
+        if (_this->_impl_.title_.IsDefault()) {
+          _this->_internal_set_title("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_source_player_name().empty()) {
+        _this->_internal_set_source_player_name(from._internal_source_player_name());
+      } else {
+        if (_this->_impl_.source_player_name_.IsDefault()) {
+          _this->_internal_set_source_player_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_active_pet_name().empty()) {
+        _this->_internal_set_active_pet_name(from._internal_active_pet_name());
+      } else {
+        if (_this->_impl_.active_pet_name_.IsDefault()) {
+          _this->_internal_set_active_pet_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_bookmark_id() != 0) {
+        _this->_impl_.bookmark_id_ = from._impl_.bookmark_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_source_battle_id() != 0) {
+        _this->_impl_.source_battle_id_ = from._impl_.source_battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_source_player_id() != 0) {
+        _this->_impl_.source_player_id_ = from._impl_.source_player_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_class_id() != 0) {
+        _this->_impl_.class_id_ = from._impl_.class_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_formation_id() != 0) {
+        _this->_impl_.formation_id_ = from._impl_.formation_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_season_seal_id() != 0) {
+        _this->_impl_.season_seal_id_ = from._impl_.season_seal_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_active_pet_table_id() != 0) {
+        _this->_impl_.active_pet_table_id_ = from._impl_.active_pet_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_saved_at_ms() != 0) {
+        _this->_impl_.saved_at_ms_ = from._impl_.saved_at_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SavedBattleBuildBookmark::CopyFrom(const SavedBattleBuildBookmark& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SavedBattleBuildBookmark)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SavedBattleBuildBookmark::InternalSwap(SavedBattleBuildBookmark* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.skill_table_ids_.InternalSwap(&other->_impl_.skill_table_ids_);
+  _impl_.wuxing_sigil_ids_.InternalSwap(&other->_impl_.wuxing_sigil_ids_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.title_, &other->_impl_.title_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.source_player_name_, &other->_impl_.source_player_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.active_pet_name_, &other->_impl_.active_pet_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.saved_at_ms_)
+      + sizeof(SavedBattleBuildBookmark::_impl_.saved_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.bookmark_id_)>(
+          reinterpret_cast<char*>(&_impl_.bookmark_id_),
+          reinterpret_cast<char*>(&other->_impl_.bookmark_id_));
+}
+
+::google::protobuf::Metadata SavedBattleBuildBookmark::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 PlayerSeasonComp::PlayerSeasonComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, PlayerSeasonComp_get_class_data()) {
@@ -767,6 +2411,13 @@ PROTOBUF_NDEBUG_INLINE PlayerSeasonComp::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.records_)>()
           , from.records_
         }
+        ,
+        saved_builds_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PlayerSeasonComp,
+              PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.saved_builds_)>()
+          , from.saved_builds_
+        }
      {}
 
 PlayerSeasonComp::PlayerSeasonComp(
@@ -783,6 +2434,11 @@ PlayerSeasonComp::PlayerSeasonComp(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.wuxing_tower_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.wuxing_tower_)
+                : nullptr;
+  _impl_.equipped_formation_id_ = from._impl_.equipped_formation_id_;
 
   // @@protoc_insertion_point(copy_constructor:PlayerSeasonComp)
 }
@@ -794,10 +2450,21 @@ PROTOBUF_NDEBUG_INLINE PlayerSeasonComp::Impl_::Impl_(
             ::PlayerSeasonComp,
             PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.records_)>()
          }
+        ,
+        saved_builds_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerSeasonComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.saved_builds_)>()
+         }
      {}
 
 inline void PlayerSeasonComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, wuxing_tower_),
+           0,
+           offsetof(Impl_, equipped_formation_id_) -
+               offsetof(Impl_, wuxing_tower_) +
+               sizeof(Impl_::equipped_formation_id_));
 }
 PlayerSeasonComp::~PlayerSeasonComp() {
   // @@protoc_insertion_point(destructor:PlayerSeasonComp)
@@ -810,6 +2477,7 @@ inline void PlayerSeasonComp::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.wuxing_tower_;
   this_._impl_.~Impl_();
 }
 
@@ -847,9 +2515,19 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.records_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.records_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.saved_builds_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.wuxing_tower_ != nullptr);
+      _impl_.wuxing_tower_->Clear();
+    }
   }
+  _impl_.equipped_formation_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -886,6 +2564,35 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
     }
   }
 
+  // uint32 equipped_formation_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_equipped_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_equipped_formation_id(), target);
+    }
+  }
+
+  // .WuxingTowerCompState wuxing_tower = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.wuxing_tower_, this_._impl_.wuxing_tower_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .SavedBattleBuildBookmark saved_builds = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_saved_builds_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_saved_builds().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              4, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -910,13 +2617,32 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
   (void)cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-   {
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .PlayerSeasonSealRecord records = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_records_size();
       for (const auto& msg : this_._internal_records()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .SavedBattleBuildBookmark saved_builds = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_saved_builds_size();
+      for (const auto& msg : this_._internal_saved_builds()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .WuxingTowerCompState wuxing_tower = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.wuxing_tower_);
+    }
+    // uint32 equipped_formation_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_equipped_formation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_equipped_formation_id());
       }
     }
   }
@@ -938,10 +2664,30 @@ void PlayerSeasonComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _this->_internal_mutable_records()->InternalMergeFromWithArena(
-        ::google::protobuf::MessageLite::internal_visibility(), arena,
-        from._internal_records());
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_records()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_records());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_saved_builds()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_saved_builds());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.wuxing_tower_ != nullptr);
+      if (_this->_impl_.wuxing_tower_ == nullptr) {
+        _this->_impl_.wuxing_tower_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.wuxing_tower_);
+      } else {
+        _this->_impl_.wuxing_tower_->MergeFrom(*from._impl_.wuxing_tower_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_equipped_formation_id() != 0) {
+        _this->_impl_.equipped_formation_id_ = from._impl_.equipped_formation_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -961,6 +2707,13 @@ void PlayerSeasonComp::InternalSwap(PlayerSeasonComp* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.records_.InternalSwap(&other->_impl_.records_);
+  _impl_.saved_builds_.InternalSwap(&other->_impl_.saved_builds_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.equipped_formation_id_)
+      + sizeof(PlayerSeasonComp::_impl_.equipped_formation_id_)
+      - PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.wuxing_tower_)>(
+          reinterpret_cast<char*>(&_impl_.wuxing_tower_),
+          reinterpret_cast<char*>(&other->_impl_.wuxing_tower_));
 }
 
 ::google::protobuf::Metadata PlayerSeasonComp::GetMetadata() const {

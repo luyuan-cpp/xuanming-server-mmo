@@ -207,6 +207,8 @@ set(SOURCE_FILES
     proto/tip/season_error_tip.pb.cc
     proto/tip/trial_journal_error_tip.pb.cc
     proto/tip/festival_beast_error_tip.pb.cc
+    proto/tip/spirit_shop_error_tip.pb.cc
+    proto/tip/travel_pass_error_tip.pb.cc
     proto/tip/chat_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc
@@ -252,6 +254,16 @@ set(SOURCE_FILES
     code/tournamentreward_table.cpp
     code/tournamentreward_table_fk.cpp
     proto/tournamentreward_table.pb.cc
+    code/spiritshopgoods_table.cpp
+    code/spiritshopgoods_table_fk.cpp
+    proto/spiritshopgoods_table.pb.cc
+    code/spiritshoplimitgroup_table.cpp
+    proto/spiritshoplimitgroup_table.pb.cc
+    code/travelpassseason_table.cpp
+    proto/travelpassseason_table.pb.cc
+    code/travelpasstier_table.cpp
+    code/travelpasstier_table_fk.cpp
+    proto/travelpasstier_table.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

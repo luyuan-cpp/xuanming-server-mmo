@@ -246,7 +246,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 | 5b | C++ scene 控制域句柄 | `config.proto`、`config.cpp`、`game_config.yaml`、scene 启动、`player_scene.cpp`、`player_mystery_merchant.cpp` |
 | 5c | K8s 控制域实例、ConfigMap、切换闸、连接账、清库与状态 | `k8s_deploy.ps1`、`redis-purpose(-ha).yaml` 头注释、`tests/k8s_redis_split_contract.tests.ps1`、`deploy/k8s/README.md` |
 
-各批的落码状态与 Codex 命令记在 §8 与 `docs/PROGRESS.md` 2026-11-05「控制面按 zone 化与控制域 Redis 按 zone 组分实例」条目。
+各批的落码状态与 Gemini 命令记在 §8 与 `docs/PROGRESS.md` 2026-11-05「控制面按 zone 化与控制域 Redis 按 zone 组分实例」条目。
 
 实际改动(2026-11-05,未编译):
 
@@ -278,7 +278,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 2026-11-10 之后由全部 Redis 上 Cluster(缺口第 34 条)换掉的部分:5a 的 `CoreRedis` 句柄与 go-zero `Redis` 段在第 2b 批删除;5b 的 `scene_control_redis` / `tlsSceneControlRedis` 在第 3 批合成 `control_redis` / `tlsControlRedis`;5c 的 `redis-ctl-g<N>` 实例、`-RedisCtlMaxMemory` / `-ConfirmRedisCtlSwitch`、切换闸、按组总账与状态检查、`k8s_redis_ctl_contract.tests.ps1` 在第 6b-1 批删除。
 
-## 8. 交给 Codex 的验证
+## 8. 交给 Gemini 的验证
 
 全部在仓库根目录执行,按顺序。C++ MSBuild 必须串行 `/m:1`。
 

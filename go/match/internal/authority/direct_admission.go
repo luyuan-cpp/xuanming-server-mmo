@@ -46,6 +46,19 @@ func (s *Store) DirectAdmission(ctx context.Context, key *pb.MatchDirectIntentRe
 	}
 	return scanDirect(s.DB.QueryRowContext(ctx, "SELECT "+directColumns+" FROM match_direct_intent WHERE kind=? AND owner_id=? AND request_high=? AND request_low=?", key.Kind, key.OwnerId, key.RequestHigh, key.RequestLow))
 }
+
+// DirectPayloadByBattle 按 (kind, battle_id) 读出已提交直接开局意图的确定性请求正文（如帮战守旗阵 AI 守擂快照）。
+func (s *Store) DirectPayloadByBattle(ctx context.Context, kind uint32, battleID uint64) ([]byte, error) {
+	if kind == 0 || battleID == 0 || s == nil || s.DB == nil {
+		return nil, nil
+	}
+	var payload []byte
+	err := s.DB.QueryRowContext(ctx, "SELECT payload FROM match_direct_intent WHERE kind=? AND battle_id=? AND cancelled=0 LIMIT 1", kind, battleID).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return payload, err
+}
 func readDirectTx(ctx context.Context, tx *sql.Tx, key *pb.MatchDirectIntentRecord) (*pb.MatchDirectIntentRecord, error) {
 	return scanDirect(tx.QueryRowContext(ctx, "SELECT "+directColumns+" FROM match_direct_intent WHERE kind=? AND owner_id=? AND request_high=? AND request_low=? FOR UPDATE", key.Kind, key.OwnerId, key.RequestHigh, key.RequestLow))
 }
@@ -69,7 +82,7 @@ func DecodeDirectStart(record *pb.MatchDirectIntentRecord) (*pb.MatchDirectStart
 	return original, nil
 }
 func validateDirectActor(ctx context.Context, key *pb.MatchDirectIntentRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchAuthorityTicketRecord, error) {
-	if key.Kind == 2 || key.Kind == 4 || key.Kind == 5 {
+	if key.Kind == 2 || key.Kind == 4 || key.Kind == 5 || key.Kind == 6 {
 		return &pb.MatchAuthorityTicketRecord{}, nil
 	}
 	actor := originalPlayer(ctx, key.OwnerId)
@@ -91,7 +104,7 @@ func (s *Store) PrepareDirectAdmission(ctx context.Context, key *pb.MatchDirectI
 }
 
 func (s *Store) prepareDirectAdmissionOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchDirectIntentRecord, error) {
-	if key == nil || key.Kind < 1 || key.Kind > 5 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
+	if key == nil || key.Kind < 1 || key.Kind > 6 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
 		return nil, ErrDirectConflict
 	}
 	observed, err := s.DirectAdmission(ctx, key)

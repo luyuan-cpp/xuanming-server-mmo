@@ -40,6 +40,7 @@
 #include "player/system/role_admission_system.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/scene/scene_info.pb.h"
 #include "proto/scene_manager/storage.pb.h"
@@ -62,6 +63,16 @@ public:
     static void SetLeadership(entt::entity player, bool isLeader)
     {
         PlayerTeamSystem::SetLeadershipSnapshotForTest(player, isLeader);
+    }
+
+    static void ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch)
+    {
+        PlayerTeamSystem::ApplyMembership(player, teamId, epoch);
+    }
+
+    static void SetDefaultMainCity(uint32_t sceneConfigId)
+    {
+        PlayerTeamSystem::SetDefaultMainCityForTest(sceneConfigId);
     }
 };
 
@@ -1073,5 +1084,61 @@ TEST_F(TeamFollowDriveTest, LeaderJumpWithoutTeleportKeepsBroadcastStateUntilFol
     EXPECT_DOUBLE_EQ(velocity->x(), 0.0);
 
     frameTime.set_current_frame(savedFrame);
+}
+
+TEST_F(PlayerTeamFollowTest, HostedPlayerAutoReturnsToMainCityWhenRemovedFromTeam)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    constexpr uint32_t kMainCityConfId = 1001;
+    constexpr uint32_t kFieldMapConfId = 2001;
+    PlayerTeamFollowTestAccess::SetDefaultMainCity(kMainCityConfId);
+
+    // 离线托管状态 + 当前在野外地图 + 曾有队伍
+    const auto lostSession = SessionOnGate(kCurrentGateId);
+    SessionMap().erase(SessionOnGate(kOriginalGateId));
+    tlsEcs.actorRegistry.remove<PlayerSessionSnapshotComp>(this->player);
+    auto& held = tlsEcs.actorRegistry.emplace<PlayerConnectionLostComp>(
+        this->player, PlayerConnectionLostComp{connection_lost_hold::Clock::now(), lostSession, 41u});
+    held.afkPass = connection_lost_hold::AfkPass::kActive;
+    held.afkPassExpiresAtSec = TimeSystem::NowSecondsUTC() + 3600;
+    held.hostingStarted = true;
+    tlsEcs.actorRegistry.emplace_or_replace<PlayerRoleAdmissionComp>(this->player, 41u, 9u);
+
+    auto& sceneInfo = tlsEcs.sceneRegistry.get<SceneInfoComp>(this->scene);
+    sceneInfo.set_scene_config_id(kFieldMapConfId);
+
+    auto& profile = tlsEcs.actorRegistry.emplace_or_replace<PlayerUint64Comp>(this->player);
+    profile.set_afk_pass_expires_at(held.afkPassExpiresAtSec);
+    profile.set_afk_auto_return_city_on_team_end(true);
+
+    auto& team = tlsEcs.actorRegistry.emplace_or_replace<TeamId>(this->player);
+    team.set_team_id(kTeamId);
+    team.set_membership_epoch(10);
+
+    // 离队 / 解散 (teamId 0, epoch 11): 自动发 hosted_placement 回默认主城安全区
+    PlayerTeamFollowTestAccess::ApplyMembership(this->player, 0, 11);
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop, [requests = sceneManager.requests, player = this->player]
+    {
+        return !requests->empty() &&
+               !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
+    }, 5s));
+    ASSERT_EQ(sceneManager.requests->size(), 1u);
+    const auto& req = sceneManager.requests->front();
+    EXPECT_EQ(req.player_id(), kPlayerId);
+    EXPECT_TRUE(req.hosted_placement());
+    EXPECT_EQ(req.scene_id(), 0u);
+    EXPECT_EQ(req.scene_conf_id(), kMainCityConfId);
+    EXPECT_EQ(req.session_id(), lostSession);
+    EXPECT_EQ(req.login_generation(), 41u);
+    EXPECT_TRUE(req.gate_id().empty());
+
+    // 若已在默认主城:再次离队不重复发回城请求
+    sceneInfo.set_scene_config_id(kMainCityConfId);
+    PlayerTeamFollowTestAccess::ApplyMembership(this->player, kTeamId, 12);
+    PlayerTeamFollowTestAccess::ApplyMembership(this->player, 0, 13);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(this->player));
+    EXPECT_EQ(sceneManager.requests->size(), 1u);
+
+    PlayerTeamFollowTestAccess::SetDefaultMainCity(0);
 }
 } // namespace

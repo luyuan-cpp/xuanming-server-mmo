@@ -30,7 +30,7 @@
 
 ### 硬禁令
 - ❌ 不要手改生成产物（见 [proto-and-tables.md](proto-and-tables.md)）。
-- ❌ 不要在 `docs/design/` 之外随便建 README，不要为记录改动新建 markdown（除非用户要求）。
+- ❌ 不要在 `docs/design/` 与 `docs/planning/` 之外随便建 README，不要为记录改动新建 markdown（除非用户要求）。
 - ❌ 不要把 `player_id` 当 Prometheus label（高基数会爆）。
 - ❌ **不要开启新的线程**：C++ 节点默认不新加 `std::thread` / `std::jthread` / `std::async` / `EventLoopThread`，异步逻辑挂主 EventLoop，多步等待用 `loop_async::AwaitCallback`。**例外**：除非压测数据证实瓶颈确实需要开启新线程（例如压测评估中考虑开启新的 Kafka consumer 线程），且**必须先和程序/负责人确认并说明原因与压测依据**，获批后再同步登记到 `tools/scripts/tests/test_cpp_thread_sources.py`（清单之外 CI 判红；线程构成见 [thread-count-monitoring_zh.md](../design/thread-count-monitoring_zh.md)）。
 - ❌ 不要用 `--no-verify`、注释断言、跳 test 等方式绕过安全检查。

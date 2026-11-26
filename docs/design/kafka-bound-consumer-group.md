@@ -2,7 +2,7 @@
 
 > **状态**:现行机制。2026-11-05 r2-kc#1 首版(owner 跨代次存活),2026-11-12 收口当时记下的残余(终止时交还给新属主、
 > 收尾核组内位点、有界重试后转死信、保留期丢失不静默跳过、reader 模式交还后结束代次、guild-trial 的 lag 告警)。
-> 2026-11-12 的改动**未编译、未测试**,待 Codex 验证(命令见 `docs/PROGRESS.md` 同日条目)。
+> 2026-11-12 的改动**未编译、未测试**,待 Gemini 验证(命令见 `docs/PROGRESS.md` 同日条目)。
 > **代码**:`go/shared/kafkautil/group_lag.go`(`BoundConsumerGroup`)、`bound_consumer_dead_letter.go`、`bound_consumer_tickets.go`、
 > `bound_consumer_retention.go`、`bound_consumer_metrics.go`、`group_lag_probe.go`;死信工具 `go/shared/cmd/kafka_dlq`。
 > **处置手册**:[kafka-bound-consumer-runbook.md](../ops/kafka-bound-consumer-runbook.md)。

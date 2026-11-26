@@ -24,63 +24,71 @@ const (
 type MatchError int32
 
 const (
-	MatchError_kMatch_errorOK                     MatchError = 0
-	MatchError_kMatchInBattle                     MatchError = 16000
-	MatchError_kMatchAlreadyQueued                MatchError = 16001
-	MatchError_kMatchModeNotOpen                  MatchError = 16002
-	MatchError_kMatchTeamSizeNotConfigured        MatchError = 16003
-	MatchError_kMatchInternal                     MatchError = 16004
-	MatchError_kMatchTicketMismatch               MatchError = 16005
-	MatchError_kMatchCancelTooLate                MatchError = 16006
-	MatchError_kMatchChallengeSelf                MatchError = 16007
-	MatchError_kMatchChallengeTargetOffline       MatchError = 16008
-	MatchError_kMatchChallengeTargetBusy          MatchError = 16009
-	MatchError_kMatchChallengeSelfBusy            MatchError = 16010
-	MatchError_kMatchChallengePending             MatchError = 16011
-	MatchError_kMatchChallengeExpired             MatchError = 16012
-	MatchError_kMatchChallengeNotTarget           MatchError = 16013
-	MatchError_kMatchSpectateWhileQueued          MatchError = 16014
-	MatchError_kMatchSpectateWhileInBattle        MatchError = 16015
-	MatchError_kMatchAlreadyWatching              MatchError = 16016
-	MatchError_kMatchNoWatchableBattle            MatchError = 16017
-	MatchError_kMatchBattleNotWatchable           MatchError = 16018
-	MatchError_kMatchSpectateOffline              MatchError = 16019
-	MatchError_kMatchNotInScene                   MatchError = 16020
-	MatchError_kMatchSpectateFull                 MatchError = 16021
-	MatchError_kMatchProbeRequired                MatchError = 16022
-	MatchError_kMatchNoRegionWithinLatency        MatchError = 16023
-	MatchError_kMatchSpectateTicketInvalid        MatchError = 16024
-	MatchError_kMatchBattleReportNotFound         MatchError = 16025
-	MatchError_kMatchBattleScriptInvalid          MatchError = 16026
-	MatchError_kMatchBattleScriptNotFound         MatchError = 16027
-	MatchError_kMatchBattleScriptLimitReached     MatchError = 16028
-	MatchError_kMatchBattleScriptRevisionConflict MatchError = 16029
-	MatchError_kMatchBattleScriptNotApproved      MatchError = 16030
-	MatchError_kMatchBattleScriptTooLarge         MatchError = 16031
-	MatchError_kMatchBattleScriptLoadoutInvalid   MatchError = 16032
-	MatchError_kMatchBattleScriptLoadoutFull      MatchError = 16033
-	MatchError_kMatchRankedSeasonSettling         MatchError = 16034
-	MatchError_kMatchRankedPresetInvalid          MatchError = 16035
-	MatchError_kMatchRankedRuleVersionMismatch    MatchError = 16036
-	MatchError_kMatchTournamentNotOpen            MatchError = 16037
-	MatchError_kMatchTournamentStageClosed        MatchError = 16038
-	MatchError_kMatchTournamentSquadNameInvalid   MatchError = 16039
-	MatchError_kMatchTournamentAlreadyInSquad     MatchError = 16040
-	MatchError_kMatchTournamentSquadNotFound      MatchError = 16041
-	MatchError_kMatchTournamentNotCaptain         MatchError = 16042
-	MatchError_kMatchTournamentSquadFull          MatchError = 16043
-	MatchError_kMatchTournamentSquadLocked        MatchError = 16044
-	MatchError_kMatchTournamentInviteNotFound     MatchError = 16045
-	MatchError_kMatchTournamentMemberNotEnough    MatchError = 16046
-	MatchError_kMatchTournamentLineupInvalid      MatchError = 16047
-	MatchError_kMatchTournamentQualifierLimit     MatchError = 16048
-	MatchError_kMatchTournamentMatchNotReady      MatchError = 16049
-	MatchError_kMatchTournamentAlreadyCheered     MatchError = 16050
-	MatchError_kMatchTournamentRewardUnavailable  MatchError = 16051
-	MatchError_kMatchBattleSurrenderNotAllowed    MatchError = 16052
-	MatchError_kMatchBattleSurrenderTooEarly      MatchError = 16053
-	MatchError_kMatchBattleSurrenderCooldown      MatchError = 16054
-	MatchError_kMatchBattleSurrenderAlreadyVoted  MatchError = 16055
+	MatchError_kMatch_errorOK                          MatchError = 0
+	MatchError_kMatchInBattle                          MatchError = 16000
+	MatchError_kMatchAlreadyQueued                     MatchError = 16001
+	MatchError_kMatchModeNotOpen                       MatchError = 16002
+	MatchError_kMatchTeamSizeNotConfigured             MatchError = 16003
+	MatchError_kMatchInternal                          MatchError = 16004
+	MatchError_kMatchTicketMismatch                    MatchError = 16005
+	MatchError_kMatchCancelTooLate                     MatchError = 16006
+	MatchError_kMatchChallengeSelf                     MatchError = 16007
+	MatchError_kMatchChallengeTargetOffline            MatchError = 16008
+	MatchError_kMatchChallengeTargetBusy               MatchError = 16009
+	MatchError_kMatchChallengeSelfBusy                 MatchError = 16010
+	MatchError_kMatchChallengePending                  MatchError = 16011
+	MatchError_kMatchChallengeExpired                  MatchError = 16012
+	MatchError_kMatchChallengeNotTarget                MatchError = 16013
+	MatchError_kMatchSpectateWhileQueued               MatchError = 16014
+	MatchError_kMatchSpectateWhileInBattle             MatchError = 16015
+	MatchError_kMatchAlreadyWatching                   MatchError = 16016
+	MatchError_kMatchNoWatchableBattle                 MatchError = 16017
+	MatchError_kMatchBattleNotWatchable                MatchError = 16018
+	MatchError_kMatchSpectateOffline                   MatchError = 16019
+	MatchError_kMatchNotInScene                        MatchError = 16020
+	MatchError_kMatchSpectateFull                      MatchError = 16021
+	MatchError_kMatchProbeRequired                     MatchError = 16022
+	MatchError_kMatchNoRegionWithinLatency             MatchError = 16023
+	MatchError_kMatchSpectateTicketInvalid             MatchError = 16024
+	MatchError_kMatchBattleReportNotFound              MatchError = 16025
+	MatchError_kMatchBattleScriptInvalid               MatchError = 16026
+	MatchError_kMatchBattleScriptNotFound              MatchError = 16027
+	MatchError_kMatchBattleScriptLimitReached          MatchError = 16028
+	MatchError_kMatchBattleScriptRevisionConflict      MatchError = 16029
+	MatchError_kMatchBattleScriptNotApproved           MatchError = 16030
+	MatchError_kMatchBattleScriptTooLarge              MatchError = 16031
+	MatchError_kMatchBattleScriptLoadoutInvalid        MatchError = 16032
+	MatchError_kMatchBattleScriptLoadoutFull           MatchError = 16033
+	MatchError_kMatchRankedSeasonSettling              MatchError = 16034
+	MatchError_kMatchRankedPresetInvalid               MatchError = 16035
+	MatchError_kMatchRankedRuleVersionMismatch         MatchError = 16036
+	MatchError_kMatchTournamentNotOpen                 MatchError = 16037
+	MatchError_kMatchTournamentStageClosed             MatchError = 16038
+	MatchError_kMatchTournamentSquadNameInvalid        MatchError = 16039
+	MatchError_kMatchTournamentAlreadyInSquad          MatchError = 16040
+	MatchError_kMatchTournamentSquadNotFound           MatchError = 16041
+	MatchError_kMatchTournamentNotCaptain              MatchError = 16042
+	MatchError_kMatchTournamentSquadFull               MatchError = 16043
+	MatchError_kMatchTournamentSquadLocked             MatchError = 16044
+	MatchError_kMatchTournamentInviteNotFound          MatchError = 16045
+	MatchError_kMatchTournamentMemberNotEnough         MatchError = 16046
+	MatchError_kMatchTournamentLineupInvalid           MatchError = 16047
+	MatchError_kMatchTournamentQualifierLimit          MatchError = 16048
+	MatchError_kMatchTournamentMatchNotReady           MatchError = 16049
+	MatchError_kMatchTournamentAlreadyCheered          MatchError = 16050
+	MatchError_kMatchTournamentRewardUnavailable       MatchError = 16051
+	MatchError_kMatchBattleSurrenderNotAllowed         MatchError = 16052
+	MatchError_kMatchBattleSurrenderTooEarly           MatchError = 16053
+	MatchError_kMatchBattleSurrenderCooldown           MatchError = 16054
+	MatchError_kMatchBattleSurrenderAlreadyVoted       MatchError = 16055
+	MatchError_kMatchTournamentAlreadySalutedToday     MatchError = 16056
+	MatchError_kMatchTournamentNoChampionToSalute      MatchError = 16057
+	MatchError_kMatchTournamentSpectateCheerCooldown   MatchError = 16058
+	MatchError_kMatchTournamentSpectateCheerInvalid    MatchError = 16059
+	MatchError_kMatchTournamentEmblemInvalid           MatchError = 16060
+	MatchError_kMatchTournamentPredictionClosed        MatchError = 16061
+	MatchError_kMatchTournamentPredictionTargetInvalid MatchError = 16062
+	MatchError_kMatchTournamentWarmupUnavailable       MatchError = 16063
 )
 
 // Enum value maps for MatchError.
@@ -143,65 +151,81 @@ var (
 		16053: "kMatchBattleSurrenderTooEarly",
 		16054: "kMatchBattleSurrenderCooldown",
 		16055: "kMatchBattleSurrenderAlreadyVoted",
+		16056: "kMatchTournamentAlreadySalutedToday",
+		16057: "kMatchTournamentNoChampionToSalute",
+		16058: "kMatchTournamentSpectateCheerCooldown",
+		16059: "kMatchTournamentSpectateCheerInvalid",
+		16060: "kMatchTournamentEmblemInvalid",
+		16061: "kMatchTournamentPredictionClosed",
+		16062: "kMatchTournamentPredictionTargetInvalid",
+		16063: "kMatchTournamentWarmupUnavailable",
 	}
 	MatchError_value = map[string]int32{
-		"kMatch_errorOK":                     0,
-		"kMatchInBattle":                     16000,
-		"kMatchAlreadyQueued":                16001,
-		"kMatchModeNotOpen":                  16002,
-		"kMatchTeamSizeNotConfigured":        16003,
-		"kMatchInternal":                     16004,
-		"kMatchTicketMismatch":               16005,
-		"kMatchCancelTooLate":                16006,
-		"kMatchChallengeSelf":                16007,
-		"kMatchChallengeTargetOffline":       16008,
-		"kMatchChallengeTargetBusy":          16009,
-		"kMatchChallengeSelfBusy":            16010,
-		"kMatchChallengePending":             16011,
-		"kMatchChallengeExpired":             16012,
-		"kMatchChallengeNotTarget":           16013,
-		"kMatchSpectateWhileQueued":          16014,
-		"kMatchSpectateWhileInBattle":        16015,
-		"kMatchAlreadyWatching":              16016,
-		"kMatchNoWatchableBattle":            16017,
-		"kMatchBattleNotWatchable":           16018,
-		"kMatchSpectateOffline":              16019,
-		"kMatchNotInScene":                   16020,
-		"kMatchSpectateFull":                 16021,
-		"kMatchProbeRequired":                16022,
-		"kMatchNoRegionWithinLatency":        16023,
-		"kMatchSpectateTicketInvalid":        16024,
-		"kMatchBattleReportNotFound":         16025,
-		"kMatchBattleScriptInvalid":          16026,
-		"kMatchBattleScriptNotFound":         16027,
-		"kMatchBattleScriptLimitReached":     16028,
-		"kMatchBattleScriptRevisionConflict": 16029,
-		"kMatchBattleScriptNotApproved":      16030,
-		"kMatchBattleScriptTooLarge":         16031,
-		"kMatchBattleScriptLoadoutInvalid":   16032,
-		"kMatchBattleScriptLoadoutFull":      16033,
-		"kMatchRankedSeasonSettling":         16034,
-		"kMatchRankedPresetInvalid":          16035,
-		"kMatchRankedRuleVersionMismatch":    16036,
-		"kMatchTournamentNotOpen":            16037,
-		"kMatchTournamentStageClosed":        16038,
-		"kMatchTournamentSquadNameInvalid":   16039,
-		"kMatchTournamentAlreadyInSquad":     16040,
-		"kMatchTournamentSquadNotFound":      16041,
-		"kMatchTournamentNotCaptain":         16042,
-		"kMatchTournamentSquadFull":          16043,
-		"kMatchTournamentSquadLocked":        16044,
-		"kMatchTournamentInviteNotFound":     16045,
-		"kMatchTournamentMemberNotEnough":    16046,
-		"kMatchTournamentLineupInvalid":      16047,
-		"kMatchTournamentQualifierLimit":     16048,
-		"kMatchTournamentMatchNotReady":      16049,
-		"kMatchTournamentAlreadyCheered":     16050,
-		"kMatchTournamentRewardUnavailable":  16051,
-		"kMatchBattleSurrenderNotAllowed":    16052,
-		"kMatchBattleSurrenderTooEarly":      16053,
-		"kMatchBattleSurrenderCooldown":      16054,
-		"kMatchBattleSurrenderAlreadyVoted":  16055,
+		"kMatch_errorOK":                          0,
+		"kMatchInBattle":                          16000,
+		"kMatchAlreadyQueued":                     16001,
+		"kMatchModeNotOpen":                       16002,
+		"kMatchTeamSizeNotConfigured":             16003,
+		"kMatchInternal":                          16004,
+		"kMatchTicketMismatch":                    16005,
+		"kMatchCancelTooLate":                     16006,
+		"kMatchChallengeSelf":                     16007,
+		"kMatchChallengeTargetOffline":            16008,
+		"kMatchChallengeTargetBusy":               16009,
+		"kMatchChallengeSelfBusy":                 16010,
+		"kMatchChallengePending":                  16011,
+		"kMatchChallengeExpired":                  16012,
+		"kMatchChallengeNotTarget":                16013,
+		"kMatchSpectateWhileQueued":               16014,
+		"kMatchSpectateWhileInBattle":             16015,
+		"kMatchAlreadyWatching":                   16016,
+		"kMatchNoWatchableBattle":                 16017,
+		"kMatchBattleNotWatchable":                16018,
+		"kMatchSpectateOffline":                   16019,
+		"kMatchNotInScene":                        16020,
+		"kMatchSpectateFull":                      16021,
+		"kMatchProbeRequired":                     16022,
+		"kMatchNoRegionWithinLatency":             16023,
+		"kMatchSpectateTicketInvalid":             16024,
+		"kMatchBattleReportNotFound":              16025,
+		"kMatchBattleScriptInvalid":               16026,
+		"kMatchBattleScriptNotFound":              16027,
+		"kMatchBattleScriptLimitReached":          16028,
+		"kMatchBattleScriptRevisionConflict":      16029,
+		"kMatchBattleScriptNotApproved":           16030,
+		"kMatchBattleScriptTooLarge":              16031,
+		"kMatchBattleScriptLoadoutInvalid":        16032,
+		"kMatchBattleScriptLoadoutFull":           16033,
+		"kMatchRankedSeasonSettling":              16034,
+		"kMatchRankedPresetInvalid":               16035,
+		"kMatchRankedRuleVersionMismatch":         16036,
+		"kMatchTournamentNotOpen":                 16037,
+		"kMatchTournamentStageClosed":             16038,
+		"kMatchTournamentSquadNameInvalid":        16039,
+		"kMatchTournamentAlreadyInSquad":          16040,
+		"kMatchTournamentSquadNotFound":           16041,
+		"kMatchTournamentNotCaptain":              16042,
+		"kMatchTournamentSquadFull":               16043,
+		"kMatchTournamentSquadLocked":             16044,
+		"kMatchTournamentInviteNotFound":          16045,
+		"kMatchTournamentMemberNotEnough":         16046,
+		"kMatchTournamentLineupInvalid":           16047,
+		"kMatchTournamentQualifierLimit":          16048,
+		"kMatchTournamentMatchNotReady":           16049,
+		"kMatchTournamentAlreadyCheered":          16050,
+		"kMatchTournamentRewardUnavailable":       16051,
+		"kMatchBattleSurrenderNotAllowed":         16052,
+		"kMatchBattleSurrenderTooEarly":           16053,
+		"kMatchBattleSurrenderCooldown":           16054,
+		"kMatchBattleSurrenderAlreadyVoted":       16055,
+		"kMatchTournamentAlreadySalutedToday":     16056,
+		"kMatchTournamentNoChampionToSalute":      16057,
+		"kMatchTournamentSpectateCheerCooldown":   16058,
+		"kMatchTournamentSpectateCheerInvalid":    16059,
+		"kMatchTournamentEmblemInvalid":           16060,
+		"kMatchTournamentPredictionClosed":        16061,
+		"kMatchTournamentPredictionTargetInvalid": 16062,
+		"kMatchTournamentWarmupUnavailable":       16063,
 	}
 )
 
@@ -236,7 +260,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xc2\x0e\n" +
+	"\x15match_error_tip.proto*\x8d\x11\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -294,7 +318,15 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x1fkMatchBattleSurrenderNotAllowed\x10\xb4}\x12\"\n" +
 	"\x1dkMatchBattleSurrenderTooEarly\x10\xb5}\x12\"\n" +
 	"\x1dkMatchBattleSurrenderCooldown\x10\xb6}\x12&\n" +
-	"!kMatchBattleSurrenderAlreadyVoted\x10\xb7}B$\n" +
+	"!kMatchBattleSurrenderAlreadyVoted\x10\xb7}\x12(\n" +
+	"#kMatchTournamentAlreadySalutedToday\x10\xb8}\x12'\n" +
+	"\"kMatchTournamentNoChampionToSalute\x10\xb9}\x12*\n" +
+	"%kMatchTournamentSpectateCheerCooldown\x10\xba}\x12)\n" +
+	"$kMatchTournamentSpectateCheerInvalid\x10\xbb}\x12\"\n" +
+	"\x1dkMatchTournamentEmblemInvalid\x10\xbc}\x12%\n" +
+	" kMatchTournamentPredictionClosed\x10\xbd}\x12,\n" +
+	"'kMatchTournamentPredictionTargetInvalid\x10\xbe}\x12&\n" +
+	"!kMatchTournamentWarmupUnavailable\x10\xbf}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

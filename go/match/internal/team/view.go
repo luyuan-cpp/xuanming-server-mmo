@@ -54,6 +54,7 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 		MatchState:       teampb.TeamMatchState_TEAM_MATCH_STATE_IDLE,
 		ApplicationCount: uint32(len(live.GetApplications())),
 		ServerTimeMs:     nowMs,
+		FollowFormation:  live.GetFollowFormation(),
 	}
 	if MatchLockActive(live, nowMs) {
 		view.MatchState = teampb.TeamMatchState_TEAM_MATCH_STATE_STARTING
@@ -113,6 +114,7 @@ func memberView(playerId uint64, zone, joinSeq uint32, leader uint64, dc display
 		Gender:       d.Gender,
 		IsLeader:     playerId == leader,
 		IsOnline:     d.Online,
+		IsHosted:     !d.Online && d.Hosted,
 		InBattle:     d.InBattle,
 		ZoneId:       zone,
 		JoinSeq:      joinSeq,

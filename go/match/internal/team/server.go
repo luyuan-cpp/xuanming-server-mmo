@@ -40,6 +40,8 @@ const (
 	methodDisbandTeam         = "DisbandTeam"
 	methodStartTeamMatch      = "StartTeamMatch"
 	methodConfirmRankedPreset = "ConfirmRankedPreset"
+	methodSetTeamFormation    = "SetTeamFormation"
+	methodRecallTeamMembers   = "RecallTeamMembers"
 )
 
 // team_rpc_total{outcome} 的固定取值。
@@ -151,6 +153,14 @@ func (s *Server) StartTeamMatch(ctx context.Context, in *teampb.StartTeamMatchRe
 
 func (s *Server) ConfirmRankedPreset(ctx context.Context, in *teampb.ConfirmRankedPresetRequest) (*teampb.TeamResponse, error) {
 	return serveTeam(ctx, methodConfirmRankedPreset, in, s.service.ConfirmRankedPreset)
+}
+
+func (s *Server) SetTeamFormation(ctx context.Context, in *teampb.SetTeamFormationRequest) (*teampb.TeamResponse, error) {
+	return serveTeam(ctx, methodSetTeamFormation, in, s.service.SetTeamFormation)
+}
+
+func (s *Server) RecallTeamMembers(ctx context.Context, in *teampb.RecallTeamMembersRequest) (*teampb.TeamResponse, error) {
+	return serveTeam(ctx, methodRecallTeamMembers, in, s.service.RecallTeamMembers)
 }
 
 // ListMyInvites 回包类型不同,单独写外壳(语义与 serveTeam 相同)。

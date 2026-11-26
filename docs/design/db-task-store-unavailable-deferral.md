@@ -2,7 +2,7 @@
 
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 不再消费存盘任务,存储不可用时由 scene 的状态机退避重试。本文只作历史保留,不再描述现行行为。
 
-> **状态(2026-11-19,Claude,负责人口径「按最标准的方式定、现在修」):§3.4 的运行期库级冷却整套删除,§3.2 的错误分类包 `storeerr` 随之删除;打开失败的冷却(`openOnce`,10 秒)保留。代码未编译、未测试,待 Codex 验证。** 原因:
+> **状态(2026-11-19,Claude,负责人口径「按最标准的方式定、现在修」):§3.4 的运行期库级冷却整套删除,§3.2 的错误分类包 `storeerr` 随之删除;打开失败的冷却(`openOnce`,10 秒)保留。代码未编译、未测试,待 Gemini 验证。** 原因:
 >
 > 1. **没有调用方。** 唯一的调用方是 Kafka 任务消费者(`key_ordered_consumer.go`),已随存档直接提交删除。之后 `cooling` 表恒空,`Store()` 的冷却分支走不到,`db_store_cooldown_stores` 恒为 0(断线重连 R19 核对时发现)。
 > 2. **它要解决的问题已经不存在。** 冷却是给消费者做的:同一子分片的任务串行执行,一个坏库会拖住落在别的库的玩家,连接类失败还会耗光重试预算、进死信(§1、§3.4)。现在每次存盘 / 认领都是一次独立的 RPC,没有共享的 worker,也没有重试预算;重试和退避都在调用方(2026-11-20 按 scene 源码核对过,`cpp/libs/services/scene/player/system/player_store_client.cpp`):传输层把任何非 OK 的 gRPC 结局都报成结果未知(`SendPlayerStoreSaveOverGrpc` / `SendPlayerStoreClaimOverGrpc`);存盘用原请求(同内容、同序号、同代次)重发,退避基数 0.5 秒起翻倍、5 秒封顶,每次再乘 0.5~1 的抖动,没有次数上限,直到拿到明确结论(`RunSaveAttempt` / `ScheduleRetry`);认领同样退避,从第一次发送起 30 秒没有结论就放弃这次进场(`ScheduleClaimRetry`);审计转发一轮里遇错就跳过这个库(一条语句至多 5 秒),下一轮按 `IntervalMs` 再来。对一个坏库的并发拨号由每库连接池的上限(`Placement.StoreMaxOpenConn`,缺省 8)封顶,不会被请求量放大。

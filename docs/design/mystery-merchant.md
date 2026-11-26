@@ -3,7 +3,7 @@
 > **状态(2026-10-09)**:代码、配表、单测、冒烟、客户端都已写完,在隔离分支 `feat/mystery-merchant` 上
 > (服务端工作树 `E:\work\xuanming-server-mmo-wt-merchant`,客户端工作树 `E:\work\mmorpg-client-wt-merchant`),**均未提交**。
 > **服务端未编译、未 proto-gen、未跑任何测试(AGENTS §10.1)**;只做过:proto 语法校验、沙盒导表(退出码 0)、gofmt。
-> 客户端离线编译 0 错误、纯逻辑测试 59/59(离线 NUnit 替身),Unity 内未运行。给 Codex 的清单在 §9。
+> 客户端离线编译 0 错误、纯逻辑测试 59/59(离线 NUnit 替身),Unity 内未运行。给 Gemini 的清单在 §9。
 
 ## 1. 目标与决定
 
@@ -342,7 +342,7 @@ schema 在 `data/schema/mysterymerchant{rule,goods,spot}_table.proto`。
 15. **`weight = 0` 立即停售没有单测**(夹具改不了表行);`ResolveGoods` 是下发与结算共用的一条路径,靠联调验证。
 16. 评审记录见 §10。
 
-## 9. 交接给 Codex 的验证清单(AGENTS §10.1)
+## 9. 交接给 Gemini 的验证清单(AGENTS §10.1)
 
 **现状(2026-10-16):第 0–7 步已在主仓实跑通过,结果见 §9.1;第 8 步(客户端)只有离线编译与离线用例,Unity 未运行。**
 下面的清单保留作复验用。任何一步的通过标准不满足就停,保留该步写明的日志。

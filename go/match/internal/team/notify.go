@@ -88,9 +88,9 @@ func (s *Service) publish(ctx context.Context, caller uint64, commits []*CommitR
 			// tid 发生变化的人:新加入者与移出者(解散时移出者即全员,§F.3)。
 			refresh = append(refresh, c.Decision.Joined...)
 			refresh = append(refresh, c.Decision.Left...)
-			// 队长换人:留下的人 tid 没变,但 scene 上的跟随队形按队长建(team-follow-server-trail.md),
-			// 新队长要停止被驱动、其他人要接到新队长身后,所以留下的全员也重读一次。
-			if c.Decision.LeaderChanged {
+			// 队长换人或跑图队形变化:留下的人 tid 没变,但 scene 上的跟随队形按队长与队形样式建
+			// (team-follow-server-trail.md),所以留下的全员也重读一次立即生效。
+			if c.Decision.LeaderChanged || c.Decision.FormationChanged {
 				refresh = append(refresh, c.Decision.Kept...)
 			}
 		}
@@ -178,13 +178,24 @@ func (s *Service) pushCommit(ctx context.Context, caller uint64, c *CommitResult
 				ActorId: d.Actor,
 			})
 	}
+	for _, pid := range uniqueIds(d.RecallRecipients) {
+		if pid == caller {
+			continue
+		}
+		s.push(ctx, pid, uint32(game.ClientPlayerTeamNotifyTeamEventMessageId), pushKindEvent,
+			&teampb.TeamEventS2C{
+				Type:    teampb.TeamEventType_TEAM_EVENT_TYPE_LEADER_RECALL,
+				TeamId:  c.TeamId,
+				ActorId: d.Actor,
+			})
+	}
 }
 
 // snapshotRecipients 快照推送的接收者(调用者由 pushCommit 另行排除)。
-//   - 建队:无(回包即视图);
+//   - 建队 / 纯一键召集:无(召集走 NotifyTeamEvent LEADER_RECALL,不重复推快照);
 //   - 申请 / 邀请增减、过期清理:只推队长(申请与已发邀请只有队长可见);
 //     同一次提交若惰性转让了队长,成员都要知道,改推全员;
-//   - 其余(加入、离队、踢人、转让、解散、开战状态):J ∪ K ∪ L 全员,
+//   - 其余(加入、离队、踢人、转让、解散、开战状态、切换队形):J ∪ K ∪ L 全员,
 //     移出者收到 team_id=0 的空视图。
 func snapshotRecipients(c *CommitResult) []uint64 {
 	d := c.Decision
@@ -192,6 +203,10 @@ func snapshotRecipients(c *CommitResult) []uint64 {
 		switch d.Reason {
 		case teampb.TeamChangeReason_TEAM_CHANGE_REASON_CREATED:
 			return nil
+		case teampb.TeamChangeReason_TEAM_CHANGE_REASON_UNSPECIFIED:
+			if len(d.RecallRecipients) > 0 {
+				return nil
+			}
 		case teampb.TeamChangeReason_TEAM_CHANGE_REASON_APPLICATION_CHANGED,
 			teampb.TeamChangeReason_TEAM_CHANGE_REASON_INVITE_CHANGED:
 			if d.Record == nil {

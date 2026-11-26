@@ -114,4 +114,12 @@ struct FCfgSeasonRuleRow : public FTableRowBase
 	/** 赛季简介说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonRule")
 	FString desc;
+
+	/** 本季满级永久解锁的零数值纪念称谓（如 破阵宗师） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonRule")
+	FString honor_title_name;
+
+	/** 本季满级永久解锁的零数值纪念徽章图标键（如 UI/SeasonHonors/honor_s1_pozhen） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonRule")
+	FString honor_badge_icon_key;
 };

@@ -434,7 +434,15 @@
         "MatchBattleSurrenderNotAllowed": 16052,
         "MatchBattleSurrenderTooEarly": 16053,
         "MatchBattleSurrenderCooldown": 16054,
-        "MatchBattleSurrenderAlreadyVoted": 16055
+        "MatchBattleSurrenderAlreadyVoted": 16055,
+        "MatchTournamentAlreadySalutedToday": 16056,
+        "MatchTournamentNoChampionToSalute": 16057,
+        "MatchTournamentSpectateCheerCooldown": 16058,
+        "MatchTournamentSpectateCheerInvalid": 16059,
+        "MatchTournamentEmblemInvalid": 16060,
+        "MatchTournamentPredictionClosed": 16061,
+        "MatchTournamentPredictionTargetInvalid": 16062,
+        "MatchTournamentWarmupUnavailable": 16063
       }
     },
     "attribute_error": {
@@ -741,6 +749,42 @@
         "FestivalBeastExclusiveSlotOccupied": 36011,
         "FestivalBeastRequestConflict": 36012,
         "FestivalBeastServiceUnavailable": 36013
+      }
+    },
+    "spirit_shop_error": {
+      "base": 37000,
+      "width": 1000,
+      "ids": {
+        "SpiritShopUnavailable": 37000,
+        "SpiritShopGoodsOffShelf": 37001,
+        "SpiritShopPriceChanged": 37002,
+        "SpiritShopInvalidCount": 37003,
+        "SpiritShopLimitReached": 37004,
+        "SpiritShopGroupLimitReached": 37005,
+        "SpiritShopCurrencyNotEnough": 37006,
+        "SpiritShopBagFull": 37007,
+        "SpiritShopFrozen": 37008,
+        "SpiritShopInBattle": 37009,
+        "SpiritShopItemBlocked": 37010
+      }
+    },
+    "travel_pass_error": {
+      "base": 38000,
+      "width": 1000,
+      "ids": {
+        "TravelPassUnavailable": 38000,
+        "TravelPassNotOpen": 38001,
+        "TravelPassAlreadyUnlocked": 38002,
+        "TravelPassPriceChanged": 38003,
+        "TravelPassCurrencyNotEnough": 38004,
+        "TravelPassNotReached": 38005,
+        "TravelPassPremiumRequired": 38006,
+        "TravelPassNothingToClaim": 38007,
+        "TravelPassBagFull": 38008,
+        "TravelPassItemBlocked": 38009,
+        "TravelPassFrozen": 38010,
+        "TravelPassInBattle": 38011,
+        "TravelPassCosmeticNotOwned": 38012
       }
     }
   },

@@ -37,6 +37,95 @@ struct CatchupPlan {
     uint64_t totalPrice{0};
 };
 
+// 赛季印单局结算增量（用于近期战果持久落盘与 BattleEndS2C 实时跳条展示）。
+struct BattleCreditDelta {
+    uint32_t seasonId{0};
+    uint32_t pointsAdded{0};
+    uint32_t progressAfter{0};
+    uint32_t maxPoints{0};
+    bool honorNewlyUnlocked{false};
+};
+
+// 赛季全员对称周环境词缀（零养成门槛、敌我对称、每周自动轮换；0 表示无词缀）。
+inline constexpr uint32_t kWeeklyAffixNone = 0;
+inline constexpr uint32_t kWeeklyAffixShieldOverload = 1;  // 护盾过载周：双方技能护盾量 +15%
+inline constexpr uint32_t kWeeklyAffixSpiritRecovery = 2;  // 灵息充盈周：双方普通防御额外回复 3% 最大法力
+inline constexpr uint32_t kWeeklyAffixOpeningGuard = 3;    // 先机守势周：前 2 回合双方受到直伤 -8%
+inline constexpr uint32_t kWeeklyAffixSharpTempo = 4;      // 锋芒竞速周：双方攻击无护盾目标直伤 +5%
+inline constexpr uint32_t kWeeklyAffixCount = 4;
+
+inline constexpr uint32_t kWeeklyAffixShieldBonusPct = 15;
+inline constexpr uint32_t kWeeklyAffixDefendManaBps = 300;
+inline constexpr uint32_t kWeeklyAffixOpeningGuardReducePct = 8;
+inline constexpr uint32_t kWeeklyAffixOpeningGuardRounds = 2;
+inline constexpr uint32_t kWeeklyAffixSharpTempoBonusPct = 5;
+
+inline bool IsValidWeeklyAffixId(uint32_t affixId) {
+    return affixId >= 1u && affixId <= kWeeklyAffixCount;
+}
+
+// 计算当前权威赛季周次（1 起）：有明确开季时间时按 7 天递增；首测常开（startsAtMs == 0）对齐 UTC+8 周一 05:00。
+inline uint32_t ComputeSeasonWeekIndex(uint64_t startsAtMs, uint64_t nowMs) {
+    constexpr uint64_t kMsPerWeek = 7ULL * 24ULL * 3600ULL * 1000ULL;
+    if (startsAtMs > 0) {
+        if (nowMs <= startsAtMs) {
+            return 1u;
+        }
+        return static_cast<uint32_t>((nowMs - startsAtMs) / kMsPerWeek) + 1u;
+    }
+    constexpr uint64_t kMonday05CstOffsetMs = (3ULL * 24ULL - 3ULL) * 3600ULL * 1000ULL;
+    return static_cast<uint32_t>((nowMs + kMonday05CstOffsetMs) / kMsPerWeek) + 1u;
+}
+
+// 由赛季编号与周次确定性轮换全员对称周词缀（1..4）；任一为 0 返回 0。
+inline uint32_t WeeklyAffixForWeek(uint32_t seasonId, uint32_t weekIndex) {
+    if (seasonId == 0 || weekIndex == 0) {
+        return kWeeklyAffixNone;
+    }
+    return ((seasonId - 1u + weekIndex - 1u) % kWeeklyAffixCount) + 1u;
+}
+
+inline uint32_t WeeklyAffixAt(uint32_t seasonId, uint64_t startsAtMs, uint64_t nowMs) {
+    if (seasonId == 0) {
+        return kWeeklyAffixNone;
+    }
+    return WeeklyAffixForWeek(seasonId, ComputeSeasonWeekIndex(startsAtMs, nowMs));
+}
+
+// 推荐搭配该周词缀的赛季印效果类型（用于面板高亮，不限制自由切换）。
+inline bool IsSealEffectRecommendedForAffix(uint32_t affixId, uint32_t effectId) {
+    switch (affixId) {
+    case kWeeklyAffixShieldOverload:
+        return effectId == 1u || effectId == 2u; // 物理/法术破盾印
+    case kWeeklyAffixSpiritRecovery:
+        return effectId == 7u || effectId == 6u; // 防御回蓝印 / 固阵守印
+    case kWeeklyAffixOpeningGuard:
+        return effectId == 6u || effectId == 7u; // 前两回合减伤印 / 蓄息印
+    case kWeeklyAffixSharpTempo:
+        return effectId == 1u || effectId == 2u; // 破盾后迅速打穿
+    default:
+        return false;
+    }
+}
+
+inline uint32_t ShieldOverloadBonusPct(uint32_t affixId) {
+    return affixId == kWeeklyAffixShieldOverload ? kWeeklyAffixShieldBonusPct : 0u;
+}
+
+inline uint32_t DefendBonusManaRegenBps(uint32_t affixId) {
+    return affixId == kWeeklyAffixSpiritRecovery ? kWeeklyAffixDefendManaBps : 0u;
+}
+
+inline uint32_t OpeningGuardDamageReducePct(uint32_t affixId, uint32_t roundIndex) {
+    return (affixId == kWeeklyAffixOpeningGuard && roundIndex >= 1u && roundIndex <= kWeeklyAffixOpeningGuardRounds)
+        ? kWeeklyAffixOpeningGuardReducePct
+        : 0u;
+}
+
+inline uint32_t SharpTempoUnshieldedDamageBonusPct(uint32_t affixId, bool targetHasShield) {
+    return (affixId == kWeeklyAffixSharpTempo && !targetHasShield) ? kWeeklyAffixSharpTempoBonusPct : 0u;
+}
+
 inline bool IsWindowActive(uint64_t startsAtMs, uint64_t endsAtMs, bool enabled, uint64_t nowMs) {
     if (!enabled) {
         return false;

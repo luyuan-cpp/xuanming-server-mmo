@@ -212,7 +212,7 @@
 | 7 | 新旧分代补到底（2026-11-12 晚）：scene Fleet 的模板修订（内容哈希）与重启令牌；`k8s_scene_roll.ps1` 按「构建标识 + 模板修订 + 重启令牌」认旧一代，新增 `-Restart`；模板不变的整批重启各形态的做法（§4.6）；演练清单（§11） | `tools/scripts/{k8s_deploy.ps1,k8s_scene_roll.ps1}`、`tools/scripts/tests/{scene_planned_drain_deploy.tests.ps1,k8s_scene_roll.tests.ps1}` | 11-12 落码，未运行 |
 | 8 | Go 服务的两处交接空窗（2026-11-13）：选主让位后跟随者的竞选间隔与锁 TTL 脱钩（见下「选主交接」）；login 停机时等已受理的 EnterGame 后台链、guild 等自己的有序收尾（见下表） | `go/shared/leader/{leader.go,leader_test.go}`、`go/login/internal/logic/pkg/loginqueue/{dispatcher.go,dispatcher_campaign_test.go}`、`go/scene_manager/internal/logic/{world_channel_directory.go,world_channel_directory_test.go}`、`go/scene_manager/internal/config/config.go`（注释）、`go/shared/shutdownbudget/`、`go/login/{login.go,internal/logic/clientplayerlogin/entergamelogic.go}`、`go/guild/guild.go`、`deploy/k8s/manifests/go-svc/login.yaml`（注释）、`docs/design/world-channel-switch.md` | 11-13 落码，未编译 |
 
-验证命令与通过标准在 PROGRESS 的落码条目里（AGENTS.md §10.1：协议生成、编译、单测、冒烟由 Codex 执行）。
+验证命令与通过标准在 PROGRESS 的落码条目里（AGENTS.md §10.1：协议生成、编译、单测、冒烟由 Gemini 执行）。
 
 **Go 服务停机时限**（批 6）：Go 服务没有玩家长连接要搬，计划重启的标准做法是「先从 etcd 注销、再等在途请求结束、最后退出」，go-zero 自带这三步，但缺省从收到 SIGTERM 起 5.5 秒就强杀进程，在途请求只有 4.5 秒。逐个服务核对「进程自己的停机时限」与「服务端请求超时」「Pod 宽限期」：
 
@@ -247,7 +247,7 @@
 
 ## 11. 演练清单（尚未执行）
 
-按 [AGENTS.md](../../AGENTS.md) §10.1 交给 Codex 在 kind 或 dev 集群执行，不在生产做。故障注入类的演练（断网、杀进程、切主）在 [断线重连核对](infra-reconnect-overview.md) §5，这里只列**计划内**的重启、缩容与换版。
+按 [AGENTS.md](../../AGENTS.md) §10.1 交给 Gemini 在 kind 或 dev 集群执行，不在生产做。故障注入类的演练（断网、杀进程、切主）在 [断线重连核对](infra-reconnect-overview.md) §5，这里只列**计划内**的重启、缩容与换版。
 
 **环境**：一个 zone；scene（Deployment 形态）、gate、login、scene_manager、player_locator、db 各至少 2 个副本；robot 保持若干账号在线并持续做移动、聊天、背包操作。每条都记录各组件的版本与副本数。
 

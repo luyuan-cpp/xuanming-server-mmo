@@ -60,6 +60,12 @@
     <ClInclude Include="code\guildshop_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\guildwarmilestone_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildwarrule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\item_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -231,6 +237,12 @@
     <ClInclude Include="proto\guildshop_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\guildwarmilestone_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\guildwarrule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\item_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -331,6 +343,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\guildshop_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildwarmilestone_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildwarrule_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\item_table_comp.h">
@@ -454,6 +472,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\guildshop_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildwarmilestone_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildwarrule_table_fk.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\equipattribute_table.h">
@@ -684,6 +708,9 @@
     <ClInclude Include="proto\tip\festival_beast_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\tip\spirit_shop_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\tip\chat_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -796,6 +823,18 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\guildshop_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildwarmilestone_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildwarmilestone_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildwarrule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildwarrule_table_fk.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\item_table.cpp">
@@ -970,6 +1009,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\guildshop_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\guildwarmilestone_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\guildwarrule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\item_table.pb.cc">
@@ -1231,6 +1276,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\festival_beast_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\spirit_shop_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc">

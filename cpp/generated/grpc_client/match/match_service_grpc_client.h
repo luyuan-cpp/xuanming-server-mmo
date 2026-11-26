@@ -271,6 +271,78 @@ void SendMatchServiceClaimTournamentReward(entt::registry& registry, entt::entit
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendMatchServiceClaimTournamentRewardErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region MatchServiceSaluteTournamentChampion
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceSaluteTournamentChampionGrpcPath = "/match.MatchService/SaluteTournamentChampion";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceSaluteTournamentChampion(entt::registry& registry, entt::entity nodeEntity, const ::match::SaluteTournamentChampionRequest& request, GrpcDone<::match::SaluteTournamentChampionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceSaluteTournamentChampionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceSendTournamentSpectateCheer
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceSendTournamentSpectateCheerGrpcPath = "/match.MatchService/SendTournamentSpectateCheer";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceSendTournamentSpectateCheer(entt::registry& registry, entt::entity nodeEntity, const ::match::SendTournamentSpectateCheerRequest& request, GrpcDone<::match::SendTournamentSpectateCheerResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceSendTournamentSpectateCheerErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceGetTournamentSpectateCheer
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetTournamentSpectateCheerGrpcPath = "/match.MatchService/GetTournamentSpectateCheer";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetTournamentSpectateCheer(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTournamentSpectateCheerRequest& request, GrpcDone<::match::GetTournamentSpectateCheerResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetTournamentSpectateCheerErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceUpdateTournamentSquadEmblem
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceUpdateTournamentSquadEmblemGrpcPath = "/match.MatchService/UpdateTournamentSquadEmblem";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceUpdateTournamentSquadEmblem(entt::registry& registry, entt::entity nodeEntity, const ::match::UpdateTournamentSquadEmblemRequest& request, GrpcDone<::match::UpdateTournamentSquadEmblemResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceUpdateTournamentSquadEmblemErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceStartTournamentWarmup
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceStartTournamentWarmupGrpcPath = "/match.MatchService/StartTournamentWarmup";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceStartTournamentWarmup(entt::registry& registry, entt::entity nodeEntity, const ::match::StartTournamentWarmupRequest& request, GrpcDone<::match::StartTournamentWarmupResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceStartTournamentWarmupErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServicePredictTournamentMatch
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServicePredictTournamentMatchGrpcPath = "/match.MatchService/PredictTournamentMatch";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServicePredictTournamentMatch(entt::registry& registry, entt::entity nodeEntity, const ::match::PredictTournamentMatchRequest& request, GrpcDone<::match::PredictTournamentMatchResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServicePredictTournamentMatchErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceGetTournamentPredictionBoard
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetTournamentPredictionBoardGrpcPath = "/match.MatchService/GetTournamentPredictionBoard";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetTournamentPredictionBoard(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTournamentPredictionBoardRequest& request, GrpcDone<::match::GetTournamentPredictionBoardResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetTournamentPredictionBoardErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceBanTournamentLeyline
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceBanTournamentLeylineGrpcPath = "/match.MatchService/BanTournamentLeyline";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceBanTournamentLeyline(entt::registry& registry, entt::entity nodeEntity, const ::match::BanTournamentLeylineRequest& request, GrpcDone<::match::BanTournamentLeylineResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceBanTournamentLeylineErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceGetTournamentHighlights
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetTournamentHighlightsGrpcPath = "/match.MatchService/GetTournamentHighlights";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetTournamentHighlights(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTournamentHighlightsRequest& request, GrpcDone<::match::GetTournamentHighlightsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetTournamentHighlightsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline);
 

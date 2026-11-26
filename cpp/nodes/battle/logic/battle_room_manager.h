@@ -277,6 +277,10 @@ public:
     void HandleUpdateBattlePrep(const ::SessionDetails &sessionDetails,
                                 const ::UpdateBattlePrepRequest &request,
                                 ::UpdateBattlePrepResponse &response);
+    // 论剑 V4 队内一键战术标点：严格仅向同队成员单播，绝不向对手或观众推送。
+    void HandleSendBattlePing(const ::SessionDetails &sessionDetails,
+                              const ::SendBattlePingRequest &request,
+                              ::SendBattlePingResponse &response);
 
     // 停机收尾,供 SetBeforeShutdown 与维护流程的 source 关闭调用:先关观战准入(此后新观众、新中继 gate 与升档一律回
     // kServiceUnavailable),再停掉房间定时器、关闭房间直连,不铸造任何终局。
@@ -445,6 +449,7 @@ private:
         uint64_t deadlineMs = 0;       // 整场作废期限(与 battleTimer 同值;补发确认事件时带给 scene)
         bool recordReplay = false;     // CreateBattleRequest.record_replay 冻结标志（变阵期延迟至亮牌后创建录制器）
         uint64_t createdAtMs = 0;      // CreateBattleRequest.created_at_ms 冻结时间戳
+        std::vector<::BattleActorBuildSummary> replayActorBuilds; // 战报回放脱敏公开配装摘要（战前冻结）
         // BattleConfirmedEvent 补发:开局后 kConfirmResendWindowMs 内每 kConfirmResendIntervalSec
         // 向全部参战玩家重发一次(scene 幂等)。没有 scene→battle 的确认回执通道(proto 已定),
         // 用有界周期补发覆盖"首发 produce 失败 / Kafka 积压 / scene 消费者 rebalance"这类

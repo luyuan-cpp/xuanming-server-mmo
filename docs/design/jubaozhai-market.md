@@ -350,7 +350,7 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
 
 ## 13. 分期与验收
 
-| 期 | 内容 | 依赖 | 验收(由 Codex 执行) |
+| 期 | 内容 | 依赖 | 验收(由 Gemini 执行) |
 |---|---|---|---|
 | **P0-a** | GM 客户端消息鉴权收口 —— **2026-09-18 已落码,未编译** | — | `GATE_RUN_MODE=prod` 重拉 gate 后,robot 发 37/175/187 收到 `kFeatureUnavailable` tip 且 scene 无对应业务日志;`GATE_RUN_MODE=dev`(启动器默认)下 `attribute-smoke` / `pet-smoke` / `currency-crash-snapshot` 照常通过;`gate_security_test` 三个新用例绿 |
 | **P0-b** | 账号角色列表持久化(login) | — | 清空 Redis 后角色列表不丢;并发建角/删除不互相覆盖 |
@@ -411,7 +411,7 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
 
 ### 15.3 2026-10-20 修复：合同推进单行隔离、放弃与人工终结的扣款腿
 
-对应第一轮审计（[data-overwrite-rollback-audit-20261018.md](data-overwrite-rollback-audit-20261018.md) §2.5）的 go-asset-services#0、#1，门控 `AssetOp.Enabled`。**状态：已落码，未编译、未测试，待 Codex 验证。** 实现在 `go/trade/internal/commerce/tick_isolation.go`、`engine.go`（`advance` / `Tick`）、`auction.go`，以及 `go/trade/internal/data/commerce_repo.go`。
+对应第一轮审计（[data-overwrite-rollback-audit-20261018.md](data-overwrite-rollback-audit-20261018.md) §2.5）的 go-asset-services#0、#1，门控 `AssetOp.Enabled`。**状态：已落码，未编译、未测试，待 Gemini 验证。** 实现在 `go/trade/internal/commerce/tick_isolation.go`、`engine.go`（`advance` / `Tick`）、`auction.go`，以及 `go/trade/internal/data/commerce_repo.go`。
 
 **#0：一条合同出错，全服交易停摆。**
 
@@ -465,7 +465,7 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
     - 持有竞价不占队头；
     - 收据 ACK 翻页越过卡住的表头，并跳过坏 payload。
 
-**2026-10-22 修复（按复核意见）**。**状态：已落码，未编译、未测试，待 Codex 验证。** 人工处理见 [交易合同隔离与角色冲突处置手册](../ops/trade-commerce-quarantine-runbook.md)，告警见 `deploy/k8s/asset-channel-alerts.yaml` 的 `trade-commerce.contracts` 组。
+**2026-10-22 修复（按复核意见）**。**状态：已落码，未编译、未测试，待 Gemini 验证。** 人工处理见 [交易合同隔离与角色冲突处置手册](../ops/trade-commerce-quarantine-runbook.md)，告警见 `deploy/k8s/asset-channel-alerts.yaml` 的 `trade-commerce.contracts` 组。
 
 - **单行子预算从父截止时刻推出（必须修）。** 原问题：7d9208237 起恢复循环每轮只给合同推进 3s（`svc.AssetChannel.Start`），而单行子预算固定 5s，两者同时到期。队头那一行卡住时（锁等待、目录事务持锁、依赖 RPC 不回包），`Tick` 只能直接返回，来不及推迟它；下一秒它又排在 `Due` 队头，再吃满 3s，全服合同推进与收据 ACK 跟着停住。现在由 `rowBudgetFor` 计算：先给本轮收据 ACK 留 0.5s（`tickAckReserve`），再给这一行失败后的推迟 / 隔离留 0.3s（`tickDeferBudget`，`deferCommerce` 自带这段超时），剩下的一行最多用一半，上限 5s；不足 0.2s 时不再开新行。按 3s 计算，第一行最多 1.1s，卡住并推迟之后父 ctx 还剩至少 1.6s，下一行最多 0.4s。卡住的行一定先撞上自己的子预算，父 ctx 还来得及把它推迟。没轮到的行仍到期，计入 `trade_commerce_tick_truncated_total`，不再每秒报一次 deadline exceeded。例外：别的事务一直持有这条合同行的行锁时，推迟也拿不到这把锁，这一行每轮仍在队头，但每轮只花它的子预算加推迟预算，同一轮其余合同照常推进。
 - **失败分类新增两类。** 以前 `ErrConflict` 一律算 `retry`，现在用包装区分（包装里仍带着 `ErrConflict`，客户端 tip 码不变）：
@@ -543,7 +543,7 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 ### 15.7 2026-11-05 转人工合同的恢复入口（未编译、未运行）
 
-对应 [缺口清单](../handoff/server-gap-audit-20261101.md) 第 2 条后半。**状态：已落码，未编译、未测试，待 Codex 验证。** 实现在 `go/trade/internal/commerce/manual.go`、命令行 `go/trade/cmd/commercefix`，手册 [§4.2](../ops/trade-commerce-quarantine-runbook.md)。
+对应 [缺口清单](../handoff/server-gap-audit-20261101.md) 第 2 条后半。**状态：已落码，未编译、未测试，待 Gemini 验证。** 实现在 `go/trade/internal/commerce/manual.go`、命令行 `go/trade/cmd/commercefix`，手册 [§4.2](../ops/trade-commerce-quarantine-runbook.md)。
 
 **原问题**：合同转人工（`status=10`）之后引擎不再推进，托管的物品和货币没有出口，原 stage 只在日志里。手册只能让运维取证、登记工单、等入口。
 
@@ -598,7 +598,7 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 #### 15.7.1 2026-11-11 四类残余的标准处置（缺口清单第 2 条残余，未编译、未运行）
 
-**状态**：已落码，未生成协议、未编译、未测试，待 Codex 验证。实现在：
+**状态**：已落码，未生成协议、未编译、未测试，待 Gemini 验证。实现在：
 
 - `go/trade/internal/commerce/manual.go`（入口、锁序、留痕、show）与 `manual_plan.go`（六种动作的判定，纯函数）；
 - `tick_isolation.go`（换主当场转人工）、`role_authority.go`（归属判定）；

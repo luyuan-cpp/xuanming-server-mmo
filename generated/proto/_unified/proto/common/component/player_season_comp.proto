@@ -12,8 +12,43 @@ message PlayerSeasonSealRecord {
   uint64 revision = 6;         // 本季写操作修订号（切印 / 追赶递增）
 }
 
+// 五行幻境·轻肉鸽周常爬塔持久化状态（10 层周常，出塔清空局内符印，位图记录首通层，AGENTS.md §13）。
+message WuxingTowerCompState {
+  uint32 week_key = 1;                       // ISO/游戏周键（周一 05:00 换周）
+  bool run_active = 2;                       // 是否处于一轮进行中的幻境爬塔
+  uint64 run_id = 3;                         // 单调递增轮次号，防重复结算与确定性抽符
+  uint32 current_floor = 4;                  // 当前待挑战层数（1..10）
+  uint32 run_total_rounds = 5;               // 本轮已累计胜利回合数
+  repeated uint32 active_sigil_ids = 6;      // 本轮已选局内五行符印（至多 9 枚，重开清空）
+  repeated uint32 pending_offer_sigil_ids = 7; // 刚通关一层后待三选一的符印候选（非空时须先选符）
+  uint32 weekly_cleared_mask = 8;            // 本周首通层位图（bit (floor-1)，1..10）
+  uint32 weekly_best_floor = 9;              // 本周最高通关层数（0..10）
+  uint32 weekly_best_rounds = 10;            // 本周 10 层全通最少总回合数（0=未全通）
+  uint64 revision = 11;                      // 写操作递增修订号
+}
+
+// 战报一键收藏的公开脱敏配装条（最多保存 12 条，仅存公开构筑摘要，不含私密属性概率）。
+message SavedBattleBuildBookmark {
+  uint64 bookmark_id = 1;
+  string title = 2;
+  uint64 source_battle_id = 3;
+  uint64 source_player_id = 4;
+  string source_player_name = 5;
+  uint32 class_id = 6;
+  uint32 formation_id = 7;
+  uint32 season_seal_id = 8;
+  uint32 active_pet_table_id = 9;
+  string active_pet_name = 10;
+  repeated uint32 skill_table_ids = 11;
+  repeated uint32 wuxing_sigil_ids = 12;
+  uint64 saved_at_ms = 13;
+}
+
 // 玩家赛季进度持久化组件（player_database 字段 30，GROWTH 分组）。
 // records 下标不承载任何业务顺序语义（AGENTS.md §11.6），按 season_id 定位。
 message PlayerSeasonComp {
   repeated PlayerSeasonSealRecord records = 1;
+  uint32 equipped_formation_id = 2;               // 五行阵法（0=无/默认，1..5 免费切换）
+  WuxingTowerCompState wuxing_tower = 3;          // 五行幻境周常爬塔状态
+  repeated SavedBattleBuildBookmark saved_builds = 4; // 战报配装收藏夹（上限 12 条）
 }

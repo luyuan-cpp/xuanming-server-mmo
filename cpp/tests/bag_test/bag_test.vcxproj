@@ -181,6 +181,8 @@
     <ClCompile Include="player_season_test.cpp" />
     <ClCompile Include="player_trial_journal_test.cpp" />
     <ClCompile Include="player_festival_beast_test.cpp" />
+    <ClCompile Include="player_spirit_shop_test.cpp" />
+    <ClCompile Include="player_travel_pass_test.cpp" />
     <ClCompile Include="player_rename_test.cpp" />
     <ClCompile Include="player_feature_snapshot_test.cpp" />
   </ItemGroup>

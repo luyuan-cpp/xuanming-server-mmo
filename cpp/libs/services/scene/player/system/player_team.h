@@ -154,6 +154,7 @@ private:
 	// 只由 CheckFollowLeader 在全部守卫通过后调用;队长实体不在本节点 / 不在同一场景 / 归属交接在途时不动。
 	static void RegroupToLeader(entt::entity player, uint64_t leaderId);
 
-	// 单测通过 PlayerTeamFollowTestAccess 设定最近一次组队权威快照里的队长身份标记。
+	// 单测通过 PlayerTeamFollowTestAccess 设定最近一次组队权威快照里的队长身份标记与默认主城配置号。
 	static void SetLeadershipSnapshotForTest(entt::entity player, bool isLeader);
+	static void SetDefaultMainCityForTest(uint32_t sceneConfigId);
 };

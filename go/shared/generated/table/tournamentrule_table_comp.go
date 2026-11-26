@@ -93,6 +93,50 @@ type TournamentRuleDescComp struct {
     Value string
 }
 
+type TournamentRuleBo3_top4_enabledComp struct {
+    Value bool
+}
+
+type TournamentRuleIntermission_secondsComp struct {
+    Value uint32
+}
+
+type TournamentRulePublic_knockout_replayComp struct {
+    Value bool
+}
+
+type TournamentRuleSalute_gold_amountComp struct {
+    Value uint32
+}
+
+type TournamentRuleSalute_item_idComp struct {
+    Value uint32
+}
+
+type TournamentRuleSalute_item_countComp struct {
+    Value uint32
+}
+
+type TournamentRuleWarmup_spar_enabledComp struct {
+    Value bool
+}
+
+type TournamentRulePrediction_enabledComp struct {
+    Value bool
+}
+
+type TournamentRulePrediction_reward_min_hitsComp struct {
+    Value uint32
+}
+
+type TournamentRuleThird_place_match_enabledComp struct {
+    Value bool
+}
+
+type TournamentRuleLeyline_ban_enabledComp struct {
+    Value bool
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -178,3 +222,41 @@ func MakeTournamentRuleDescComp(row *pb.TournamentRuleTable) TournamentRuleDescC
     return TournamentRuleDescComp{Value: row.Desc}
 }
 
+func MakeTournamentRuleBo3_top4_enabledComp(row *pb.TournamentRuleTable) TournamentRuleBo3_top4_enabledComp {
+    return TournamentRuleBo3_top4_enabledComp{Value: row.Bo3Top4Enabled}
+}
+
+func MakeTournamentRuleIntermission_secondsComp(row *pb.TournamentRuleTable) TournamentRuleIntermission_secondsComp {
+    return TournamentRuleIntermission_secondsComp{Value: row.IntermissionSeconds}
+}
+
+func MakeTournamentRulePublic_knockout_replayComp(row *pb.TournamentRuleTable) TournamentRulePublic_knockout_replayComp {
+    return TournamentRulePublic_knockout_replayComp{Value: row.PublicKnockoutReplay}
+}
+
+func MakeTournamentRuleSalute_gold_amountComp(row *pb.TournamentRuleTable) TournamentRuleSalute_gold_amountComp {
+    return TournamentRuleSalute_gold_amountComp{Value: row.SaluteGoldAmount}
+}
+
+func MakeTournamentRuleSalute_item_idComp(row *pb.TournamentRuleTable) TournamentRuleSalute_item_idComp {
+    return TournamentRuleSalute_item_idComp{Value: row.SaluteItemId}
+}
+
+func MakeTournamentRuleSalute_item_countComp(row *pb.TournamentRuleTable) TournamentRuleSalute_item_countComp {
+    return TournamentRuleSalute_item_countComp{Value: row.SaluteItemCount}
+}
+
+func MakeTournamentRuleWarmup_spar_enabledComp(row *pb.TournamentRuleTable) TournamentRuleWarmup_spar_enabledComp {
+    return TournamentRuleWarmup_spar_enabledComp{Value: row.WarmupSparEnabled}
+}
+
+func MakeTournamentRulePrediction_enabledComp(row *pb.TournamentRuleTable) TournamentRulePrediction_enabledComp {
+    return TournamentRulePrediction_enabledComp{Value: row.PredictionEnabled}
+}
+
+func MakeTournamentRulePrediction_reward_min_hitsComp(row *pb.TournamentRuleTable) TournamentRulePrediction_reward_min_hitsComp {
+    return TournamentRulePrediction_reward_min_hitsComp{Value: row.PredictionRewardMinHits}
+}
+
+func MakeTournamentRuleThird_place_match_enabledComp(row *pb.TournamentRuleTable) TournamentRuleThird_place_match_enabledComp {
+    return TournamentRu

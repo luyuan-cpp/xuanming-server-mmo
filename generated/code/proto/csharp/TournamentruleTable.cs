@@ -22,7 +22,7 @@ public static partial class TournamentruleTableReflection {
   static TournamentruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Chp0b3VybmFtZW50cnVsZV90YWJsZS5wcm90byKbBAoTVG91cm5hbWVudFJ1",
+          "Chp0b3VybmFtZW50cnVsZV90YWJsZS5wcm90byLfBgoTVG91cm5hbWVudFJ1",
           "bGVUYWJsZRIKCgJpZBgBIAEoDRIUCgxydWxlX3ZlcnNpb24YAiABKA0SDwoH",
           "ZW5hYmxlZBgDIAEoCBIYChBiYXR0bGVfY29uZmlnX2lkGAQgASgNEhgKEGJh",
           "dHRsZV90ZWFtX3NpemUYBSABKA0SFwoPcm9zdGVyX21heF9zaXplGAYgASgN",
@@ -34,14 +34,22 @@ public static partial class TournamentruleTableReflection {
           "b3V0X3JvdW5kX3RpbWVvdXRfc2Vjb25kcxgPIAEoDRIcChRxdWFsaWZpZXJf",
           "d2luX3BvaW50cxgQIAEoDRIdChVxdWFsaWZpZXJfZHJhd19wb2ludHMYESAB",
           "KA0SHQoVcXVhbGlmaWVyX2xvc3NfcG9pbnRzGBIgASgNEhoKEmludml0ZV90",
-          "dGxfc2Vjb25kcxgTIAEoDRIMCgRkZXNjGBQgASgJIj0KF1RvdXJuYW1lbnRS",
-          "dWxlVGFibGVEYXRhEiIKBGRhdGEYASADKAsyFC5Ub3VybmFtZW50UnVsZVRh",
-          "YmxlQkUKDmNvbS5nYW1lLnRhYmxlQh1Ub3VybmFtZW50UnVsZVRhYmxlT3V0",
-          "ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "dGxfc2Vjb25kcxgTIAEoDRIMCgRkZXNjGBQgASgJEhgKEGJvM190b3A0X2Vu",
+          "YWJsZWQYFSABKAgSHAoUaW50ZXJtaXNzaW9uX3NlY29uZHMYFiABKA0SHgoW",
+          "cHVibGljX2tub2Nrb3V0X3JlcGxheRgXIAEoCBIaChJzYWx1dGVfZ29sZF9h",
+          "bW91bnQYGCABKA0SFgoOc2FsdXRlX2l0ZW1faWQYGSABKA0SGQoRc2FsdXRl",
+          "X2l0ZW1fY291bnQYGiABKA0SGwoTd2FybXVwX3NwYXJfZW5hYmxlZBgbIAEo",
+          "CBIaChJwcmVkaWN0aW9uX2VuYWJsZWQYHCABKAgSIgoacHJlZGljdGlvbl9y",
+          "ZXdhcmRfbWluX2hpdHMYHSABKA0SIQoZdGhpcmRfcGxhY2VfbWF0Y2hfZW5h",
+          "YmxlZBgeIAEoCBIbChNsZXlsaW5lX2Jhbl9lbmFibGVkGB8gASgIIj0KF1Rv",
+          "dXJuYW1lbnRSdWxlVGFibGVEYXRhEiIKBGRhdGEYASADKAsyFC5Ub3VybmFt",
+          "ZW50UnVsZVRhYmxlQkUKDmNvbS5nYW1lLnRhYmxlQh1Ub3VybmFtZW50UnVs",
+          "ZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTable), global::TournamentRuleTable.Parser, new[]{ "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTable), global::TournamentRuleTable.Parser, new[]{ "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTableData), global::TournamentRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -104,6 +112,17 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     qualifierLossPoints_ = other.qualifierLossPoints_;
     inviteTtlSeconds_ = other.inviteTtlSeconds_;
     desc_ = other.desc_;
+    bo3Top4Enabled_ = other.bo3Top4Enabled_;
+    intermissionSeconds_ = other.intermissionSeconds_;
+    publicKnockoutReplay_ = other.publicKnockoutReplay_;
+    saluteGoldAmount_ = other.saluteGoldAmount_;
+    saluteItemId_ = other.saluteItemId_;
+    saluteItemCount_ = other.saluteItemCount_;
+    warmupSparEnabled_ = other.warmupSparEnabled_;
+    predictionEnabled_ = other.predictionEnabled_;
+    predictionRewardMinHits_ = other.predictionRewardMinHits_;
+    thirdPlaceMatchEnabled_ = other.thirdPlaceMatchEnabled_;
+    leylineBanEnabled_ = other.leylineBanEnabled_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -353,6 +372,138 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
   }
 
+  /// <summary>Field number for the "bo3_top4_enabled" field.</summary>
+  public const int Bo3Top4EnabledFieldNumber = 21;
+  private bool bo3Top4Enabled_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool Bo3Top4Enabled {
+    get { return bo3Top4Enabled_; }
+    set {
+      bo3Top4Enabled_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "intermission_seconds" field.</summary>
+  public const int IntermissionSecondsFieldNumber = 22;
+  private uint intermissionSeconds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint IntermissionSeconds {
+    get { return intermissionSeconds_; }
+    set {
+      intermissionSeconds_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "public_knockout_replay" field.</summary>
+  public const int PublicKnockoutReplayFieldNumber = 23;
+  private bool publicKnockoutReplay_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool PublicKnockoutReplay {
+    get { return publicKnockoutReplay_; }
+    set {
+      publicKnockoutReplay_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "salute_gold_amount" field.</summary>
+  public const int SaluteGoldAmountFieldNumber = 24;
+  private uint saluteGoldAmount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SaluteGoldAmount {
+    get { return saluteGoldAmount_; }
+    set {
+      saluteGoldAmount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "salute_item_id" field.</summary>
+  public const int SaluteItemIdFieldNumber = 25;
+  private uint saluteItemId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SaluteItemId {
+    get { return saluteItemId_; }
+    set {
+      saluteItemId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "salute_item_count" field.</summary>
+  public const int SaluteItemCountFieldNumber = 26;
+  private uint saluteItemCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SaluteItemCount {
+    get { return saluteItemCount_; }
+    set {
+      saluteItemCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "warmup_spar_enabled" field.</summary>
+  public const int WarmupSparEnabledFieldNumber = 27;
+  private bool warmupSparEnabled_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool WarmupSparEnabled {
+    get { return warmupSparEnabled_; }
+    set {
+      warmupSparEnabled_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "prediction_enabled" field.</summary>
+  public const int PredictionEnabledFieldNumber = 28;
+  private bool predictionEnabled_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool PredictionEnabled {
+    get { return predictionEnabled_; }
+    set {
+      predictionEnabled_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "prediction_reward_min_hits" field.</summary>
+  public const int PredictionRewardMinHitsFieldNumber = 29;
+  private uint predictionRewardMinHits_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint PredictionRewardMinHits {
+    get { return predictionRewardMinHits_; }
+    set {
+      predictionRewardMinHits_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "third_place_match_enabled" field.</summary>
+  public const int ThirdPlaceMatchEnabledFieldNumber = 30;
+  private bool thirdPlaceMatchEnabled_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool ThirdPlaceMatchEnabled {
+    get { return thirdPlaceMatchEnabled_; }
+    set {
+      thirdPlaceMatchEnabled_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "leyline_ban_enabled" field.</summary>
+  public const int LeylineBanEnabledFieldNumber = 31;
+  private bool leylineBanEnabled_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool LeylineBanEnabled {
+    get { return leylineBanEnabled_; }
+    set {
+      leylineBanEnabled_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -388,6 +539,17 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (QualifierLossPoints != other.QualifierLossPoints) return false;
     if (InviteTtlSeconds != other.InviteTtlSeconds) return false;
     if (Desc != other.Desc) return false;
+    if (Bo3Top4Enabled != other.Bo3Top4Enabled) return false;
+    if (IntermissionSeconds != other.IntermissionSeconds) return false;
+    if (PublicKnockoutReplay != other.PublicKnockoutReplay) return false;
+    if (SaluteGoldAmount != other.SaluteGoldAmount) return false;
+    if (SaluteItemId != other.SaluteItemId) return false;
+    if (SaluteItemCount != other.SaluteItemCount) return false;
+    if (WarmupSparEnabled != other.WarmupSparEnabled) return false;
+    if (PredictionEnabled != other.PredictionEnabled) return false;
+    if (PredictionRewardMinHits != other.PredictionRewardMinHits) return false;
+    if (ThirdPlaceMatchEnabled != other.ThirdPlaceMatchEnabled) return false;
+    if (LeylineBanEnabled != other.LeylineBanEnabled) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -415,6 +577,17 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (QualifierLossPoints != 0) hash ^= QualifierLossPoints.GetHashCode();
     if (InviteTtlSeconds != 0) hash ^= InviteTtlSeconds.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (Bo3Top4Enabled != false) hash ^= Bo3Top4Enabled.GetHashCode();
+    if (IntermissionSeconds != 0) hash ^= IntermissionSeconds.GetHashCode();
+    if (PublicKnockoutReplay != false) hash ^= PublicKnockoutReplay.GetHashCode();
+    if (SaluteGoldAmount != 0) hash ^= SaluteGoldAmount.GetHashCode();
+    if (SaluteItemId != 0) hash ^= SaluteItemId.GetHashCode();
+    if (SaluteItemCount != 0) hash ^= SaluteItemCount.GetHashCode();
+    if (WarmupSparEnabled != false) hash ^= WarmupSparEnabled.GetHashCode();
+    if (PredictionEnabled != false) hash ^= PredictionEnabled.GetHashCode();
+    if (PredictionRewardMinHits != 0) hash ^= PredictionRewardMinHits.GetHashCode();
+    if (ThirdPlaceMatchEnabled != false) hash ^= ThirdPlaceMatchEnabled.GetHashCode();
+    if (LeylineBanEnabled != false) hash ^= LeylineBanEnabled.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -513,6 +686,50 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
       output.WriteRawTag(162, 1);
       output.WriteString(Desc);
     }
+    if (Bo3Top4Enabled != false) {
+      output.WriteRawTag(168, 1);
+      output.WriteBool(Bo3Top4Enabled);
+    }
+    if (IntermissionSeconds != 0) {
+      output.WriteRawTag(176, 1);
+      output.WriteUInt32(IntermissionSeconds);
+    }
+    if (PublicKnockoutReplay != false) {
+      output.WriteRawTag(184, 1);
+      output.WriteBool(PublicKnockoutReplay);
+    }
+    if (SaluteGoldAmount != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(SaluteGoldAmount);
+    }
+    if (SaluteItemId != 0) {
+      output.WriteRawTag(200, 1);
+      output.WriteUInt32(SaluteItemId);
+    }
+    if (SaluteItemCount != 0) {
+      output.WriteRawTag(208, 1);
+      output.WriteUInt32(SaluteItemCount);
+    }
+    if (WarmupSparEnabled != false) {
+      output.WriteRawTag(216, 1);
+      output.WriteBool(WarmupSparEnabled);
+    }
+    if (PredictionEnabled != false) {
+      output.WriteRawTag(224, 1);
+      output.WriteBool(PredictionEnabled);
+    }
+    if (PredictionRewardMinHits != 0) {
+      output.WriteRawTag(232, 1);
+      output.WriteUInt32(PredictionRewardMinHits);
+    }
+    if (ThirdPlaceMatchEnabled != false) {
+      output.WriteRawTag(240, 1);
+      output.WriteBool(ThirdPlaceMatchEnabled);
+    }
+    if (LeylineBanEnabled != false) {
+      output.WriteRawTag(248, 1);
+      output.WriteBool(LeylineBanEnabled);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -603,6 +820,50 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
       output.WriteRawTag(162, 1);
       output.WriteString(Desc);
     }
+    if (Bo3Top4Enabled != false) {
+      output.WriteRawTag(168, 1);
+      output.WriteBool(Bo3Top4Enabled);
+    }
+    if (IntermissionSeconds != 0) {
+      output.WriteRawTag(176, 1);
+      output.WriteUInt32(IntermissionSeconds);
+    }
+    if (PublicKnockoutReplay != false) {
+      output.WriteRawTag(184, 1);
+      output.WriteBool(PublicKnockoutReplay);
+    }
+    if (SaluteGoldAmount != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(SaluteGoldAmount);
+    }
+    if (SaluteItemId != 0) {
+      output.WriteRawTag(200, 1);
+      output.WriteUInt32(SaluteItemId);
+    }
+    if (SaluteItemCount != 0) {
+      output.WriteRawTag(208, 1);
+      output.WriteUInt32(SaluteItemCount);
+    }
+    if (WarmupSparEnabled != false) {
+      output.WriteRawTag(216, 1);
+      output.WriteBool(WarmupSparEnabled);
+    }
+    if (PredictionEnabled != false) {
+      output.WriteRawTag(224, 1);
+      output.WriteBool(PredictionEnabled);
+    }
+    if (PredictionRewardMinHits != 0) {
+      output.WriteRawTag(232, 1);
+      output.WriteUInt32(PredictionRewardMinHits);
+    }
+    if (ThirdPlaceMatchEnabled != false) {
+      output.WriteRawTag(240, 1);
+      output.WriteBool(ThirdPlaceMatchEnabled);
+    }
+    if (LeylineBanEnabled != false) {
+      output.WriteRawTag(248, 1);
+      output.WriteBool(LeylineBanEnabled);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -672,6 +933,39 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
     if (Desc.Length != 0) {
       size += 2 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (Bo3Top4Enabled != false) {
+      size += 2 + 1;
+    }
+    if (IntermissionSeconds != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(IntermissionSeconds);
+    }
+    if (PublicKnockoutReplay != false) {
+      size += 2 + 1;
+    }
+    if (SaluteGoldAmount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SaluteGoldAmount);
+    }
+    if (SaluteItemId != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SaluteItemId);
+    }
+    if (SaluteItemCount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SaluteItemCount);
+    }
+    if (WarmupSparEnabled != false) {
+      size += 2 + 1;
+    }
+    if (PredictionEnabled != false) {
+      size += 2 + 1;
+    }
+    if (PredictionRewardMinHits != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(PredictionRewardMinHits);
+    }
+    if (ThirdPlaceMatchEnabled != false) {
+      size += 2 + 1;
+    }
+    if (LeylineBanEnabled != false) {
+      size += 2 + 1;
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -744,6 +1038,39 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.Bo3Top4Enabled != false) {
+      Bo3Top4Enabled = other.Bo3Top4Enabled;
+    }
+    if (other.IntermissionSeconds != 0) {
+      IntermissionSeconds = other.IntermissionSeconds;
+    }
+    if (other.PublicKnockoutReplay != false) {
+      PublicKnockoutReplay = other.PublicKnockoutReplay;
+    }
+    if (other.SaluteGoldAmount != 0) {
+      SaluteGoldAmount = other.SaluteGoldAmount;
+    }
+    if (other.SaluteItemId != 0) {
+      SaluteItemId = other.SaluteItemId;
+    }
+    if (other.SaluteItemCount != 0) {
+      SaluteItemCount = other.SaluteItemCount;
+    }
+    if (other.WarmupSparEnabled != false) {
+      WarmupSparEnabled = other.WarmupSparEnabled;
+    }
+    if (other.PredictionEnabled != false) {
+      PredictionEnabled = other.PredictionEnabled;
+    }
+    if (other.PredictionRewardMinHits != 0) {
+      PredictionRewardMinHits = other.PredictionRewardMinHits;
+    }
+    if (other.ThirdPlaceMatchEnabled != false) {
+      ThirdPlaceMatchEnabled = other.ThirdPlaceMatchEnabled;
+    }
+    if (other.LeylineBanEnabled != false) {
+      LeylineBanEnabled = other.LeylineBanEnabled;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -844,6 +1171,50 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
           Desc = input.ReadString();
           break;
         }
+        case 168: {
+          Bo3Top4Enabled = input.ReadBool();
+          break;
+        }
+        case 176: {
+          IntermissionSeconds = input.ReadUInt32();
+          break;
+        }
+        case 184: {
+          PublicKnockoutReplay = input.ReadBool();
+          break;
+        }
+        case 192: {
+          SaluteGoldAmount = input.ReadUInt32();
+          break;
+        }
+        case 200: {
+          SaluteItemId = input.ReadUInt32();
+          break;
+        }
+        case 208: {
+          SaluteItemCount = input.ReadUInt32();
+          break;
+        }
+        case 216: {
+          WarmupSparEnabled = input.ReadBool();
+          break;
+        }
+        case 224: {
+          PredictionEnabled = input.ReadBool();
+          break;
+        }
+        case 232: {
+          PredictionRewardMinHits = input.ReadUInt32();
+          break;
+        }
+        case 240: {
+          ThirdPlaceMatchEnabled = input.ReadBool();
+          break;
+        }
+        case 248: {
+          LeylineBanEnabled = input.ReadBool();
+          break;
+        }
       }
     }
   #endif
@@ -941,6 +1312,50 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
         }
         case 162: {
           Desc = input.ReadString();
+          break;
+        }
+        case 168: {
+          Bo3Top4Enabled = input.ReadBool();
+          break;
+        }
+        case 176: {
+          IntermissionSeconds = input.ReadUInt32();
+          break;
+        }
+        case 184: {
+          PublicKnockoutReplay = input.ReadBool();
+          break;
+        }
+        case 192: {
+          SaluteGoldAmount = input.ReadUInt32();
+          break;
+        }
+        case 200: {
+          SaluteItemId = input.ReadUInt32();
+          break;
+        }
+        case 208: {
+          SaluteItemCount = input.ReadUInt32();
+          break;
+        }
+        case 216: {
+          WarmupSparEnabled = input.ReadBool();
+          break;
+        }
+        case 224: {
+          PredictionEnabled = input.ReadBool();
+          break;
+        }
+        case 232: {
+          PredictionRewardMinHits = input.ReadUInt32();
+          break;
+        }
+        case 240: {
+          ThirdPlaceMatchEnabled = input.ReadBool();
+          break;
+        }
+        case 248: {
+          LeylineBanEnabled = input.ReadBool();
           break;
         }
       }
@@ -1088,56 +1503,4 @@ public sealed partial class TournamentRuleTableData : pb::IMessage<TournamentRul
   }
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public void MergeFrom(pb::CodedInputStream input) {
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    input.ReadRawMessage(this);
-  #else
-    uint tag;
-    while ((tag = input.ReadTag()) != 0) {
-    if ((tag & 7) == 4) {
-      // Abort on any end group tag.
-      return;
-    }
-    switch(tag) {
-        default:
-          _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-          break;
-        case 10: {
-          data_.AddEntriesFrom(input, _repeated_data_codec);
-          break;
-        }
-      }
-    }
-  #endif
-  }
-
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-    uint tag;
-    while ((tag = input.ReadTag()) != 0) {
-    if ((tag & 7) == 4) {
-      // Abort on any end group tag.
-      return;
-    }
-    switch(tag) {
-        default:
-          _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-          break;
-        case 10: {
-          data_.AddEntriesFrom(ref input, _repeated_data_codec);
-          break;
-        }
-      }
-    }
-  }
-  #endif
-
-}
-
-#endregion
-
-
-#endregion Designer generated code
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", nul

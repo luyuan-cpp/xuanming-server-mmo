@@ -1,6 +1,6 @@
 # 全球成局人工 ABORT 处置手册
 
-> **状态**：v0.2，2026-11-05 随 [跨区匹配设计](../design/cross-zone-matchmaking.md) §13.3「2026-11-05 修复：永久 UNKNOWN 成局的人工处置工具」一起写，同日按评审修正（目标核对改用环境名、缺票行与成局行损坏各有原因码、写明工具处置不了的非 v1 成局与处置后 battle 侧的表现）。**代码未编译、未测试，本手册未在任何环境演练**，待 Codex 验证。以代码为准：代码行为变了，回来同步这里。
+> **状态**：v0.2，2026-11-05 随 [跨区匹配设计](../design/cross-zone-matchmaking.md) §13.3「2026-11-05 修复：永久 UNKNOWN 成局的人工处置工具」一起写，同日按评审修正（目标核对改用环境名、缺票行与成局行损坏各有原因码、写明工具处置不了的非 v1 成局与处置后 battle 侧的表现）。**代码未编译、未测试，本手册未在任何环境演练**，待 Gemini 验证。以代码为准：代码行为变了，回来同步这里。
 > **依据**：`go/match/internal/authority/manual_abort.go`（放行判据、锁内复核、ABORT 与审计同一事务）、`go/match/internal/logic/stranded_formation_ops.go`（调用方准入、目标核对、结论映射）、`go/match/cmd/formationfix`（工具）。ABORT 写入与截止裁决共用 `authority.commitAbortTx`。
 > **Java 版**：待做（见 §8）。
 

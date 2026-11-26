@@ -74,7 +74,7 @@
 
 ### C. 2026-09-28 本批:合服工具缺口修复(**代码未编译、未测试**)
 
-出处与修法详见 [player-storage-placement.md](./player-storage-placement.md) §12(含「实现口径(v2.1)」)。操作口径已同步进 [merge-zone-runbook.md](../ops/merge-zone-runbook.md) v3。下表的「闭合」都以 Codex 验证通过为前提,验证清单在 PROGRESS.md「2026-09-28 玩家存储落点」条目。
+出处与修法详见 [player-storage-placement.md](./player-storage-placement.md) §12(含「实现口径(v2.1)」)。操作口径已同步进 [merge-zone-runbook.md](../ops/merge-zone-runbook.md) v3。下表的「闭合」都以 Gemini 验证通过为前提,验证清单在 PROGRESS.md「2026-09-28 玩家存储落点」条目。
 
 | # | 缺口 | 状态 |
 |---|---|---|

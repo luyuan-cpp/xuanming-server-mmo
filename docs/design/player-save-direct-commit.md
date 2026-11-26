@@ -13,7 +13,7 @@
 4. **C++ 内存结构不变。** `PlayerAllData`、loader、Unmarshal 全部不改。存盘时把 `player_database` 按字段投影成若干片段,只发有变化的片段;加载时把片段拼接后 `ParseFromString`,protobuf 的合并语义还原整个消息。字段属于哪一行由 proto 字段选项声明,每一行怎么存由行枚举值的选项声明,漏标启动即失败(§1.1)。
 5. **每个玩家同时只有一个在途存盘。** 结果未知就用同样的内容、同一个序号重试,直到拿到明确结果才发下一笔。脏判断以「上一次确认提交」为基准。
 6. **「SQL 已追平」的判据全部换成事务结果。** 不再需要 Redis 里的 ACK 镜像、PING 探测、补投。
-7. **新旧路径用开关并存**(`PlayerStorePath: redis | direct`,缺省 redis),切换批翻转,验收后删除旧路径。主干全程可运行,不打断 Codex 验收。开关的约束见 §7.1。
+7. **新旧路径用开关并存**(`PlayerStorePath: redis | direct`,缺省 redis),切换批翻转,验收后删除旧路径。主干全程可运行,不打断 Gemini 验收。开关的约束见 §7.1。
 
 ## 1. 表结构
 
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS `player_store` (
   - 测试:12 个 C++ 测试按单表改(往返测试的世代断言从「两表取最小」改成单表,载体缺失只测一个;快照提交核对的串号用例改成主表串号)。
   - 脚本与说明:压测汇总去掉 legacy1 列(`stress_summarize.ps1` 与 `test_stress_summarize.ps1`),`stress_round19.ps1`、`cpp/AGENTS.md`、`go/AGENTS.md`、`proto/AGENTS.md` 的说明。
 - **没改的**:`go/db/model`、`go/login/model`、`go/player_locator` 下的 `mysql_database_table.sql` 文件头写明是历史手工导出、不是权威 DDL,里面 `player_database` 也早就不是表了,这次不动;生成器测试 `db_model_test.go` 里的 `player_database_1` 只是自造的夹具名,不依赖真 proto。
-- **改名单独一批,要负责人给窗口**(2026-11-12 复核):`player_database` 改成按职责的名字(比如 `PlayerSaveData`),`derived_attributes_component` 改成 `vitals`(它现在只存当前血蓝,§1.1)。纯可读性改动,没有功能变化。不能夹在别的批次里做,原因有三个:`player_database` 被 100 多个文件引用;`proto/persist_schema_gen.txt` 的台账按「消息名#字段号」记字段,改消息名要连台账一起迁移,生成器怎么处理改名要先核对(`persistschema/apply.go`);工作区里几十个会话有未提交的改动,改名会让它们下一次编译全部失败。所以条件是:别的会话的改动都已提交、当时没有别的会话在改 C++ / Go,由 Codex 一次生成、整仓编译通过后提交。条件满足之前不动;这不是功能缺口。
+- **改名单独一批,要负责人给窗口**(2026-11-12 复核):`player_database` 改成按职责的名字(比如 `PlayerSaveData`),`derived_attributes_component` 改成 `vitals`(它现在只存当前血蓝,§1.1)。纯可读性改动,没有功能变化。不能夹在别的批次里做,原因有三个:`player_database` 被 100 多个文件引用;`proto/persist_schema_gen.txt` 的台账按「消息名#字段号」记字段,改消息名要连台账一起迁移,生成器怎么处理改名要先核对(`persistschema/apply.go`);工作区里几十个会话有未提交的改动,改名会让它们下一次编译全部失败。所以条件是:别的会话的改动都已提交、当时没有别的会话在改 C++ / Go,由 Gemini 一次生成、整仓编译通过后提交。条件满足之前不动;这不是功能缺口。
 
 ## 2. `Save`
 
@@ -382,7 +382,7 @@ FIFO 依赖要逐处拆掉:PING 快路径、A2′ 先于 GET、重连补发顺�
 
 ## 7. 分批
 
-每批不超过 30 个手写文件,落码后交 Codex 编译测试。**B1、B2 与 §15 的文件相交很少,可以先做;B5 选库部分与 §15 对齐。**
+每批不超过 30 个手写文件,落码后交 Gemini 编译测试。**B1、B2 与 §15 的文件相交很少,可以先做;B5 选库部分与 §15 对齐。**
 
 | 批 | 内容 | 对应总体方案 |
 |---|---|---|
@@ -395,13 +395,13 @@ FIFO 依赖要逐处拆掉:PING 快路径、A2′ 先于 GET、重连补发顺�
 | B7 | 读方与工具:friend、match、login 外观改读投影或 TiDB;`route_bootstrap.go:37` 改查新表;`rollback_logic.go:776` GM 回档写 Redis 却回成功,改掉或 fail-closed;merge_zone 按清单会自动收 `player_store`,这一批之前 fail-closed;debug、barrierrestore、verifier、`robot/data_stress` 依赖探针与 DBTask,适配或 fail-closed | A5 |
 | B8 | 全链路验收后翻默认值;按 TiDB 决策 §9.3 删除旧路径 | A6 |
 
-**2026-10-30**:B1~B8 都已落码,未编译,待 Codex 验证。开关 `PlayerStorePath` 已删除,新路径是唯一路径;下面 §7.1 只作历史保留。
+**2026-10-30**:B1~B8 都已落码,未编译,待 Gemini 验证。开关 `PlayerStorePath` 已删除,新路径是唯一路径;下面 §7.1 只作历史保留。
 
 ### 7.1 开关的约束
 
 开关**单向、全局单源**:所有节点读同一份配置,部署门禁校验,翻转时清库(项目未上线,不做存量迁移)。混跑不安全:跨 zone 到 redis 节点会读旧父键,静默回档;data_service 与 scene 不一致时拿到 `NO_OWNER` 或空数据。缺省 redis 只是为了主干在切换批之前可运行,不是灰度手段。
 
-## 8. 测试(Codex 执行)
+## 8. 测试(Gemini 执行)
 
 - **判定表逐格单测**(§4 两张表)。
 - **真 TiDB 集成**:并发 `Save` 与 `LoadAndClaim` 交错;老持有者在认领后写被拒;请求超时后重试、旧请求晚到;同序号重放不写两次;部分脏行之后读回的整体一致;`release` 后同实例再写成功并清除 `released`,他实例认领后原实例再写被拒;E>Er 且持有者是自己时放行并抬 Er,持有者是别人时拒绝;nil payload、kind 为 0、kind 重复;表不存在时 `VerifySchema` 拒绝启动;世代倒退;并发两个实例认领。

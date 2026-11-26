@@ -2,9 +2,9 @@
 
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 的 Kafka 消费、重试队列和 WAITAOF 都已删除。本文只作历史保留,不再描述现行行为。
 
-> **状态**：已落码，未编译、未测试，待 Codex 验证（截至 2026-10-17 工作区，含 R7 语义复核 godb 区域的 9 条修复）。告警表达式没有经过 `promtool` 校验，也没有在真实 Prometheus 上跑过。
+> **状态**：已落码，未编译、未测试，待 Gemini 验证（截至 2026-10-17 工作区，含 R7 语义复核 godb 区域的 9 条修复）。告警表达式没有经过 `promtool` 校验，也没有在真实 Prometheus 上跑过。
 > **范围**：存盘管线 S1。包括 ④ 的 (a)「重试只在原始分区的属主进程执行」、(c)「go/db 副本数 ≤ PartitionCnt 的部署门禁」，以及三类 Kafka 源入队点的 WAITAOF 组提交，外加回滚工具 `go/db/cmd/retry_requeue`。B0（调 SubShardCount）和 ④B2（双消费在线换代）不在本批。TiDB 决策 D5 的修订块已于 2026-10-17 写进 `global-data-layer-tidb-decision.md`。
-> **执行清单**：Codex 与负责人逐项打勾用 [上线待做](../ops/godb-pipeline-launch-todo.md) §9；回滚到 S1 之前的镜像用 [发布清单](../ops/release-checklist.md) §4「go/db 回滚到 S1(重试只交给分区属主)之前的版本」。两者的设计依据都是本文。
+> **执行清单**：Gemini 与负责人逐项打勾用 [上线待做](../ops/godb-pipeline-launch-todo.md) §9；回滚到 S1 之前的镜像用 [发布清单](../ops/release-checklist.md) §4「go/db 回滚到 S1(重试只交给分区属主)之前的版本」。两者的设计依据都是本文。
 > **依据**：`docs/handoff/godb-pipeline-impl-20261015/` 下的 S1 规格（`S1-retry-owner-waitaof-spec.md`）、复核（`…-review.md`）、修订稿（`…-addendum.md`，优先级高于前两者），以及 R7 语义复核的修复。**代码与规格冲突时以代码为准**。冲突处在正文里标「与规格的差异」，汇总见 §15；修订稿文末另有「2026-10-16 更正」一节。
 > **证据口径**：全部来自静态阅读代码。没有编译，没有运行，也没有连过集群。文中的量级都是按设计参数推算的，没有实测。
 > **相关文档**：[瓶颈文档](db-task-pipeline-bottlenecks.md) §4.4（G6 停机顺序）与 §5（④ 要点）；[消费组按 zone 拆](db-consumer-group-per-zone.md)（S2，交接闸）；[MySQL 条件写](db-write-fencing-mysql.md)（围栏）；[L-04 延后](db-task-store-unavailable-deferral.md)；[分区契约](db-task-kafka-partition-contract.md)；[合服手册](../ops/merge-zone-runbook.md)；[上线待做](../ops/godb-pipeline-launch-todo.md)；[发布清单](../ops/release-checklist.md)。
@@ -49,7 +49,7 @@
 4. **双属主窗口与排空超时后的重叠**：只靠排序锁与 applied 游标兜底，彻底封死要靠 MySQL 条件写。见 §6.3、§12.3。
 5. **WAITAOF 不覆盖游标、收据 ack 与重试源搬移**：AOF 尾巴丢失时游标可能回退，旧 seq 收据重放会把 MySQL 覆盖回旧档，只能由 MySQL 条件写封死。见 §7.7。
 6. **位点语义**：再平衡、交接让出与失败收尾走 `drainAfterStop`，之后等到的确认不再标记位点，这些 offset 由新属主重投；MySQL 故障期间每次再平衡每分区多重投约 100～200 条（推算）。见 §7.4。
-7. **WAITAOF fail-closed 的可用性代价**：确认不足时 claim 失败并触发再平衡；入队层吞吐上限约每次 fsync 一批，超出时背压成 Kafka lag；K8s 共享 Redis 切到 redis-ha 后，`k8s_deploy.ps1` 把 db ConfigMap 的 `WaitAOFNumReplicas` 渲染成 1（2026-10-19 部署侧落码，未运行，待 Codex 验证），副本维护期间失败路径上的分区都会停滞。见 §7.5、§7.10、§10.2「redis-ha 接入时」。
+7. **WAITAOF fail-closed 的可用性代价**：确认不足时 claim 失败并触发再平衡；入队层吞吐上限约每次 fsync 一批，超出时背压成 Kafka lag；K8s 共享 Redis 切到 redis-ha 后，`k8s_deploy.ps1` 把 db ConfigMap 的 `WaitAOFNumReplicas` 渲染成 1（2026-10-19 部署侧落码，未运行，待 Gemini 验证），副本维护期间失败路径上的分区都会停滞。见 §7.5、§7.10、§10.2「redis-ha 接入时」。
 8. **重复副本**：来源有五类，死信里的副本没有硬上界，需人工按 taskID 或 (topic, partition, offset) 去重。见 §7.6、§7.10。
 9. **防重记录与待重搬表的边界**：Redis 卡顿超过 5 分钟（记录 TTL）时可能重复 POP / LREM；待重搬表随进程崩溃丢失，靠租约过期后别的实例回收。见 §7.8、§7.9。
 10. **回滚到 S1 之前的镜像**：DbRetryPartitionedStranded 只在 6h 窗口内有效，过后只能靠 `retry_requeue -check`；退出码 5 看不见不登记模式的早期 S1 镜像，三项人工核对不能省。见 §10.3–§10.5、§11。
@@ -83,7 +83,7 @@
 | `go/db/internal/metrics/metrics.go` | §11 用到的全部指标与常量 |
 | `go/db/cmd/retry_requeue/main.go` | 回滚工具（§10.4） |
 | `go/db/etc/db.yaml` | `ServerConfig.Kafka.RetryRouting: shared`；`ServerConfig.RedisClient.WaitAOFNumLocal: 1` / `WaitAOFNumReplicas: 0` / `WaitAOFTimeoutMs: 1500` |
-| `tools/scripts/k8s_deploy.ps1` | db ConfigMap 原样镜像其中三个键（`$dbRetryRouting`、`$dbWaitAOFNumLocal`、`$dbWaitAOFTimeoutMs`），`$dbWaitAOFNumReplicas` 按共享 Redis 形态渲染（`Get-MappingRedisTopology` → `Get-RouteStoreWaitAOFNumReplicas`，与 data-service 的 `RouteStore.WaitAOFNumReplicas` 同一个函数：单实例 0、redis-ha 1；2026-10-19 起，未运行，待 Codex 验证）；`Test-DbReplicaPartitionBudget`、`Assert-DbReplicasWithinPartitionContract`；Redis 连接总账 db 行 `Fixed = 2` |
+| `tools/scripts/k8s_deploy.ps1` | db ConfigMap 原样镜像其中三个键（`$dbRetryRouting`、`$dbWaitAOFNumLocal`、`$dbWaitAOFTimeoutMs`），`$dbWaitAOFNumReplicas` 按共享 Redis 形态渲染（`Get-MappingRedisTopology` → `Get-RouteStoreWaitAOFNumReplicas`，与 data-service 的 `RouteStore.WaitAOFNumReplicas` 同一个函数：单实例 0、redis-ha 1；2026-10-19 起，未运行，待 Gemini 验证）；`Test-DbReplicaPartitionBudget`、`Assert-DbReplicasWithinPartitionContract`；Redis 连接总账 db 行 `Fixed = 2` |
 | `deploy/k8s/db-task-retry-alerts.yaml` | 组 `db-task.retry-and-dead-letter` 里的 ④ / WAITAOF 告警（§11） |
 | `tools/merge_zone/preflight.go`、`audit_checks.go` | `dbRetryPartitionQueuePrefix`、`dbRetryPartitionQueuePattern`、`escapeRedisGlob`、`dbTaskQueueKeys`（SCAN 发现 p*，出错 fail-closed） |
 
@@ -483,7 +483,7 @@ type durableEnqueue interface {
 - **校验**：`(*Config).Validate` 在 `db.go` 的 Normalize 与 ResolveRetryRouting 之后调用，错误文本英文并点名键。
 - **启动日志**：`retry routing: mode=<shared|owner> source=<default|config|env DB_RETRY_ROUTING>`；横幅一行 `retry: routing=… (…) waitaof=<local>/<replicas>/<ms>ms`；开启时另有 `retry enqueue WAITAOF enabled: numlocal=… numreplicas=… timeout=… batchBudget=…`。
 - **Redis 要求**：≥ 7.2 且 `appendonly yes`。K8s `manifests/infra/redis.yaml` 以 `--appendonly yes` 启动（高可用形态 `redis-ha.yaml` 的每个 redis 节点同样开 AOF，镜像 `redis:7.2`）；`deploy/docker-compose.yml` 的 redis 服务也开了 AOF。本机没开 AOF 的开发环境默认会拒启，需要显式写 0/0。appendfsync 不是 everysec 的部署（例如 `no`），WAITAOF 的本地确认行为没有核实，探针会拦。
-- **K8s 上改值必须 rollout restart**：ConfigMap 由 `k8s_deploy.ps1` 原样镜像 `go/db/etc/db.yaml` 的 `RetryRouting`、`WaitAOFNumLocal`、`WaitAOFTimeoutMs` 三个键；`WaitAOFNumReplicas` 例外，按共享 Redis 形态渲染（`Get-RouteStoreWaitAOFNumReplicas`，与 data-service 的 `RouteStore.WaitAOFNumReplicas` 同一个函数：单实例 0、redis-ha 1；形态取 `-RedisReplicas` 与档位，zone 写路径没给参数时跟随线上 `statefulset/redis` 副本数）。db.yaml 的那一项保持 0 给本机 compose 单实例。四个键在 db.yaml 里仍必须显式写出，`Get-AuthoritativeScalar` 查不到即 throw。只改 ConfigMap 不会滚动 db。（渲染规则 2026-10-19 落码，未运行，待 Codex 验证。）
+- **K8s 上改值必须 rollout restart**：ConfigMap 由 `k8s_deploy.ps1` 原样镜像 `go/db/etc/db.yaml` 的 `RetryRouting`、`WaitAOFNumLocal`、`WaitAOFTimeoutMs` 三个键；`WaitAOFNumReplicas` 例外，按共享 Redis 形态渲染（`Get-RouteStoreWaitAOFNumReplicas`，与 data-service 的 `RouteStore.WaitAOFNumReplicas` 同一个函数：单实例 0、redis-ha 1；形态取 `-RedisReplicas` 与档位，zone 写路径没给参数时跟随线上 `statefulset/redis` 副本数）。db.yaml 的那一项保持 0 给本机 compose 单实例。四个键在 db.yaml 里仍必须显式写出，`Get-AuthoritativeScalar` 查不到即 throw。只改 ConfigMap 不会滚动 db。（渲染规则 2026-10-19 落码，未运行，待 Gemini 验证。）
 
 ### 7.13 计数口径
 
@@ -518,7 +518,7 @@ B2 本轮不做（负责人拍板）。日后要做时，以下四条是硬约�
 
 ## 10. 上线、回滚与紧急搬回
 
-### 10.1 前置（Codex，线上不动）
+### 10.1 前置（Gemini，线上不动）
 
 1. 跑通 `docs/handoff/placement-reverify-checklist-20261012.md` §2「第 12 步」第 3 条（本机双 db 实例），以及 §5「已知覆盖缺口」第 1、4、7 条（第 7 条由 `TestStop_RetryLoopJoinsWaitGroup` 覆盖）。结果写回 PROGRESS。
 2. 查清并记录线上各 zone 的 go/db 镜像与副本数：
@@ -553,7 +553,7 @@ B2 本轮不做（负责人拍板）。日后要做时，以下四条是硬约�
   - 验收：每个 Pod 启动日志 `retry routing: mode=owner source=config`；24 小时内 `executed_nonowner = 0`；死信速率不升；p* 无长期积压；lag = 0；DbDurableEnqueueNotConfirmed、DbZoneNoPartitionClaims 不响。
   - 回滚到 shared：db.yaml 改回 `shared` → zone-up → rollout restart 加 status。
 - **告警**：`kubectl apply -n observability -f deploy/k8s/db-task-retry-alerts.yaml`（PrometheusRule）。
-- **redis-ha 接入时**：不改 db.yaml（`WaitAOFNumReplicas` 保持 0，给本机 compose 单实例；写 1 本机 go/db 的启动探针等不到副本而拒启）。K8s 上 db ConfigMap 的 `WaitAOFNumReplicas` 由 `k8s_deploy.ps1` 按共享 Redis 形态渲染（与 data-service 同一个 `Get-RouteStoreWaitAOFNumReplicas`：单实例 0、高可用 1；2026-10-19 部署侧落码，未运行，待 Codex 验证）。单实例切到高可用后，对每个 zone 重跑 zone-up（副本份数变 1），再 `kubectl -n mmorpg-zone-<z> rollout restart statefulset/db` 加 `rollout status`（只改 ConfigMap 不会滚动），并重新评估 fail-closed 的可用性代价：
+- **redis-ha 接入时**：不改 db.yaml（`WaitAOFNumReplicas` 保持 0，给本机 compose 单实例；写 1 本机 go/db 的启动探针等不到副本而拒启）。K8s 上 db ConfigMap 的 `WaitAOFNumReplicas` 由 `k8s_deploy.ps1` 按共享 Redis 形态渲染（与 data-service 同一个 `Get-RouteStoreWaitAOFNumReplicas`：单实例 0、高可用 1；2026-10-19 部署侧落码，未运行，待 Gemini 验证）。单实例切到高可用后，对每个 zone 重跑 zone-up（副本份数变 1），再 `kubectl -n mmorpg-zone-<z> rollout restart statefulset/db` 加 `rollout status`（只改 ConfigMap 不会滚动），并重新评估 fail-closed 的可用性代价：
   - 副本维护期间所有失败路径上的分区都会停滞；
   - 三个 Redis Pod 同时坏两个时写入被拒（`min-replicas-to-write 1`）；切主后几秒内新主还没有从时，WAITAOF 确认失败（消息重投），此期间刚启动的 go/db 会被启动探针拒启。
 
@@ -708,7 +708,7 @@ go run ./cmd/retry_requeue -f etc/db.yaml -zone <z> -redis 127.0.0.1:16379 -redi
   - 三类围栏死信由 `owner-epoch-alerts.yaml` 报，`DbTaskDeadLetterAdded` 已把它们排除。
 - **`advanceApplied` 不受 WAITAOF 覆盖**：它与收据 ack 一样是主池上的普通写，§7.7 的残余（AOF 尾巴丢失 → 旧写重放覆盖 MySQL）照旧成立。围栏开关切 `dual` 后，受围栏的玩家表由行内 (owner_epoch, save_seq) 条件写挡住旧写；`legacy` 模式下以及不受围栏的表，这一残余仍在。
 
-## 13. Codex 验证命令
+## 13. Gemini 验证命令
 
 **口径**：与 [上线待做](../ops/godb-pipeline-launch-todo.md) §9.2–§9.4 一致（做法同该文件 §2：临时 worktree）。本节的正则在其基础上并入了 R7 的用例，打勾以该文件为准。
 
@@ -749,7 +749,7 @@ $env:GODB_REDIS_ITEST_ADDR='127.0.0.1:6379'; go test -count=1 -v -run 'TestDurab
 - 仓库根：`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`（db ConfigMap 的 RetryRouting、WaitAOFNumLocal、WaitAOFTimeoutMs == go/db/etc/db.yaml，WaitAOFNumReplicas 按共享 Redis 形态：dev 档缺省单实例 0、prod 档缺省高可用 1，db.yaml 那一项为 0；`Test-DbReplicaPartitionBudget` 11 > 10 throw、10 == 10 放行、PartitionCnt = 0 throw；仓库 manifest 副本数 ≤ PartitionCnt）；`pwsh -NoProfile -File tools/scripts/test_stress_summarize.ps1`。0 失败。
 - 可选：本机有 `promtool` 时，把 `deploy/k8s/db-task-retry-alerts.yaml` 的 `spec` 抽成规则文件跑 `promtool check rules`；没有就报告「告警语法未验证」。
 
-### 13.3 本机端到端（Codex，非文件）
+### 13.3 本机端到端（Gemini，非文件）
 
 **准备**：按 AGENTS §6.2 清理：`redis-cli FLUSHALL`、清空测试库、清 etcd、删 `tools/scripts/.run` 的 pid / log。
 
@@ -826,5 +826,5 @@ go run ./cmd/verifier -config etc/db.yaml -mode strict -wait 180s
 
 ## 16. 修订历史
 
-- 2026-10-17：新建（R6 文档批）。按 S1 规格、复核、修订稿与 R7 修复后的代码写成。状态：已落码，未编译、未测试，待 Codex 验证。
-- 2026-10-18：文档复核更正。修订稿裁决条号三处（§3、§11、§15 第 2 条：「不设 shared 兜底」与挂点不变量 ② 是第 5 条，「按分区的深度 gauge 不做」是第 9 条）；§10.3 第 5 条补上退出码 4 还要求旧共享 processing 为 0（`LooksUnused`）；§10.4 `-zone` 行改写为 R7 之前的行为；§0 新增「残余风险」索引，§6.1 补「MySQL 恢复期 p* 只由属主排空」，§10.2 第 1 步补回落时间对比演练；§13.1 的 `-race` 正则补 `TestWaitRejoinBackoff`、`TestConfirmingEnqueue`。代码状态不变：已落码，未编译、未测试，待 Codex 验证。
+- 2026-10-17：新建（R6 文档批）。按 S1 规格、复核、修订稿与 R7 修复后的代码写成。状态：已落码，未编译、未测试，待 Gemini 验证。
+- 2026-10-18：文档复核更正。修订稿裁决条号三处（§3、§11、§15 第 2 条：「不设 shared 兜底」与挂点不变量 ② 是第 5 条，「按分区的深度 gauge 不做」是第 9 条）；§10.3 第 5 条补上退出码 4 还要求旧共享 processing 为 0（`LooksUnused`）；§10.4 `-zone` 行改写为 R7 之前的行为；§0 新增「残余风险」索引，§6.1 补「MySQL 恢复期 p* 只由属主排空」，§10.2 第 1 步补回落时间对比演练；§13.1 的 `-race` 正则补 `TestWaitRejoinBackoff`、`TestConfirmingEnqueue`。代码状态不变：已落码，未编译、未测试，待 Gemini 验证。

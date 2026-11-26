@@ -11,7 +11,7 @@
 
 > **状态(历史,2026-10-12)**:已拍板(2026-10-12,负责人),当时分批落码;拍板结果与落码进度见「§11 拍板与落码记录」。现状以上面「现行设计」为准。
 > **起因**:用户提出「逻辑服 id(home_zone)和 storage_id 应该存到 TiDB,Redis 只做缓存,不然 Redis 丢了映射无法恢复」。这正是 [TiDB 决策](./global-data-layer-tidb-decision.md) D1「映射持久化兜底」与 [player-storage-placement.md](./player-storage-placement.md) §4.4 / §11.4 的遗留项。
-> **怎么来的**:多 agent 只读设计。先盘点两份映射的全部读写点与不变量,再并行出三种方案:A 库为真源 + Redis 缓存;B Redis 为真源 + 数据库副本;C 把归属写进玩家主表。之后从「数据一致性」「运维上线」两个视角做对抗评审,最后汇总成本稿。只读代码、grep、git 得出,没有编译、测试或压测。按 AGENTS.md §10.1,实现后交 Codex 验证,在那之前不能说「已验证」。
+> **怎么来的**:多 agent 只读设计。先盘点两份映射的全部读写点与不变量,再并行出三种方案:A 库为真源 + Redis 缓存;B Redis 为真源 + 数据库副本;C 把归属写进玩家主表。之后从「数据一致性」「运维上线」两个视角做对抗评审,最后汇总成本稿。只读代码、grep、git 得出,没有编译、测试或压测。按 AGENTS.md §10.1,实现后交 Gemini 验证,在那之前不能说「已验证」。
 > **前置**:当前 HEAD 的落点代码先按 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 复验,本方案不叠在未验证的基线上。行号以 2026-10-12 HEAD `73b852f32` 为准。
 
 
@@ -407,7 +407,7 @@ leader 由 `route_meta` 租约选出（10s 租期，3s 续一次）。每拍 1s�
 | **3 读方要求标记**（约 10 个文件，覆盖 P5） | go/db 的三键 MGET、`route_not_ready`、预算豁免、开关、指标；data_service 读路径与回源；guild 围栏读；`data_consistency_check`；告警 yaml；文档（落点设计新增一节、TiDB 决策 D1 标为本方案、PROGRESS、`docs/README.md`） | `go/db/internal/kafka/placement_route.go`、`go/db/internal/config/config.go`、`go/guild/internal/logic/merge_fence.go`、`tools/data_consistency_check/main.go`、`deploy/k8s/*-alerts.yaml`、`docs/design/*` |
 | **Java 版** | 等价实现，在 `PARITY.md` 登记 | Java 仓库 |
 
-**每批交给 Codex 的验证要点**：
+**每批交给 Gemini 的验证要点**：
 - 受影响 Go 模块的 build、vet、test；
 - data_service 和 merge_zone 的 MySQL + Redis 集成测试：发布 set-if-newer 乱序、WAITAOF 同连接、围栏分片互斥、二次导入收敛、预热与并发写收敛、回档检测；
 - 至少一组 TiDB 悲观 RC 用例；
@@ -440,7 +440,7 @@ leader 由 `route_meta` 租约选出（10s 租期，3s 续一次）。每拍 1s�
 | 5. WAITAOF 延迟 | 未单独表态,按本稿默认:`appendfsync everysec` 下先用 WAITAOF,压测后再定是否改 always |
 | 6. 时间点 | 「两条都做,D1 先行」:先写 D1 代码,同时出 TiDB Phase 1 的设计与实施清单 |
 
-前置提醒:当前 HEAD 的落点代码还没按 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 复验。D1 代码可以先写,但交 Codex 验证时要先跑那份清单,再跑本方案各批的验证。
+前置提醒:当前 HEAD 的落点代码还没按 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 复验。D1 代码可以先写,但交 Gemini 验证时要先跑那份清单,再跑本方案各批的验证。
 
 ### 11.2 落码进度
 
@@ -464,7 +464,7 @@ leader 由 `route_meta` 租约选出（10s 租期，3s 续一次）。每拍 1s�
 - `tools/scripts/tests/k8s_zone_rollback_flush_guard.tests.ps1`(新):防护判定、fail-closed、确认开关、dry-run 不读 Redis、口令遮蔽、dev_tools 转发。
 - `docs/design/zone_data_rollback.md`:步骤 3 的 FLUSHDB 补警告。
 
-**第 0 批交 Codex 的验证**(仓库根):
+**第 0 批交 Gemini 的验证**(仓库根):
 1. `cd go/data_service`:`gofmt -l ./internal/routing ./internal/server`(无输出);`go vet ./internal/routing/... ./internal/server/...`;`go test ./internal/routing/... ./internal/server/... -count=1 -v -run "BatchGetPlayerHomeZone|GetAllPlayerIDsInZone"`,上面 3 个新用例与既有 `TestBatchGetPlayerHomeZone` PASS;再 `go test ./... -count=1` 全绿(既有失败按复验清单第 4 步归因)。
 2. `pwsh -NoProfile -NonInteractive -File tools/scripts/tests/k8s_zone_rollback_flush_guard.tests.ps1`:fail=0(共 8 个用例)。
 3. 回归:`pwsh -NoProfile -NonInteractive -File tools/scripts/tests/k8s_zone_rollback_gate_router_mode.tests.ps1` 与 `dev_tools_merge_zone_contract.tests.ps1` 均 fail=0(dev_tools 参数表新增了一个 switch)。
@@ -480,7 +480,7 @@ leader 由 `route_meta` 租约选出（10s 租期，3s 续一次）。每拍 1s�
 
 **第 1a 批(2026-10-12):存储底座 + W1 的 db_first 开关 + 导入 / 审计工具 + W2 / W3 停用**
 
-**未编译、未测试**(AGENTS.md §10.1)。Codex 跑完下面「第 1a 批交 Codex 的验证」之前,不能说「编译通过」「测试绿」「已验证」。
+**未编译、未测试**(AGENTS.md §10.1)。Gemini 跑完下面「第 1a 批交 Gemini 的验证」之前,不能说「编译通过」「测试绿」「已验证」。
 
 - **改动面**:代码与脚本 38 个(新增 15、修改 23),文档 10 个,超过 §10.2 的 30 文件门槛,已由 §11.1 第 1 行授权。
 - **本批不改 proto,不重编 C++**:四张表走手写 DDL,列漂移只守列名与主键(`routeTableShapes`),补 proto 留到第 2 批(偏离第 1 条)。
@@ -488,7 +488,7 @@ leader 由 `route_meta` 租约选出（10s 租期，3s 续一次）。每拍 1s�
 - **代码注释里的「规格 x 节 / 第 N 条」**指第 1a 批定稿实现规格。那是会话工作稿,没有入库。与决策相关的部分收录在本节,编号保持一致:
   - 「规格 g.2 第 N 条」= 下面「相对本提案的偏离」第 N 行;
   - 「规格 g.3 第 N 条」= 「仍未解决的风险」第 N 条;
-  - 「规格 h 节第 N 步」= 「第 1a 批交 Codex 的验证」第 N 步;
+  - 「规格 h 节第 N 步」= 「第 1a 批交 Gemini 的验证」第 N 步;
   - 「规格 c.3」= 「语义对照」表;「规格 Q1–Q16」= 「待定问题」表;
   - 其余各节(b 类型、SQL 与 Lua,c.1 / c.2 的步骤,d 配置,e 工具,f 用例清单,以及评审编号 B1 / B2 / M1–M6 / m1–m12)已落在代码与注释里,以代码为准。
 
@@ -694,14 +694,14 @@ gRPC code 的集合与今天相同:OK、AlreadyExists、FailedPrecondition、Una
 | Q13 | W1 拒绝注册进已被合走的 zone(查 `zone_merged_into`) | 本批不做,记为后续加固项 |
 | Q14 | Java 的 PARITY.md 何时登记 | 第 1 批(1a + 1b)全部完成时登记一行;本批只在 PROGRESS 写「Java 待做」 |
 | Q15 | 锁冲突重试次数 | 1213 / 9007 共 4 次(1 + 3),最多多睡 150ms;1205 不重试 |
-| Q16 | P2 门禁的阈值 | 负责人看 Codex 的压测对比表之后拍板,本批不预设数字 |
+| Q16 | P2 门禁的阈值 | 负责人看 Gemini 的压测对比表之后拍板,本批不预设数字 |
 
-**第 1a 批交 Codex 的验证(规格 h 节,步骤编号一致)**
+**第 1a 批交 Gemini 的验证(规格 h 节,步骤编号一致)**
 
 先后顺序:
 
 - 先按 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 复验,**以第 4 步之后追加的附录为准**:计数与用例名已因第 0 批和第 1a 批改变;
-- 再跑上面「第 0 批交 Codex 的验证」;
+- 再跑上面「第 0 批交 Gemini 的验证」;
 - 最后跑下面第 1–9 步。全部在仓库根目录、用 PowerShell 执行。
 
 第 1–9 步:
@@ -796,7 +796,7 @@ gRPC code 的集合与今天相同:OK、AlreadyExists、FailedPrecondition、Una
 
 **第 1a 批热点修复(G1a,2026-10-12):`player_route` 聚簇片前缀 + `route_meta` 拆表 + 建池探针 P4 + `route_tool tidb-prepare`**
 
-> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 按下面「验证增量」执行)。与第 1a 批一起交验证,任何红都要区分归属(第 0 批 / 第 1a 批 / G1a)。
+> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Gemini 按下面「验证增量」执行)。与第 1a 批一起交验证,任何红都要区分归属(第 0 批 / 第 1a 批 / G1a)。
 > 2026-10-13:行片模数由 16 改为 **64**,本段凡涉及片数、尾部条数、预切段数之处已同步;起因、预切密度与「按 16 建过表的库怎么办」见本段之后的「行片 16 → 64」。
 
 **起因**。上面「仍未解决的风险」第 1 条:`player_route` 主键 `player_id NONCLUSTERED + SHARD_ROW_ID_BITS` 只打散行数据,主键退化成的唯一索引、`idx_route_updated`、单 zone 内的 `idx_route_home` 都是单调尾部;`PRE_SPLIT_REGIONS` 只切行数据,每条索引建表时只有 1 个 Region;号段发的 `player_id` 在每个 login 段内严格递增,首日数据量到不了按大小分裂的阈值,新插入始终打同一个尾部 Region(Load Base Split 只看读)。`zone_merge_fence` 整表一个 Region;`route_meta` 单行同时放「每次 W1 都读的 writable」和「1b leader 常写的水位 / 租约」。开服首日瓶颈核对把它列为 TiDB 档的首要问题之一([tidb-phase1-and-launch-readiness.md](./tidb-phase1-and-launch-readiness.md) §5.1)。**为什么现在做**:这几张表还没在任何环境部署,第 1a 批代码也未编译;TiDB 建表后不能改聚簇属性 —— 现在改只是改常量,上线后再改等于整表重写 + 双写迁移。
@@ -880,10 +880,10 @@ gRPC code 的集合与今天相同:OK、AlreadyExists、FailedPrecondition、Una
 5. **HR5 `idx_route_storage` 的 NULL 段没切**:`PinOnCreate=false` 时新号 storage 为 NULL,这 64 条尾部仍在一个 Region;`SPLIT … BY (NULL, …)` 的写法未核实。打开 `PinOnCreate` 后按 `-storages=1000000` 切。
 6. **HR6 围栏仍是每 zone 一个 Region**:单 zone 开服尖峰时,该 zone 的全部 W1 在一个 Region leader 上加锁 / 提交。缓解梯子见 §12「万一目录还是成了瓶颈」第 ③ 步。
 7. **HR7 TRUNCATE / BR / TiCDC 丢预切与属性**:两份清库脚本只连本机 MySQL;TiDB 环境每个恢复 / 清库步骤后重跑 `tidb-prepare`。漏跑 = 回到单尾,只有性能后果。
-8. **HR8 叠在未验证的 1a 上**:G1a 改的就是 1a 未编译的代码,两者一起交 Codex。1a 自己的风险(上面「仍未解决的风险」)全部仍在,G1a 只处理第 1 条里的 TiDB 热点部分;MySQL 单机连接预算(L-03)与 Redis 单主(L-06)不在本批。
+8. **HR8 叠在未验证的 1a 上**:G1a 改的就是 1a 未编译的代码,两者一起交 Gemini。1a 自己的风险(上面「仍未解决的风险」)全部仍在,G1a 只处理第 1 条里的 TiDB 热点部分;MySQL 单机连接预算(L-03)与 Redis 单主(L-06)不在本批。
 9. **HR9 在线跑 `tidb-prepare` 的 DDL 副作用**:`ALTER TABLE … ATTRIBUTES` 可能让在途 W1 悲观事务以 8028 失败一次【未核实】,W1 只重试 1213 / 9007 → 那一次建角 Unavailable,由客户端重试。缓解:开新 zone 时在开放前、低峰执行;真 TiDB 用例在二次预切期间并发建角并原样记录。若实测确有,再评估「属性已在就跳过 ALTER」或给 W1 加 8028 重试(改变既有重试口径,另议)。
 
-**验证增量**(插在上面「第 1a 批交 Codex 的验证」里执行:先复验清单 → 第 0 批 → 第 1a 批第 1–9 步,各步按下面替换 / 追加)
+**验证增量**(插在上面「第 1a 批交 Gemini 的验证」里执行:先复验清单 → 第 0 批 → 第 1a 批第 1–9 步,各步按下面替换 / 追加)
 
 - 前置:本机 `testdb` 若跑过 G1a 之前的第 1a 批迁移,按 HR4 处理;若跑过模数还是 16 的那一版(`d5cbb8a8e`)的迁移,按「行片 16 → 64」的前置处理(这一种迁移不报错,要先 `SHOW CREATE TABLE player_route` 看);不确定时停下来问负责人。P4 让所有建 route store 的真库用例要求 MySQL ≥ 8.0.16,跑第 3 步前先 `SELECT VERSION()` 记下版本。
 - 第 1 步:placement 顶层用例 15 → **16**(新增 `TestRouteRowShard`);另跑 `go test ./placement/... -list . | Measure-Object -Line`(期望 16 行用例 + 1 行 ok)。
@@ -912,7 +912,7 @@ gRPC code 的集合与今天相同:OK、AlreadyExists、FailedPrecondition、Una
 
 **行片 16 → 64(2026-10-13,容量模型 [capacity-model-hok-scale.md](./capacity-model-hok-scale.md) §4.1)**
 
-> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 验证)。16 的版本已随 `d5cbb8a8e` 提交并推送,所以这不是「建表前改个常量」那么干净:任何跑过那一版迁移的库都要先处理(见「前置」)。
+> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Gemini 验证)。16 的版本已随 `d5cbb8a8e` 提交并推送,所以这不是「建表前改个常量」那么干净:任何跑过那一版迁移的库都要先处理(见「前置」)。
 
 **为什么改**。单 Region 的写入上限 B 没测过,而模数建表后改不了(改它 = 整表换主键重写)。S3 开服上沿时每条尾部 = C_p / R:R=16 是 3,125/s,R=64 是 781/s;取 64 是保险,理由不是「16 已经证明不够」。后备:V5 实测 B 低于 800/s 时取 256(列是 `tinyint unsigned`,上限 256)。数字都是容量模型的推算,没有压测。
 
@@ -953,7 +953,7 @@ Region 总数 ≈ 63 + 63 + 8·Z + 8·S + Z。行数据与 `idx_route_updated` �
 - `zone_merge_fence` 每 zone 预切 4~8 个点、WAITAOF 的 `appendfsync always` 或调大连接池:未做,仍在容量模型的清单里。
 - 1b 增量推送每拍的查询数随行片数从 16 条变成 64 条(上面读方模板已改)。
 
-**交 Codex 的验证**(工作目录以仓库根为起点;不写死 Go 版本,按各模块 go.mod;串行,前一步红了就停下归因)
+**交 Gemini 的验证**(工作目录以仓库根为起点;不写死 Go 版本,按各模块 go.mod;串行,前一步红了就停下归因)
 
 1. 前置:对本机 / kind / staging 里任何可能建过路由表的库执行上面「前置」第 1~2 步,记录每个库的 `SHOW CREATE TABLE player_route` 结果。
 2. `cd go/shared`:`gofmt -l ./placement`(无输出)、`go vet ./placement/...`、`go test -count=1 ./placement/...`;`TestRouteRowShard` 必须 PASS。
@@ -969,7 +969,7 @@ Region 总数 ≈ 63 + 63 + 8·Z + 8·S + Z。行数据与 `idx_route_updated` �
 
 **正向探针 P5:建池时认出按另一个行片模数建的表(2026-10-14)**
 
-> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 按下面的验证执行)。负责人 2026-10-13 拍板加机械守卫;评审曾建议把模数写进约束名(`chk_route_shard_mod64`),未采纳,DDL 契约不变。
+> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Gemini 按下面的验证执行)。负责人 2026-10-13 拍板加机械守卫;评审曾建议把模数写进约束名(`chk_route_shard_mod64`),未采纳,DDL 契约不变。
 
 **起因**。上面「前置」:按 16 建过的表,迁移(`CREATE TABLE IF NOT EXISTS`)、形状守卫(只查列名与主键)、P4(违例行 `(1, 0)` 对任何模数都违例)全都通过,要到运行期 W1 / 导入对 `player_id % 64 ≥ 16` 的新号大面积撞 3819、建角 Unavailable 才暴露,启动期没有任何信号。
 
@@ -1017,14 +1017,14 @@ Region 总数 ≈ 63 + 63 + 8·Z + 8·S + Z。行数据与 `idx_route_updated` �
 | 测试 | 纯函数判别表 `TestRouteShardModulusProbeDiscriminates`;契约 `TestNewRouteStoreShardModulusProbeContract`(全接受 / 撞键 / 每一行各自 3819 / 3819 点名别的约束 / 1205 / 1142 / 非 MySQL 错误);`TestNewRouteStoreProbeFailClosed` 的三个通过用例跟上 P5 的两条语句,另补 P4 的 1142 / 1062 文案用例;真库 `TestRouteStore_ProbeRejectsTableBuiltWithAnotherShardModulus`(按 `% 16` / `% 128` 手工重建 → 新哨兵,换回 `% 64` 建池通过);`TestOpenRouteStoreHintByCause` |
 | 文档 | 本段、H10、HR4 补注;runbook §9.3 前置、退出码表与 tidb-prepare 小节 |
 
-**交 Codex 的验证**(工作目录以仓库根为起点;不写死 Go 版本;串行,前一步红了就停下归因)
+**交 Gemini 的验证**(工作目录以仓库根为起点;不写死 Go 版本;串行,前一步红了就停下归因)
 
 1. `cd go/data_service`:`gofmt -l ./internal/store ./cmd/route_tool`(期望无输出)、`go vet ./internal/store/... ./cmd/route_tool/...`、`go test -count=1 -v ./internal/store/... ./cmd/route_tool/... -run "ShardModulus|NewRouteStore|RouteSQL|RouteBootstrapDDL|NoPlayerRouteWrites|OpenRouteStoreHint"`,再不带 `-run` 跑一次 `go test -count=1 ./internal/store/... ./internal/routetool/... ./cmd/route_tool/...`。
 2. 真库(MySQL ≥ 8.0.16,环境变量同上面第 4 步):`go test -tags=integration -count=1 -v ./internal/store/... -run "Route"`,`TestRouteStore_ProbeRejectsTableBuiltWithAnotherShardModulus` 必须 PASS,其余建 route store 的真库用例(都经过 P5)不许因 P5 变红;第 1a 批验证里 routing 带 integration 的那一步按原样跑,`TestDBFirstRegister_RealStores` 必须 PASS(它经过 P5)。
 3. 可选真 TiDB:同「验证增量」,只跑 `-run "TiDB"`;建池失败时原样回报报错文本(P4 失败后事务是否可用未核实)。
 4. 前置纪律不变:任何可能建过路由表的库仍先 `SHOW CREATE TABLE player_route`。
 
-**2026-10-15 评审修复**(未编译、未测试,待 Codex 验证;AGENTS.md §10.1)
+**2026-10-15 评审修复**(未编译、未测试,待 Gemini 验证;AGENTS.md §10.1)
 
 | 问题 | 修法 | 位置 |
 |---|---|---|
@@ -1035,11 +1035,11 @@ Region 总数 ≈ 63 + 63 + 8·Z + 8·S + Z。行数据与 `idx_route_updated` �
 
 另补契约用例 `TestNewRouteStoreProbeRetriesLockConflict`:首行 / 次行 1213 重跑后建池,语句序列与实参逐条钉住;连续 `routeTxAttempts` 次 1213 建池失败、关池,`errors.As` 取得出 1213;退避途中 ctx 结束即停、不再开事务。
 
-验证增量(接在上面「交 Codex 的验证」之后,口径不变):第 1 步的 `-run` 已覆盖新用例(`NewRouteStore`、`OpenRouteStoreHint`);不带 `-run` 的那一次加上 `./internal/svc/... ./cmd/debugutil/...`,`go vet` 也加上这两处(它们改了调用)。第 2 步 `TestRouteStore_ProbeKeysHeldByRealPlayers` 必须 PASS,原样回报它日志里的耗时。第 3 步真 TiDB 上建第二个 store 失败时,原样回报报错文本。
+验证增量(接在上面「交 Gemini 的验证」之后,口径不变):第 1 步的 `-run` 已覆盖新用例(`NewRouteStore`、`OpenRouteStoreHint`);不带 `-run` 的那一次加上 `./internal/svc/... ./cmd/debugutil/...`,`go vet` 也加上这两处(它们改了调用)。第 2 步 `TestRouteStore_ProbeKeysHeldByRealPlayers` 必须 PASS,原样回报它日志里的耗时。第 3 步真 TiDB 上建第二个 store 失败时,原样回报报错文本。
 
 **2026-10-15 补登:两段验证的「失败时保留」,与 FenceShards TiDB 档的配置载体**(只补文档;上面所有命令、期望与顺序都不变;AGENTS.md §10.1)
 
-*失败时保留*。适用于「行片 16 → 64」的「交 Codex 的验证」第 1~5 步,以及本段「交 Codex 的验证」第 1~4 步与其「验证增量」。任何一步红了就停下归因,按下表原样回报;不连续重试,不改代码或用例迁就,不 `gofmt -w`。回报里不得出现 `DATA_SERVICE_IT_MYSQL_PASSWORD` 或 TiDB 测试账号的口令(AGENTS.md §9)。
+*失败时保留*。适用于「行片 16 → 64」的「交 Gemini 的验证」第 1~5 步,以及本段「交 Gemini 的验证」第 1~4 步与其「验证增量」。任何一步红了就停下归因,按下表原样回报;不连续重试,不改代码或用例迁就,不 `gofmt -w`。回报里不得出现 `DATA_SERVICE_IT_MYSQL_PASSWORD` 或 TiDB 测试账号的口令(AGENTS.md §9)。
 
 | 哪一步红 | 保留什么 |
 |---|---|
@@ -1073,7 +1073,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 **第 1b-1 批(2026-10-18):route_tool 并进主程序入口 + freeze / reconcile-from-cache / unfreeze + 就绪标记的值格式与 CAS / CAD 脚本**
 
-> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 按下面「交 Codex 的验证」执行)。**不改服务的运行行为**:新的库原语只被工具调用,发布路径只改了「pipeline 没执行」的分类(见运行时要点第 6 条)。唯一可见的入口变化:没有 `-route-tool` 却带位置参数时 data_service 以退出码 2 拒启(K8s 的 args 只有 `-f`,本地 `go_services.ps1` 也只传 `-f`,都不受影响)。
+> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Gemini 按下面「交 Gemini 的验证」执行)。**不改服务的运行行为**:新的库原语只被工具调用,发布路径只改了「pipeline 没执行」的分类(见运行时要点第 6 条)。唯一可见的入口变化:没有 `-route-tool` 却带位置参数时 data_service 以退出码 2 拒启(K8s 的 args 只有 `-f`,本地 `go_services.ps1` 也只传 `-f`,都不受影响)。
 > 依据:调研规格 `docs/handoff/launch-readiness-20261013/spec_D1_batch1b_scout.md`（已清理，见 `ccf2840b2`） 中标为 1b-1 的部分,吸收了其「# VERDICT」的 must / should,以及主会话 2026-10-18 定下的 10 条修法(与规格冲突处以后者为准)。没有另起 `spec_D1_batch1b.md`(核实意见 nit (d):两个事实源),结论以本段为准。
 
 **改动清单**
@@ -1145,7 +1145,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 涉及的旧命令(第 1a 批第 2 步、G1a「验证增量」第 2 步、「行片 16 → 64」第 3 步、「正向探针 P5」第 1 步):凡是出现 `./cmd/route_tool/...` 的地方改跑 `./internal/routetoolcli/... ./cmd/route_tool/...`,`-run` 正则不变(`Route` 仍能选中这五个)。第 1a 批第 2 步「routing 顶层用例 54 个」与第 4 步「带 integration tag 共 63 个」从本批起分别是 56 与 65(新增两个发布用例)。G1a 的 route_tool 冒烟 `go build ./cmd/route_tool` 照旧可用。
 
-**交 Codex 的验证**(工作目录以仓库根为起点,PowerShell 串行;前一步红了就停下归因,不连续重试、不 `gofmt -w`、不改用例迁就;Go 设 `GOTOOLCHAIN=local`、`GOPROXY=off`,不改 go.mod / go.sum)
+**交 Gemini 的验证**(工作目录以仓库根为起点,PowerShell 串行;前一步红了就停下归因,不连续重试、不 `gofmt -w`、不改用例迁就;Go 设 `GOTOOLCHAIN=local`、`GOPROXY=off`,不改 go.mod / go.sum)
 
 前置:先按复验清单、第 0 / 1a / G1a / P5 各段把已落码部分跑完(其中 `./cmd/route_tool/...` 按上面「更正」换位置),再跑本段。
 
@@ -1200,7 +1200,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 失败时保留:同上面「2026-10-15 补登」那张表(gofmt -d 输出、第一条编译错误原文并注明是否在本段改动范围内、失败用例完整 -v 输出、MySQL 错误号、`SELECT VERSION()`、`SHOW CREATE TABLE player_route`);口令不进回报。
 
-**修复评审(2026-10-18,同日;同样未编译、未测试,待 Codex 验证)**
+**修复评审(2026-10-18,同日;同样未编译、未测试,待 Gemini 验证)**
 
 1. **发布用例的测试钩子(must)**。`route_publish_test.go` 第一版的 `rejectPipelinesHook` 不分命令拦下前 n+1 个 pipeline。已在模块缓存逐行核实:go-zero v1.10.0 `getClient` 把 `r.hooks` 挂在 breakerHook 之后;go-redis v9.18.0 每条新连接在 `initConn` 里经同一条钩子链用 pipeline 发两条 CLIENT SETINFO(`DisableIdentity` 缺省 false);结构体字面量的 `RedisConf` 是 `NonBlock=false`,`NewRedis` 先 PING;被挡下的 SETINFO 让 PING 失败,`MustNewRedis` → `logx.Must` → `os.Exit(1)`。整个 routing 测试进程退出,两个子用例都跑不到,第 0 步拿到的「红」无效。改为 `publishBreakerHook`:只拦含 `PublishRouteScript` 那条 EVAL 的批(`Name()=="eval"` 且 `Args()[1]` 等于脚本,同 login `createplayer_seed_test.go` 的 `probePipelineHook` 按批内命令认人),其余一律放行;自检改为发一条 `ECHO <哨兵>` 的 pipeline、只置「已挂上」标记,不消耗名额;断言改为「被挡下的发布批 / 放行的发布批」两个计数(子用例 1 恰好 1 / 1,子用例 2 恰好 3 / 0),不再断言总计数。go-zero 熔断器在 3 次失败下不会自己打开(`protection = 5`),计数不受真熔断干扰。被测代码不变。
 2. **redis 模式下撤销 freeze(should,两条评审意见合并修一次)**。原先 redis 模式下 freeze 放行、unfreeze 退出码 2,而 `requireRouteWritable` 与模式无关:误跑 / 演练一次 freeze(或从 db_first 回退时带着冻结),P1 / P3 的 `import-from-redis` 就一直报 `ErrRouteNotWritable`,工具里没有解冻路径,运维只能手写 `UPDATE route_meta`(绕过「先抬水位再解冻」与 store 的写入守卫)。取方案 A(保留 freeze 的止血语义):redis 模式下允许 `unfreeze -confirm-audited -cache-was-not-verified-acknowledged`,不连 mapping Redis、不读就绪标记(规格「redis 模式不碰标记」)、最低水位 0,照样走 `store.UnfreezeRouteWriters`,stderr 打 WARN,统计行 `marker=not_read_redis_mode`;没加确认开关在连任何东西之前退出码 2(`refuseByMode`),`routetool.Unfreeze` 的 `RedisMode` 再兜一次;MappingRedis 必须是 node 的要求只对 db_first 成立。新增 `TestRunFreezeThenUnfreezeInRedisMode`(routetoolcli)、`TestUnfreeze_RedisModeNeedsAckAndSkipsMarker`(routetool);`TestRunReconcileAndUnfreezeRefusedInRedisMode` 用例表不变(没加确认的 unfreeze 仍在拒绝之列),只改注释。usage、包注释、runbook §9.4 表后加更正注。
@@ -1218,7 +1218,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 | 1b1-17 | redis 模式下允许 unfreeze(要显式确认,不读标记),规格原为退出码 2 | 见上「修复评审」第 2 条:否则 redis 模式下的冻结没有工具撤销路径 | 确认开关在 redis 模式下的含义是「确认所有副本都在 redis 模式」,靠运维判断 |
 | 1b1-18 | 反向修库在 maprev > 库 rev 但缓存少一列时判冲突,规格原为整行覆盖 | 见上「修复评审」第 4 条 | 带外 DEL 造成的这类行要人工处理 |
 
-**修复评审的验证增量**(插进上面「交 Codex 的验证」,命令不变的步骤照旧):
+**修复评审的验证增量**(插进上面「交 Gemini 的验证」,命令不变的步骤照旧):
 
 - 第 0 步:按该步的同日更正**重做**;期望是用例级 FAIL(含 `unexpected route publish reply`),进程退出不算红。修复评审第 2–4 条修的是本批新增的代码(`RouteReadyMarker`、`decideRepair`、`refuseByMode` / `Unfreeze` 在基线 `360d56ae5` 里都不存在),基线上只会是编译失败,不单独取证;它们的回归由新增 / 改判的用例在修复后的代码上钉住。
 - 第 2 步 `-run` 正则不变即可选中新用例:store 的 `DecideRepair`、routetool 的 `Unfreeze`(含 `TestUnfreeze_RedisModeNeedsAckAndSkipsMarker`)、routetoolcli 全量(含 `TestRunFreezeThenUnfreezeInRedisMode`)。routing 顶层用例数仍是 56(带 integration 65);routetool 新增 1 个顶层用例,routetoolcli 新增 1 个(`TestRun*` 7 → 8)。
@@ -1310,10 +1310,10 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 | 环节 | 现状 | 加机器能扩吗 | 要做的事 / 状态（2026-10-19） |
 |---|---|---|---|
-| 共享 Redis | K8s 上 login、data_service（MappingRedis）、scene_manager、player_locator 全指向 `redis.${InfraNamespace}:6379`：全服同一个主。（2026-10-19 订正）原写「单实例、replicas 1；`redis-ha.yaml` 未接入任何部署路径」已过时：形态由 `k8s_deploy.ps1 -RedisReplicas` 决定，dev 档缺省单实例（`redis.yaml`，replicas 1），staging / prod 档缺省 3 = `redis-ha.yaml`（1 主 2 从 + 每 Pod 一个哨兵 + 2 个 haproxy 代理，Service redis 指向代理，客户端地址不变）；2026-10-16 接入、10-19 补齐连接上限与 WAITAOF 副本份数按拓扑渲染，均未运行、待 Codex 验证，未在任何真实集群切换过。高可用只消除单点故障，读写仍压在一个主上，不改变右列「不能」 | **不能** | 第一步 mapping 拆独立实例（G4a，设计稿未落码）并上 HA；上 Cluster 的阻塞见下「映射链路的 Cluster 阻塞点」；10-17 已拍板「单元化 + 单元内 Cluster」，修订稿与代码都未做 |
+| 共享 Redis | K8s 上 login、data_service（MappingRedis）、scene_manager、player_locator 全指向 `redis.${InfraNamespace}:6379`：全服同一个主。（2026-10-19 订正）原写「单实例、replicas 1；`redis-ha.yaml` 未接入任何部署路径」已过时：形态由 `k8s_deploy.ps1 -RedisReplicas` 决定，dev 档缺省单实例（`redis.yaml`，replicas 1），staging / prod 档缺省 3 = `redis-ha.yaml`（1 主 2 从 + 每 Pod 一个哨兵 + 2 个 haproxy 代理，Service redis 指向代理，客户端地址不变）；2026-10-16 接入、10-19 补齐连接上限与 WAITAOF 副本份数按拓扑渲染，均未运行、待 Gemini 验证，未在任何真实集群切换过。高可用只消除单点故障，读写仍压在一个主上，不改变右列「不能」 | **不能** | 第一步 mapping 拆独立实例（G4a，设计稿未落码）并上 HA；上 Cluster 的阻塞见下「映射链路的 Cluster 阻塞点」；10-17 已拍板「单元化 + 单元内 Cluster」，修订稿与代码都未做 |
 | AssignGate 读 gate 目录 | 原为每请求一次 etcd 线性一致 Range | 部分 | **已落码、未验证**：list-watch 进程内镜像，镜像不新鲜回落直读（`gate-load-balancing-design.md`「gate 目录怎么读、怎么挑」） |
 | PickGate | 原为按 10s 刷新的人数确定性取最少，开新区一个窗口可把 4.5k~5 万连接压到同一台 | 部分 | **已落码、未验证**：随机二选一（`go/shared/gatepick`，login 快路径与 scene_manager 跨 zone 重定向共用，重定向并补排空过滤；Java `GatePicker` 同步）。K8s 默认每 zone 2 台时：两台人数不等与旧规则相同；全体同人数（开新区第一个上报窗口）时从全落 NodeID 最小的一台变为两台各半；之后的窗口里羊群依旧，充分摊开要每 zone ≥3 台。单台连接上限感知、死 gate 新鲜度过滤未做 |
-| task:result | 全服一个频道广播 | 部分 | B0-3 按 login 实例定向两批已落码，待 Codex 验证 |
+| task:result | 全服一个频道广播 | 部分 | B0-3 按 login 实例定向两批已落码，待 Gemini 验证 |
 | 账号目录 `account:{a}` | 只在核心 Redis，没有 DB 副本 | 不能 | 落库位置待拍板；现成的 `user_accounts.simple_players` 列（`go/db/model/mysql_database_table.sql`）没有任何代码写它 |
 | 新号首登冷读 | 父键缺失时固定发 2 条读任务 | 部分 | 新号免冷读已落码、默认关，打开要拍板 |
 | db_first 之后的建角 | WAITAOF 与登录角色列表、进场查询共用 data_service 的 mapping 连接池（go-zero 按地址共用一个客户端），建角上限约 40Z/s，尖峰时饿住读 | — | 见下「对 §12 的更正」第 2 条；修法登记在本节，D1 后续批次处理 |
@@ -1351,7 +1351,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 ### 12.2 上线前复核步骤（负责人 2026-10-19 要求：开服前由 AI 再查一遍「登录取逻辑服 / 物理服是不是瓶颈、能不能水平扩展」）
 
-登记在 [tidb-phase1-and-launch-readiness.md](./tidb-phase1-and-launch-readiness.md) §7 L-18 与 `docs/ops/release-checklist.md` A.1。复核要对着**当时**的代码、部署和压测重做，不能照抄 §12.1：§12.1 写于开服前很久，当时当前登录路径没有任何压测覆盖，倍数全是推算。按 AGENTS §10.1，Claude 做静态核对与文档，压测与汇总交 Codex。
+登记在 [tidb-phase1-and-launch-readiness.md](./tidb-phase1-and-launch-readiness.md) §7 L-18 与 `docs/ops/release-checklist.md` A.1。复核要对着**当时**的代码、部署和压测重做，不能照抄 §12.1：§12.1 写于开服前很久，当时当前登录路径没有任何压测覆盖，倍数全是推算。按 AGENTS §10.1，Claude 做静态核对与文档，压测与汇总交 Gemini。
 
 1. **读路径有没有变**（静态核对，按函数名搜，不按行号）：
    - login：`Login` 两条路径（HTTP 与 gate access_token）各自对 mapping Redis、核心 Redis、data_service、库的调用次数；`roleListWithCurrentHomeZone` 的补齐成本（缺外观时整份读 PlayerAllData、缺名时回源注册表）有没有被削减或变重；EnterGame 的 `RedirectOnEnterEnabled` 现网取值。
@@ -1359,10 +1359,10 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
    - scene_manager：每次进场 / 换图的归属查询是否仍是 1 次 EVAL；go/db：每条读写任务的映射 MGET 次数。
    - 新增的任何「每次登录都要做」的跨服务调用，都按「全服单份 / 每 zone / 每实例」三类归档。
 2. **存储拓扑有没有变**：`k8s_deploy.ps1` 里 login `Node.RedisClient`、data_service `MappingRedis`、scene_manager、go/db `Placement.Redis` 实际指向哪些实例；G4a（mapping 独立实例）、`redis-ha.yaml`、单元化 / Cluster 是否已落地（`redis-ha.yaml` 2026-10-16 起已接入部署路径、staging / prod 档缺省，但接入不等于线上已切：以线上 `sts/redis` 的副本数为准，1 = 单实例、3 = 高可用）；单实例的 `maxclients`、`maxmemory`、淘汰策略与 PVC。仍是全服单实例就仍然「不能水平扩」，结论不变；切到高可用也只是一个主，结论同样不变。
-   - （2026-10-19 补）核对各 zone 的 data-service ConfigMap 的 `RouteStore.WaitAOFNumReplicas` 与 go/db ConfigMap 的 `ServerConfig.RedisClient.WaitAOFNumReplicas` 与线上 Redis 形态一致：单实例 0、高可用 1（两处由 `k8s_deploy.ps1` 的同一个 `Get-RouteStoreWaitAOFNumReplicas` 按拓扑渲染，对照部署输出的 `Redis topology: ... waitaof_replicas=` 行）；运行中的 db / data-service Pod 也要已在该 ConfigMap 之后重启过（只改 ConfigMap 不会滚动它们）。高可用下仍是 0 = 切主时已答复的写可能不在新主上；单实例下写成 1 = WAITAOF 启动探针等不到副本，go/db 拒启（data-service 在 db_first 下同样不装配 route store、拒启）。部署脚本这部分未运行、待 Codex 验证。
+   - （2026-10-19 补）核对各 zone 的 data-service ConfigMap 的 `RouteStore.WaitAOFNumReplicas` 与 go/db ConfigMap 的 `ServerConfig.RedisClient.WaitAOFNumReplicas` 与线上 Redis 形态一致：单实例 0、高可用 1（两处由 `k8s_deploy.ps1` 的同一个 `Get-RouteStoreWaitAOFNumReplicas` 按拓扑渲染，对照部署输出的 `Redis topology: ... waitaof_replicas=` 行）；运行中的 db / data-service Pod 也要已在该 ConfigMap 之后重启过（只改 ConfigMap 不会滚动它们）。高可用下仍是 0 = 切主时已答复的写可能不在新主上；单实例下写成 1 = WAITAOF 启动探针等不到副本，go/db 拒启（data-service 在 db_first 下同样不装配 route store、拒启）。部署脚本这部分未运行、待 Gemini 验证。
 3. **db_first 是否已开**：开了的话核对 §12.1 更正第 2 条（WAITAOF 与读共用连接池）是否已改为独立连接池，没改就把「建角尖峰饿住登录 / 进场」列为开服风险。
 4. **gate 侧**：每 zone gate 台数（≥3 台随机二选一才有实际收益）；`login_gate_directory_reads_total{source}` 在压测里是否以 `cache` 为主；单台连接上限感知、死 gate 新鲜度过滤是否已做。
-5. **压测证据**（交 Codex，按 AGENTS §6 全流程，即 L-14）：
+5. **压测证据**（交 Gemini，按 AGENTS §6 全流程，即 L-14）：
    - 前置：`stress_summarize.ps1` 目前不汇总 data_service 归属查询、scene_manager 归属查询的耗时，也不汇总 mapping Redis 的 ops / CPU / 延迟；开服前要先补这几项，否则「是不是瓶颈」没有数据回答。
    - 看：登录与进场速率的饱和点（不是爬坡斜率）、各阶段 p99、mapping 与核心 Redis 的 ops 与 CPU、`login_gate_directory_reads_total` 的 source 分布、gate 落点分布。
    - 没有与 `prev-summary.txt` 的对比表，不下「是 / 不是瓶颈」的结论。
@@ -1446,7 +1446,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
   - 按规划档每 zone 约 264 条推算，Z=36 触发代理告警；单实例形态 Z=118 才触发。
   - `13000×(2+1)+1000` 恰好等于 40000，没有余量。要加代理副本，必须同时调小 `PROXY_MAXCONN` 或调大 `MAXCLIENTS`，否则 `Get-RedisHaLimits` 会 throw。
   - 代理吞吐与多出这一跳的延迟都没有数据。
-- 部署脚本拓扑函数重复定义：旧 HEAD `c63b22dca` 的 `k8s_deploy.ps1` 有 7 个 Redis 拓扑函数各定义两遍，后定义的旧版生效，「zone 写路径跟随线上 `sts/redis`」因此不生效。已由 `c35e1133d` 去重入库，未运行，部署前要交 Codex 验证。
+- 部署脚本拓扑函数重复定义：旧 HEAD `c63b22dca` 的 `k8s_deploy.ps1` 有 7 个 Redis 拓扑函数各定义两遍，后定义的旧版生效，「zone 写路径跟随线上 `sts/redis`」因此不生效。已由 `c35e1133d` 去重入库，未运行，部署前要交 Gemini 验证。
 - G4a 落码时有两个耦合要同批解开：`k8s_zone_rollback.ps1` 硬性要求 MappingRedis 与 go/db RedisClient 同一实例同一 DB，契约测试也钉住了这一点。
 - 共享 MySQL 是单个 `mysql:8.0` Deployment（replicas 1，`max_connections 2100`），全局库与全部 zone 库都在上面。按连接总账公式推算（最坏假设每个 go/db 常驻其余全部 zone 库）：规划档（db_first）Z=5 峰值约 2292，超限；今天的 redis 模式 Z=6 约 2428 才超。超限只告警，不阻断。以 DryRun 的「MySQL connection ledger」行为准。
 - 全部 zone 共用 infra 里一套 3 节点 etcd。登录在线路径只读、gate 目录已改为镜像，推断今天不会先撞到它。
@@ -1484,7 +1484,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 ## 13. 第 1b-2 / 1b-3 / 第 2 / 第 3 批:最小设计修订与落码(2026-10-18 ~ 19)
 
-> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 按 PROGRESS 2026-10-19「D1 剩余批次落码完成」条目执行)。开关全部保持安全缺省(Mode=redis、ArmReadyMarker=false、三个读方开关 false),**代码完成不等于启用**,任何环境的切换按 §13.4 逐阶段由负责人决定。
+> 状态:**已落码,未编译、未测试**(AGENTS.md §10.1,待 Gemini 按 PROGRESS 2026-10-19「D1 剩余批次落码完成」条目执行)。开关全部保持安全缺省(Mode=redis、ArmReadyMarker=false、三个读方开关 false),**代码完成不等于启用**,任何环境的切换按 §13.4 逐阶段由负责人决定。
 > 落码规格(逐条细节、评审吸收、偏离与用例清单)是 `docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md`（已清理，见 `ccf2840b2`）;本节只记结论,两者冲突以本节为准。
 
 ### 13.1 为什么要修订:已批准方案会写错库
@@ -1518,7 +1518,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 ### 13.5 仍未完成 / 残余风险
 
-1. ~~四张路由表的 proto 列漂移守卫(第 1a 批偏离第 1 条)仍未做。~~ **已做(2026-10-20 D1 收尾,未编译,待 Codex 重生成 proto 并验证)**:实为五张(player_route、zone_merge_fence、zone_merged_into、route_meta、route_reconcile)。`proto/common/database/rollback_database_table.proto` 追加五个 message(player_route 沿用 DDL 预留的 pb:1..10,另四张按列序新定字段号;可空列用零值表达,与 `store.RouteRow` 同约定);`schema.go` 的 `routeTableShapes` 删除,`routeTableMessages()` 进 `TableMessages()`(只为表名守卫,同步循环跳过),迁移期按 proto 字段查列名、按 `OptionPrimaryKey` 查主键列序;`route_store_test` 双向比对 proto 字段与 DDL 列、player_route 的 pb 注释与字段号、`RouteRow` 与 `dbpb.PlayerRoute` 逐字段对应(`RouteRow` 保留为领域类型,写明映射,AGENTS §3 的并行 struct 由该用例机械守住)。DDL 不改。
+1. ~~四张路由表的 proto 列漂移守卫(第 1a 批偏离第 1 条)仍未做。~~ **已做(2026-10-20 D1 收尾,未编译,待 Gemini 重生成 proto 并验证)**:实为五张(player_route、zone_merge_fence、zone_merged_into、route_meta、route_reconcile)。`proto/common/database/rollback_database_table.proto` 追加五个 message(player_route 沿用 DDL 预留的 pb:1..10,另四张按列序新定字段号;可空列用零值表达,与 `store.RouteRow` 同约定);`schema.go` 的 `routeTableShapes` 删除,`routeTableMessages()` 进 `TableMessages()`(只为表名守卫,同步循环跳过),迁移期按 proto 字段查列名、按 `OptionPrimaryKey` 查主键列序;`route_store_test` 双向比对 proto 字段与 DDL 列、player_route 的 pb 注释与字段号、`RouteRow` 与 `dbpb.PlayerRoute` 逐字段对应(`RouteRow` 保留为领域类型,写明映射,AGENTS §3 的并行 struct 由该用例机械守住)。DDL 不改。
 2. INFO 在 Lua 里的可用性(Redis 7.2)与每次读多两次 INFO 的开销未实测;mapping Redis 若用 ACL,账号要放行 INFO(@dangerous)。
 3. `DEBUG RELOAD NOSAVE` / `LOADAOF` 在进程内换数据不换身份:靠 `enable-debug-command no` 与 leader 自检;淘汰策略被改到下一拍之间的键丢失只能靠 leader 每拍自检。
 4. redis-ha 网络分区时被隔离的旧主仍自报 master 的情形【推断】;WAITAOF 按全局偏移覆盖此前写是推断。
@@ -1541,10 +1541,10 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 ---
 
-## 15. 2026-10-23 负责人拍板：映射改为直读 TiDB，撤掉 Redis 副本（2026-10-30 已落码，未编译，待 Codex 验证）
+## 15. 2026-10-23 负责人拍板：映射改为直读 TiDB，撤掉 Redis 副本（2026-10-30 已落码，未编译，待 Gemini 验证）
 
 > **状态（2026-10-30 更新）**：已按 §15.9「落码口径」写完，未编译。下面是当时的方向说明，**落码以 §15.9 为准**。取代 §2「Redis 完整副本 + 就绪标记」、§5.1 / §5.4、§13 的 M1–M5、第 1b-2 批对账 leader 与第 3 批读方。保留：库为真源、四张（含 proto 守卫共五张）路由表、合服围栏落库、提交点在 TiDB 事务。
-> **2026-11-01 核对**：落码会话静态核过残留：非测试代码里已没有映射键、就绪标记、水位键、对账表和部署开关。第三阶段后 go/db 不连全局库，选库经 data_service `GetPlayerRoute`（AGENTS §7 逻辑库自治），读失败回暂不可用，只有目录确定没有才算没有落点；§15.9 落码口径 (d) 的「强读 `player_route`」和 T6 按这个理解。全部未编译，运行证据以 Codex 回执 `docs/handoff/player-save-direct-commit-20261030/codex-results.md` 为准。
+> **2026-11-01 核对**：落码会话静态核过残留：非测试代码里已没有映射键、就绪标记、水位键、对账表和部署开关。第三阶段后 go/db 不连全局库，选库经 data_service `GetPlayerRoute`（AGENTS §7 逻辑库自治），读失败回暂不可用，只有目录确定没有才算没有落点；§15.9 落码口径 (d) 的「强读 `player_route`」和 T6 按这个理解。全部未编译，运行证据以 Gemini 回执 `docs/handoff/player-save-direct-commit-20261030/codex-results.md` 为准。
 > **来源**：负责人在会话「账号登录逻辑/物理服瓶颈」里，面对三个选项（直读 TiDB / Redis 分片副本 / 这次不动）选了「直读 TiDB（推荐）」。选项原文：去掉 Redis 映射副本，`player_route` 只在 TiDB 一份，登录、进场、go/db 直接 SQL 点查，go/db 在同一 TiDB 事务里核落点；删掉就绪标记、对账 leader、预热、发布等待。负责人同日说明：项目未上线，玩家数据可完全清空。
 > **与 §14 的关系**：§14（2026-10-21 全球正式默认与首次启动）里依赖副本的部分随本节作废：对账 leader 自然挂 ready、go/db 消费 / 重试就绪闸放行、「Mapping Redis 无历史 zone/placement/maprev/merged_into」这一条空环境判据、存量环境的 `route-tool import-from-redis` 与 `audit -require-maprev`。首次启动改为：预建并迁移全局库与白名单落点库 → 起 data_service（§14 的 SQL 空环境判据保留）→ 直接起 go/db 与 login，不再等待 ready。§14 其余内容（RequireTiDB、Placement.Required、PinOnCreate、storage_id 白名单反解、强读会话）保留。
 > **依据**：§12.3 与 2026-10-22~23 的两轮多代理静态核对（基线 HEAD `940ef9746` / `2c07f2c28`）；D1 移交 `docs/handoff/d1-review-fix-handoff-20261023.md`（已清理，见 `ccf2840b2`）；数据服务路由审计会话给出的写门禁契约（[data_service_role_and_scope.md](./data_service_role_and_scope.md)「写门禁契约」「已澄清」）。本节的删除清单是汇总结果，**不是穷举**；落码第一步先按 §15.7 B0 做全仓穷举盘点。
@@ -1607,7 +1607,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 - TiDB 不可用时：登录（账号目录本来就已依赖 TiDB）与存盘（消息留在 Kafka）一起停，爆炸半径与账号目录相同，不新增依赖。
 - data_service route store 池（`RouteStore.MaxOpenConn`，缺省 20）与账号目录池（`AccountDirectory.MaxOpenConn`）都计入 TiDB 连接预算；TiDB 侧连接总账仍缺（§12.3、开服线拍板清单），一并补。
 
-### 15.7 分批实现计划（每批：实现 → 对抗复核 → 修复；编译测试交 Codex）
+### 15.7 分批实现计划（每批：实现 → 对抗复核 → 修复；编译测试交 Gemini）
 
 - **B0 穷举盘点**（只读）：按键字面量、配置键、指标名、K8s 参数、测试文件、文档引用多路扫描，产出逐文件清单，补全 §15.4。
 - **B1 data_service + `go/shared/placement`**：读写路径改 SQL、删副本相关包与配置、改指标与测试。保留 `router.go` 的玩家锁段。
@@ -1615,7 +1615,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 - **B3 guild、merge_zone、data_consistency_check、dev_tools**。
 - **B4 部署**：k8s_deploy 开关与总账、告警、route tool、契约测试。
 - **B5 文档**：merge-zone runbook、release-checklist（加「写过落点记录之后禁止回退到不认落点的 go/db」）、§12.3 复核结论更新、G4a 稿指向注（由 G4a 会话加）、PROGRESS。
-- 验证（Codex）：data_service / go/db / guild / merge_zone / data_consistency_check 的 build、vet、单测与真 TiDB 用例（MySQL 通过不能代替 TiDB）、PowerShell 契约测试；L-14 压测看 D1 / D2 / M1 表。
+- 验证（Gemini）：data_service / go/db / guild / merge_zone / data_consistency_check 的 build、vet、单测与真 TiDB 用例（MySQL 通过不能代替 TiDB）、PowerShell 契约测试；L-14 压测看 D1 / D2 / M1 表。
 
 ### 15.8 对其他线的边界
 
@@ -1653,13 +1653,13 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
    - 代码里已有 `RequireReconcile=false` 分支：不锁 reconcile，floor 必须为 0。这就是 J 的形状。§15 落地后 R 收敛到这一形状即可，不需要另起协议。
 4. **待负责人决定。**
    - (a) 10-23 拍板的 §15 与 10-26 补段，以哪一份为准。
-   - (b) §15 与 Codex 全球同服验收谁先谁后。§15 会改 Codex 正在验收的 authoritysql、barrierrestore、drainproof、proto 和维护权限脚本，受影响的验收项见文末。
+   - (b) §15 与 Gemini 全球同服验收谁先谁后。§15 会改 Gemini 正在验收的 authoritysql、barrierrestore、drainproof、proto 和维护权限脚本，受影响的验收项见文末。
    - (c) 约 280 文件的改动授权。
    - (d) B2 的 go/db 写路径怎么做（落码会话 10-30 补）。[TiDB 决策](./global-data-layer-tidb-decision.md) §9.3 已写明映射不在 §9 范围，§15 的结论不变。但 §9.4 第 1 条还没定：存盘改为 scene 经 data_service 直接提交 TiDB，还是保留 Kafka → go/db。若选前者，go/db 写路径整体退场，§15.3 的写事务锁读和 T1（proto2mysql 事务出口）都白做。候选：
      - 按 §15.3 做；
      - 先把 go/db 现有的「选库读 + 落库后复核读」从 Redis 一比一换成 SQL 点查，保持现在的正确性；写事务内锁读等 §9.4 定了，再并入新的存盘路径。这一种偏离了负责人所选选项的原文「go/db 在同一 TiDB 事务里核落点」，所以要负责人定。
      - **（2026-10-30 补，上面原文不改）§9.4 第 1 条已定**：用户在会话「玩家数据存储方案」选了存盘直接提交 TiDB，存盘服务放 go/db（原话「放 go/db」），见[总体方案](./player-data-tidb-scaling-plan.md) §3。所以上面「go/db 写路径整体退场」的前提不成立：退场的只是 go/db 的 Kafka 消费路径，go/db 改成接 RPC 的存盘服务，仍在一个 TiDB 事务里写玩家行。「go/db 在同一 TiDB 事务里核落点」和 T1（proto2mysql 事务出口）在新路径上仍然需要；Kafka 写路径本身会退役，所以不必为它单独做一遍。(d) 的具体做法落码前与该总体方案的第 1 批规格对齐。其余 (a)(b)(c) 仍待负责人定。
-   - 盘点人建议在独立分支上落码：分支编译、测试通过后整批合入主线。这样多批次改动期间主工作区不会处于半改状态，也不打断其他会话和 Codex 的验收。
+   - 盘点人建议在独立分支上落码：分支编译、测试通过后整批合入主线。这样多批次改动期间主工作区不会处于半改状态，也不打断其他会话和 Gemini 的验收。
 
 **对 §15.4 的更正**
 
@@ -1713,7 +1713,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 | G8 | `tools/merge_zone`（`relocate.go`、`relocate_run.go`、`main.go`） | R2 原先成立的前提是「go/db 持锁直到复核完成」。§15.3 去掉复核后，这个前提改由 TiDB 行锁保证，R2 / `-relocate-lock-wait` / `redisOrderingLocks` 可能变成冗余（推断） |
 | G9 | `.github/workflows/deploy-config-tests.yml`；go/db `durable_enqueue.go` | CI 路径过滤；一条镜像注释指向将被删除的同名函数 |
 | G10 | scene_manager、login | 两者只经 data_service RPC 读，代码不用改，只改过时注释：§14 的 reconcile→ready 顺序、「同一段 Lua」、`merge:in_progress` 键 |
-| G11 | `tools/scripts/stress_summarize.ps1`（D1 表与文件头说明）、`stress_snap.ps1` 注释、`test_stress_summarize.ps1` | D1 表的 `rr_cache` / `rr_sql` / `rr_sqlerr` 三列按 `data_service_route_read_total{result=cache\|sql\|not_found_sql\|sql_error}` 求和；`route_read_total` 改为只计 ok / not_found / error 后，三列改为 `rr_ok` / `rr_nf` / `rr_err`，夹具里的 `data_service_route_ready_verdict_total` 一并删，与 B1 同批。`go/data_service/internal/metrics/login_reads_test.go` 的 `TestLoginReadNamesMatchStressSummarize` 从脚本读 `$homeZoneReadResults` / `$accountDirectoryRpcs` 钉名；rr_* 的结局若也提成脚本变量，钉名用例同批加一项。L-18 观测批（PROGRESS 10-24）至今没有 Codex 验证记录（落码会话 10-30 补） |
+| G11 | `tools/scripts/stress_summarize.ps1`（D1 表与文件头说明）、`stress_snap.ps1` 注释、`test_stress_summarize.ps1` | D1 表的 `rr_cache` / `rr_sql` / `rr_sqlerr` 三列按 `data_service_route_read_total{result=cache\|sql\|not_found_sql\|sql_error}` 求和；`route_read_total` 改为只计 ok / not_found / error 后，三列改为 `rr_ok` / `rr_nf` / `rr_err`，夹具里的 `data_service_route_ready_verdict_total` 一并删，与 B1 同批。`go/data_service/internal/metrics/login_reads_test.go` 的 `TestLoginReadNamesMatchStressSummarize` 从脚本读 `$homeZoneReadResults` / `$accountDirectoryRpcs` 钉名；rr_* 的结局若也提成脚本变量，钉名用例同批加一项。L-18 观测批（PROGRESS 10-24）至今没有 Gemini 验证记录（落码会话 10-30 补） |
 | G12 | `go/db/internal/saveoutbox/{replay,service}.go`、`db.go` | 归属更正：§15.2 / §15.8 写的「由『Redis 物理水平扩展设计』会话的 saveoutbox 改造删掉这处映射读」已不成立。那项改造属于第 2c / 2d 批，已作废（PROGRESS 10-30），该会话 10-24 之后也没再运行。R2 会话的记录是「映射直读 TiDB 后 RouteGate 接缝同批删除，home_zone 的 GET 改读 TiDB，归新方向会话」。所以由 B2 做：删 RouteGate 接缝和 `db.go` 注入的 mapping 客户端，映射读的去向见 T10（落码会话 10-30 补） |
 
 **落码前要定的技术点**
@@ -1749,7 +1749,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 B8 删掉了 go/db 的 Kafka 消费和 saveoutbox,上面清单里 G1、G2、G9、G12、T1、T2、T10 对应的代码已经不存在,不再处理。其余按下面定:
 
 - **(a) §15 为准。** 10-26 补段里挂在 `route_reconcile`、ReadyMarker、Redis watermark 上的释放水位全部删除,R 侧收敛到现有的 `RequireReconcile=false` 形状,然后把这个参数和 floor 校验一起删掉,只剩一种形状。
-- **(b)(c)** 用户已授权,先写完,再整批交 Codex 验证。
+- **(b)(c)** 用户已授权,先写完,再整批交 Gemini 验证。
 - **(d) go/db 选库:认领前一次强读 `player_route`,不在玩家库事务里跨库锁路由行。** 原选项写的是「在同一 TiDB 事务里核落点」,这里有意偏离,理由:
   - 新路径上写权已经由写权行(代次 + 持有者)在玩家库的提交事务里判定,路由行不再是防旧写的手段。
   - `Save` 带着认领时返回的落点,不读路由;只有 `LoadAndClaim` 和实体已没的空行释放读一次。每笔存盘多一次跨库 `FOR UPDATE`,等于把全部存盘串到全局库上,违背「所有层都要水平扩展」。
@@ -1917,7 +1917,7 @@ B8 删掉了 go/db 的 Kafka 消费和 saveoutbox,上面清单里 G1、G2、G9�
   - `tools/scripts/k8s_deploy.ps1`：match 线
   - `tools/merge_zone/blob_lock_integration_test.go`
 
-**对 Codex 全球同服验收的影响（推断，按依赖推出）**
+**对 Gemini 全球同服验收的影响（推断，按依赖推出）**
 
 - **要重跑：**
   - 完整协议生成与 After 快照；
@@ -1938,7 +1938,7 @@ B8 删掉了 go/db 的 Kafka 消费和 saveoutbox,上面清单里 G1、G2、G9�
 
 ## 16. 2026-11-11 收尾:对照「1b / 2 / 3 批」旧任务清单逐项核对,补合服历史
 
-> **状态**:§16.3 已落码,**未生成协议、未编译、未测试**,待 Codex 按 [PROGRESS](../PROGRESS.md) 2026-11-11「D1 映射持久化收尾:合服历史」条目验证。§16.2 的其余各项是对现有代码的核对结论,运行证据仍以 Codex 回执为准。
+> **状态**:§16.3 已落码,**未生成协议、未编译、未测试**,待 Gemini 按 [PROGRESS](../PROGRESS.md) 2026-11-11「D1 映射持久化收尾:合服历史」条目验证。§16.2 的其余各项是对现有代码的核对结论,运行证据仍以 Gemini 回执为准。
 
 ### 16.1 为什么有这一节
 

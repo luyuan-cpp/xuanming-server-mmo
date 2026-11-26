@@ -75,6 +75,11 @@ type GuildNotifier interface {
 	Notify(ctx context.Context, change *pb.GuildChangedS2C, recipients []uint64)
 }
 
+// WarAlertNotifier 可选扩展接口：用于推送非阻断帮战与追杀预警（NotifyGuildWarAlert）。
+type WarAlertNotifier interface {
+	NotifyWarAlert(ctx context.Context, alert *pb.GuildWarAlertS2C, recipients []uint64)
+}
+
 // NoopNotifier:未配 Kafka(Brokers 为空 → svcCtx.KafkaWriter 为 nil)或单测时使用。
 // 客户端此时靠拉取刷新,功能降级但不出错。
 type NoopNotifier struct{}
@@ -197,6 +202,47 @@ func (n *KafkaGuildNotifier) Notify(ctx context.Context, change *pb.GuildChanged
 	})
 }
 
+// NotifyWarAlert 异步向在线目标推送帮战/追杀预警横幅（至多一次、不阻塞 RPC）。
+func (n *KafkaGuildNotifier) NotifyWarAlert(ctx context.Context, alert *pb.GuildWarAlertS2C, recipients []uint64) {
+	if n == nil || alert == nil {
+		return
+	}
+	detached := context.WithoutCancel(ctx)
+	ids := uniqueNonZero(recipients)
+	if len(ids) == 0 {
+		return
+	}
+	body, err := proto.Marshal(alert)
+	if err != nil {
+		logx.Errorf("[guild] marshal GuildWarAlertS2C: %v", err)
+		return
+	}
+	finish := func() {}
+	if n.admission != nil {
+		accepted, err := n.admission.Enter()
+		if err != nil {
+			n.admission.Hold()
+			return
+		}
+		finish = accepted
+	}
+	safego.Go(guildPushPoint, func() {
+		defer finish()
+		ctx, cancel := context.WithTimeout(detached, guildPushBudget)
+		defer cancel()
+		online, _, err := loadGateInfos(ctx, n.sessions, ids)
+		if err != nil || len(online) == 0 {
+			return
+		}
+		msgID := uint32(game.GuildServiceNotifyGuildWarAlertMessageId)
+		if len(online) == 1 {
+			_ = kafkautil.PushToPlayer(ctx, n.writer, n.builder, online[0], msgID, body)
+		} else {
+			_ = kafkautil.BroadcastToPlayers(ctx, n.writer, n.builder, online, msgID, body)
+		}
+	})
+}
+
 // loadGateInfos:按 slot 分组 MGET 会话键,返回在线者的网关路由信息与离线人数。
 //
 // "推不出去"一律按离线计(返回值的第二项),不单独分类:对调用方来说
@@ -304,6 +350,8 @@ func changeKindLabel(kind pb.GuildChangeKind) string {
 		return "announcement_changed"
 	case pb.GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED:
 		return "activity_changed"
+	case pb.GuildChangeKind_GUILD_CHANGE_KIND_WAR_UPDATED:
+		return "war_updated"
 	case pb.GuildChangeKind_GUILD_CHANGE_KIND_DELIVERY_DONE:
 		return "delivery_done"
 	case pb.GuildChangeKind_GUILD_CHANGE_KIND_RENAMED:

@@ -36,6 +36,8 @@ const (
 	BattleClientPlayer_NotifySurrenderVote_FullMethodName      = "/BattleClientPlayer/NotifySurrenderVote"
 	BattleClientPlayer_UpdateBattlePrep_FullMethodName         = "/BattleClientPlayer/UpdateBattlePrep"
 	BattleClientPlayer_NotifyBattlePrepUpdate_FullMethodName   = "/BattleClientPlayer/NotifyBattlePrepUpdate"
+	BattleClientPlayer_SendBattlePing_FullMethodName           = "/BattleClientPlayer/SendBattlePing"
+	BattleClientPlayer_NotifyBattlePing_FullMethodName         = "/BattleClientPlayer/NotifyBattlePing"
 )
 
 // BattleClientPlayerClient is the client API for BattleClientPlayer service.
@@ -62,6 +64,9 @@ type BattleClientPlayerClient interface {
 	// ---- 论剑 V3 战前 15 秒明牌变阵(docs/design/ranked-play-v3-tactical-prep.md):换赛季印/换首发宠与锁定 ----
 	UpdateBattlePrep(ctx context.Context, in *UpdateBattlePrepRequest, opts ...grpc.CallOption) (*UpdateBattlePrepResponse, error)
 	NotifyBattlePrepUpdate(ctx context.Context, in *BattlePrepUpdateS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 论剑 V4 队内一键战术标点(docs/planning/ranked-play-v4-team-tactics-and-highlights.md):零文字同队战术信号 ----
+	SendBattlePing(ctx context.Context, in *SendBattlePingRequest, opts ...grpc.CallOption) (*SendBattlePingResponse, error)
+	NotifyBattlePing(ctx context.Context, in *BattlePingS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type battleClientPlayerClient struct {
@@ -232,6 +237,26 @@ func (c *battleClientPlayerClient) NotifyBattlePrepUpdate(ctx context.Context, i
 	return out, nil
 }
 
+func (c *battleClientPlayerClient) SendBattlePing(ctx context.Context, in *SendBattlePingRequest, opts ...grpc.CallOption) (*SendBattlePingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendBattlePingResponse)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_SendBattlePing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleClientPlayerClient) NotifyBattlePing(ctx context.Context, in *BattlePingS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_NotifyBattlePing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleClientPlayerServer is the server API for BattleClientPlayer service.
 // All implementations must embed UnimplementedBattleClientPlayerServer
 // for forward compatibility.
@@ -256,6 +281,9 @@ type BattleClientPlayerServer interface {
 	// ---- 论剑 V3 战前 15 秒明牌变阵(docs/design/ranked-play-v3-tactical-prep.md):换赛季印/换首发宠与锁定 ----
 	UpdateBattlePrep(context.Context, *UpdateBattlePrepRequest) (*UpdateBattlePrepResponse, error)
 	NotifyBattlePrepUpdate(context.Context, *BattlePrepUpdateS2C) (*base.Empty, error)
+	// ---- 论剑 V4 队内一键战术标点(docs/planning/ranked-play-v4-team-tactics-and-highlights.md):零文字同队战术信号 ----
+	SendBattlePing(context.Context, *SendBattlePingRequest) (*SendBattlePingResponse, error)
+	NotifyBattlePing(context.Context, *BattlePingS2C) (*base.Empty, error)
 	mustEmbedUnimplementedBattleClientPlayerServer()
 }
 
@@ -313,6 +341,12 @@ func (UnimplementedBattleClientPlayerServer) UpdateBattlePrep(context.Context, *
 }
 func (UnimplementedBattleClientPlayerServer) NotifyBattlePrepUpdate(context.Context, *BattlePrepUpdateS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyBattlePrepUpdate not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) SendBattlePing(context.Context, *SendBattlePingRequest) (*SendBattlePingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendBattlePing not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) NotifyBattlePing(context.Context, *BattlePingS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyBattlePing not implemented")
 }
 func (UnimplementedBattleClientPlayerServer) mustEmbedUnimplementedBattleClientPlayerServer() {}
 func (UnimplementedBattleClientPlayerServer) testEmbeddedByValue()                            {}
@@ -623,6 +657,42 @@ func _BattleClientPlayer_NotifyBattlePrepUpdate_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleClientPlayer_SendBattlePing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendBattlePingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).SendBattlePing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_SendBattlePing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).SendBattlePing(ctx, req.(*SendBattlePingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleClientPlayer_NotifyBattlePing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BattlePingS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).NotifyBattlePing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_NotifyBattlePing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).NotifyBattlePing(ctx, req.(*BattlePingS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleClientPlayer_ServiceDesc is the grpc.ServiceDesc for BattleClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -693,6 +763,14 @@ var BattleClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyBattlePrepUpdate",
 			Handler:    _BattleClientPlayer_NotifyBattlePrepUpdate_Handler,
+		},
+		{
+			MethodName: "SendBattlePing",
+			Handler:    _BattleClientPlayer_SendBattlePing_Handler,
+		},
+		{
+			MethodName: "NotifyBattlePing",
+			Handler:    _BattleClientPlayer_NotifyBattlePing_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

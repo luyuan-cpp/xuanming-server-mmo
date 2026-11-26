@@ -1,6 +1,6 @@
 # 装备强化与镶嵌(装备属性系统二期)
 
-> 2026-11-05 变更(审计 r2-equip#1,未编译,待 Codex 验证):`EnhanceEquipRequest` 加 `expected_level = 2`,服务器做乐观比较,
+> 2026-11-05 变更(审计 r2-equip#1,未编译,待 Gemini 验证):`EnhanceEquipRequest` 加 `expected_level = 2`,服务器做乐观比较,
 > 对不上回新码 `EquipEnhanceLevelChanged`、不扣不掷 —— 结局未知(1003)后的重发不再重复扣费、重复掉级。见 §2.5、§3.3、§4.3 第 4a 步、§5 第 12 条、§6.1、§8。
 >
 > 落地日期：2026-10-09 / 10；2026-10-13 已整合主干、正式导表与全量 proto-gen，C++ 编译、C++ / Go 单测、起栈冒烟（一期 + 二期两遍）均有当日运行证据，见 §11。
@@ -985,7 +985,7 @@ Codex 在 `0b40715d06` 上独立跑过同一组,也是 253 通过(见 `docs/PROG
 ### 11.6 还没验证的 / 不归本线的
 
 - 三条成功日志已在 2026-11-10 的 C++ 日志英文化里改成英文:`[PlayerEquip] Enhance:` / `Inlay:` / `Gem removal:`
-  (原 `强化:` / `镶嵌:` / `取下:`),写入口与表校验的其余中文日志同批改完;要重编 scene,未编译,待 Codex 验证。
+  (原 `强化:` / `镶嵌:` / `取下:`),写入口与表校验的其余中文日志同批改完;要重编 scene,未编译,待 Gemini 验证。
 - **客户端**:没有在 Unity 里编过、跑过(EditMode 用例、窗口级用例、实机都没有);证据只有 §11.1 那次离线的 Roslyn + NUnit。
   (10-16 更新:已在真 Unity 6000.6.0f1 里跑过 EditMode —— 副本工程 batchmode,客户端 main `db969ce4`,装备相关八个用例类全过(含真搭 uGUI 的 `EquipWindowTests` 29/29 与新面板逻辑 `EquipForgeUiStateTests` 63/63);同批另有 67 条美术资源用例失败,退回改动前同样失败,属既有问题。仍没有实机点过。)
   强化 / 镶嵌的**界面入口没有做**(按分工是 Codex 的文件,接线说明在客户端 `Docs/EquipmentForge-20261009.md`)——

@@ -209,7 +209,7 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 
 ## 2026-11-05 单向关注、反向索引与范围外同步
 
-按 [AOI 单向关注与范围外同步](aoi-directed-interest.md) 落码（未编译，待 Codex 验证）。正文「淘汰规则」「显式关注」「隐身可见性」「方向性与投递」「关键 API」已按新实现改写，要点：
+按 [AOI 单向关注与范围外同步](aoi-directed-interest.md) 落码（未编译，待 Gemini 验证）。正文「淘汰规则」「显式关注」「隐身可见性」「方向性与投递」「关键 API」已按新实现改写，要点：
 
 - 新增反向索引 `AoiWatchersComp`，`AoiEntry` 记录空间来源、显式来源与显示状态。移动、属性、技能广播改按反向索引投递，修掉了 [team-system.md](team-system.md) V.2 记录的缺口：对方能看见我、但我的表因容量已满没收下对方时，对方收不到我的移动。
 - 上两节提到的 `BroadcastEntityVisibilityChanges`、`NotifyEntityVisibilityChanges`、`BroadcastEntityLeave` 合并为 `AoiSystem::SendVisibilityChanges`：先求每对（观察者，目标）的净变化，再按"单目标按目标合并广播、多目标单发列表"组包，消息号与消息体不变。离场者的移除仍是 `ActorDestroyS2C`，但只发给正在显示它的观察者，不再发给七格内全部实体。
@@ -226,7 +226,7 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 口径与 Java 版一致（Java 仓 `docs/reference/mmorpg-client-contract-aoi.md` §8、`PARITY.md`「视野（AOI）进出通知」行），Java 不用改代码。
 - 原来「后续计划」里的滞后 / 缓冲期由这次的两个半径实现，已从计划中删去。
 - `AoiSystem::UpdateGridState` / `HandleEntityVisibility` 改为 `UpdateGridMembership`（只挪格子成员）与 `ReevaluateVisibility`（按距离重判）；上两节提到的跨格进出处理以本节为准。
-- 未编译，待 Codex 按 [AOI 单向关注](aoi-directed-interest.md)「验证」执行。
+- 未编译，待 Gemini 按 [AOI 单向关注](aoi-directed-interest.md)「验证」执行。
 
 ## 2026-11-10 战斗关注、补回附近的人，权重表保持静态
 

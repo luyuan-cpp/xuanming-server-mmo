@@ -131,7 +131,7 @@ Auth provider registered: qq (request_unionid=true require_unionid=true endpoint
 
 ### C.1 单元 / 集成层(本机就能跑)
 
-由 Codex 按交付说明执行(Claude 不跑测试,AGENTS.md §10.1):
+由 Gemini 按交付说明执行(Claude 不跑测试,AGENTS.md §10.1):
 
 ```bash
 # go-zero 这层 mock-server e2e(provider 策略与配置门禁):

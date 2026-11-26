@@ -64,6 +64,14 @@ type GuildLogic struct {
 	// contentGuard 把帮会名与公告送内容安全服务判定(content_check.go),经 WithContentGuard 注入。
 	// nil = 未接线(单测):不送检。只经 checkText 访问。
 	contentGuard contentguard.Checker
+	// war 是帮会全天帮战 V2 的外部依赖(war_logic.go 的 WarDeps),经 WithWar 注入。
+	war *WarDeps
+}
+
+func (l *GuildLogic) notifyWarAlert(ctx context.Context, alert *pb.GuildWarAlertS2C, recipients []uint64) {
+	if wn, ok := l.notifier.(WarAlertNotifier); ok {
+		wn.NotifyWarAlert(ctx, alert, recipients)
+	}
 }
 
 // Option 是 NewGuildLogic 的可选项。
@@ -474,6 +482,9 @@ func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) 
 	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.LeaveGuildResponse{ErrorMessage: tip}, err
 	}
+	if l.war != nil && l.war.Repo != nil {
+		_ = l.war.Repo.RemovePlayerGarrison(ctx, who.playerID)
+	}
 	// 快照已不含退帮者,所以"剩余全体"就是收件人;他自己拿的是这次响应,不必再推。
 	l.notify(ctx, pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_LEFT, guildID, who.playerID, who.playerID, membersExcept(res.Guild))
 	// 摘要要把退帮者本人算进去(他的 GetPlayerGuild 从"在帮"变成"未入帮")。
@@ -532,6 +543,9 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 		if id != who.playerID {
 			recipients = append(recipients, id)
 		}
+	}
+	if l.war != nil && l.war.Repo != nil {
+		_ = l.war.Repo.CleanupGuildWarOnDisband(ctx, guildID, uint64(l.warNow().UnixMilli()))
 	}
 	// target 取 0:解散没有"被作用的那个人"。只提交过申请的玩家不通知(他们的申请行已被删,
 	// 下次打开申请列表自然就没了)。

@@ -23,6 +23,12 @@ public:
     static void GmSetAfkPass(entt::entity player,
         const ::GmSetAfkPassRequest* request,
         ::GmSetAfkPassResponse* response);
+    static void SetAfkPassSettings(entt::entity player,
+        const ::SetAfkPassSettingsRequest* request,
+        ::SetAfkPassSettingsResponse* response);
+    static void AckHostedRecap(entt::entity player,
+        const ::AckHostedRecapRequest* request,
+        ::AckHostedRecapResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -56,6 +62,24 @@ public:
             GmSetAfkPass(player,
                 static_cast<const ::GmSetAfkPassRequest*>(request),
                 static_cast<::GmSetAfkPassResponse*>(response));
+			}
+            break;
+        case 3:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SetAfkPassSettingsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SetAfkPassSettings(player,
+                static_cast<const ::SetAfkPassSettingsRequest*>(request),
+                static_cast<::SetAfkPassSettingsResponse*>(response));
+			}
+            break;
+        case 4:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::AckHostedRecapResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            AckHostedRecap(player,
+                static_cast<const ::AckHostedRecapRequest*>(request),
+                static_cast<::AckHostedRecapResponse*>(response));
 			}
             break;
         default:

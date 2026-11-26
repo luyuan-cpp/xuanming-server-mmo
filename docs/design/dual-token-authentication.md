@@ -185,7 +185,7 @@ Client must redo WeChat/QQ OAuth flow from scratch.
 
 ## 令牌家族、重用检测与家族吊销(2026-11-01 定稿)
 
-**状态:已实现,两版同批(AGENTS.md §12),未编译、未测试,待 Codex 验证。**
+**状态:已实现,两版同批(AGENTS.md §12),未编译、未测试,待 Gemini 验证。**
 
 **拍板记录**:
 

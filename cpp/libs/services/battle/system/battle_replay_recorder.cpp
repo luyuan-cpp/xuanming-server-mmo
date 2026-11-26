@@ -32,10 +32,18 @@ BattleReplayRecorder::BattleReplayRecorder(const BattleReplayHeader& header, con
     replay.set_battle_config_id(header.battleConfigId);
     replay.set_started_at_ms(header.startedAtMs);
     replay.set_table_fingerprint(header.tableFingerprint);
+    for (const auto& build : header.actorBuilds)
+    {
+        *replay.add_actor_builds() = build;
+    }
     auto* start = replay.mutable_start_state();
     *start = spectatorStartState;
     ClearLiveOnlyFields(*start);
     recordedBytes = start->ByteSizeLong();
+    for (const auto& build : replay.actor_builds())
+    {
+        recordedBytes += build.ByteSizeLong();
+    }
 }
 
 void BattleReplayRecorder::AddRound(const ::TurnResultS2C& spectatorTurn)

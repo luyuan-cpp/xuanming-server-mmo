@@ -28,7 +28,7 @@
 
 ### 2.1 十秒短断线并不是旧连接续用
 
-> 2026-11-05 已改(未编译、未测试,待 Codex 验证):意外断线时 gate 改发 `ExitGame(reason = DISCONNECTED)`,scene 把角色停在原地保留 25 秒,窗口内同一角色的新会话直接接回这个实体并补完整入场基线,超时才按原路径存盘退出;主动登出、租约到期关假死连接仍立即退出。下面描述的是改之前的行为。见 [断线保留](player-connection-lost-hold.md)。Java 版待做。
+> 2026-11-05 已改(未编译、未测试,待 Gemini 验证):意外断线时 gate 改发 `ExitGame(reason = DISCONNECTED)`,scene 把角色停在原地保留 25 秒,窗口内同一角色的新会话直接接回这个实体并补完整入场基线,超时才按原路径存盘退出;主动登出、租约到期关假死连接仍立即退出。下面描述的是改之前的行为。见 [断线保留](player-connection-lost-hold.md)。Java 版待做。
 
 Gate 的 `HandleConnectionDisconnection` 立即代发 Scene `ExitGame`，清 Gate 会话及请求 lane，并通知 Login。Scene 收到退出后停止运动、离开场景/AOI，存盘收敛后销毁实体。旧 TCP 会话的输出队列不会转接给新 TCP 会话。[Gate 退出](../../cpp/nodes/gate/handler/rpc/client_session_handler.cpp#L473)、[断线入口](../../cpp/nodes/gate/handler/rpc/client_session_handler.cpp#L508)、[Scene 退出](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L3147)
 
@@ -40,7 +40,7 @@ Login 给 locator 的 `DISCONNECTING` 状态申请默认 30 秒租约。重连�
 
 ### 2.2 重连落点不保证原场景、原频道
 
-> 2026-11-05 已改(未编译、未测试,待 Codex 验证):没有任何去向的进场请求(只有 login 的 ShortReconnect / ReplaceLogin 这样发)在 location 记的场景还在时回到原场景,原场景已回收或解析不出来才回落默认大世界,并计 `enter_scene_rejected_total{reason="resume_scene_fallback"}`。下面描述的是改之前的行为。见 [断线保留](player-connection-lost-hold.md) §6。
+> 2026-11-05 已改(未编译、未测试,待 Gemini 验证):没有任何去向的进场请求(只有 login 的 ShortReconnect / ReplaceLogin 这样发)在 location 记的场景还在时回到原场景,原场景已回收或解析不出来才回落默认大世界,并计 `enter_scene_rejected_total{reason="resume_scene_fallback"}`。下面描述的是改之前的行为。见 [断线保留](player-connection-lost-hold.md) §6。
 
 Login 重连/顶号请求给 SceneManager 的目标为 `ZoneId=0, SceneId=0`；SceneManager 从已有 location 恢复 zone，但没有据此恢复原 SceneId，随后选默认大世界地图和轻载频道。非默认地图、副本或多频道玩家可能改派，也可能遇到跨节点交接门禁。[Login 重连请求](../../go/login/internal/logic/clientplayerlogin/entergamelogic.go#L727)、[顶号请求](../../go/login/internal/logic/clientplayerlogin/entergamelogic.go#L1005)、[恢复 zone](../../go/scene_manager/internal/logic/enterscenelogic.go#L386)、[默认落点](../../go/scene_manager/internal/logic/enterscenelogic.go#L1415)
 
@@ -195,7 +195,7 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.1 优先修复：新会话复用同场景实体，漏掉入场基线
 
-> 2026-11-01 已修(未编译、未测试,待 Codex 验证):`EnterScene` 发现会话变了且实体还在目标场景时,先离场再走完整入场;同一会话的重复路由仍然幂等。Java 版未核对,`PARITY.md` 已记待做。
+> 2026-11-01 已修(未编译、未测试,待 Gemini 验证):`EnterScene` 发现会话变了且实体还在目标场景时,先离场再走完整入场;同一会话的重复路由仍然幂等。Java 版未核对,`PARITY.md` 已记待做。
 > 2026-11-06 修正(11-08 Codex 跑整套 `cross_zone_test`,对应用例通过):上面那次修复判「会话变了」比的是会话快照,而入口第 2 步已先把快照会话置无效,同一会话的重复路由实际也会先离场再入场,「仍然幂等」当时并不成立。现改为比实体的登录身份(会话号不同,或号相同而登录代次更新),判据与用例见 [断线保留](player-connection-lost-hold.md) §5 第 3 步。
 > 2026-11-12 再改(未编译、未测试):会话变了时不再先离场,只把入场画面(入场通知、自身创建、当前看得见的目标)重发给新客户端,角色留在原地,邻居看不到他先消失再出现。gate 排空迁移会让整台 gate 的人都走这条路,原先的做法在邻居眼里是一片人闪一下。做法与用例见 [断线保留](player-connection-lost-hold.md) §5 第 3 步。
 
@@ -207,7 +207,7 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.2 实时场景持续状态缺少基线，CD/Buff 生命周期也未明确
 
-> 2026-11-19 「规则需确定」一段已定案并落码(未生成、未导表、未编译、未测试,待 Codex 验证),规则与验证步骤见 [实时技能冷却与 Buff 跨重登保留](realtime-cooldown-buff-persistence.md):冷却全部随玩家存档保留,按 UTC 毫秒的绝对时刻存;Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余是战斗类短效状态,实体重建即清;离线期间时间照常走。实体复用与重建两条路径对冷却完全等价。Java 版待做,`PARITY.md` 已记。
+> 2026-11-19 「规则需确定」一段已定案并落码(未生成、未导表、未编译、未测试,待 Gemini 验证),规则与验证步骤见 [实时技能冷却与 Buff 跨重登保留](realtime-cooldown-buff-persistence.md):冷却全部随玩家存档保留,按 UTC 毫秒的绝对时刻存;Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余是战斗类短效状态,实体重建即清;离线期间时间照常走。实体复用与重建两条路径对冷却完全等价。Java 版待做,`PARITY.md` 已记。
 > 本节第一段(新观察者缺基线)2026-11-20 核对现状:正在走的目标进视野时补发此刻的移动,已由 PROGRESS 2026-11-12「进视野补发移动」做掉;战斗状态标志只走属性增量(消息 66),Unity 不消费 66(Java 仓契约文档已记),没有消费者,服务端不补发。
 
 **已确认**：ActorCreate 只有 §3.2 所列内容；`ActorBaseAttributesS2C` 的 transform/velocity/combat flags 由实体全局 dirty mask 驱动，广播前即移除该 mask，没有为新观察者保留确认或生成完整初始状态。目标的沉默等 flags 已向旧观察者发过且之后不变时，新观察者缺当前 flags。共享客户端目前也未找到生产代码对 `SyncBaseAttribute` 及 2/5/10/30/60 属性档位的消费，actor 世界主要消费创建、移动和技能表现通知。[脏位消费](../../cpp/libs/services/scene/generated/attribute/actorbaseattributess2c_attribute_sync.cpp#L24)、[协议内容](../../proto/scene/player_state_attribute_sync.proto#L14)、[客户端生产注册](../../../mmorpg-client/Assets/Scripts/Game/GameClient.cs#L1744)
@@ -218,7 +218,7 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.3 战斗结果展示缺少重登恢复
 
-> 2026-11-05 已补(服务端已落码,未编译、未测试,待 Codex 验证;客户端改动交 Codex):结算应用的同一帧把本人实际入账的结果写进存档里的有界列表(最多 10 局、按 battle_id 去重),与奖励同一次存盘提交,确认提交之后才公开;客户端每次落地查 `GetRecentBattleResults`,收到无战斗上下文的 BattleEnd 时再查一次,展示后 `AckBattleResults`。方案比较与协议见 [战斗结果重登恢复](battle-result-recovery.md)。Java 版待做,`PARITY.md` 已记。
+> 2026-11-05 已补(服务端已落码,未编译、未测试,待 Gemini 验证;客户端改动交 Gemini):结算应用的同一帧把本人实际入账的结果写进存档里的有界列表(最多 10 局、按 battle_id 去重),与奖励同一次存盘提交,确认提交之后才公开;客户端每次落地查 `GetRecentBattleResults`,收到无战斗上下文的 BattleEnd 时再查一次,展示后 `AckBattleResults`。方案比较与协议见 [战斗结果重登恢复](battle-result-recovery.md)。Java 版待做,`PARITY.md` 已记。
 
 **情形 A**：断线期间场景已经应用结算，直连和大厅两份终局通知均未被客户端消费。重连后 pending 已销账、账本命中不会重推，房间也已删除，140/179 无法取得历史终局。
 

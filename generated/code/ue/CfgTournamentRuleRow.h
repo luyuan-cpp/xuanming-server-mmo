@@ -134,4 +134,45 @@ struct FCfgTournamentRuleRow : public FTableRowBase
 	/** 规则说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
 	FString desc;
-};
+
+	/** 半决赛与总决赛是否启用 BO3 与五行灵脉阵眼轮转(V2,默认 true) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	bool bo3_top4_enabled = false;
+
+	/** BO3 局间换阵与灵脉公示倒计时秒数(V2,默认 60) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	int32 intermission_seconds = 0;
+
+	/** 淘汰赛战报是否向全服公开回放(V2,默认 true) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	bool public_knockout_replay = false;
+
+	/** 每日免费观道致敬绑定银两数量(V2,默认 5000) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	int32 salute_gold_amount = 0;
+
+	/** 每日免费观道致敬绑定道具 ID(V2,FK -> Item.id,默认 20 灵兽口粮) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	int32 salute_item_id = 0;
+
+	/** 每日免费观道致敬绑定道具数量(V2,默认 3) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	int32 salute_item_count = 0;
+
+	/** 报名与海选期是否开放零积分热身约战(V3,默认 true) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	bool warmup_spar_enabled = false;
+
+	/** 淘汰赛阶段是否开放免费全服神机竞猜榜(V3,默认 true) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	bool prediction_enabled = false;
+
+	/** 神机竞猜达标领奖所需最低命中场次(V3,默认 2) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	int32 prediction_reward_min_hits = 0;
+
+	/** 四强及以上淘汰赛是否加赛季军争夺战(V3,默认 true) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	bool third_place_match_enabled = false;
+
+	/

@@ -42,6 +42,6 @@
 
 验收分别覆盖：鉴权与越权拒绝、真实协议签名、64 位 ID、草稿幂等、并发发送、邮件超时同号重放、直接 GM 未知结果禁止重发、审计持久化、前端构建及真实登录。网页地址为 `http://127.0.0.1:3101/`，已完成原生验证码登录、退出重登、十二项权限展示和七项操作目录检查，并经真实 DataService 查询不存在的角色验证读取链路。集成检查不对用户已有角色发放资产。独立 mail 已完成正式迁移、写者登记及健康检查；原有游戏容器未重启。
 
-2026-11-20 状态更新：随着 11-18 全量重建完成并补齐 `equipartifact.json` / `equipv1affix.json`、`deploy/debug/compose.game.yml` 补入 GM Scene 环境变量与回环端口 `127.0.0.1:2355:50001`、以及 `gm_rpc_startup.py` / `gm_admin_startup.py` / `gm_scene_promotion.py` / `scene-deploy.py` 支持重建后提升与重启自愈，本机 Scene 写通道与独立 Mail 通道均已激活并通过 `probe_scene.py --execute`（未签名 `PERMISSION_DENIED`、合法签名无副作用业务拒绝 `OK` + `tipId=1006`）。同日完成服务端 C++ 与 GM 前后端强一致/水平扩展标准收口（详见 `docs/PROGRESS.md`），协议生成/编译/单测/冒烟移交 Codex 验证。
+2026-11-20 状态更新：随着 11-18 全量重建完成并补齐 `equipartifact.json` / `equipv1affix.json`、`deploy/debug/compose.game.yml` 补入 GM Scene 环境变量与回环端口 `127.0.0.1:2355:50001`、以及 `gm_rpc_startup.py` / `gm_admin_startup.py` / `gm_scene_promotion.py` / `scene-deploy.py` 支持重建后提升与重启自愈，本机 Scene 写通道与独立 Mail 通道均已激活并通过 `probe_scene.py --execute`（未签名 `PERMISSION_DENIED`、合法签名无副作用业务拒绝 `OK` + `tipId=1006`）。同日完成服务端 C++ 与 GM 前后端强一致/水平扩展标准收口（详见 `docs/PROGRESS.md`），协议生成/编译/单测/冒烟移交 Gemini 验证。
 
 本模块首先接当前 C++/Go/Java 网关混合服务端。独立 Java 全服务版使用不同内部管理协议，保留在 `PARITY.md` TODO，不假称已兼容。

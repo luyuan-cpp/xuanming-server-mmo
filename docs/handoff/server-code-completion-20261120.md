@@ -1,6 +1,6 @@
 # 服务器代码完成度核对与决定(2026-11-20)
 
-范围:服务器(Go、C++)与客户端代码。Java 不动,留到 todo(见 Java 仓 `PARITY.md`)。协议生成、编译、测试、冒烟交 Codex。
+范围:服务器(Go、C++)与客户端代码。Java 不动,留到 todo(见 Java 仓 `PARITY.md`)。协议生成、编译、测试、冒烟交 Gemini。
 
 ## 1. 结论
 
@@ -66,11 +66,11 @@
 - 第 33 条住户预算:保留 200(11-11)。
 - 第 3 条审计 topic 的 `retention`:prod 4GiB(11-11)。
 
-## 4. 交 Codex 的验证
+## 4. 交 Gemini 的验证
 
 - 按 PROGRESS 各条目的命令执行,重点是 2026-11-19 与 2026-11-20 的条目。
-- 提交 `55eae6be3` 含其它会话的 C++ 改动。建议 Codex 先跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`(AGENTS §10.1)。本轮自己没有 C++ 改动。
-- 提交含 proto 改动(如 `proto/common`、`proto/match`)。Codex 需先按 AGENTS §4 执行 `proto-gen-build` 与 `proto-gen-run`,再编译受影响的服务。
+- 提交 `55eae6be3` 含其它会话的 C++ 改动。建议 Gemini 先跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`(AGENTS §10.1)。本轮自己没有 C++ 改动。
+- 提交含 proto 改动(如 `proto/common`、`proto/match`)。Gemini 需先按 AGENTS §4 执行 `proto-gen-build` 与 `proto-gen-run`,再编译受影响的服务。
 
 ## 5. 风险与未验证项
 

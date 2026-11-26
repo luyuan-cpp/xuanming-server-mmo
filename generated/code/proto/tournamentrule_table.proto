@@ -29,8 +29,18 @@ message TournamentRuleTable {
 	uint32 qualifier_loss_points = 18;
 	uint32 invite_ttl_seconds = 19;
 	string desc = 20;
+	bool bo3_top4_enabled = 21;
+	uint32 intermission_seconds = 22;
+	bool public_knockout_replay = 23;
+	uint32 salute_gold_amount = 24;
+	uint32 salute_item_id = 25;
+	uint32 salute_item_count = 26;
+	bool warmup_spar_enabled = 27;
+	bool prediction_enabled = 28;
+	uint32 prediction_reward_min_hits = 29;
+	bool third_place_match_enabled = 30;
+	bool leyline_ban_enabled = 31;
 }
 
 message TournamentRuleTableData {
-	repeated TournamentRuleTable data = 1;
-}
+	repeated

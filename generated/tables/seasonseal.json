@@ -55,6 +55,62 @@
    "name": "聚息援印",
    "per_round_limit": 1,
    "season_id": 1
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 0,
+   "bonus_bps": 1000,
+   "cap_bps": 0,
+   "description": "主目标首段物理直伤结算后，额外削减伤害10%的剩余护盾，不伤气血。每回合1次。",
+   "effect_id": 1,
+   "health_threshold_bps": 0,
+   "icon_key": "UI/SeasonSeals/101",
+   "id": 201,
+   "name": "玄脉锋印",
+   "per_round_limit": 1,
+   "season_id": 2
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 0,
+   "bonus_bps": 1000,
+   "cap_bps": 0,
+   "description": "主目标首段法术直伤结算后，额外削减伤害10%的剩余护盾，不伤气血。每回合1次。",
+   "effect_id": 2,
+   "health_threshold_bps": 0,
+   "icon_key": "UI/SeasonSeals/102",
+   "id": 202,
+   "name": "玄脉雷印",
+   "per_round_limit": 1,
+   "season_id": 2
+  },
+  {
+   "active_rounds": 2,
+   "battle_limit": 1,
+   "bonus_bps": 1000,
+   "cap_bps": 300,
+   "description": "前两回合首次受到敌方扣血直伤减少10%，最多减免入战最大气血的3%。每场1次。",
+   "effect_id": 6,
+   "health_threshold_bps": 0,
+   "icon_key": "UI/SeasonSeals/103",
+   "id": 203,
+   "name": "玄脉护印",
+   "per_round_limit": 0,
+   "season_id": 2
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 3,
+   "bonus_bps": 400,
+   "cap_bps": 0,
+   "description": "实际执行普通防御后，回复入战最大法力的4%，按缺口封顶。每回合1次，每场3次。",
+   "effect_id": 7,
+   "health_threshold_bps": 0,
+   "icon_key": "UI/SeasonSeals/104",
+   "id": 204,
+   "name": "玄脉息印",
+   "per_round_limit": 1,
+   "season_id": 2
   }
  ]
 }

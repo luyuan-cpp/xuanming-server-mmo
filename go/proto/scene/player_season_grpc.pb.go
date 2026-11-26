@@ -19,9 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneSeasonClientPlayer_GetSeasonState_FullMethodName    = "/SceneSeasonClientPlayer/GetSeasonState"
-	SceneSeasonClientPlayer_EquipSeasonSeal_FullMethodName   = "/SceneSeasonClientPlayer/EquipSeasonSeal"
-	SceneSeasonClientPlayer_CatchupSeasonSeal_FullMethodName = "/SceneSeasonClientPlayer/CatchupSeasonSeal"
+	SceneSeasonClientPlayer_GetSeasonState_FullMethodName            = "/SceneSeasonClientPlayer/GetSeasonState"
+	SceneSeasonClientPlayer_EquipSeasonSeal_FullMethodName           = "/SceneSeasonClientPlayer/EquipSeasonSeal"
+	SceneSeasonClientPlayer_CatchupSeasonSeal_FullMethodName         = "/SceneSeasonClientPlayer/CatchupSeasonSeal"
+	SceneSeasonClientPlayer_EquipWuxingFormation_FullMethodName      = "/SceneSeasonClientPlayer/EquipWuxingFormation"
+	SceneSeasonClientPlayer_GetWuxingTowerState_FullMethodName       = "/SceneSeasonClientPlayer/GetWuxingTowerState"
+	SceneSeasonClientPlayer_StartWuxingTowerRun_FullMethodName       = "/SceneSeasonClientPlayer/StartWuxingTowerRun"
+	SceneSeasonClientPlayer_PickWuxingTowerSigil_FullMethodName      = "/SceneSeasonClientPlayer/PickWuxingTowerSigil"
+	SceneSeasonClientPlayer_AbandonWuxingTowerRun_FullMethodName     = "/SceneSeasonClientPlayer/AbandonWuxingTowerRun"
+	SceneSeasonClientPlayer_SaveBattleBuildBookmark_FullMethodName   = "/SceneSeasonClientPlayer/SaveBattleBuildBookmark"
+	SceneSeasonClientPlayer_DeleteBattleBuildBookmark_FullMethodName = "/SceneSeasonClientPlayer/DeleteBattleBuildBookmark"
 )
 
 // SceneSeasonClientPlayerClient is the client API for SceneSeasonClientPlayer service.
@@ -31,6 +38,14 @@ type SceneSeasonClientPlayerClient interface {
 	GetSeasonState(ctx context.Context, in *GetSeasonStateRequest, opts ...grpc.CallOption) (*GetSeasonStateResponse, error)
 	EquipSeasonSeal(ctx context.Context, in *EquipSeasonSealRequest, opts ...grpc.CallOption) (*EquipSeasonSealResponse, error)
 	CatchupSeasonSeal(ctx context.Context, in *CatchupSeasonSealRequest, opts ...grpc.CallOption) (*CatchupSeasonSealResponse, error)
+	// ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+	EquipWuxingFormation(ctx context.Context, in *EquipWuxingFormationRequest, opts ...grpc.CallOption) (*EquipWuxingFormationResponse, error)
+	GetWuxingTowerState(ctx context.Context, in *GetWuxingTowerStateRequest, opts ...grpc.CallOption) (*GetWuxingTowerStateResponse, error)
+	StartWuxingTowerRun(ctx context.Context, in *StartWuxingTowerRunRequest, opts ...grpc.CallOption) (*StartWuxingTowerRunResponse, error)
+	PickWuxingTowerSigil(ctx context.Context, in *PickWuxingTowerSigilRequest, opts ...grpc.CallOption) (*PickWuxingTowerSigilResponse, error)
+	AbandonWuxingTowerRun(ctx context.Context, in *AbandonWuxingTowerRunRequest, opts ...grpc.CallOption) (*AbandonWuxingTowerRunResponse, error)
+	SaveBattleBuildBookmark(ctx context.Context, in *SaveBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*SaveBattleBuildBookmarkResponse, error)
+	DeleteBattleBuildBookmark(ctx context.Context, in *DeleteBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*DeleteBattleBuildBookmarkResponse, error)
 }
 
 type sceneSeasonClientPlayerClient struct {
@@ -71,6 +86,76 @@ func (c *sceneSeasonClientPlayerClient) CatchupSeasonSeal(ctx context.Context, i
 	return out, nil
 }
 
+func (c *sceneSeasonClientPlayerClient) EquipWuxingFormation(ctx context.Context, in *EquipWuxingFormationRequest, opts ...grpc.CallOption) (*EquipWuxingFormationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EquipWuxingFormationResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_EquipWuxingFormation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) GetWuxingTowerState(ctx context.Context, in *GetWuxingTowerStateRequest, opts ...grpc.CallOption) (*GetWuxingTowerStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetWuxingTowerStateResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_GetWuxingTowerState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) StartWuxingTowerRun(ctx context.Context, in *StartWuxingTowerRunRequest, opts ...grpc.CallOption) (*StartWuxingTowerRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartWuxingTowerRunResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_StartWuxingTowerRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) PickWuxingTowerSigil(ctx context.Context, in *PickWuxingTowerSigilRequest, opts ...grpc.CallOption) (*PickWuxingTowerSigilResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PickWuxingTowerSigilResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_PickWuxingTowerSigil_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) AbandonWuxingTowerRun(ctx context.Context, in *AbandonWuxingTowerRunRequest, opts ...grpc.CallOption) (*AbandonWuxingTowerRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AbandonWuxingTowerRunResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_AbandonWuxingTowerRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) SaveBattleBuildBookmark(ctx context.Context, in *SaveBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*SaveBattleBuildBookmarkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveBattleBuildBookmarkResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_SaveBattleBuildBookmark_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) DeleteBattleBuildBookmark(ctx context.Context, in *DeleteBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*DeleteBattleBuildBookmarkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBattleBuildBookmarkResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_DeleteBattleBuildBookmark_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSeasonClientPlayerServer is the server API for SceneSeasonClientPlayer service.
 // All implementations must embed UnimplementedSceneSeasonClientPlayerServer
 // for forward compatibility.
@@ -78,6 +163,14 @@ type SceneSeasonClientPlayerServer interface {
 	GetSeasonState(context.Context, *GetSeasonStateRequest) (*GetSeasonStateResponse, error)
 	EquipSeasonSeal(context.Context, *EquipSeasonSealRequest) (*EquipSeasonSealResponse, error)
 	CatchupSeasonSeal(context.Context, *CatchupSeasonSealRequest) (*CatchupSeasonSealResponse, error)
+	// ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+	EquipWuxingFormation(context.Context, *EquipWuxingFormationRequest) (*EquipWuxingFormationResponse, error)
+	GetWuxingTowerState(context.Context, *GetWuxingTowerStateRequest) (*GetWuxingTowerStateResponse, error)
+	StartWuxingTowerRun(context.Context, *StartWuxingTowerRunRequest) (*StartWuxingTowerRunResponse, error)
+	PickWuxingTowerSigil(context.Context, *PickWuxingTowerSigilRequest) (*PickWuxingTowerSigilResponse, error)
+	AbandonWuxingTowerRun(context.Context, *AbandonWuxingTowerRunRequest) (*AbandonWuxingTowerRunResponse, error)
+	SaveBattleBuildBookmark(context.Context, *SaveBattleBuildBookmarkRequest) (*SaveBattleBuildBookmarkResponse, error)
+	DeleteBattleBuildBookmark(context.Context, *DeleteBattleBuildBookmarkRequest) (*DeleteBattleBuildBookmarkResponse, error)
 	mustEmbedUnimplementedSceneSeasonClientPlayerServer()
 }
 
@@ -96,6 +189,27 @@ func (UnimplementedSceneSeasonClientPlayerServer) EquipSeasonSeal(context.Contex
 }
 func (UnimplementedSceneSeasonClientPlayerServer) CatchupSeasonSeal(context.Context, *CatchupSeasonSealRequest) (*CatchupSeasonSealResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CatchupSeasonSeal not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) EquipWuxingFormation(context.Context, *EquipWuxingFormationRequest) (*EquipWuxingFormationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EquipWuxingFormation not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) GetWuxingTowerState(context.Context, *GetWuxingTowerStateRequest) (*GetWuxingTowerStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWuxingTowerState not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) StartWuxingTowerRun(context.Context, *StartWuxingTowerRunRequest) (*StartWuxingTowerRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartWuxingTowerRun not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) PickWuxingTowerSigil(context.Context, *PickWuxingTowerSigilRequest) (*PickWuxingTowerSigilResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PickWuxingTowerSigil not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) AbandonWuxingTowerRun(context.Context, *AbandonWuxingTowerRunRequest) (*AbandonWuxingTowerRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AbandonWuxingTowerRun not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) SaveBattleBuildBookmark(context.Context, *SaveBattleBuildBookmarkRequest) (*SaveBattleBuildBookmarkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveBattleBuildBookmark not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) DeleteBattleBuildBookmark(context.Context, *DeleteBattleBuildBookmarkRequest) (*DeleteBattleBuildBookmarkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBattleBuildBookmark not implemented")
 }
 func (UnimplementedSceneSeasonClientPlayerServer) mustEmbedUnimplementedSceneSeasonClientPlayerServer() {
 }
@@ -173,6 +287,132 @@ func _SceneSeasonClientPlayer_CatchupSeasonSeal_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSeasonClientPlayer_EquipWuxingFormation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EquipWuxingFormationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).EquipWuxingFormation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_EquipWuxingFormation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).EquipWuxingFormation(ctx, req.(*EquipWuxingFormationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_GetWuxingTowerState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWuxingTowerStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).GetWuxingTowerState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_GetWuxingTowerState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).GetWuxingTowerState(ctx, req.(*GetWuxingTowerStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_StartWuxingTowerRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartWuxingTowerRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).StartWuxingTowerRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_StartWuxingTowerRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).StartWuxingTowerRun(ctx, req.(*StartWuxingTowerRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_PickWuxingTowerSigil_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PickWuxingTowerSigilRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).PickWuxingTowerSigil(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_PickWuxingTowerSigil_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).PickWuxingTowerSigil(ctx, req.(*PickWuxingTowerSigilRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_AbandonWuxingTowerRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AbandonWuxingTowerRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).AbandonWuxingTowerRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_AbandonWuxingTowerRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).AbandonWuxingTowerRun(ctx, req.(*AbandonWuxingTowerRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_SaveBattleBuildBookmark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveBattleBuildBookmarkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).SaveBattleBuildBookmark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_SaveBattleBuildBookmark_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).SaveBattleBuildBookmark(ctx, req.(*SaveBattleBuildBookmarkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_DeleteBattleBuildBookmark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBattleBuildBookmarkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).DeleteBattleBuildBookmark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_DeleteBattleBuildBookmark_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).DeleteBattleBuildBookmark(ctx, req.(*DeleteBattleBuildBookmarkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSeasonClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSeasonClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -191,6 +431,34 @@ var SceneSeasonClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CatchupSeasonSeal",
 			Handler:    _SceneSeasonClientPlayer_CatchupSeasonSeal_Handler,
+		},
+		{
+			MethodName: "EquipWuxingFormation",
+			Handler:    _SceneSeasonClientPlayer_EquipWuxingFormation_Handler,
+		},
+		{
+			MethodName: "GetWuxingTowerState",
+			Handler:    _SceneSeasonClientPlayer_GetWuxingTowerState_Handler,
+		},
+		{
+			MethodName: "StartWuxingTowerRun",
+			Handler:    _SceneSeasonClientPlayer_StartWuxingTowerRun_Handler,
+		},
+		{
+			MethodName: "PickWuxingTowerSigil",
+			Handler:    _SceneSeasonClientPlayer_PickWuxingTowerSigil_Handler,
+		},
+		{
+			MethodName: "AbandonWuxingTowerRun",
+			Handler:    _SceneSeasonClientPlayer_AbandonWuxingTowerRun_Handler,
+		},
+		{
+			MethodName: "SaveBattleBuildBookmark",
+			Handler:    _SceneSeasonClientPlayer_SaveBattleBuildBookmark_Handler,
+		},
+		{
+			MethodName: "DeleteBattleBuildBookmark",
+			Handler:    _SceneSeasonClientPlayer_DeleteBattleBuildBookmark_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

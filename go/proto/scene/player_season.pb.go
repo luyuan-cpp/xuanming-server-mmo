@@ -319,6 +319,192 @@ func (x *SeasonSkillSummary) GetActionTags() uint32 {
 	return 0
 }
 
+// 单季永久零数值纪念印记与称谓展示视图（源自 PlayerSeasonComp.records，换季永久留存且零战斗属性）。
+type SeasonHonorView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId          uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	SeasonName        string                 `protobuf:"bytes,2,opt,name=season_name,json=seasonName,proto3" json:"season_name,omitempty"`
+	HonorTitleName    string                 `protobuf:"bytes,3,opt,name=honor_title_name,json=honorTitleName,proto3" json:"honor_title_name,omitempty"`
+	HonorBadgeIconKey string                 `protobuf:"bytes,4,opt,name=honor_badge_icon_key,json=honorBadgeIconKey,proto3" json:"honor_badge_icon_key,omitempty"`
+	ProgressPoints    uint32                 `protobuf:"varint,5,opt,name=progress_points,json=progressPoints,proto3" json:"progress_points,omitempty"`
+	MaxPoints         uint32                 `protobuf:"varint,6,opt,name=max_points,json=maxPoints,proto3" json:"max_points,omitempty"`
+	Unlocked          bool                   `protobuf:"varint,7,opt,name=unlocked,proto3" json:"unlocked,omitempty"`
+	IsCurrentSeason   bool                   `protobuf:"varint,8,opt,name=is_current_season,json=isCurrentSeason,proto3" json:"is_current_season,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *SeasonHonorView) Reset() {
+	*x = SeasonHonorView{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeasonHonorView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeasonHonorView) ProtoMessage() {}
+
+func (x *SeasonHonorView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeasonHonorView.ProtoReflect.Descriptor instead.
+func (*SeasonHonorView) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SeasonHonorView) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *SeasonHonorView) GetSeasonName() string {
+	if x != nil {
+		return x.SeasonName
+	}
+	return ""
+}
+
+func (x *SeasonHonorView) GetHonorTitleName() string {
+	if x != nil {
+		return x.HonorTitleName
+	}
+	return ""
+}
+
+func (x *SeasonHonorView) GetHonorBadgeIconKey() string {
+	if x != nil {
+		return x.HonorBadgeIconKey
+	}
+	return ""
+}
+
+func (x *SeasonHonorView) GetProgressPoints() uint32 {
+	if x != nil {
+		return x.ProgressPoints
+	}
+	return 0
+}
+
+func (x *SeasonHonorView) GetMaxPoints() uint32 {
+	if x != nil {
+		return x.MaxPoints
+	}
+	return 0
+}
+
+func (x *SeasonHonorView) GetUnlocked() bool {
+	if x != nil {
+		return x.Unlocked
+	}
+	return false
+}
+
+func (x *SeasonHonorView) GetIsCurrentSeason() bool {
+	if x != nil {
+		return x.IsCurrentSeason
+	}
+	return false
+}
+
+// 当前活跃赛季的全员对称周环境词缀视图（不卖数值、零养成门槛，每周自动轮换）。
+type SeasonWeeklyAffixView struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	WeekIndex          uint32                 `protobuf:"varint,1,opt,name=week_index,json=weekIndex,proto3" json:"week_index,omitempty"`
+	AffixId            uint32                 `protobuf:"varint,2,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"` // 0=无，1护盾过载/2灵息充盈/3先机守势/4锋芒竞速
+	Name               string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description        string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	StrategyTip        string                 `protobuf:"bytes,5,opt,name=strategy_tip,json=strategyTip,proto3" json:"strategy_tip,omitempty"`
+	RecommendedSealIds []uint32               `protobuf:"varint,6,rep,packed,name=recommended_seal_ids,json=recommendedSealIds,proto3" json:"recommended_seal_ids,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SeasonWeeklyAffixView) Reset() {
+	*x = SeasonWeeklyAffixView{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeasonWeeklyAffixView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeasonWeeklyAffixView) ProtoMessage() {}
+
+func (x *SeasonWeeklyAffixView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeasonWeeklyAffixView.ProtoReflect.Descriptor instead.
+func (*SeasonWeeklyAffixView) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SeasonWeeklyAffixView) GetWeekIndex() uint32 {
+	if x != nil {
+		return x.WeekIndex
+	}
+	return 0
+}
+
+func (x *SeasonWeeklyAffixView) GetAffixId() uint32 {
+	if x != nil {
+		return x.AffixId
+	}
+	return 0
+}
+
+func (x *SeasonWeeklyAffixView) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SeasonWeeklyAffixView) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *SeasonWeeklyAffixView) GetStrategyTip() string {
+	if x != nil {
+		return x.StrategyTip
+	}
+	return ""
+}
+
+func (x *SeasonWeeklyAffixView) GetRecommendedSealIds() []uint32 {
+	if x != nil {
+		return x.RecommendedSealIds
+	}
+	return nil
+}
+
 type SeasonStateSnapshot struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Available         bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
@@ -353,13 +539,21 @@ type SeasonStateSnapshot struct {
 	Revision                   uint64                `protobuf:"varint,28,opt,name=revision,proto3" json:"revision,omitempty"`
 	Seals                      []*SeasonSealOption   `protobuf:"bytes,29,rep,name=seals,proto3" json:"seals,omitempty"`
 	SeasonSkills               []*SeasonSkillSummary `protobuf:"bytes,30,rep,name=season_skills,json=seasonSkills,proto3" json:"season_skills,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	// 五行阵法当前装配（0=无/默认，1天覆/2地载/3风扬/4云垂/5虎翼；免费切换）。
+	EquippedFormationId uint32 `protobuf:"varint,31,opt,name=equipped_formation_id,json=equippedFormationId,proto3" json:"equipped_formation_id,omitempty"`
+	// 战报一键收藏的脱敏公开配装列表（上限 12 条）。
+	SavedBuilds []*SavedBattleBuildBookmarkView `protobuf:"bytes,32,rep,name=saved_builds,json=savedBuilds,proto3" json:"saved_builds,omitempty"`
+	// 历季与当季零数值永久纪念印记与称谓（休赛期亦返回已达成历史荣誉）。
+	Honors []*SeasonHonorView `protobuf:"bytes,33,rep,name=honors,proto3" json:"honors,omitempty"`
+	// 本周全员对称环境词缀（无活跃赛季时为空）。
+	WeeklyAffix   *SeasonWeeklyAffixView `protobuf:"bytes,34,opt,name=weekly_affix,json=weeklyAffix,proto3" json:"weekly_affix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SeasonStateSnapshot) Reset() {
 	*x = SeasonStateSnapshot{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[2]
+	mi := &file_proto_scene_player_season_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -371,7 +565,7 @@ func (x *SeasonStateSnapshot) String() string {
 func (*SeasonStateSnapshot) ProtoMessage() {}
 
 func (x *SeasonStateSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[2]
+	mi := &file_proto_scene_player_season_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -384,7 +578,7 @@ func (x *SeasonStateSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeasonStateSnapshot.ProtoReflect.Descriptor instead.
 func (*SeasonStateSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{2}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SeasonStateSnapshot) GetAvailable() bool {
@@ -597,6 +791,1102 @@ func (x *SeasonStateSnapshot) GetSeasonSkills() []*SeasonSkillSummary {
 	return nil
 }
 
+func (x *SeasonStateSnapshot) GetEquippedFormationId() uint32 {
+	if x != nil {
+		return x.EquippedFormationId
+	}
+	return 0
+}
+
+func (x *SeasonStateSnapshot) GetSavedBuilds() []*SavedBattleBuildBookmarkView {
+	if x != nil {
+		return x.SavedBuilds
+	}
+	return nil
+}
+
+func (x *SeasonStateSnapshot) GetHonors() []*SeasonHonorView {
+	if x != nil {
+		return x.Honors
+	}
+	return nil
+}
+
+func (x *SeasonStateSnapshot) GetWeeklyAffix() *SeasonWeeklyAffixView {
+	if x != nil {
+		return x.WeeklyAffix
+	}
+	return nil
+}
+
+type SavedBattleBuildBookmarkView struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BookmarkId       uint64                 `protobuf:"varint,1,opt,name=bookmark_id,json=bookmarkId,proto3" json:"bookmark_id,omitempty"`
+	Title            string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	SourceBattleId   uint64                 `protobuf:"varint,3,opt,name=source_battle_id,json=sourceBattleId,proto3" json:"source_battle_id,omitempty"`
+	SourcePlayerId   uint64                 `protobuf:"varint,4,opt,name=source_player_id,json=sourcePlayerId,proto3" json:"source_player_id,omitempty"`
+	SourcePlayerName string                 `protobuf:"bytes,5,opt,name=source_player_name,json=sourcePlayerName,proto3" json:"source_player_name,omitempty"`
+	ClassId          uint32                 `protobuf:"varint,6,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	FormationId      uint32                 `protobuf:"varint,7,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"`
+	SeasonSealId     uint32                 `protobuf:"varint,8,opt,name=season_seal_id,json=seasonSealId,proto3" json:"season_seal_id,omitempty"`
+	ActivePetTableId uint32                 `protobuf:"varint,9,opt,name=active_pet_table_id,json=activePetTableId,proto3" json:"active_pet_table_id,omitempty"`
+	ActivePetName    string                 `protobuf:"bytes,10,opt,name=active_pet_name,json=activePetName,proto3" json:"active_pet_name,omitempty"`
+	SkillTableIds    []uint32               `protobuf:"varint,11,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
+	WuxingSigilIds   []uint32               `protobuf:"varint,12,rep,packed,name=wuxing_sigil_ids,json=wuxingSigilIds,proto3" json:"wuxing_sigil_ids,omitempty"`
+	SavedAtMs        uint64                 `protobuf:"varint,13,opt,name=saved_at_ms,json=savedAtMs,proto3" json:"saved_at_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SavedBattleBuildBookmarkView) Reset() {
+	*x = SavedBattleBuildBookmarkView{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SavedBattleBuildBookmarkView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SavedBattleBuildBookmarkView) ProtoMessage() {}
+
+func (x *SavedBattleBuildBookmarkView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SavedBattleBuildBookmarkView.ProtoReflect.Descriptor instead.
+func (*SavedBattleBuildBookmarkView) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SavedBattleBuildBookmarkView) GetBookmarkId() uint64 {
+	if x != nil {
+		return x.BookmarkId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *SavedBattleBuildBookmarkView) GetSourceBattleId() uint64 {
+	if x != nil {
+		return x.SourceBattleId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetSourcePlayerId() uint64 {
+	if x != nil {
+		return x.SourcePlayerId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetSourcePlayerName() string {
+	if x != nil {
+		return x.SourcePlayerName
+	}
+	return ""
+}
+
+func (x *SavedBattleBuildBookmarkView) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetFormationId() uint32 {
+	if x != nil {
+		return x.FormationId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetSeasonSealId() uint32 {
+	if x != nil {
+		return x.SeasonSealId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetActivePetTableId() uint32 {
+	if x != nil {
+		return x.ActivePetTableId
+	}
+	return 0
+}
+
+func (x *SavedBattleBuildBookmarkView) GetActivePetName() string {
+	if x != nil {
+		return x.ActivePetName
+	}
+	return ""
+}
+
+func (x *SavedBattleBuildBookmarkView) GetSkillTableIds() []uint32 {
+	if x != nil {
+		return x.SkillTableIds
+	}
+	return nil
+}
+
+func (x *SavedBattleBuildBookmarkView) GetWuxingSigilIds() []uint32 {
+	if x != nil {
+		return x.WuxingSigilIds
+	}
+	return nil
+}
+
+func (x *SavedBattleBuildBookmarkView) GetSavedAtMs() uint64 {
+	if x != nil {
+		return x.SavedAtMs
+	}
+	return 0
+}
+
+type EquipWuxingFormationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FormationId   uint32                 `protobuf:"varint,1,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"` // 0..5，免费切换
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipWuxingFormationRequest) Reset() {
+	*x = EquipWuxingFormationRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipWuxingFormationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipWuxingFormationRequest) ProtoMessage() {}
+
+func (x *EquipWuxingFormationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipWuxingFormationRequest.ProtoReflect.Descriptor instead.
+func (*EquipWuxingFormationRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *EquipWuxingFormationRequest) GetFormationId() uint32 {
+	if x != nil {
+		return x.FormationId
+	}
+	return 0
+}
+
+type EquipWuxingFormationResponse struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage        *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	EquippedFormationId uint32                 `protobuf:"varint,2,opt,name=equipped_formation_id,json=equippedFormationId,proto3" json:"equipped_formation_id,omitempty"`
+	State               *SeasonStateSnapshot   `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *EquipWuxingFormationResponse) Reset() {
+	*x = EquipWuxingFormationResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipWuxingFormationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipWuxingFormationResponse) ProtoMessage() {}
+
+func (x *EquipWuxingFormationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipWuxingFormationResponse.ProtoReflect.Descriptor instead.
+func (*EquipWuxingFormationResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *EquipWuxingFormationResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *EquipWuxingFormationResponse) GetEquippedFormationId() uint32 {
+	if x != nil {
+		return x.EquippedFormationId
+	}
+	return 0
+}
+
+func (x *EquipWuxingFormationResponse) GetState() *SeasonStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type WuxingTowerLeaderboardEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rank          uint32                 `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
+	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName    string                 `protobuf:"bytes,3,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	BestFloor     uint32                 `protobuf:"varint,4,opt,name=best_floor,json=bestFloor,proto3" json:"best_floor,omitempty"`
+	BestRounds    uint32                 `protobuf:"varint,5,opt,name=best_rounds,json=bestRounds,proto3" json:"best_rounds,omitempty"`
+	FormationId   uint32                 `protobuf:"varint,6,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"`
+	SigilIds      []uint32               `protobuf:"varint,7,rep,packed,name=sigil_ids,json=sigilIds,proto3" json:"sigil_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WuxingTowerLeaderboardEntry) Reset() {
+	*x = WuxingTowerLeaderboardEntry{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WuxingTowerLeaderboardEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WuxingTowerLeaderboardEntry) ProtoMessage() {}
+
+func (x *WuxingTowerLeaderboardEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WuxingTowerLeaderboardEntry.ProtoReflect.Descriptor instead.
+func (*WuxingTowerLeaderboardEntry) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetRank() uint32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetBestFloor() uint32 {
+	if x != nil {
+		return x.BestFloor
+	}
+	return 0
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetBestRounds() uint32 {
+	if x != nil {
+		return x.BestRounds
+	}
+	return 0
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetFormationId() uint32 {
+	if x != nil {
+		return x.FormationId
+	}
+	return 0
+}
+
+func (x *WuxingTowerLeaderboardEntry) GetSigilIds() []uint32 {
+	if x != nil {
+		return x.SigilIds
+	}
+	return nil
+}
+
+type WuxingTowerStateSnapshot struct {
+	state                      protoimpl.MessageState         `protogen:"open.v1"`
+	WeekKey                    uint32                         `protobuf:"varint,1,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`
+	RunActive                  bool                           `protobuf:"varint,2,opt,name=run_active,json=runActive,proto3" json:"run_active,omitempty"`
+	RunId                      uint64                         `protobuf:"varint,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	CurrentFloor               uint32                         `protobuf:"varint,4,opt,name=current_floor,json=currentFloor,proto3" json:"current_floor,omitempty"`                                               // 当前待挑战层（1..10）
+	MaxFloors                  uint32                         `protobuf:"varint,5,opt,name=max_floors,json=maxFloors,proto3" json:"max_floors,omitempty"`                                                        // 固定 10 层
+	CurrentFloorDungeonId      uint32                         `protobuf:"varint,6,opt,name=current_floor_dungeon_id,json=currentFloorDungeonId,proto3" json:"current_floor_dungeon_id,omitempty"`                // 当前层开战应传入的 PVE_SOLO battle_config_id
+	CurrentFloorLeylineElement uint32                         `protobuf:"varint,7,opt,name=current_floor_leyline_element,json=currentFloorLeylineElement,proto3" json:"current_floor_leyline_element,omitempty"` // 本层环境五行灵脉（1..5）
+	RunTotalRounds             uint32                         `protobuf:"varint,8,opt,name=run_total_rounds,json=runTotalRounds,proto3" json:"run_total_rounds,omitempty"`
+	ActiveSigilIds             []uint32                       `protobuf:"varint,9,rep,packed,name=active_sigil_ids,json=activeSigilIds,proto3" json:"active_sigil_ids,omitempty"`
+	PendingOfferSigilIds       []uint32                       `protobuf:"varint,10,rep,packed,name=pending_offer_sigil_ids,json=pendingOfferSigilIds,proto3" json:"pending_offer_sigil_ids,omitempty"`
+	WeeklyClearedMask          uint32                         `protobuf:"varint,11,opt,name=weekly_cleared_mask,json=weeklyClearedMask,proto3" json:"weekly_cleared_mask,omitempty"`
+	WeeklyBestFloor            uint32                         `protobuf:"varint,12,opt,name=weekly_best_floor,json=weeklyBestFloor,proto3" json:"weekly_best_floor,omitempty"`
+	WeeklyBestRounds           uint32                         `protobuf:"varint,13,opt,name=weekly_best_rounds,json=weeklyBestRounds,proto3" json:"weekly_best_rounds,omitempty"`
+	Revision                   uint64                         `protobuf:"varint,14,opt,name=revision,proto3" json:"revision,omitempty"`
+	WeeklyLeaderboard          []*WuxingTowerLeaderboardEntry `protobuf:"bytes,15,rep,name=weekly_leaderboard,json=weeklyLeaderboard,proto3" json:"weekly_leaderboard,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *WuxingTowerStateSnapshot) Reset() {
+	*x = WuxingTowerStateSnapshot{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WuxingTowerStateSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WuxingTowerStateSnapshot) ProtoMessage() {}
+
+func (x *WuxingTowerStateSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WuxingTowerStateSnapshot.ProtoReflect.Descriptor instead.
+func (*WuxingTowerStateSnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *WuxingTowerStateSnapshot) GetWeekKey() uint32 {
+	if x != nil {
+		return x.WeekKey
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetRunActive() bool {
+	if x != nil {
+		return x.RunActive
+	}
+	return false
+}
+
+func (x *WuxingTowerStateSnapshot) GetRunId() uint64 {
+	if x != nil {
+		return x.RunId
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetCurrentFloor() uint32 {
+	if x != nil {
+		return x.CurrentFloor
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetMaxFloors() uint32 {
+	if x != nil {
+		return x.MaxFloors
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetCurrentFloorDungeonId() uint32 {
+	if x != nil {
+		return x.CurrentFloorDungeonId
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetCurrentFloorLeylineElement() uint32 {
+	if x != nil {
+		return x.CurrentFloorLeylineElement
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetRunTotalRounds() uint32 {
+	if x != nil {
+		return x.RunTotalRounds
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetActiveSigilIds() []uint32 {
+	if x != nil {
+		return x.ActiveSigilIds
+	}
+	return nil
+}
+
+func (x *WuxingTowerStateSnapshot) GetPendingOfferSigilIds() []uint32 {
+	if x != nil {
+		return x.PendingOfferSigilIds
+	}
+	return nil
+}
+
+func (x *WuxingTowerStateSnapshot) GetWeeklyClearedMask() uint32 {
+	if x != nil {
+		return x.WeeklyClearedMask
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetWeeklyBestFloor() uint32 {
+	if x != nil {
+		return x.WeeklyBestFloor
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetWeeklyBestRounds() uint32 {
+	if x != nil {
+		return x.WeeklyBestRounds
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *WuxingTowerStateSnapshot) GetWeeklyLeaderboard() []*WuxingTowerLeaderboardEntry {
+	if x != nil {
+		return x.WeeklyLeaderboard
+	}
+	return nil
+}
+
+type GetWuxingTowerStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWuxingTowerStateRequest) Reset() {
+	*x = GetWuxingTowerStateRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWuxingTowerStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWuxingTowerStateRequest) ProtoMessage() {}
+
+func (x *GetWuxingTowerStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWuxingTowerStateRequest.ProtoReflect.Descriptor instead.
+func (*GetWuxingTowerStateRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{10}
+}
+
+type GetWuxingTowerStateResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage      `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *WuxingTowerStateSnapshot `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWuxingTowerStateResponse) Reset() {
+	*x = GetWuxingTowerStateResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWuxingTowerStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWuxingTowerStateResponse) ProtoMessage() {}
+
+func (x *GetWuxingTowerStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWuxingTowerStateResponse.ProtoReflect.Descriptor instead.
+func (*GetWuxingTowerStateResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetWuxingTowerStateResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetWuxingTowerStateResponse) GetState() *WuxingTowerStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type StartWuxingTowerRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartWuxingTowerRunRequest) Reset() {
+	*x = StartWuxingTowerRunRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartWuxingTowerRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartWuxingTowerRunRequest) ProtoMessage() {}
+
+func (x *StartWuxingTowerRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartWuxingTowerRunRequest.ProtoReflect.Descriptor instead.
+func (*StartWuxingTowerRunRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{12}
+}
+
+type StartWuxingTowerRunResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage      `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *WuxingTowerStateSnapshot `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartWuxingTowerRunResponse) Reset() {
+	*x = StartWuxingTowerRunResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartWuxingTowerRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartWuxingTowerRunResponse) ProtoMessage() {}
+
+func (x *StartWuxingTowerRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartWuxingTowerRunResponse.ProtoReflect.Descriptor instead.
+func (*StartWuxingTowerRunResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *StartWuxingTowerRunResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *StartWuxingTowerRunResponse) GetState() *WuxingTowerStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type PickWuxingTowerSigilRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExpectedRunId uint64                 `protobuf:"varint,1,opt,name=expected_run_id,json=expectedRunId,proto3" json:"expected_run_id,omitempty"`
+	SigilId       uint32                 `protobuf:"varint,2,opt,name=sigil_id,json=sigilId,proto3" json:"sigil_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PickWuxingTowerSigilRequest) Reset() {
+	*x = PickWuxingTowerSigilRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PickWuxingTowerSigilRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PickWuxingTowerSigilRequest) ProtoMessage() {}
+
+func (x *PickWuxingTowerSigilRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PickWuxingTowerSigilRequest.ProtoReflect.Descriptor instead.
+func (*PickWuxingTowerSigilRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PickWuxingTowerSigilRequest) GetExpectedRunId() uint64 {
+	if x != nil {
+		return x.ExpectedRunId
+	}
+	return 0
+}
+
+func (x *PickWuxingTowerSigilRequest) GetSigilId() uint32 {
+	if x != nil {
+		return x.SigilId
+	}
+	return 0
+}
+
+type PickWuxingTowerSigilResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage      `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *WuxingTowerStateSnapshot `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PickWuxingTowerSigilResponse) Reset() {
+	*x = PickWuxingTowerSigilResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PickWuxingTowerSigilResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PickWuxingTowerSigilResponse) ProtoMessage() {}
+
+func (x *PickWuxingTowerSigilResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PickWuxingTowerSigilResponse.ProtoReflect.Descriptor instead.
+func (*PickWuxingTowerSigilResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *PickWuxingTowerSigilResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PickWuxingTowerSigilResponse) GetState() *WuxingTowerStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type AbandonWuxingTowerRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExpectedRunId uint64                 `protobuf:"varint,1,opt,name=expected_run_id,json=expectedRunId,proto3" json:"expected_run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbandonWuxingTowerRunRequest) Reset() {
+	*x = AbandonWuxingTowerRunRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbandonWuxingTowerRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbandonWuxingTowerRunRequest) ProtoMessage() {}
+
+func (x *AbandonWuxingTowerRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbandonWuxingTowerRunRequest.ProtoReflect.Descriptor instead.
+func (*AbandonWuxingTowerRunRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *AbandonWuxingTowerRunRequest) GetExpectedRunId() uint64 {
+	if x != nil {
+		return x.ExpectedRunId
+	}
+	return 0
+}
+
+type AbandonWuxingTowerRunResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage      `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *WuxingTowerStateSnapshot `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbandonWuxingTowerRunResponse) Reset() {
+	*x = AbandonWuxingTowerRunResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbandonWuxingTowerRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbandonWuxingTowerRunResponse) ProtoMessage() {}
+
+func (x *AbandonWuxingTowerRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbandonWuxingTowerRunResponse.ProtoReflect.Descriptor instead.
+func (*AbandonWuxingTowerRunResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *AbandonWuxingTowerRunResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *AbandonWuxingTowerRunResponse) GetState() *WuxingTowerStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type SaveBattleBuildBookmarkRequest struct {
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Bookmark      *SavedBattleBuildBookmarkView `protobuf:"bytes,1,opt,name=bookmark,proto3" json:"bookmark,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBattleBuildBookmarkRequest) Reset() {
+	*x = SaveBattleBuildBookmarkRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBattleBuildBookmarkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBattleBuildBookmarkRequest) ProtoMessage() {}
+
+func (x *SaveBattleBuildBookmarkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBattleBuildBookmarkRequest.ProtoReflect.Descriptor instead.
+func (*SaveBattleBuildBookmarkRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SaveBattleBuildBookmarkRequest) GetBookmark() *SavedBattleBuildBookmarkView {
+	if x != nil {
+		return x.Bookmark
+	}
+	return nil
+}
+
+type SaveBattleBuildBookmarkResponse struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage            `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Saved         *SavedBattleBuildBookmarkView   `protobuf:"bytes,2,opt,name=saved,proto3" json:"saved,omitempty"`
+	AllBookmarks  []*SavedBattleBuildBookmarkView `protobuf:"bytes,3,rep,name=all_bookmarks,json=allBookmarks,proto3" json:"all_bookmarks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBattleBuildBookmarkResponse) Reset() {
+	*x = SaveBattleBuildBookmarkResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBattleBuildBookmarkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBattleBuildBookmarkResponse) ProtoMessage() {}
+
+func (x *SaveBattleBuildBookmarkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBattleBuildBookmarkResponse.ProtoReflect.Descriptor instead.
+func (*SaveBattleBuildBookmarkResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SaveBattleBuildBookmarkResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SaveBattleBuildBookmarkResponse) GetSaved() *SavedBattleBuildBookmarkView {
+	if x != nil {
+		return x.Saved
+	}
+	return nil
+}
+
+func (x *SaveBattleBuildBookmarkResponse) GetAllBookmarks() []*SavedBattleBuildBookmarkView {
+	if x != nil {
+		return x.AllBookmarks
+	}
+	return nil
+}
+
+type DeleteBattleBuildBookmarkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BookmarkId    uint64                 `protobuf:"varint,1,opt,name=bookmark_id,json=bookmarkId,proto3" json:"bookmark_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteBattleBuildBookmarkRequest) Reset() {
+	*x = DeleteBattleBuildBookmarkRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteBattleBuildBookmarkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteBattleBuildBookmarkRequest) ProtoMessage() {}
+
+func (x *DeleteBattleBuildBookmarkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteBattleBuildBookmarkRequest.ProtoReflect.Descriptor instead.
+func (*DeleteBattleBuildBookmarkRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *DeleteBattleBuildBookmarkRequest) GetBookmarkId() uint64 {
+	if x != nil {
+		return x.BookmarkId
+	}
+	return 0
+}
+
+type DeleteBattleBuildBookmarkResponse struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage            `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	AllBookmarks  []*SavedBattleBuildBookmarkView `protobuf:"bytes,2,rep,name=all_bookmarks,json=allBookmarks,proto3" json:"all_bookmarks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteBattleBuildBookmarkResponse) Reset() {
+	*x = DeleteBattleBuildBookmarkResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteBattleBuildBookmarkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteBattleBuildBookmarkResponse) ProtoMessage() {}
+
+func (x *DeleteBattleBuildBookmarkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteBattleBuildBookmarkResponse.ProtoReflect.Descriptor instead.
+func (*DeleteBattleBuildBookmarkResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *DeleteBattleBuildBookmarkResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *DeleteBattleBuildBookmarkResponse) GetAllBookmarks() []*SavedBattleBuildBookmarkView {
+	if x != nil {
+		return x.AllBookmarks
+	}
+	return nil
+}
+
 type GetSeasonStateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -605,7 +1895,7 @@ type GetSeasonStateRequest struct {
 
 func (x *GetSeasonStateRequest) Reset() {
 	*x = GetSeasonStateRequest{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[3]
+	mi := &file_proto_scene_player_season_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -617,7 +1907,7 @@ func (x *GetSeasonStateRequest) String() string {
 func (*GetSeasonStateRequest) ProtoMessage() {}
 
 func (x *GetSeasonStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[3]
+	mi := &file_proto_scene_player_season_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -630,7 +1920,7 @@ func (x *GetSeasonStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeasonStateRequest.ProtoReflect.Descriptor instead.
 func (*GetSeasonStateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{3}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{22}
 }
 
 type GetSeasonStateResponse struct {
@@ -643,7 +1933,7 @@ type GetSeasonStateResponse struct {
 
 func (x *GetSeasonStateResponse) Reset() {
 	*x = GetSeasonStateResponse{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[4]
+	mi := &file_proto_scene_player_season_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +1945,7 @@ func (x *GetSeasonStateResponse) String() string {
 func (*GetSeasonStateResponse) ProtoMessage() {}
 
 func (x *GetSeasonStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[4]
+	mi := &file_proto_scene_player_season_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +1958,7 @@ func (x *GetSeasonStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeasonStateResponse.ProtoReflect.Descriptor instead.
 func (*GetSeasonStateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{4}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetSeasonStateResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -696,7 +1986,7 @@ type EquipSeasonSealRequest struct {
 
 func (x *EquipSeasonSealRequest) Reset() {
 	*x = EquipSeasonSealRequest{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[5]
+	mi := &file_proto_scene_player_season_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +1998,7 @@ func (x *EquipSeasonSealRequest) String() string {
 func (*EquipSeasonSealRequest) ProtoMessage() {}
 
 func (x *EquipSeasonSealRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[5]
+	mi := &file_proto_scene_player_season_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +2011,7 @@ func (x *EquipSeasonSealRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipSeasonSealRequest.ProtoReflect.Descriptor instead.
 func (*EquipSeasonSealRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{5}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *EquipSeasonSealRequest) GetSeasonId() uint32 {
@@ -748,7 +2038,7 @@ type EquipSeasonSealResponse struct {
 
 func (x *EquipSeasonSealResponse) Reset() {
 	*x = EquipSeasonSealResponse{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[6]
+	mi := &file_proto_scene_player_season_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -760,7 +2050,7 @@ func (x *EquipSeasonSealResponse) String() string {
 func (*EquipSeasonSealResponse) ProtoMessage() {}
 
 func (x *EquipSeasonSealResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[6]
+	mi := &file_proto_scene_player_season_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -773,7 +2063,7 @@ func (x *EquipSeasonSealResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipSeasonSealResponse.ProtoReflect.Descriptor instead.
 func (*EquipSeasonSealResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{6}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *EquipSeasonSealResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -805,7 +2095,7 @@ type CatchupSeasonSealRequest struct {
 
 func (x *CatchupSeasonSealRequest) Reset() {
 	*x = CatchupSeasonSealRequest{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[7]
+	mi := &file_proto_scene_player_season_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -817,7 +2107,7 @@ func (x *CatchupSeasonSealRequest) String() string {
 func (*CatchupSeasonSealRequest) ProtoMessage() {}
 
 func (x *CatchupSeasonSealRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[7]
+	mi := &file_proto_scene_player_season_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -830,7 +2120,7 @@ func (x *CatchupSeasonSealRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CatchupSeasonSealRequest.ProtoReflect.Descriptor instead.
 func (*CatchupSeasonSealRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CatchupSeasonSealRequest) GetClientRequestId() uint64 {
@@ -881,7 +2171,7 @@ type CatchupSeasonSealResponse struct {
 
 func (x *CatchupSeasonSealResponse) Reset() {
 	*x = CatchupSeasonSealResponse{}
-	mi := &file_proto_scene_player_season_proto_msgTypes[8]
+	mi := &file_proto_scene_player_season_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -893,7 +2183,7 @@ func (x *CatchupSeasonSealResponse) String() string {
 func (*CatchupSeasonSealResponse) ProtoMessage() {}
 
 func (x *CatchupSeasonSealResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_season_proto_msgTypes[8]
+	mi := &file_proto_scene_player_season_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -906,7 +2196,7 @@ func (x *CatchupSeasonSealResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CatchupSeasonSealResponse.ProtoReflect.Descriptor instead.
 func (*CatchupSeasonSealResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CatchupSeasonSealResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -984,7 +2274,26 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\vcaster_mask\x18\x0f \x01(\rR\n" +
 	"casterMask\x12\x1f\n" +
 	"\vaction_tags\x18\x10 \x01(\rR\n" +
-	"actionTags\"\xf0\t\n" +
+	"actionTags\"\xba\x02\n" +
+	"\x0fSeasonHonorView\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1f\n" +
+	"\vseason_name\x18\x02 \x01(\tR\n" +
+	"seasonName\x12(\n" +
+	"\x10honor_title_name\x18\x03 \x01(\tR\x0ehonorTitleName\x12/\n" +
+	"\x14honor_badge_icon_key\x18\x04 \x01(\tR\x11honorBadgeIconKey\x12'\n" +
+	"\x0fprogress_points\x18\x05 \x01(\rR\x0eprogressPoints\x12\x1d\n" +
+	"\n" +
+	"max_points\x18\x06 \x01(\rR\tmaxPoints\x12\x1a\n" +
+	"\bunlocked\x18\a \x01(\bR\bunlocked\x12*\n" +
+	"\x11is_current_season\x18\b \x01(\bR\x0fisCurrentSeason\"\xdc\x01\n" +
+	"\x15SeasonWeeklyAffixView\x12\x1d\n" +
+	"\n" +
+	"week_index\x18\x01 \x01(\rR\tweekIndex\x12\x19\n" +
+	"\baffix_id\x18\x02 \x01(\rR\aaffixId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12!\n" +
+	"\fstrategy_tip\x18\x05 \x01(\tR\vstrategyTip\x120\n" +
+	"\x14recommended_seal_ids\x18\x06 \x03(\rR\x12recommendedSealIds\"\xcb\v\n" +
 	"\x13SeasonStateSnapshot\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12-\n" +
 	"\x12unavailable_reason\x18\x02 \x01(\tR\x11unavailableReason\x12\x1b\n" +
@@ -1022,7 +2331,94 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\x19action_unavailable_reason\x18\x1b \x01(\tR\x17actionUnavailableReason\x12\x1a\n" +
 	"\brevision\x18\x1c \x01(\x04R\brevision\x12'\n" +
 	"\x05seals\x18\x1d \x03(\v2\x11.SeasonSealOptionR\x05seals\x128\n" +
-	"\rseason_skills\x18\x1e \x03(\v2\x13.SeasonSkillSummaryR\fseasonSkills\"\x17\n" +
+	"\rseason_skills\x18\x1e \x03(\v2\x13.SeasonSkillSummaryR\fseasonSkills\x122\n" +
+	"\x15equipped_formation_id\x18\x1f \x01(\rR\x13equippedFormationId\x12@\n" +
+	"\fsaved_builds\x18  \x03(\v2\x1d.SavedBattleBuildBookmarkViewR\vsavedBuilds\x12(\n" +
+	"\x06honors\x18! \x03(\v2\x10.SeasonHonorViewR\x06honors\x129\n" +
+	"\fweekly_affix\x18\" \x01(\v2\x16.SeasonWeeklyAffixViewR\vweeklyAffix\"\x84\x04\n" +
+	"\x1cSavedBattleBuildBookmarkView\x12\x1f\n" +
+	"\vbookmark_id\x18\x01 \x01(\x04R\n" +
+	"bookmarkId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12(\n" +
+	"\x10source_battle_id\x18\x03 \x01(\x04R\x0esourceBattleId\x12(\n" +
+	"\x10source_player_id\x18\x04 \x01(\x04R\x0esourcePlayerId\x12,\n" +
+	"\x12source_player_name\x18\x05 \x01(\tR\x10sourcePlayerName\x12\x19\n" +
+	"\bclass_id\x18\x06 \x01(\rR\aclassId\x12!\n" +
+	"\fformation_id\x18\a \x01(\rR\vformationId\x12$\n" +
+	"\x0eseason_seal_id\x18\b \x01(\rR\fseasonSealId\x12-\n" +
+	"\x13active_pet_table_id\x18\t \x01(\rR\x10activePetTableId\x12&\n" +
+	"\x0factive_pet_name\x18\n" +
+	" \x01(\tR\ractivePetName\x12&\n" +
+	"\x0fskill_table_ids\x18\v \x03(\rR\rskillTableIds\x12(\n" +
+	"\x10wuxing_sigil_ids\x18\f \x03(\rR\x0ewuxingSigilIds\x12\x1e\n" +
+	"\vsaved_at_ms\x18\r \x01(\x04R\tsavedAtMs\"@\n" +
+	"\x1bEquipWuxingFormationRequest\x12!\n" +
+	"\fformation_id\x18\x01 \x01(\rR\vformationId\"\xb4\x01\n" +
+	"\x1cEquipWuxingFormationResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x122\n" +
+	"\x15equipped_formation_id\x18\x02 \x01(\rR\x13equippedFormationId\x12*\n" +
+	"\x05state\x18\x03 \x01(\v2\x14.SeasonStateSnapshotR\x05state\"\xef\x01\n" +
+	"\x1bWuxingTowerLeaderboardEntry\x12\x12\n" +
+	"\x04rank\x18\x01 \x01(\rR\x04rank\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x03 \x01(\tR\n" +
+	"playerName\x12\x1d\n" +
+	"\n" +
+	"best_floor\x18\x04 \x01(\rR\tbestFloor\x12\x1f\n" +
+	"\vbest_rounds\x18\x05 \x01(\rR\n" +
+	"bestRounds\x12!\n" +
+	"\fformation_id\x18\x06 \x01(\rR\vformationId\x12\x1b\n" +
+	"\tsigil_ids\x18\a \x03(\rR\bsigilIds\"\xa9\x05\n" +
+	"\x18WuxingTowerStateSnapshot\x12\x19\n" +
+	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x1d\n" +
+	"\n" +
+	"run_active\x18\x02 \x01(\bR\trunActive\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\x04R\x05runId\x12#\n" +
+	"\rcurrent_floor\x18\x04 \x01(\rR\fcurrentFloor\x12\x1d\n" +
+	"\n" +
+	"max_floors\x18\x05 \x01(\rR\tmaxFloors\x127\n" +
+	"\x18current_floor_dungeon_id\x18\x06 \x01(\rR\x15currentFloorDungeonId\x12A\n" +
+	"\x1dcurrent_floor_leyline_element\x18\a \x01(\rR\x1acurrentFloorLeylineElement\x12(\n" +
+	"\x10run_total_rounds\x18\b \x01(\rR\x0erunTotalRounds\x12(\n" +
+	"\x10active_sigil_ids\x18\t \x03(\rR\x0eactiveSigilIds\x125\n" +
+	"\x17pending_offer_sigil_ids\x18\n" +
+	" \x03(\rR\x14pendingOfferSigilIds\x12.\n" +
+	"\x13weekly_cleared_mask\x18\v \x01(\rR\x11weeklyClearedMask\x12*\n" +
+	"\x11weekly_best_floor\x18\f \x01(\rR\x0fweeklyBestFloor\x12,\n" +
+	"\x12weekly_best_rounds\x18\r \x01(\rR\x10weeklyBestRounds\x12\x1a\n" +
+	"\brevision\x18\x0e \x01(\x04R\brevision\x12K\n" +
+	"\x12weekly_leaderboard\x18\x0f \x03(\v2\x1c.WuxingTowerLeaderboardEntryR\x11weeklyLeaderboard\"\x1c\n" +
+	"\x1aGetWuxingTowerStateRequest\"\x84\x01\n" +
+	"\x1bGetWuxingTowerStateResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
+	"\x05state\x18\x02 \x01(\v2\x19.WuxingTowerStateSnapshotR\x05state\"\x1c\n" +
+	"\x1aStartWuxingTowerRunRequest\"\x84\x01\n" +
+	"\x1bStartWuxingTowerRunResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
+	"\x05state\x18\x02 \x01(\v2\x19.WuxingTowerStateSnapshotR\x05state\"`\n" +
+	"\x1bPickWuxingTowerSigilRequest\x12&\n" +
+	"\x0fexpected_run_id\x18\x01 \x01(\x04R\rexpectedRunId\x12\x19\n" +
+	"\bsigil_id\x18\x02 \x01(\rR\asigilId\"\x85\x01\n" +
+	"\x1cPickWuxingTowerSigilResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
+	"\x05state\x18\x02 \x01(\v2\x19.WuxingTowerStateSnapshotR\x05state\"F\n" +
+	"\x1cAbandonWuxingTowerRunRequest\x12&\n" +
+	"\x0fexpected_run_id\x18\x01 \x01(\x04R\rexpectedRunId\"\x86\x01\n" +
+	"\x1dAbandonWuxingTowerRunResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
+	"\x05state\x18\x02 \x01(\v2\x19.WuxingTowerStateSnapshotR\x05state\"[\n" +
+	"\x1eSaveBattleBuildBookmarkRequest\x129\n" +
+	"\bbookmark\x18\x01 \x01(\v2\x1d.SavedBattleBuildBookmarkViewR\bbookmark\"\xd0\x01\n" +
+	"\x1fSaveBattleBuildBookmarkResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
+	"\x05saved\x18\x02 \x01(\v2\x1d.SavedBattleBuildBookmarkViewR\x05saved\x12B\n" +
+	"\rall_bookmarks\x18\x03 \x03(\v2\x1d.SavedBattleBuildBookmarkViewR\fallBookmarks\"C\n" +
+	" DeleteBattleBuildBookmarkRequest\x12\x1f\n" +
+	"\vbookmark_id\x18\x01 \x01(\x04R\n" +
+	"bookmarkId\"\x9d\x01\n" +
+	"!DeleteBattleBuildBookmarkResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12B\n" +
+	"\rall_bookmarks\x18\x02 \x03(\v2\x1d.SavedBattleBuildBookmarkViewR\fallBookmarks\"\x17\n" +
 	"\x15GetSeasonStateRequest\"z\n" +
 	"\x16GetSeasonStateResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
@@ -1044,11 +2440,18 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\x05state\x18\x02 \x01(\v2\x14.SeasonStateSnapshotR\x05state\x12\x1a\n" +
 	"\breplayed\x18\x03 \x01(\bR\breplayed\x12!\n" +
 	"\fadded_points\x18\x04 \x01(\rR\vaddedPoints\x12%\n" +
-	"\x0espent_currency\x18\x05 \x01(\x04R\rspentCurrency2\xfa\x01\n" +
+	"\x0espent_currency\x18\x05 \x01(\x04R\rspentCurrency2\xe2\x06\n" +
 	"\x17SceneSeasonClientPlayer\x12A\n" +
 	"\x0eGetSeasonState\x12\x16.GetSeasonStateRequest\x1a\x17.GetSeasonStateResponse\x12D\n" +
 	"\x0fEquipSeasonSeal\x12\x17.EquipSeasonSealRequest\x1a\x18.EquipSeasonSealResponse\x12J\n" +
-	"\x11CatchupSeasonSeal\x12\x19.CatchupSeasonSealRequest\x1a\x1a.CatchupSeasonSealResponse\x1a\n" +
+	"\x11CatchupSeasonSeal\x12\x19.CatchupSeasonSealRequest\x1a\x1a.CatchupSeasonSealResponse\x12S\n" +
+	"\x14EquipWuxingFormation\x12\x1c.EquipWuxingFormationRequest\x1a\x1d.EquipWuxingFormationResponse\x12P\n" +
+	"\x13GetWuxingTowerState\x12\x1b.GetWuxingTowerStateRequest\x1a\x1c.GetWuxingTowerStateResponse\x12P\n" +
+	"\x13StartWuxingTowerRun\x12\x1b.StartWuxingTowerRunRequest\x1a\x1c.StartWuxingTowerRunResponse\x12S\n" +
+	"\x14PickWuxingTowerSigil\x12\x1c.PickWuxingTowerSigilRequest\x1a\x1d.PickWuxingTowerSigilResponse\x12V\n" +
+	"\x15AbandonWuxingTowerRun\x12\x1d.AbandonWuxingTowerRunRequest\x1a\x1e.AbandonWuxingTowerRunResponse\x12\\\n" +
+	"\x17SaveBattleBuildBookmark\x12\x1f.SaveBattleBuildBookmarkRequest\x1a .SaveBattleBuildBookmarkResponse\x12b\n" +
+	"\x19DeleteBattleBuildBookmark\x12!.DeleteBattleBuildBookmarkRequest\x1a\".DeleteBattleBuildBookmarkResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -1063,39 +2466,92 @@ func file_proto_scene_player_season_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_season_proto_rawDescData
 }
 
-var file_proto_scene_player_season_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_scene_player_season_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_scene_player_season_proto_goTypes = []any{
-	(*SeasonSealOption)(nil),          // 0: SeasonSealOption
-	(*SeasonSkillSummary)(nil),        // 1: SeasonSkillSummary
-	(*SeasonStateSnapshot)(nil),       // 2: SeasonStateSnapshot
-	(*GetSeasonStateRequest)(nil),     // 3: GetSeasonStateRequest
-	(*GetSeasonStateResponse)(nil),    // 4: GetSeasonStateResponse
-	(*EquipSeasonSealRequest)(nil),    // 5: EquipSeasonSealRequest
-	(*EquipSeasonSealResponse)(nil),   // 6: EquipSeasonSealResponse
-	(*CatchupSeasonSealRequest)(nil),  // 7: CatchupSeasonSealRequest
-	(*CatchupSeasonSealResponse)(nil), // 8: CatchupSeasonSealResponse
-	(*base.TipInfoMessage)(nil),       // 9: TipInfoMessage
+	(*SeasonSealOption)(nil),                  // 0: SeasonSealOption
+	(*SeasonSkillSummary)(nil),                // 1: SeasonSkillSummary
+	(*SeasonHonorView)(nil),                   // 2: SeasonHonorView
+	(*SeasonWeeklyAffixView)(nil),             // 3: SeasonWeeklyAffixView
+	(*SeasonStateSnapshot)(nil),               // 4: SeasonStateSnapshot
+	(*SavedBattleBuildBookmarkView)(nil),      // 5: SavedBattleBuildBookmarkView
+	(*EquipWuxingFormationRequest)(nil),       // 6: EquipWuxingFormationRequest
+	(*EquipWuxingFormationResponse)(nil),      // 7: EquipWuxingFormationResponse
+	(*WuxingTowerLeaderboardEntry)(nil),       // 8: WuxingTowerLeaderboardEntry
+	(*WuxingTowerStateSnapshot)(nil),          // 9: WuxingTowerStateSnapshot
+	(*GetWuxingTowerStateRequest)(nil),        // 10: GetWuxingTowerStateRequest
+	(*GetWuxingTowerStateResponse)(nil),       // 11: GetWuxingTowerStateResponse
+	(*StartWuxingTowerRunRequest)(nil),        // 12: StartWuxingTowerRunRequest
+	(*StartWuxingTowerRunResponse)(nil),       // 13: StartWuxingTowerRunResponse
+	(*PickWuxingTowerSigilRequest)(nil),       // 14: PickWuxingTowerSigilRequest
+	(*PickWuxingTowerSigilResponse)(nil),      // 15: PickWuxingTowerSigilResponse
+	(*AbandonWuxingTowerRunRequest)(nil),      // 16: AbandonWuxingTowerRunRequest
+	(*AbandonWuxingTowerRunResponse)(nil),     // 17: AbandonWuxingTowerRunResponse
+	(*SaveBattleBuildBookmarkRequest)(nil),    // 18: SaveBattleBuildBookmarkRequest
+	(*SaveBattleBuildBookmarkResponse)(nil),   // 19: SaveBattleBuildBookmarkResponse
+	(*DeleteBattleBuildBookmarkRequest)(nil),  // 20: DeleteBattleBuildBookmarkRequest
+	(*DeleteBattleBuildBookmarkResponse)(nil), // 21: DeleteBattleBuildBookmarkResponse
+	(*GetSeasonStateRequest)(nil),             // 22: GetSeasonStateRequest
+	(*GetSeasonStateResponse)(nil),            // 23: GetSeasonStateResponse
+	(*EquipSeasonSealRequest)(nil),            // 24: EquipSeasonSealRequest
+	(*EquipSeasonSealResponse)(nil),           // 25: EquipSeasonSealResponse
+	(*CatchupSeasonSealRequest)(nil),          // 26: CatchupSeasonSealRequest
+	(*CatchupSeasonSealResponse)(nil),         // 27: CatchupSeasonSealResponse
+	(*base.TipInfoMessage)(nil),               // 28: TipInfoMessage
 }
 var file_proto_scene_player_season_proto_depIdxs = []int32{
 	0,  // 0: SeasonStateSnapshot.seals:type_name -> SeasonSealOption
 	1,  // 1: SeasonStateSnapshot.season_skills:type_name -> SeasonSkillSummary
-	9,  // 2: GetSeasonStateResponse.error_message:type_name -> TipInfoMessage
-	2,  // 3: GetSeasonStateResponse.state:type_name -> SeasonStateSnapshot
-	9,  // 4: EquipSeasonSealResponse.error_message:type_name -> TipInfoMessage
-	2,  // 5: EquipSeasonSealResponse.state:type_name -> SeasonStateSnapshot
-	9,  // 6: CatchupSeasonSealResponse.error_message:type_name -> TipInfoMessage
-	2,  // 7: CatchupSeasonSealResponse.state:type_name -> SeasonStateSnapshot
-	3,  // 8: SceneSeasonClientPlayer.GetSeasonState:input_type -> GetSeasonStateRequest
-	5,  // 9: SceneSeasonClientPlayer.EquipSeasonSeal:input_type -> EquipSeasonSealRequest
-	7,  // 10: SceneSeasonClientPlayer.CatchupSeasonSeal:input_type -> CatchupSeasonSealRequest
-	4,  // 11: SceneSeasonClientPlayer.GetSeasonState:output_type -> GetSeasonStateResponse
-	6,  // 12: SceneSeasonClientPlayer.EquipSeasonSeal:output_type -> EquipSeasonSealResponse
-	8,  // 13: SceneSeasonClientPlayer.CatchupSeasonSeal:output_type -> CatchupSeasonSealResponse
-	11, // [11:14] is the sub-list for method output_type
-	8,  // [8:11] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	5,  // 2: SeasonStateSnapshot.saved_builds:type_name -> SavedBattleBuildBookmarkView
+	2,  // 3: SeasonStateSnapshot.honors:type_name -> SeasonHonorView
+	3,  // 4: SeasonStateSnapshot.weekly_affix:type_name -> SeasonWeeklyAffixView
+	28, // 5: EquipWuxingFormationResponse.error_message:type_name -> TipInfoMessage
+	4,  // 6: EquipWuxingFormationResponse.state:type_name -> SeasonStateSnapshot
+	8,  // 7: WuxingTowerStateSnapshot.weekly_leaderboard:type_name -> WuxingTowerLeaderboardEntry
+	28, // 8: GetWuxingTowerStateResponse.error_message:type_name -> TipInfoMessage
+	9,  // 9: GetWuxingTowerStateResponse.state:type_name -> WuxingTowerStateSnapshot
+	28, // 10: StartWuxingTowerRunResponse.error_message:type_name -> TipInfoMessage
+	9,  // 11: StartWuxingTowerRunResponse.state:type_name -> WuxingTowerStateSnapshot
+	28, // 12: PickWuxingTowerSigilResponse.error_message:type_name -> TipInfoMessage
+	9,  // 13: PickWuxingTowerSigilResponse.state:type_name -> WuxingTowerStateSnapshot
+	28, // 14: AbandonWuxingTowerRunResponse.error_message:type_name -> TipInfoMessage
+	9,  // 15: AbandonWuxingTowerRunResponse.state:type_name -> WuxingTowerStateSnapshot
+	5,  // 16: SaveBattleBuildBookmarkRequest.bookmark:type_name -> SavedBattleBuildBookmarkView
+	28, // 17: SaveBattleBuildBookmarkResponse.error_message:type_name -> TipInfoMessage
+	5,  // 18: SaveBattleBuildBookmarkResponse.saved:type_name -> SavedBattleBuildBookmarkView
+	5,  // 19: SaveBattleBuildBookmarkResponse.all_bookmarks:type_name -> SavedBattleBuildBookmarkView
+	28, // 20: DeleteBattleBuildBookmarkResponse.error_message:type_name -> TipInfoMessage
+	5,  // 21: DeleteBattleBuildBookmarkResponse.all_bookmarks:type_name -> SavedBattleBuildBookmarkView
+	28, // 22: GetSeasonStateResponse.error_message:type_name -> TipInfoMessage
+	4,  // 23: GetSeasonStateResponse.state:type_name -> SeasonStateSnapshot
+	28, // 24: EquipSeasonSealResponse.error_message:type_name -> TipInfoMessage
+	4,  // 25: EquipSeasonSealResponse.state:type_name -> SeasonStateSnapshot
+	28, // 26: CatchupSeasonSealResponse.error_message:type_name -> TipInfoMessage
+	4,  // 27: CatchupSeasonSealResponse.state:type_name -> SeasonStateSnapshot
+	22, // 28: SceneSeasonClientPlayer.GetSeasonState:input_type -> GetSeasonStateRequest
+	24, // 29: SceneSeasonClientPlayer.EquipSeasonSeal:input_type -> EquipSeasonSealRequest
+	26, // 30: SceneSeasonClientPlayer.CatchupSeasonSeal:input_type -> CatchupSeasonSealRequest
+	6,  // 31: SceneSeasonClientPlayer.EquipWuxingFormation:input_type -> EquipWuxingFormationRequest
+	10, // 32: SceneSeasonClientPlayer.GetWuxingTowerState:input_type -> GetWuxingTowerStateRequest
+	12, // 33: SceneSeasonClientPlayer.StartWuxingTowerRun:input_type -> StartWuxingTowerRunRequest
+	14, // 34: SceneSeasonClientPlayer.PickWuxingTowerSigil:input_type -> PickWuxingTowerSigilRequest
+	16, // 35: SceneSeasonClientPlayer.AbandonWuxingTowerRun:input_type -> AbandonWuxingTowerRunRequest
+	18, // 36: SceneSeasonClientPlayer.SaveBattleBuildBookmark:input_type -> SaveBattleBuildBookmarkRequest
+	20, // 37: SceneSeasonClientPlayer.DeleteBattleBuildBookmark:input_type -> DeleteBattleBuildBookmarkRequest
+	23, // 38: SceneSeasonClientPlayer.GetSeasonState:output_type -> GetSeasonStateResponse
+	25, // 39: SceneSeasonClientPlayer.EquipSeasonSeal:output_type -> EquipSeasonSealResponse
+	27, // 40: SceneSeasonClientPlayer.CatchupSeasonSeal:output_type -> CatchupSeasonSealResponse
+	7,  // 41: SceneSeasonClientPlayer.EquipWuxingFormation:output_type -> EquipWuxingFormationResponse
+	11, // 42: SceneSeasonClientPlayer.GetWuxingTowerState:output_type -> GetWuxingTowerStateResponse
+	13, // 43: SceneSeasonClientPlayer.StartWuxingTowerRun:output_type -> StartWuxingTowerRunResponse
+	15, // 44: SceneSeasonClientPlayer.PickWuxingTowerSigil:output_type -> PickWuxingTowerSigilResponse
+	17, // 45: SceneSeasonClientPlayer.AbandonWuxingTowerRun:output_type -> AbandonWuxingTowerRunResponse
+	19, // 46: SceneSeasonClientPlayer.SaveBattleBuildBookmark:output_type -> SaveBattleBuildBookmarkResponse
+	21, // 47: SceneSeasonClientPlayer.DeleteBattleBuildBookmark:output_type -> DeleteBattleBuildBookmarkResponse
+	38, // [38:48] is the sub-list for method output_type
+	28, // [28:38] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_season_proto_init() }
@@ -1109,7 +2565,7 @@ func file_proto_scene_player_season_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_season_proto_rawDesc), len(file_proto_scene_player_season_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -107,4 +107,16 @@ public final class SeasonRuleTableComp {
         }
     }
 
+    public record Honor_title_name(String value) {
+        public static Honor_title_name from(SeasonRuleTable row) {
+            return new Honor_title_name(row.getHonorTitleName());
+        }
+    }
+
+    public record Honor_badge_icon_key(String value) {
+        public static Honor_badge_icon_key from(SeasonRuleTable row) {
+            return new Honor_badge_icon_key(row.getHonorBadgeIconKey());
+        }
+    }
+
 }

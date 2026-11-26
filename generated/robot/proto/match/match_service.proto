@@ -86,6 +86,21 @@ service MatchService {
   rpc StartTournamentMatch(StartTournamentMatchRequest) returns (StartTournamentMatchResponse) {}
   rpc CheerTournamentSquad(CheerTournamentSquadRequest) returns (CheerTournamentSquadResponse) {}
   rpc ClaimTournamentReward(ClaimTournamentRewardRequest) returns (ClaimTournamentRewardResponse) {}
+
+  // ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/design/season-team-tournament-v2.md):请求只认会话本人 ----
+  rpc SaluteTournamentChampion(SaluteTournamentChampionRequest) returns (SaluteTournamentChampionResponse) {}
+  rpc SendTournamentSpectateCheer(SendTournamentSpectateCheerRequest) returns (SendTournamentSpectateCheerResponse) {}
+  rpc GetTournamentSpectateCheer(GetTournamentSpectateCheerRequest) returns (GetTournamentSpectateCheerResponse) {}
+
+  // ---- 全服赛季战队锦标赛《群仙问道赛》V3(docs/planning/season-team-tournament-v3.md):请求只认会话本人 ----
+  rpc UpdateTournamentSquadEmblem(UpdateTournamentSquadEmblemRequest) returns (UpdateTournamentSquadEmblemResponse) {}
+  rpc StartTournamentWarmup(StartTournamentWarmupRequest) returns (StartTournamentWarmupResponse) {}
+  rpc PredictTournamentMatch(PredictTournamentMatchRequest) returns (PredictTournamentMatchResponse) {}
+  rpc GetTournamentPredictionBoard(GetTournamentPredictionBoardRequest) returns (GetTournamentPredictionBoardResponse) {}
+
+  // ---- 全服赛季战队锦标赛《群仙问道赛》V4(docs/planning/season-team-tournament-v4.md):请求只认会话本人 ----
+  rpc BanTournamentLeyline(BanTournamentLeylineRequest) returns (BanTournamentLeylineResponse) {}
+  rpc GetTournamentHighlights(GetTournamentHighlightsRequest) returns (GetTournamentHighlightsResponse) {}
 }
 
 // ----- Match mode config -----
@@ -135,6 +150,8 @@ message JoinQueueRequest {
   uint32 pet_preset_id = 11;
   // 排位规则版本号(非 0 时与当前赛季规则版本比对,不符回 kMatchRankedRuleVersionMismatch)。
   uint32 ranked_rule_version = 12;
+  // true = 五行幻境周常爬塔单人开战（仅 PVE_SOLO 有效，真实层数与符印由 Scene 从玩家权威状态注入）。
+  bool is_wuxing_tower = 13;
 }
 
 message JoinQueueResponse {
@@ -199,6 +216,7 @@ message ChallengePlayerRequest {
   uint64 player_id = 1;          // 发起者(权威身份以 session metadata 为准)
   uint64 target_player_id = 2;   // 被挑战者(客户端从场景 AOI 拿到)
   uint32 battle_config_id = 3;   // PK 规则/场地配置(0 = 默认切磋规则)
+  CustomDuelRules custom_rules = 4; // 道友切磋坊自定义规则（可空=默认真养成私密切磋）
 }
 
 message ChallengePlayerResponse {
@@ -210,6 +228,8 @@ message RespondChallengeRequest {
   uint64 player_id = 1;          // 应战者(权威身份以 session metadata 为准)
   uint64 challenge_id = 2;
   bool accept = 3;
+  uint32 responder_character_preset_id = 4; // 公平模板切磋时应战者所选人物预设（0=默认 101）
+  uint32 responder_pet_preset_id = 5;       // 公平模板切磋时应战者所选灵宠预设（0=默认 203）
 }
 
 message RespondChallengeResponse {
@@ -223,6 +243,7 @@ message ChallengeInviteS2C {
   string challenger_name = 3;
   uint32 battle_config_id = 4;
   uint64 expires_at_ms = 5;      // Unix 毫秒,过期客户端自动收起弹窗
+  CustomDuelRules custom_rules = 6; // 发起者勾选的自定义切磋规则（弹窗明示给应战者）
 }
 
 // 推给发起者(以及拒绝时推给双方)的结果
@@ -542,6 +563,8 @@ message RankedPlayerSeasonSummary {
   uint32 milestone_bits = 13;      // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符, bit3=6胜锋芒称号
   uint64 final_rank = 14;          // 封榜后最终名次;0=未上榜或未封榜
   bool champion_awarded = 15;      // 封榜第 1 且终分达到无双
+  uint32 current_win_streak = 16;  // 本季当前有效连胜场次（胜+1、负归0、平/作废不变；纯荣誉）
+  uint32 best_win_streak = 17;     // 本季最高连胜纪录（纯荣誉）
 }
 
 message RankedBattleSettlementView {
@@ -565,6 +588,8 @@ message RankedBattleSettlementView {
   uint64 settled_at_ms = 18;
   uint32 character_preset_id = 19;
   uint32 pet_preset_id = 20;
+  uint32 win_streak_after = 21;      // 本局结算后的当前连胜数
+  uint32 ended_opponent_streak = 22; // 若本方获胜并终结了 >=3 连胜对手，记录被终结的最高连胜数（否则 0）
 }
 
 message GetRankedProfileRequest {
@@ -640,6 +665,19 @@ enum TournamentMatchPhase {
   TOURNAMENT_MATCH_PHASE_UNSPECIFIED = 0;
   TOURNAMENT_MATCH_PHASE_QUALIFIER   = 1; // 海选积分赛
   TOURNAMENT_MATCH_PHASE_KNOCKOUT    = 2; // 淘汰赛/总决赛
+  TOURNAMENT_MATCH_PHASE_WARMUP      = 3; // V3: 赛前零积分热身约战
+}
+
+enum TournamentSquadEmblem {
+  TOURNAMENT_SQUAD_EMBLEM_UNSPECIFIED = 0; // 未选(服务端归一化为 1 青剑)
+  TOURNAMENT_SQUAD_EMBLEM_SWORD       = 1; // 青剑(诛邪剑)
+  TOURNAMENT_SQUAD_EMBLEM_TAIJI       = 2; // 太极(两仪图)
+  TOURNAMENT_SQUAD_EMBLEM_FURNACE     = 3; // 丹炉(金丹炉)
+  TOURNAMENT_SQUAD_EMBLEM_LOTUS       = 4; // 青莲(玉清莲)
+  TOURNAMENT_SQUAD_EMBLEM_CRANE       = 5; // 玄鹤(仙鹤印)
+  TOURNAMENT_SQUAD_EMBLEM_THUNDER     = 6; // 雷印(五雷诀)
+  TOURNAMENT_SQUAD_EMBLEM_BAGUA       = 7; // 八卦(先天卦)
+  TOURNAMENT_SQUAD_EMBLEM_CAULDRON    = 8; // 云鼎(玄天鼎)
 }
 
 enum TournamentMatchState {
@@ -650,6 +688,7 @@ enum TournamentMatchState {
   TOURNAMENT_MATCH_STATE_FINISHED         = 4; // 已决胜负/平局
   TOURNAMENT_MATCH_STATE_BYE              = 5; // 轮空自动晋级
   TOURNAMENT_MATCH_STATE_FORFEIT          = 6; // 超时弃权裁决
+  TOURNAMENT_MATCH_STATE_INTERMISSION     = 7; // V2: BO3 局间灵脉公示与 60 秒换阵倒计时中
 }
 
 enum TournamentRewardTierKind {
@@ -661,6 +700,8 @@ enum TournamentRewardTierKind {
   TOURNAMENT_REWARD_TIER_TOP16       = 5; // 十六强(第9-16名)
   TOURNAMENT_REWARD_TIER_PARTICIPANT = 6; // 参赛保底(全队完赛>=2场)
   TOURNAMENT_REWARD_TIER_CHEER       = 7; // 免费助威命中(所选队进四强/夺冠)
+  TOURNAMENT_REWARD_TIER_THIRD_PLACE = 8; // V3: 季军(第3名,启用季军争夺战时独立发放)
+  TOURNAMENT_REWARD_TIER_PREDICTION  = 9; // V3: 神机竞猜达标纪念礼(零成本免费预测命中达标)
 }
 
 enum TournamentRewardDeliveryState {
@@ -693,6 +734,17 @@ message TournamentSeasonView {
   uint64 champion_squad_id = 20;
   string champion_squad_name = 21;
   string champion_member_summary = 22;  // 冠军成员摘要(供冠军殿堂展示)
+  uint64 champion_salute_count = 23;    // V2: 全服累计观道致敬次数
+  bool saluted_today = 24;              // V2: 当前玩家今日(UTC+8)是否已观道致敬
+  repeated TournamentMemberView champion_members = 25; // V2: 冠军战队成员外观快照
+  uint32 champion_emblem_id = 26;                     // V3: 冠军战队队徽(1..8)
+  uint64 third_place_squad_id = 27;                   // V3: 季军战队 ID(0=无季军战或未决出)
+  string third_place_squad_name = 28;                 // V3: 季军战队名
+  uint32 third_place_emblem_id = 29;                  // V3: 季军战队队徽(1..8)
+  uint64 final_mvp_player_id = 30;                    // V3: 总决赛问鼎之星(MVP)玩家 ID
+  string final_mvp_player_name = 31;                  // V3: 总决赛 MVP 角色名
+  uint32 final_mvp_score = 32;                        // V3: 总决赛 MVP 综合战功分
+  uint32 champion_honor_bits = 33;                    // V4: 冠军战队赛季荣耀铭牌位图(bit 0..5)
 }
 
 message TournamentMemberView {
@@ -702,6 +754,9 @@ message TournamentMemberView {
   TournamentMemberRole role = 4;
   uint32 starter_slot = 5; // 1..battle_team_size 为首发位,0 为替补
   uint64 joined_ms = 6;
+  uint32 class_id = 7;        // V2: 门派/职业表 ID(0=未知,客户端回落中性青玉剪影)
+  uint32 gender = 8;          // V2: 性别(0=未知)
+  string appearance_id = 9;   // V2: 外观立绘标识(空=按 class_id+gender 解析)
 }
 
 message TournamentSquadView {
@@ -721,6 +776,8 @@ message TournamentSquadView {
   uint32 cheer_count = 14; // 全服免费助威票数
   uint64 registered_ms = 15;
   repeated TournamentMemberView members = 16;
+  uint32 emblem_id = 17;  // V3: 官方预设道家队徽(1..8)
+  uint32 honor_bits = 18; // V4: 战队赛季荣耀铭牌位图(bit 0..5)
 }
 
 message TournamentInviteView {
@@ -757,6 +814,30 @@ message TournamentMatchView {
   uint64 scheduled_start_ms = 19;
   uint64 deadline_ms = 20;
   uint64 finished_ms = 21;
+  uint32 best_of = 22;                                       // V2: 1=BO1, 3=BO3
+  uint32 current_game_index = 23;                            // V2: 当前小局序号(1..best_of)
+  uint32 wins_a = 24;                                        // V2: A 队小局胜场
+  uint32 wins_b = 25;                                        // V2: B 队小局胜场
+  TournamentLeylineElement current_leyline_element = 26;     // V2: 当前/下一小局五行灵脉阵眼
+  repeated TournamentLeylineElement leyline_sequence = 27;   // V2: BO3 全部灵脉公示顺序(不重复)
+  uint64 intermission_deadline_ms = 28;                      // V2: BO3 局间换阵截止时刻(Unix 毫秒)
+  bool public_replay_available = 29;                         // V2: 是否向全服公开战报回放
+  repeated uint64 game_battle_ids = 30;                      // V2: 已开战各小局 battle_id 列表(按局序)
+  uint32 squad_a_emblem_id = 31;                             // V3: A 队队徽(1..8)
+  uint32 squad_b_emblem_id = 32;                             // V3: B 队队徽(1..8)
+  bool is_third_place = 33;                                  // V3: true=季军争夺战(铜牌战)
+  uint64 mvp_player_id = 34;                                 // V3: 本场问鼎之星(MVP)玩家 ID(0=未评出)
+  string mvp_player_name = 35;                               // V3: 本场 MVP 角色名
+  uint64 mvp_squad_id = 36;                                  // V3: 本场 MVP 所属战队 ID
+  uint32 mvp_score = 37;                                     // V3: 本场 MVP 综合战功分
+  uint64 mvp_damage = 38;                                    // V3: 本场 MVP 累计伤害
+  uint64 mvp_healing = 39;                                   // V3: 本场 MVP 累计治疗与护盾
+  uint32 mvp_controls = 40;                                  // V3: 本场 MVP 累计成功硬控次数
+  uint64 my_predicted_squad_id = 41;                         // V3: 当前查询玩家对本场淘汰赛的免费预测战队 ID(0=未预测)
+  uint32 predict_count_a = 42;                               // V3: 全服预测 A 队胜票数
+  uint32 predict_count_b = 43;                               // V3: 全服预测 B 队胜票数
+  TournamentLeylineElement banned_leyline_a = 44;            // V4: BO3 赛前 A 队队长禁选的灵脉(0=未禁)
+  TournamentLeylineElement banned_leyline_b = 45;            // V4: BO3 赛前 B 队队长禁选的灵脉(0=未禁)
 }
 
 message TournamentRewardItem {
@@ -811,6 +892,7 @@ message GetTournamentOverviewResponse {
 
 message CreateTournamentSquadRequest {
   string squad_name = 1; // 2..12 字符,服务端审核并同季去重
+  uint32 emblem_id = 2;  // V3: 可选预设道家队徽(0 默认 1 青剑,否则必须 1..8)
 }
 message CreateTournamentSquadResponse {
   TipInfoMessage error_message = 1;
@@ -897,4 +979,164 @@ message ClaimTournamentRewardRequest {
 message ClaimTournamentRewardResponse {
   TipInfoMessage error_message = 1;
   repeated TournamentPlayerRewardView claimed_rewards = 2;
+}
+
+// ---- 《群仙问道赛》V2 增量协议：每日免费观道致敬 + 观战预设喝彩 ----
+
+message SaluteTournamentChampionRequest {
+  uint32 season_id = 1; // 0 = 致敬最近一届有总冠军的赛季
+}
+message SaluteTournamentChampionResponse {
+  TipInfoMessage error_message = 1;
+  uint32 season_id = 2;
+  uint64 champion_salute_count = 3;
+  bool saluted_today = 4;
+  uint64 gold_amount = 5;
+  repeated TournamentRewardItem items = 6;
+  uint64 mail_id = 7;
+}
+
+message TournamentSpectateCheerItem {
+  uint64 seq = 1;         // 本场递增序号(客户端按 seq 去重飘字)
+  uint32 phrase_id = 2;   // 严格白名单 1..6: 1道友加油/2稳住阵脚/3妙法天成/4配合无间/5逆转乾坤/6一战封神
+  uint32 side = 3;        // 0=支持A队(玉绿), 1=支持B队(朱砂)
+  string sender_name = 4; // 发送者角色名
+  uint64 created_ms = 5;
+}
+
+message SendTournamentSpectateCheerRequest {
+  uint64 battle_id = 1;
+  uint32 phrase_id = 2; // 严格白名单 1..6
+  uint32 side = 3;      // 0=A队, 1=B队
+}
+message SendTournamentSpectateCheerResponse {
+  TipInfoMessage error_message = 1;
+  uint64 battle_id = 2;
+  uint64 count_a = 3;
+  uint64 count_b = 4;
+  uint64 cooldown_until_ms = 5;
+  repeated TournamentSpectateCheerItem recent_cheers = 6;
+  uint64 server_time_ms = 7;
+}
+
+message GetTournamentSpectateCheerRequest {
+  uint64 battle_id = 1;
+  uint64 after_seq = 2; // 仅返回 seq > after_seq 的新喝彩(0=返回近期若干条)
+}
+message GetTournamentSpectateCheerResponse {
+  TipInfoMessage error_message = 1;
+  uint64 battle_id = 2;
+  uint64 count_a = 3;
+  uint64 count_b = 4;
+  uint64 cooldown_until_ms = 5;
+  repeated TournamentSpectateCheerItem recent_cheers = 6;
+  uint64 server_time_ms = 7;
+}
+
+// ---- 《群仙问道赛》V3 增量协议：队徽更换 + 零积分热身约战 + 神机问道免费竞猜 ----
+
+message UpdateTournamentSquadEmblemRequest {
+  uint32 emblem_id = 1; // 必须为 1..8
+}
+message UpdateTournamentSquadEmblemResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSquadView squad = 2;
+}
+
+message StartTournamentWarmupRequest {
+  uint64 target_squad_id = 1;                   // 0 = 全服随机热身池;非 0 = 定向约战指定战队
+  TournamentLeylineElement leyline_element = 2; // 0..5 自选演练灵脉
+  repeated uint64 lineup_player_ids = 3;        // 空则沿用当前已保存首发阵容
+}
+message StartTournamentWarmupResponse {
+  TipInfoMessage error_message = 1;
+  TournamentMatchView match = 2;
+  uint64 battle_id = 3;
+}
+
+message PredictTournamentMatchRequest {
+  uint64 match_id = 1;
+  uint64 predicted_squad_id = 2;
+}
+message PredictTournamentMatchResponse {
+  TipInfoMessage error_message = 1;
+  uint64 match_id = 2;
+  uint64 predicted_squad_id = 3;
+  uint32 predict_count_a = 4;
+  uint32 predict_count_b = 5;
+}
+
+message TournamentPredictionEntryView {
+  uint64 match_id = 1;
+  uint32 round_index = 2;
+  uint32 slot_index = 3;
+  bool is_third_place = 4;
+  uint64 squad_a_id = 5;
+  string squad_a_name = 6;
+  uint64 squad_b_id = 7;
+  string squad_b_name = 8;
+  uint64 predicted_squad_id = 9;
+  uint64 winner_squad_id = 10;
+  uint32 result_state = 11; // 0 待结算 / 1 命中 / 2 未中
+  uint32 earned_points = 12;
+  uint64 updated_ms = 13;
+}
+
+message TournamentPredictionRankEntry {
+  uint32 rank = 1;
+  uint64 player_id = 2;
+  string player_name = 3;
+  uint32 hit_count = 4;
+  uint32 total_predictions = 5;
+  uint32 total_points = 6;
+}
+
+message GetTournamentPredictionBoardRequest {
+  uint32 season_id = 1; // 0 = 当前赛季
+}
+message GetTournamentPredictionBoardResponse {
+  TipInfoMessage error_message = 1;
+  uint32 season_id = 2;
+  uint32 min_hits_for_reward = 3;
+  uint32 my_hit_count = 4;
+  uint32 my_total_points = 5;
+  uint32 my_rank = 6;
+  repeated TournamentPredictionEntryView my_predictions = 7;
+  repeated TournamentPredictionRankEntry top_predictors = 8;
+  uint64 server_time_ms = 9;
+}
+
+// ---- 《群仙问道赛》V4 增量协议：BO3 五行灵脉禁选 + 本季名局录 ----
+
+enum TournamentHighlightTag {
+  TOURNAMENT_HIGHLIGHT_TAG_UNSPECIFIED = 0;
+  TOURNAMENT_HIGHLIGHT_TAG_FINAL = 1;        // 总决赛巅峰局
+  TOURNAMENT_HIGHLIGHT_TAG_BO3_THRILLER = 2; // 决胜三局激战
+  TOURNAMENT_HIGHLIGHT_TAG_THIRD_PLACE = 3;  // 季军争夺战
+  TOURNAMENT_HIGHLIGHT_TAG_HIGH_MVP = 4;     // 高光问鼎局
+}
+
+message BanTournamentLeylineRequest {
+  uint64 match_id = 1;
+  TournamentLeylineElement leyline_element = 2; // 必须为 1..5(金/木/水/火/土)
+}
+message BanTournamentLeylineResponse {
+  TipInfoMessage error_message = 1;
+  TournamentMatchView match = 2;
+}
+
+message TournamentHighlightEntry {
+  TournamentHighlightTag tag = 1;
+  string tag_label = 2;
+  TournamentMatchView match = 3;
+}
+
+message GetTournamentHighlightsRequest {
+  uint32 season_id = 1; // 0 = 当前赛季
+}
+message GetTournamentHighlightsResponse {
+  TipInfoMessage error_message = 1;
+  uint32 season_id = 2;
+  repeated TournamentHighlightEntry highlights = 3;
+  uint64 server_time_ms = 4;
 }

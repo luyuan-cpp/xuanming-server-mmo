@@ -1,0 +1,38 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum travel_pass_error {
+  kTravel_pass_errorOK = 0;
+
+  kTravelPassUnavailable = 38000;
+
+  kTravelPassNotOpen = 38001;
+
+  kTravelPassAlreadyUnlocked = 38002;
+
+  kTravelPassPriceChanged = 38003;
+
+  kTravelPassCurrencyNotEnough = 38004;
+
+  kTravelPassNotReached = 38005;
+
+  kTravelPassPremiumRequired = 38006;
+
+  kTravelPassNothingToClaim = 38007;
+
+  kTravelPassBagFull = 38008;
+
+  kTravelPassItemBlocked = 38009;
+
+  kTravelPassFrozen = 38010;
+
+  kTravelPassInBattle = 38011;
+
+  kTravelPassCosmeticNotOwned = 38012;
+
+};

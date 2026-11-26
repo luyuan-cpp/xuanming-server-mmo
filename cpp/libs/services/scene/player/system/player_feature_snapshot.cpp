@@ -28,6 +28,7 @@
 #include "services/scene/player/system/player_activity_schedule.h"
 #include "services/scene/player/system/player_activity.h"
 #include "services/scene/player/system/player_festival_beast.h"
+#include "services/scene/player/system/player_travel_pass.h"
 #include "engine/core/time/system/time.h"
 
 namespace {
@@ -335,6 +336,7 @@ uint32_t PlayerActivityReadSystem::BuildList(entt::entity player, uint64_t serve
         }
     }
     PlayerFestivalBeastSystem::AppendActivityCatalogEntry(player, serverTimeMs, out);
+    PlayerTravelPassSystem::AppendActivityCatalogEntries(player, serverTimeMs, out);
     std::sort(out.mutable_activities()->begin(), out.mutable_activities()->end(),
         [](const PlayerActivityInfo& left, const PlayerActivityInfo& right) {
             return left.activity_id() < right.activity_id();

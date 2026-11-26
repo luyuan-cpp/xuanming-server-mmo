@@ -230,7 +230,7 @@ matcher 侧新增的只有 §3.2 的两处:成员校验核对 `queue_key`,以及
 
 没有新增 C++ 源文件,vcxproj / CMake 不用动。
 
-## 7. 给 Codex 的验证清单
+## 7. 给 Gemini 的验证清单
 
 工作树 `E:\work\xuanming-server-mmo-wt-pvematch`,分支 `feat/pve-team-size-match`。
 这棵工作树的 `third_party` 子模块是空的:C++ 要么先 `git submodule update --init --recursive`,要么合进主仓后在主仓编。
@@ -240,7 +240,7 @@ matcher 侧新增的只有 §3.2 的两处:成员校验核对 `queue_key`,以及
 `go build ./...`、`go vet ./...` 退出码 0;`go test ./... -count=1` 7 个有测试的包全部 ok,其中 §7.1 第 3 步的 10 条新用例全过。
 首次实跑发现一条既有用例 `TestGatherCreateFailureWithDestroyFailureKeepsRecord` 自 09-29 入库起一直是红的(铺数据只弹组、
 没把票据推进 matched;在本改动之前的提交上同样失败),已按生产顺序补上那一步。`bin\go_services\match.exe` 已用 `go_services.ps1 -Command build -Services match` 重编。
-§7.1 的第 1~4 步因此已有结果,Codex 复跑即可;第 5 步(robot)与 §7.2 之后的 C++ 仍未做。
+§7.1 的第 1~4 步因此已有结果,Gemini 复跑即可;第 5 步(robot)与 §7.2 之后的 C++ 仍未做。
 
 静态证据(不能代替运行):三轮只读复核逐条走查了新旧用例。第二轮(6 个方向 + 逐条反驳核实)
 确认的问题已改;第三轮只审第二轮之后新写的代码(活动对局不放大、§2.2、§3.2 的 `queue_key` 核对及其用例、客户端选中态),

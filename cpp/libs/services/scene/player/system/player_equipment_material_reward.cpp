@@ -219,6 +219,7 @@ BattleEvaluation EvaluateBattle(const BattleSettlementData& settlement) {
     case match::MATCH_MODE_5V5:
     case match::MATCH_MODE_PVP_TEAM:
     case match::MATCH_MODE_POLARITY_5V5:
+    case match::MATCH_MODE_GUILD_WAR_PVP:
     case match::MATCH_MODE_SEASON_TOURNAMENT:
         if (settlement.competitive_ranked() && !settlement.participated()) {
             eval.pvpLossIneligible = !playerWon;
@@ -240,6 +241,14 @@ BattleEvaluation EvaluateBattle(const BattleSettlementData& settlement) {
         }
         eval.eligible = true;
         eval.isWin = false;
+        eval.baseUnits = System::kBattleUnits;
+        eval.bonusUnits = 0u;
+        return eval;
+    case match::MATCH_MODE_GUILD_WAR_SIEGE:
+        // 守旗阵踢馆（AI 托管）：胜 +10、负 0，不触发 PVP 败局防挂机门槛。
+        if (!playerWon) return eval;
+        eval.eligible = true;
+        eval.isWin = true;
         eval.baseUnits = System::kBattleUnits;
         eval.bonusUnits = 0u;
         return eval;

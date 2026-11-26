@@ -26,6 +26,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"match/internal/svc"
 
@@ -126,6 +128,20 @@ func IsBattleLocked(ctx context.Context, svcCtx *svc.ServiceContext, playerId ui
 		return true, fmt.Errorf("查询 battle:lock 失败: %w", err)
 	}
 	return n == 1, nil
+}
+
+// BattleLockBattleID 读取 battle:lock:{player_id} 对应的战斗号（值由 scene 写为十进制 battle_id）。
+// 键不存在返回 (0, false, nil)；存在返回 (battleId, true, nil)；Redis 出错按 fail-closed 返回 (0, true, err)。
+func BattleLockBattleID(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) (uint64, bool, error) {
+	raw, err := svcCtx.PlayerRedis.Get(ctx, BattleLockKey(playerId)).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, true, fmt.Errorf("读取 battle:lock 失败: %w", err)
+	}
+	id, _ := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+	return id, true, nil
 }
 
 // PushToPlayer 把 S2C 消息经 Kafka gate-cmd_g<N> 的 gate_node_id % P 号分区推给玩家客户端

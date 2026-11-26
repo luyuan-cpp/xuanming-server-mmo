@@ -59,6 +59,12 @@ func (s *MatchInternalServer) StartActivityBattle(ctx context.Context, in *match
 	return l.StartActivityBattle(in)
 }
 
+// StartGuildWarBattle 帮会全天帮战 V2 直打开局:支持真人帮战(9)与守旗阵踢馆 AI 托管(10),返回 battle_id 或冲突方正在进行的 offender_battle_id。
+func (s *MatchInternalServer) StartGuildWarBattle(ctx context.Context, in *matchpb.StartGuildWarBattleRequest) (*matchpb.StartGuildWarBattleResponse, error) {
+	l := logic.NewStartGuildWarBattleLogic(ctx, s.svcCtx)
+	return l.StartGuildWarBattle(in)
+}
+
 func (s *MatchInternalServer) CancelActivityBattle(ctx context.Context, in *matchpb.CancelActivityBattleRequest) (*matchpb.CancelActivityBattleResponse, error) {
 	return logic.NewCancelActivityBattleLogic(ctx, s.svcCtx).CancelActivityBattle(in)
 }

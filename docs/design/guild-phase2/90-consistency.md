@@ -181,12 +181,12 @@ message GuildDailyCounterRecord {   // 锁序位置 7
 
 - `data.Tables()` 最终顺序 = 锁序:guild、guild_player_state、guild_member、guild_application、guild_player_op_seq、guild_asset_op、guild_daily_counter(B5a 已追加)、guild_activity_progress(B6a)、guild_trial_battle、guild_trial_reward_owed(B6b)。
 - Store 用一个 `statusToDB/statusFromDB` switch 在 `assetop.Status` 与本枚举之间映射,单测覆盖 5 个值;`assetop.NewSeqTables("guild_player_op_seq","guild_asset_op", uint32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING))`。
-- Codex 核对 `OptionUniqueKey` 复合列是否被 proto2mysql 支持:`SHOW CREATE TABLE` 必须出现 `UNIQUE KEY uk_guild_asset_op (player_id,stream,stream_epoch,seq)`;不支持就停下报告,不得退化成单列。
+- Gemini 核对 `OptionUniqueKey` 复合列是否被 proto2mysql 支持:`SHOW CREATE TABLE` 必须出现 `UNIQUE KEY uk_guild_asset_op (player_id,stream,stream_epoch,seq)`;不支持就停下报告,不得退化成单列。
 
 ## 2. 统一事务规则(取代 S1 §2.1 规则 5、S2 §6.2 重试部分、S5 §5.15 重试与忙错误、S6 §6.10 重试;修 D6/D7)
 
 1. **唯一助手** `func (r *GuildRepo) inTx(ctx, op string, fn func(*sql.Tx) error) error`,B2s 写在 `guild_manage_repo.go`;经济(`EconomyRepo`)与活动(`ActivityRepo`)持有 `*GuildRepo` 并调用它。删除 S5 `withTxRetry`、S6 `withActivityTxRetry`。
-2. **隔离级别**:`BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})`。B2s Codex 增查 `SELECT @@global.binlog_format` = `ROW`。
+2. **隔离级别**:`BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})`。B2s Gemini 增查 `SELECT @@global.binlog_format` = `ROW`。
 3. **重试分类** `retryableTx(err)`:MySQL 1213、TiDB 9007、哨兵 `errRetryTx`(S6 结算 e 步)→ 整事务重跑,最多 3 次,10–50ms 随机退避。1205 不重试。1062 不重试(计数器一律 upsert,X-13)。
 4. **忙错误**:重试耗尽、1205、事务子预算 ctx 到期(父请求 ctx 仍有效)、COMMIT 结果不明(另打 ERROR `commit outcome unknown`)→ `ErrWriteConflict`。父请求 ctx 已取消 → 原样返回 ctx 错误。
 5. **错误到 tip**:`ErrWriteConflict` → `kGuildBusyRetry`(B2/B5/B6 全部写 RPC,不回 gRPC 错误);`assetop.ErrTooManyPending` → `kGuildAssetPending`;S5 `ErrEconomyBusy` 删除,用 `ErrWriteConflict`。
@@ -232,7 +232,7 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 - B5a:GuildFundsInsufficient、GuildMaxLevel、GuildDonateLimit、GuildCurrencyInsufficient、GuildAssetPending、GuildAssetRejected、GuildShopGoodsNotFound、GuildShopLevelTooLow、GuildShopLimit、GuildContributionInsufficient(S5 §5.12 表里前两行不改 B2 文案)。
 - B6a-srv:GuildActivityNotOpen、GuildActivityAlreadyClaimed、GuildActivityThresholdNotReached、GuildTrialTeamInvalid、GuildActivityLevelTooLow、GuildActivityJoinTooRecent、GuildTrialInviteExpired、GuildTrialInviteDeclined、GuildTrialInviteCooldown、GuildTrialServiceBusy(fault=1)。
 - B3a-1:`//login_error` 尾部 RoleNameInvalid、RoleNameTaken、RoleNameSensitive。B4a-1:新组 `//asset_error base=27000` 9 行(S4 4.3.6)。
-每批 Codex 核对 `tip_enum_ids.json` 只增不改,且 `go/shared/generated/tip/segments.go` 中 guild_error 组宽度容纳全部 29 个新码。
+每批 Gemini 核对 `tip_enum_ids.json` 只增不改,且 `go/shared/generated/tip/segments.go` 中 guild_error 组宽度容纳全部 29 个新码。
 
 **Y-06 重投循环参数(重要)**。S5 §5.29 的 Batch 10 / Lease 30s / 串行 Tick 与 `LeaseMs ≥ Batch×OpBudget+5000` 建立在 S4 旧版上。按 S4 4.37:`AssetOpConf` 字段与默认 `ReconcileIntervalMs 2000、ReconcileBatch 100、Workers 8、LeaseMs 10000、OpBudgetMs 2500、MaxBackoffMs 60000、PoisonDelayMs 3600000、LedgerReadMinAttempts 3`;Validate 与 `NewLoop` 相同(`1≤Workers≤64`、`Batch≥Workers`、`OpBudget+2000≤Lease`、`Base≤Max`),删串行乘积约束;S5 W4、§5.39 config_test 用例、§5.43 偏差 12 同步改。`Loop.Ledger` 在 B5b 置 nil,B5d 接 data_service 实现。
 
@@ -285,14 +285,14 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 | B2c | ListMyGuildApplications、ListGuildApplications | SetGuildMemberRole、KickGuildMember、TransferGuildLeader、ApplyJoinGuild、CancelGuildApplication、ReviewGuildApplication | 原 19 号(JoinGuild)按 S2 §28 B2c 第 1 步处理;NotifyGuildChanged 不加 |
 | B5a | GetGuildDonateOptions、GetGuildShop | DonateToGuild、UpgradeGuild、BuyGuildShopGoods | 按 proto-gen 实际号填,填后重导表 |
 | B6a-srv | GetGuildActivities | LightGuildLantern、ClaimGuildReunion、StartGuildTrial、RespondGuildTrialInvite | 同上 |
-| 不加行 | DataService 三个名字 RPC(B3a-1)、SceneNodeGrpc 三个资产 RPC(B4a-1)、MatchInternal(B6b-srv1)、B5d 两个内部 RPC | — | Codex 核对路由表 `ClientProtocol: false` |
+| 不加行 | DataService 三个名字 RPC(B3a-1)、SceneNodeGrpc 三个资产 RPC(B4a-1)、MatchInternal(B6b-srv1)、B5d 两个内部 RPC | — | Gemini 核对路由表 `ClientProtocol: false` |
 
 ## G-02 客户端白名单与生成清单
 
 - `tools/gen_messageids.ps1` 帮会段:B2c 删 JoinGuild、加 9 项(含 NotifyGuildChanged,只收不发);B5c 加 5 项;B6a-cli 加 5 项。其它批次不改。
 - `GuildClient` 只在 B2c 注册 `NotifyGuildChanged` 一次。
 - `tools/gen_proto.ps1`:只有 B3b 加 `generated/code/proto/tip/login_error_tip.proto`;`guild_db.proto`、`asset_op.proto`、`asset_op_ledger_comp.proto`、`match_internal.proto`、`guild_internal.proto`(B5d)永不进客户端。
-- 每个客户端批次 Codex 断言:`rg -n "AssetDebit|MatchInternal|ReservePlayerName|ListAppliedAssetOpsSince|GetPlayerAssetOpLedger" Assets/Scripts/Net/MessageIds.cs` 为 0。
+- 每个客户端批次 Gemini 断言:`rg -n "AssetDebit|MatchInternal|ReservePlayerName|ListAppliedAssetOpsSince|GetPlayerAssetOpLedger" Assets/Scripts/Net/MessageIds.cs` 为 0。
 
 ## G-03 `player_database` 加列与迁移
 
@@ -328,8 +328,8 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 | data_service `BootstrapTags` 加 `guild_asset_op`(yaml、config、id_segment_store、k8s_deploy.ps1) | B5a | 已认领 |
 | `login.yaml` `AccountLockTTL: 20` | B3a-2 | 已认领 |
 | Kafka `match-results` 消费组 `guild-trial`(yaml 不加引号) | B6b-srv2 | 已认领 |
-| **Redis 同源核对**:guild `PlayerLocatorRedis` 必须与 scene 写 `player:{id}:location` 的实例相同(critic 未决项);battle zone Redis 与它相同 | 前者 **B5b Codex 新增**;后者 B6b-srv1 | 前者新增 |
-| **`cpp/generated/table/CMakeLists.txt` 缺 ActivitySchedule**(critic 未决,S2 拒收,S6 甩给 B5) | **B2s 顺带补**(同文件,不增文件数),B2s Codex 加 Linux table 目标构建 | 新增认领 |
+| **Redis 同源核对**:guild `PlayerLocatorRedis` 必须与 scene 写 `player:{id}:location` 的实例相同(critic 未决项);battle zone Redis 与它相同 | 前者 **B5b Gemini 新增**;后者 B6b-srv1 | 前者新增 |
+| **`cpp/generated/table/CMakeLists.txt` 缺 ActivitySchedule**(critic 未决,S2 拒收,S6 甩给 B5) | **B2s 顺带补**(同文件,不增文件数),B2s Gemini 加 Linux table 目标构建 | 新增认领 |
 
 ## G-05 K8s 上线批 BK8s(本期不落地,单独授权;各节零散"上线项"汇总)
 
@@ -375,7 +375,7 @@ guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigr
 
 ## G-09 EditMode 用例数基线(`-testFilter "GuildClientTests;GuildWindowTests"`)
 
-B2c = 65(S2);B3b +2 = 67;B5c +9(client)+5(window)−2(Unsupported 删两例)= 79;B6a-cli 估 +21(删 Unsupported 方法 −1)= 100;B6b-cli 估 +5 = 105。B6 两批须在交付说明里给出精确增量;Codex 以"上一批实测总数 + 本批声明增量"核对,且 0 失败。Role 程序集(B3b)单独统计。
+B2c = 65(S2);B3b +2 = 67;B5c +9(client)+5(window)−2(Unsupported 删两例)= 79;B6a-cli 估 +21(删 Unsupported 方法 −1)= 100;B6b-cli 估 +5 = 105。B6 两批须在交付说明里给出精确增量;Gemini 以"上一批实测总数 + 本批声明增量"核对,且 0 失败。Role 程序集(B3b)单独统计。
 
 ## G-10 B5d 内部 RPC 的放置(D3 采纳时)
 

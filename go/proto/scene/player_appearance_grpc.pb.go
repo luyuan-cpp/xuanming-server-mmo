@@ -26,6 +26,8 @@ const (
 	SceneAppearanceClientPlayer_CancelAppearanceTrial_FullMethodName        = "/SceneAppearanceClientPlayer/CancelAppearanceTrial"
 	SceneAppearanceClientPlayer_NotifyActorAppearanceChanged_FullMethodName = "/SceneAppearanceClientPlayer/NotifyActorAppearanceChanged"
 	SceneAppearanceClientPlayer_NotifyAppearanceState_FullMethodName        = "/SceneAppearanceClientPlayer/NotifyAppearanceState"
+	SceneAppearanceClientPlayer_EquipPetCosmetic_FullMethodName             = "/SceneAppearanceClientPlayer/EquipPetCosmetic"
+	SceneAppearanceClientPlayer_EquipSkillVfx_FullMethodName                = "/SceneAppearanceClientPlayer/EquipSkillVfx"
 )
 
 // SceneAppearanceClientPlayerClient is the client API for SceneAppearanceClientPlayer service.
@@ -38,6 +40,9 @@ type SceneAppearanceClientPlayerClient interface {
 	CancelAppearanceTrial(ctx context.Context, in *CancelAppearanceTrialRequest, opts ...grpc.CallOption) (*CancelAppearanceTrialResponse, error)
 	NotifyActorAppearanceChanged(ctx context.Context, in *ActorAppearanceChangedS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyAppearanceState(ctx context.Context, in *AppearanceStateNotify, opts ...grpc.CallOption) (*base.Empty, error)
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	EquipPetCosmetic(ctx context.Context, in *EquipPetCosmeticRequest, opts ...grpc.CallOption) (*EquipPetCosmeticResponse, error)
+	EquipSkillVfx(ctx context.Context, in *EquipSkillVfxRequest, opts ...grpc.CallOption) (*EquipSkillVfxResponse, error)
 }
 
 type sceneAppearanceClientPlayerClient struct {
@@ -108,6 +113,26 @@ func (c *sceneAppearanceClientPlayerClient) NotifyAppearanceState(ctx context.Co
 	return out, nil
 }
 
+func (c *sceneAppearanceClientPlayerClient) EquipPetCosmetic(ctx context.Context, in *EquipPetCosmeticRequest, opts ...grpc.CallOption) (*EquipPetCosmeticResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EquipPetCosmeticResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_EquipPetCosmetic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAppearanceClientPlayerClient) EquipSkillVfx(ctx context.Context, in *EquipSkillVfxRequest, opts ...grpc.CallOption) (*EquipSkillVfxResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EquipSkillVfxResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_EquipSkillVfx_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneAppearanceClientPlayerServer is the server API for SceneAppearanceClientPlayer service.
 // All implementations must embed UnimplementedSceneAppearanceClientPlayerServer
 // for forward compatibility.
@@ -118,6 +143,9 @@ type SceneAppearanceClientPlayerServer interface {
 	CancelAppearanceTrial(context.Context, *CancelAppearanceTrialRequest) (*CancelAppearanceTrialResponse, error)
 	NotifyActorAppearanceChanged(context.Context, *ActorAppearanceChangedS2C) (*base.Empty, error)
 	NotifyAppearanceState(context.Context, *AppearanceStateNotify) (*base.Empty, error)
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	EquipPetCosmetic(context.Context, *EquipPetCosmeticRequest) (*EquipPetCosmeticResponse, error)
+	EquipSkillVfx(context.Context, *EquipSkillVfxRequest) (*EquipSkillVfxResponse, error)
 	mustEmbedUnimplementedSceneAppearanceClientPlayerServer()
 }
 
@@ -145,6 +173,12 @@ func (UnimplementedSceneAppearanceClientPlayerServer) NotifyActorAppearanceChang
 }
 func (UnimplementedSceneAppearanceClientPlayerServer) NotifyAppearanceState(context.Context, *AppearanceStateNotify) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyAppearanceState not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) EquipPetCosmetic(context.Context, *EquipPetCosmeticRequest) (*EquipPetCosmeticResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EquipPetCosmetic not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) EquipSkillVfx(context.Context, *EquipSkillVfxRequest) (*EquipSkillVfxResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EquipSkillVfx not implemented")
 }
 func (UnimplementedSceneAppearanceClientPlayerServer) mustEmbedUnimplementedSceneAppearanceClientPlayerServer() {
 }
@@ -276,6 +310,42 @@ func _SceneAppearanceClientPlayer_NotifyAppearanceState_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneAppearanceClientPlayer_EquipPetCosmetic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EquipPetCosmeticRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).EquipPetCosmetic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_EquipPetCosmetic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).EquipPetCosmetic(ctx, req.(*EquipPetCosmeticRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAppearanceClientPlayer_EquipSkillVfx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EquipSkillVfxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).EquipSkillVfx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_EquipSkillVfx_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).EquipSkillVfx(ctx, req.(*EquipSkillVfxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneAppearanceClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneAppearanceClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -306,6 +376,14 @@ var SceneAppearanceClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyAppearanceState",
 			Handler:    _SceneAppearanceClientPlayer_NotifyAppearanceState_Handler,
+		},
+		{
+			MethodName: "EquipPetCosmetic",
+			Handler:    _SceneAppearanceClientPlayer_EquipPetCosmetic_Handler,
+		},
+		{
+			MethodName: "EquipSkillVfx",
+			Handler:    _SceneAppearanceClientPlayer_EquipSkillVfx_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

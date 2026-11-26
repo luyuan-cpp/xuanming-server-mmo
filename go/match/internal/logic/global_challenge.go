@@ -10,9 +10,12 @@ import (
 	"match/internal/constants"
 	"match/internal/metrics"
 	"match/internal/svc"
+	battlepb "proto/battle"
 	dspb "proto/data_service"
 	pb "proto/match"
 	"shared/rolefence"
+
+	"google.golang.org/protobuf/proto"
 )
 
 func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, challenger uint64) (*pb.ChallengePlayerResponse, error) {
@@ -40,7 +43,14 @@ func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, ch
 	if err != nil {
 		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "服务器繁忙，请稍后再试")}, nil
 	}
-	invitation, err := l.svcCtx.Authority.CreateChallenge(l.ctx, id, challenger, in.TargetPlayerId, in.BattleConfigId, uint64(l.challengeTTL())*1000)
+	var rulesPayload []byte
+	if rules := in.GetCustomRules(); rules != nil {
+		rulesPayload, err = proto.MarshalOptions{Deterministic: true}.Marshal(rules)
+		if err != nil {
+			return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "自定义切磋规则编码失败")}, nil
+		}
+	}
+	invitation, err := l.svcCtx.Authority.CreateChallengeWithRules(l.ctx, id, challenger, in.TargetPlayerId, in.BattleConfigId, uint64(l.challengeTTL())*1000, rulesPayload)
 	if err != nil {
 		return l.globalChallengeCreateFailure(err), nil
 	}
@@ -73,8 +83,26 @@ func (l *ChallengeLogic) globalChallengeCreateFailure(err error) *pb.ChallengePl
 	}
 }
 
+func decodeCustomDuelRules(payload []byte) *battlepb.CustomDuelRules {
+	if len(payload) == 0 {
+		return nil
+	}
+	rules := &battlepb.CustomDuelRules{}
+	if err := proto.Unmarshal(payload, rules); err != nil {
+		return nil
+	}
+	return rules
+}
+
 func globalChallengeInvitationNotice(invitation *pb.MatchChallengeInvitationRecord, publicName string) *pb.ChallengeInviteS2C {
-	return &pb.ChallengeInviteS2C{ChallengeId: invitation.ChallengeId, ChallengerId: invitation.ChallengerPlayerId, ChallengerName: publicName, BattleConfigId: invitation.ConfigId, ExpiresAtMs: invitation.ExpiresMs}
+	return &pb.ChallengeInviteS2C{
+		ChallengeId:    invitation.ChallengeId,
+		ChallengerId:   invitation.ChallengerPlayerId,
+		ChallengerName: publicName,
+		BattleConfigId: invitation.ConfigId,
+		ExpiresAtMs:    invitation.ExpiresMs,
+		CustomRules:    decodeCustomDuelRules(invitation.CustomRulesPayload),
+	}
 }
 
 // 展示只取既有角色名注册表；在线session.account同样是私有登录账号，不能充当昵称。
@@ -120,7 +148,16 @@ func (l *ChallengeLogic) respondGlobalChallenge(in *pb.RespondChallengeRequest, 
 				return &pb.RespondChallengeResponse{ErrorMessage: tipErr(constants.ErrChallengeSelfBusy, "成员仍在其它战斗中")}, nil
 			}
 		}
-		formation, group, err = buildGlobalDirect(l.ctx, l.svcCtx, pb.MatchMode_MATCH_MODE_PVP_CHALLENGE, invitation.ConfigId, []uint64{invitation.ChallengerPlayerId, invitation.TargetPlayerId}, nil, directOptions{})
+		customRules := decodeCustomDuelRules(invitation.CustomRulesPayload)
+		opts := directOptions{customDuelRules: customRules}
+		if customRules != nil && customRules.GetUseFreePreset() {
+			rankedCtx, presetErr := buildCustomDuelFreePresetContext(l.svcCtx, invitation.ChallengerPlayerId, invitation.TargetPlayerId, customRules, in.GetResponderCharacterPresetId(), in.GetResponderPetPresetId())
+			if presetErr != nil {
+				return &pb.RespondChallengeResponse{ErrorMessage: tipErr(constants.ErrRankedPresetInvalid, "公平切磋 3x3 模板搭配无效")}, nil
+			}
+			opts.rankedContext = rankedCtx
+		}
+		formation, group, err = buildGlobalDirect(l.ctx, l.svcCtx, pb.MatchMode_MATCH_MODE_PVP_CHALLENGE, invitation.ConfigId, []uint64{invitation.ChallengerPlayerId, invitation.TargetPlayerId}, nil, opts)
 		if err != nil {
 			return l.globalChallengeFailure(err)
 		}
@@ -152,4 +189,57 @@ func (l *ChallengeLogic) respondGlobalChallenge(in *pb.RespondChallengeRequest, 
 		launchGlobalFormation(l.svcCtx, formation)
 	}
 	return &pb.RespondChallengeResponse{}, nil
+}
+
+// buildCustomDuelFreePresetContext 为道友切磋坊公平 3×3 免费模板构建非计分上下文（season_id=0, use_free_preset=true）。
+func buildCustomDuelFreePresetContext(s *svc.ServiceContext, challengerID, responderID uint64, rules *battlepb.CustomDuelRules, respChar, respPet uint32) (*battlepb.RankedMatchContext, error) {
+	var ruleVersion uint32
+	var fingerprint string
+	var defChar, defPet uint32 = 101, 203
+	var cat interface {
+		RuleVersion() uint32
+		Fingerprint() string
+		DefaultPresets() (uint32, uint32)
+		IsValidPair(uint32, uint32) bool
+	}
+	if s != nil && s.Authority != nil && s.Authority.RankedCatalog() != nil {
+		cat = s.Authority.RankedCatalog()
+		ruleVersion = cat.RuleVersion()
+		fingerprint = cat.Fingerprint()
+		defChar, defPet = cat.DefaultPresets()
+	}
+	chChar := rules.GetChallengerCharacterPresetId()
+	if chChar == 0 {
+		chChar = defChar
+	}
+	chPet := rules.GetChallengerPetPresetId()
+	if chPet == 0 {
+		chPet = defPet
+	}
+	if respChar == 0 {
+		respChar = defChar
+	}
+	if respPet == 0 {
+		respPet = defPet
+	}
+	if cat != nil && (!cat.IsValidPair(chChar, chPet) || !cat.IsValidPair(respChar, respPet)) {
+		return nil, authority.ErrRankedPresetInvalid
+	}
+	return &battlepb.RankedMatchContext{
+		SeasonId:          0,
+		RuleVersion:       ruleVersion,
+		TeamSize:          1,
+		ConfigFingerprint: fingerprint,
+		UseFreePreset:     true,
+		Members: []*battlepb.RankedMemberLoadout{
+			{
+				PlayerId: challengerID,
+				Presets:  &battlepb.RankedPresetSelection{CharacterPresetId: chChar, PetPresetId: chPet},
+			},
+			{
+				PlayerId: responderID,
+				Presets:  &battlepb.RankedPresetSelection{CharacterPresetId: respChar, PetPresetId: respPet},
+			},
+		},
+	}, nil
 }

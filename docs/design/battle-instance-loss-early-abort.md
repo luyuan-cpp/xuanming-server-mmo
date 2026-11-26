@@ -1,6 +1,6 @@
 # 战斗进程失效的提前作废与作废通知
 
-> 状态：2026-11-11 起草并定案，11-12 服务端与客户端代码写完，**未编译、未测试，待 Codex 验证**（第 12 节）。Java 版待做。
+> 状态：2026-11-11 起草并定案，11-12 服务端与客户端代码写完，**未编译、未测试，待 Gemini 验证**（第 12 节）。Java 版待做。
 > 关联：场景服冻结到期与续冻见 [turn-battle-gap-closure.md](./turn-battle-gap-closure.md) §11；截止作废先取证（B5）见 [cross-zone-matchmaking.md](./cross-zone-matchmaking.md) §13.3；缺口 e2e-3 见 [turn-based-battle-server.md](./turn-based-battle-server.md) §22.6；作废时释放道具见 [battle-item-reservation.md](./battle-item-reservation.md)；近期战斗结果见 [battle-result-recovery.md](./battle-result-recovery.md)。
 
 ## 1. 改之前的问题
@@ -198,7 +198,7 @@
 
 待做，已登记在 Java 仓 `PARITY.md`：客户端契约（VOID）必须同批；作废结算、收件箱校验、场景侧短路、按实例复核的提前作废按 Java 惯用方式实现。
 
-## 12. 验证（全部未执行，交 Codex）
+## 12. 验证（全部未执行，交 Gemini）
 
 先生成协议，再按顺序跑。任何一步失败保留完整输出，不要跳过后面的步骤之外的无关项。
 

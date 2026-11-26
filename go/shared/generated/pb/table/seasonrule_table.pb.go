@@ -38,6 +38,8 @@ type SeasonRuleTable struct {
 	CatchupPricePerPoint uint64                 `protobuf:"varint,13,opt,name=catchup_price_per_point,json=catchupPricePerPoint,proto3" json:"catchup_price_per_point,omitempty"`
 	DefaultSealId        uint32                 `protobuf:"varint,14,opt,name=default_seal_id,json=defaultSealId,proto3" json:"default_seal_id,omitempty"`
 	Desc                 string                 `protobuf:"bytes,15,opt,name=desc,proto3" json:"desc,omitempty"`
+	HonorTitleName       string                 `protobuf:"bytes,16,opt,name=honor_title_name,json=honorTitleName,proto3" json:"honor_title_name,omitempty"`
+	HonorBadgeIconKey    string                 `protobuf:"bytes,17,opt,name=honor_badge_icon_key,json=honorBadgeIconKey,proto3" json:"honor_badge_icon_key,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -177,6 +179,20 @@ func (x *SeasonRuleTable) GetDesc() string {
 	return ""
 }
 
+func (x *SeasonRuleTable) GetHonorTitleName() string {
+	if x != nil {
+		return x.HonorTitleName
+	}
+	return ""
+}
+
+func (x *SeasonRuleTable) GetHonorBadgeIconKey() string {
+	if x != nil {
+		return x.HonorBadgeIconKey
+	}
+	return ""
+}
+
 type SeasonRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*SeasonRuleTable     `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -225,7 +241,7 @@ var File_seasonrule_table_proto protoreflect.FileDescriptor
 
 const file_seasonrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x16seasonrule_table.proto\"\xa9\x04\n" +
+	"\x16seasonrule_table.proto\"\x84\x05\n" +
 	"\x0fSeasonRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -244,7 +260,9 @@ const file_seasonrule_table_proto_rawDesc = "" +
 	"\x15catchup_currency_type\x18\f \x01(\rR\x13catchupCurrencyType\x125\n" +
 	"\x17catchup_price_per_point\x18\r \x01(\x04R\x14catchupPricePerPoint\x12&\n" +
 	"\x0fdefault_seal_id\x18\x0e \x01(\rR\rdefaultSealId\x12\x12\n" +
-	"\x04desc\x18\x0f \x01(\tR\x04desc\";\n" +
+	"\x04desc\x18\x0f \x01(\tR\x04desc\x12(\n" +
+	"\x10honor_title_name\x18\x10 \x01(\tR\x0ehonorTitleName\x12/\n" +
+	"\x14honor_badge_icon_key\x18\x11 \x01(\tR\x11honorBadgeIconKey\";\n" +
 	"\x13SeasonRuleTableData\x12$\n" +
 	"\x04data\x18\x01 \x03(\v2\x10.SeasonRuleTableR\x04dataBA\n" +
 	"\x0ecom.game.tableB\x19SeasonRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

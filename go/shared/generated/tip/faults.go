@@ -82,6 +82,8 @@ var Faults = []Fault{
 	{Code: 35000, Group: "trial_journal_error", Name: "TrialJournalUnavailable"},
 	{Code: 36001, Group: "festival_beast_error", Name: "FestivalBeastConfigInvalid"},
 	{Code: 36013, Group: "festival_beast_error", Name: "FestivalBeastServiceUnavailable"},
+	{Code: 37000, Group: "spirit_shop_error", Name: "SpiritShopUnavailable"},
+	{Code: 38000, Group: "travel_pass_error", Name: "TravelPassUnavailable"},
 }
 
 // faultSet 由 Faults 派生,不单独生成一份字面量:

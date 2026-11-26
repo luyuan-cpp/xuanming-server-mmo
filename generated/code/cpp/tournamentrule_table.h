@@ -18,6 +18,7 @@ struct TournamentRuleTableSnapshot {
     TournamentRuleTableData data;
     IdMapType idMap;
     std::unordered_map<uint32_t, std::vector<const TournamentRuleTable*>> battleConfigIdIndex;
+    std::unordered_map<uint32_t, std::vector<const TournamentRuleTable*>> saluteItemIdIndex;
     const TournamentRuleTable* FindRowById(uint32_t tableId) const {
         const auto it = idMap.find(tableId);
         return it != idMap.end() ? it->second : nullptr;
@@ -74,11 +75,18 @@ public:
     void LoadSuccess() { if (loadSuccessCallback) { loadSuccessCallback(); } }
 
     // FK: battle_config_id -> Dungeon.id
+    // FK: salute_item_id -> Item.id
     const std::unordered_map<uint32_t, std::vector<const TournamentRuleTable*>>& GetBattleConfigIdIndex() const { return snapshot->battleConfigIdIndex; }
     const std::vector<const TournamentRuleTable*>& GetByBattleConfigId(uint32_t key) const {
         static const std::vector<const TournamentRuleTable*> kEmpty;
         auto it = snapshot->battleConfigIdIndex.find(key);
         return it != snapshot->battleConfigIdIndex.end() ? it->second : kEmpty;
+    }
+    const std::unordered_map<uint32_t, std::vector<const TournamentRuleTable*>>& GetSaluteItemIdIndex() const { return snapshot->saluteItemIdIndex; }
+    const std::vector<const TournamentRuleTable*>& GetBySaluteItemId(uint32_t key) const {
+        static const std::vector<const TournamentRuleTable*> kEmpty;
+        auto it = snapshot->saluteItemIdIndex.find(key);
+        return it != snapshot->saluteItemIdIndex.end() ? it->second : kEmpty;
     }
 
     // ---- Exists ----
@@ -91,6 +99,10 @@ public:
     std::size_t CountByBattleConfigIdIndex(uint32_t key) const {
         auto it = snapshot->battleConfigIdIndex.find(key);
         return it != snapshot->battleConfigIdIndex.end() ? it->second.size() : 0;
+    }
+    std::size_t CountBySaluteItemIdIndex(uint32_t key) const {
+        auto it = snapshot->saluteItemIdIndex.find(key);
+        return it != snapshot->saluteItemIdIndex.end() ? it->second.size() : 0;
     }
 
     // ---- FindByIds (IN) ----

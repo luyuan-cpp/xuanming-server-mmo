@@ -55,7 +55,7 @@
   (后端 `gateway:8081`,**只路由 `/api`**,`/admin` 与 `/actuator` 不出集群),可配 `-GatewayIngressClassName`(默认 `nginx`)与 `-GatewayIngressTlsSecret`。
   启用 Ingress 时 `-GatewayTrustedProxies` 必填(写进 `gate.rate-limit.trusted-proxies`),否则全体玩家都被记在 Ingress controller 名下、共用一个限流桶。
   留空 host 不生成、也不删除已有 Ingress。参数细节见 `deploy/k8s/README.md` Optional Flags「集群外客户端入口」。
-- **限流按发布档位开启,ConfigMap 带 Redis 口令(G4b,2026-10-14;已落码,未编译、未测试,待 Codex 验证)**:`k8s_deploy.ps1 -GatewayRateLimit auto|on|off`
+- **限流按发布档位开启,ConfigMap 带 Redis 口令(G4b,2026-10-14;已落码,未编译、未测试,待 Gemini 验证)**:`k8s_deploy.ps1 -GatewayRateLimit auto|on|off`
   (缺省 `auto` = staging / prod 开、dev 关)决定 gateway ConfigMap 是否在 `gate.rate-limit` 下写 `enabled: true` 与开服档阈值(zone 2000/s、突发 5000,IP 5/s、突发 20,
   冷却 5000ms,**已定(2026-11-12),压测出基线后可调**;依据见 `deploy/k8s/README.md`「削峰(G4b)」:zone 档取设计稿「Layer 1 配额参考」的开服档,
   IP 档与冷却同 jar 内缺省,一次登录扣 2 个 IP 令牌),与上一条的 `trusted-proxies` 共用一个 `rate-limit:` 键;`spring.data.redis.password` 在 `MMORPG_REDIS_PASSWORD` 非空时写入

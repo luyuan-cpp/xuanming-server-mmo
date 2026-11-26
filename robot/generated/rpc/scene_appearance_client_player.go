@@ -123,3 +123,49 @@ func (sceneAppearanceClientPlayerRpc) decodeCancelAppearanceTrial(reply *base.Me
 	}
 	return resp, nil
 }
+
+// EquipPetCosmetic 异步调用 SceneAppearanceClientPlayer.EquipPetCosmetic(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) EquipPetCosmetic(c *pkg.GameClient, req *scene.EquipPetCosmeticRequest, timeout time.Duration, done func(*scene.EquipPetCosmeticResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerEquipPetCosmeticMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeEquipPetCosmetic(reply, err))
+	})
+}
+
+// EquipPetCosmeticSync 同步调用 SceneAppearanceClientPlayer.EquipPetCosmetic(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) EquipPetCosmeticSync(ctx context.Context, c *pkg.GameClient, req *scene.EquipPetCosmeticRequest, timeout time.Duration) (*scene.EquipPetCosmeticResponse, error) {
+	return r.decodeEquipPetCosmetic(c.CallSync(ctx, game.SceneAppearanceClientPlayerEquipPetCosmeticMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeEquipPetCosmetic(reply *base.MessageContent, err error) (*scene.EquipPetCosmeticResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.EquipPetCosmeticResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.EquipPetCosmetic reply: %w", err)
+	}
+	return resp, nil
+}
+
+// EquipSkillVfx 异步调用 SceneAppearanceClientPlayer.EquipSkillVfx(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) EquipSkillVfx(c *pkg.GameClient, req *scene.EquipSkillVfxRequest, timeout time.Duration, done func(*scene.EquipSkillVfxResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerEquipSkillVfxMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeEquipSkillVfx(reply, err))
+	})
+}
+
+// EquipSkillVfxSync 同步调用 SceneAppearanceClientPlayer.EquipSkillVfx(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) EquipSkillVfxSync(ctx context.Context, c *pkg.GameClient, req *scene.EquipSkillVfxRequest, timeout time.Duration) (*scene.EquipSkillVfxResponse, error) {
+	return r.decodeEquipSkillVfx(c.CallSync(ctx, game.SceneAppearanceClientPlayerEquipSkillVfxMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeEquipSkillVfx(reply *base.MessageContent, err error) (*scene.EquipSkillVfxResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.EquipSkillVfxResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.EquipSkillVfx reply: %w", err)
+	}
+	return resp, nil
+}

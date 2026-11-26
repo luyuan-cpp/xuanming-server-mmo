@@ -149,7 +149,7 @@ Redis 维护撤销与 SQL 提交不宣称跨存储 ACID：任一阶段失败保�
 
 Java 版按自己的 SQL owner 与最终存盘模型实现。旧 OPEN 只有准入、没有最终快照载荷；现有七天清理的安全依据是同 P／route 锁内的持久更高 E 与最终状态条件，七天本身只是保留期。新工具只退休已固定 listing 的指定旧 OPEN，并持久保存恢复原件；PENDING、未知状态、Match／Inbox／资产待投不进入退休集合，不伪造 EXACT_APPLIED。更高 E 已入场时要求原 SCENE_ACK 与实际 SQL APPLIED；更高 E 仅 claim、尚未 load 时，要求该 E 的最终准入实际缺席及非 NULL 原存档，计划固定剩余旧 OPEN 集合、数量和最后一条语义，仅最后一条退休时复用正式封闭形成真实 SQL_NO_ADMISSION。load 与冻结以同 P 决定先后，不能借无准入分支替已经入场的实体造 ACK。两版必须分别验证真实崩溃后阻断、合法恢复、旧写者迟到拒绝、B5 反例、未确认 pending 拒绝、并发 Cancel／Register／过户、提交未知及原件重放。
 
-## 摘孤儿角色(2026-11-01,2026-11-05 改判据,未编译,待 Codex 验证)
+## 摘孤儿角色(2026-11-01,2026-11-05 改判据,未编译,待 Gemini 验证)
 
 `LoginAdmin.RemovePlayersFromAccounts` 保留并接线。原来的调用方是单 zone 回档,那条路已经退役。它是目录删角流程(`RemoveAccountRoles`)唯一的生产入口,删掉之后那套两阶段就没有调用方了。
 

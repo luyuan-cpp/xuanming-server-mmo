@@ -149,7 +149,7 @@ zone 1 销毁玩家实体后,如果 zone 500 没收到消息(broker 重启 / 网
 3. **Kafka 已经提供顺序**:按 playerId 一致性哈希到同 partition,串行问题已解决
 
    > 更正(2026-10-16,历史审计不改原文):这一条当时不成立——login 的读走 sarama 默认 FNV,C++ 的写走 CRC32,读写不在同一分区。
-   > 分区契约对齐之后(已落码,未编译、未测试,待 Codex 验证),同一 topic 内成立;跨 topic(访客、合服)仍然不成立。
+   > 分区契约对齐之后(已落码,未编译、未测试,待 Gemini 验证),同一 topic 内成立;跨 topic(访客、合服)仍然不成立。
    > 见 [db-task-kafka-partition-contract.md](./db-task-kafka-partition-contract.md)「屏障覆盖范围与剩余缺口」。
 
 4. **不符合「位置透明」高频跨 zone 的核心场景**

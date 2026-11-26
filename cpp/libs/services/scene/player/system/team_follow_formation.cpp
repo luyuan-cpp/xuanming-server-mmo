@@ -242,8 +242,8 @@ void TeamFollowTrail::PruneBefore(const double odo)
 // TeamFollowFormation
 // ---------------------------------------------------------------------------
 
-TeamFollowFormation::TeamFollowFormation(const FollowPoint& leader, const double spacing)
-	: spacing(spacing)
+TeamFollowFormation::TeamFollowFormation(const FollowPoint& leader, const double spacing, const TeamFollowStyle style)
+	: spacing(spacing), style(style)
 {
 	trail.Reset(leader);
 }
@@ -315,9 +315,117 @@ void TeamFollowFormation::SetSuspended(const uint64_t playerId, const bool suspe
 	}
 }
 
+double TeamFollowFormation::SlotLag(const std::size_t rank) const
+{
+	switch (style)
+	{
+	case TeamFollowStyle::kEchelon:
+		// 雁行两翼:第 1/2 名并排第一翼,第 3/4 名并排第二翼。
+		return static_cast<double>(rank / 2 + 1) * spacing;
+	case TeamFollowStyle::kWuxing:
+		// 五行聚阵:左右双护翼贴近队长,中军与殿后居中心轴。
+		switch (rank)
+		{
+		case 0:
+		case 1:
+			return 0.85 * spacing;
+		case 2:
+			return 1.7 * spacing;
+		default:
+			return 2.55 * spacing;
+		}
+	case TeamFollowStyle::kColumn:
+	default:
+		return static_cast<double>(rank + 1) * spacing;
+	}
+}
+
+double TeamFollowFormation::TargetLateral(const std::size_t rank) const
+{
+	switch (style)
+	{
+	case TeamFollowStyle::kEchelon:
+		switch (rank)
+		{
+		case 0:
+			return -2.0;
+		case 1:
+			return 2.0;
+		case 2:
+			return -3.6;
+		case 3:
+			return 3.6;
+		default:
+			return 0.0;
+		}
+	case TeamFollowStyle::kWuxing:
+		switch (rank)
+		{
+		case 0:
+			return -2.4;
+		case 1:
+			return 2.4;
+		default:
+			return 0.0;
+		}
+	case TeamFollowStyle::kColumn:
+	default:
+		return 0.0;
+	}
+}
+
 double TeamFollowFormation::SlotOdo(const std::size_t rank) const
 {
-	return std::max(trail.TailOdo(), trail.HeadOdo() - static_cast<double>(rank + 1) * spacing);
+	return std::max(trail.TailOdo(), trail.HeadOdo() - SlotLag(rank));
+}
+
+FollowPoint TeamFollowFormation::ResolveSlotPoint(const double odo, const double desiredLateral,
+	const TeamFollowTrail::WalkableCheck& walkable, double* const appliedLateral) const
+{
+	const FollowPoint base = trail.PointAt(odo);
+	if (appliedLateral != nullptr)
+	{
+		*appliedLateral = 0.0;
+	}
+	if (std::abs(desiredLateral) < 1e-4 || trail.Length() < kTrailMinStep)
+	{
+		return base;
+	}
+	constexpr double kTangentHalfWindow = 0.5;
+	const FollowPoint back = trail.PointAt(std::max(trail.TailOdo(), odo - kTangentHalfWindow));
+	const FollowPoint front = trail.PointAt(std::min(trail.HeadOdo(), odo + kTangentHalfWindow));
+	const double dx = front.x - back.x;
+	const double dy = front.y - back.y;
+	const double len = std::hypot(dx, dy);
+	if (len < 1e-3)
+	{
+		return base;
+	}
+	// Z-up 平面切线 (tx, ty) 对应的右法向量 (ty, -tx)。
+	const double rx = dy / len;
+	const double ry = -dx / len;
+	constexpr double kScales[] = {1.0, 0.5};
+	for (const double scale : kScales)
+	{
+		const double offset = desiredLateral * scale;
+		const FollowPoint candidate{base.x + rx * offset, base.y + ry * offset, base.z};
+		if (!walkable || walkable(base, candidate))
+		{
+			if (appliedLateral != nullptr)
+			{
+				*appliedLateral = offset;
+			}
+			return candidate;
+		}
+	}
+	// 两侧均贴墙 / 窄道:自动收拢回队长走过的安全轨迹点,永不穿墙或卡死。
+	return base;
+}
+
+FollowPoint TeamFollowFormation::SlotPosition(const std::size_t rank, const TeamFollowTrail::WalkableCheck& walkable,
+	double* const appliedLateral) const
+{
+	return ResolveSlotPoint(SlotOdo(rank), TargetLateral(rank), walkable, appliedLateral);
 }
 
 double TeamFollowFormation::ProtectOdo() const
@@ -349,7 +457,7 @@ double TeamFollowFormation::KeepOdo() const
 
 void TeamFollowFormation::TrimTailForNewcomer(const std::size_t rank)
 {
-	double trimTo = trail.HeadOdo() - static_cast<double>(rank + 1) * spacing;
+	double trimTo = trail.HeadOdo() - SlotLag(rank);
 	for (const auto& member : members)
 	{
 		if (!member.needsPlacement)
@@ -394,7 +502,10 @@ void TeamFollowFormation::Tick(const FollowPoint& leader, const double deltaSeco
 		{
 			member.cursorOdo = slot;
 			member.needsPlacement = false;
-			step.position = trail.PointAt(slot);
+			double appliedLateral = 0.0;
+			step.trailPosition = trail.PointAt(slot);
+			step.position = ResolveSlotPoint(slot, TargetLateral(rank), walkable, &appliedLateral);
+			member.lateralOffset = appliedLateral;
 			step.placed = true;
 			out.push_back(step);
 			continue;
@@ -402,9 +513,30 @@ void TeamFollowFormation::Tick(const FollowPoint& leader, const double deltaSeco
 
 		// 只进不退:在槽位上或比槽位靠前(队长往回走了)时原地等。
 		const double next = member.cursorOdo < slot ? std::min(slot, member.cursorOdo + maxStep) : member.cursorOdo;
-		step.moved = next - member.cursorOdo;
+		const double odoAdvance = next - member.cursorOdo;
 		member.cursorOdo = next;
-		step.position = trail.PointAt(next);
+		step.trailPosition = trail.PointAt(next);
+
+		// 目标侧移经导航安全校验后再平滑收敛:切换阵型或进出窄道时平滑滑动,不突兀瞬移。
+		double safeTargetLateral = 0.0;
+		const FollowPoint safeTargetPoint = ResolveSlotPoint(next, TargetLateral(rank), walkable, &safeTargetLateral);
+		const double lateralDiff = safeTargetLateral - member.lateralOffset;
+		const double desiredNextLateral = std::abs(lateralDiff) <= maxStep
+			? safeTargetLateral
+			: member.lateralOffset + std::copysign(maxStep, lateralDiff);
+		double appliedLateral = 0.0;
+		FollowPoint resolved = ResolveSlotPoint(next, desiredNextLateral, walkable, &appliedLateral);
+		// 若平滑过渡中间点撞墙,直接退到已验过的目标侧移(保证不悬停在障碍侧)。
+		if (std::abs(appliedLateral - desiredNextLateral) > 1e-4 &&
+			std::abs(desiredNextLateral - safeTargetLateral) > 1e-4)
+		{
+			resolved = safeTargetPoint;
+			appliedLateral = safeTargetLateral;
+		}
+		const double lateralMoved = std::abs(appliedLateral - member.lateralOffset);
+		member.lateralOffset = appliedLateral;
+		step.moved = (odoAdvance > 0.0 || lateralMoved > 1e-4) ? std::hypot(odoAdvance, lateralMoved) : 0.0;
+		step.position = resolved;
 		out.push_back(step);
 	}
 

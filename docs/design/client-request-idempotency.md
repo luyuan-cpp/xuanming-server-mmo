@@ -3,7 +3,7 @@
 **Created:** 2026-11-05
 **状态:** 服务端与客户端代码没有待写的部分（2026-11-19 核对）。
 - 服务端：三处接入点是神秘商人购买、新建加点方案、强化，强化接在「数据覆写审计 R2 交接」会话交付的 `expected_level` 之上。2026-11-06 负责人定「改成存盘」，账本是玩家存档字段 25。代码随 `a8af9372d` 入库；2026-11-08 Codex 的 `build/verification/naming-audit-20261108/` 跑过 §8 的单测：`bag_test` 932 条通过、0 条失败、2 条跳过（跳过的与本功能无关；本功能新增的 40 条全是 OK），`cross_zone_test` 458 条通过。
-- 2026-11-17 Codex 在同一本账本上加了装备打造、材料自选两种请求（§4），规则写在 [equipment-eight-slot-implementation.md](equipment-eight-slot-implementation.md)。
+- 2026-11-17 Gemini 在同一本账本上加了装备打造、材料自选两种请求（§4），规则写在 [equipment-eight-slot-implementation.md](equipment-eight-slot-implementation.md)。
 - Unity 客户端：2026-11-12 按 §6 与交接文档落码并入库（客户端仓 `2978c807`）；2026-11-17 Codex 离线编译客户端全部运行时源码无错（`docs/PROGRESS.md` 同日「装备材料自选端到端」条）。
 - robot：三个冒烟 2026-11-13 改完并入库（`6914a1af8`），同日 Codex 合并 main 后 robot 全包测试通过。三条冒烟还没在 dev 环境跑过（§8 第 6 步）。
 - 遗留的三个「可选后续」2026-11-19 逐条定案为不做：给其余请求加幂等键（§1）、账本自动修复（§5.2）、跨连接自动重发（§6）。
@@ -136,8 +136,8 @@
 | 神秘商人购买 | `PlayerMysteryMerchantSystem::Buy`：入口在 `valid(player)` 之后查账；成交后 `Remember`；成功组应答抽成 `FillSuccessReply`，供首次与重放共用 | 无（货架与背包取当前） | 2026-11-08 单测通过；robot 冒烟未跑 |
 | 新建加点方案 | `SceneAttributeClientPlayerHandler::CreateAttributeScheme` | `created_scheme_id` | 2026-11-08 单测通过；robot 冒烟未跑 |
 | 强化 | `SceneBagClientPlayerHandler::EnhanceEquip`：先查键，命中就重放；没命中才进 `PlayerEquipSystem::Enhance`（里面有 `expected_level` 乐观比较）。指纹含 `item_id` 与 `expected_level` | `enhance_success`、`enhance_level` | 2026-11-08 单测通过；robot 冒烟未跑 |
-| 装备打造 / 首次装词条（种类 4） | `PlayerEquipmentV1System::Commit`。键必须非 0。同键换参数回 REJECTED；账本不可用回 UNKNOWN；回执被挤出后，请求里的 `expected_forge_revision` 对不上账本水位，回 UNKNOWN，不重做 | `equipment_item_id`、`forge_revision` | 2026-11-17 Codex 落码；规则与验证状态见装备设计稿「第三批」 |
-| 材料自选领取（种类 5） | `PlayerEquipmentMaterialRewardSystem::Claim`。同上，水位是 `material_reward.revision` | 领取水位、两种材料各领了多少 | 2026-11-17 Codex 落码；见装备设计稿「第四批」 |
+| 装备打造 / 首次装词条（种类 4） | `PlayerEquipmentV1System::Commit`。键必须非 0。同键换参数回 REJECTED；账本不可用回 UNKNOWN；回执被挤出后，请求里的 `expected_forge_revision` 对不上账本水位，回 UNKNOWN，不重做 | `equipment_item_id`、`forge_revision` | 2026-11-17 Gemini 落码；规则与验证状态见装备设计稿「第三批」 |
+| 材料自选领取（种类 5） | `PlayerEquipmentMaterialRewardSystem::Claim`。同上，水位是 `material_reward.revision` | 领取水位、两种材料各领了多少 | 2026-11-17 Gemini 落码；见装备设计稿「第四批」 |
 | 挂机月卡开通（种类 6） | `AfkPassSystem::Buy`（`afk_pass.cpp`）。键必须非 0；查账排在规则表、报价、冻结、叠加上限、余额之前；扣灵石、写到期、记键在同一次同步调用里。指纹含报价（币种、价格） | 无（月卡状态取当前，[挂机月卡](afk-monthly-card.md) §4.1） | 2026-11-19 落码，未编译 |
 
 后两种与前三种有两处不同，都写在装备设计稿里：它们先在账本的副本上记账、校验通过再换入，和背包改动同一次提交；它们的应答带 `outcome` 与 `durable`，客户端把整份请求存在本地，重启后带原键重发。
@@ -191,7 +191,7 @@
 
 ## 6. 客户端（Unity）
 
-2026-11-06 负责人授权出细则交 Codex 实施，细则见 交接文档（原 `docs/handoff/client-request-idempotency-unity-20261106.md`，已清理，见 `ccf2840b2`），那份文档写明了改哪些文件、哪几行、用例和验证命令。规则摘要：
+2026-11-06 负责人授权出细则交 Gemini 实施，细则见 交接文档（原 `docs/handoff/client-request-idempotency-unity-20261106.md`，已清理，见 `ccf2840b2`），那份文档写明了改哪些文件、哪几行、用例和验证命令。规则摘要：
 
 - 三个调用点原本就有单飞：回包没到时再点不发第二个包。这一条保留；不为第二次点击生成新键。
 - 每次点击（本地检查都过了之后）生成一个新键，写进请求。生成方法与帮会经济共用一个实现（`ClientRequestKeys.TryCreate`，照 `GuildClient.EconomyRequestId`）。
@@ -207,7 +207,7 @@
 
 改的是客户端可见协议，Java 版要对齐：`game-proto` 同步这几个字段，Java scene 的神秘商人购买、新建加点方案、强化按同一顺序接入。账本放进 Java 的玩家状态，和货币同一次围栏写。状态：**Java 待做**，登记在 Java 仓 `PARITY.md`。
 
-## 8. 验证（交 Codex）
+## 8. 验证（交 Gemini）
 
 1. 前提：R2 会话那一批在 `data/tip/Tip.xlsx` 新加的码（`EquipEnhanceLevelChanged` 和三个临时格的码）要先导表，强化用例用到 `kEquipEnhanceLevelChanged`。导表按 `AGENTS.md` §4 第 4 条。
 2. 协议：在仓库根执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。客户端未授权，所以用 no-unity 配置。生成之后核对以下几处：
@@ -227,7 +227,7 @@
 - 2026-11-06：
   - 强化接入（`client_request_id = 3`、`replayed = 6`），接在 R2 会话的 `expected_level = 2` 之上。
   - 工程登记：场景库加账本两个文件，bag_test 加 `client_request_ledger_test.cpp`。Linux 的 `cpp/libs/services/scene/CMakeLists.txt` 由 R2 会话补了一行。这个文件由 `build_linux.sh` 第 2 步按 `.vcxproj` 重新生成，`scene.vcxproj` 的条目已挪到同一位置，重新生成不会产生差异。
-  - 负责人授权出 Unity 细则交 Codex（`docs/handoff/client-request-idempotency-unity-20261106.md`）。
+  - 负责人授权出 Unity 细则交 Gemini（`docs/handoff/client-request-idempotency-unity-20261106.md`）。
   - 负责人定「改成存盘」：账本改为 `player_database` 字段 25（WALLET 组），组件改为持久数据，指纹改为 SHA-256 前 16 字节，淘汰改按显式 seq，加载校验与失效标签照收件箱账本。不做开关（§5.3）。
   - 夹具同步：满套持久组件的手搭玩家（`bag_test.cpp`、`cross_zone_test.cpp`、两个 `EmplaceIfAbsent` 补齐函数）都挂上新组件；「缺组件整份拒存」清单与存盘往返用例都覆盖到它。
   - `player_database_1` 由「玩家数据存储策略优化」会话同期删除，与本改动互不影响；它会把字段 25 补进 `player-save-direct-commit.md` §1.1 的钱包行。
@@ -235,7 +235,7 @@
   - robot 三个冒烟场景按交接 §8 补上同键重发，神秘商人另补重登后重发（§8 第 6 步）。未编译、未运行。
   - §5.2 改正：原文说「玩家离线时清空这个字段是安全的」，这个说法过宽。清空会丢掉全部去重记录，带旧键的重发会再执行一次，只在两个条件同时满足时才不出事（玩家离线；客户端只在同一条连接上重发）。修复改为默认逐条修、不删合法的键。§2.1 第 6 条补上保留期前提；§6 的跨连接恢复补上它对 §5.2 的约束。
   - §4 的状态列按 2026-11-08 的单测结果更新。
-- 2026-11-17（Codex，记在这里是为了让本文与代码一致）：账本加了装备打造（种类 4）、材料自选领取（种类 5），组件多了 `forge_revision` 与 `material_reward`，`Validate` 多了对应的校验。规则在 `equipment-eight-slot-implementation.md`。
+- 2026-11-17（Gemini，记在这里是为了让本文与代码一致）：账本加了装备打造（种类 4）、材料自选领取（种类 5），组件多了 `forge_revision` 与 `material_reward`，`Validate` 多了对应的校验。规则在 `equipment-eight-slot-implementation.md`。
 - 2026-11-19：
   - 按当前代码重核全部扣资源的客户端请求（§1 的表）：11-13 之后新增的五个都有各自的防重，没有漏接的。
   - 三个「可选后续」定案为不做，各自的原因写在原处：其余请求不加幂等键（§1）；账本判坏不做自动修复、不预做修复工具（§5.2）；前三种请求不做跨连接自动重发（§6）。

@@ -1,10 +1,10 @@
 # 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 
-> 状态:**已落码,未编译、未运行**,待 Codex 按 §8 验证。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 25 条。
-> 第二批(2026-11-11,「G4a Redis 设计稿修订应用」会话):mail 与 GM 回收的重投分片(§10)、guild / trade 终态清理分片(§11)、分片缺口告警(§12),**同样已落码,未编译、未运行**,待 Codex 按 §13.3 验证。
+> 状态:**已落码,未编译、未运行**,待 Gemini 按 §8 验证。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 25 条。
+> 第二批(2026-11-11,「G4a Redis 设计稿修订应用」会话):mail 与 GM 回收的重投分片(§10)、guild / trade 终态清理分片(§11)、分片缺口告警(§12),**同样已落码,未编译、未运行**,待 Gemini 按 §13.3 验证。
 > 复用 `go/shared/workshard`(先例:trade 合同推进,[聚宝斋设计](jubaozhai-market.md) §15.8)与 match 的 `svc.OwnsWork`([全服匹配设计](global-match-hierarchical-pools.md) §5.2、§12.7)。
-> 第一、二批不改表、不改协议、不改 proto,不需要重新生成。第三批(2026-11-11,本会话):四张表的到期索引 `idx_0` 加 `op_id`、`player_id`(§2.4),**改了 proto 的索引选项,要先重新生成协议、删库重建**;未生成、未编译、未运行,待 Codex 按 §8 末尾「第三批」验证。
-> 第四批(2026-11-11~12,「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话):GM 回收派发与 mail 过期清理按片分工、三个周期循环的活性指标与按副本判的停摆告警(§14)。第五批(同一会话):其余三个按片分工循环(guild / trade 终态清理、match 终局发件箱)的活性;六个循环的活性口径收进共享包 `go/shared/looplive`,每一轮各自 recover(mail 清理与 match 发件箱原来一轮 panic 会打死进程,trade 清理原来会让循环退出),并加对全部 Go 服务后台点位的「panic 过」告警(§14.3、§14.8);match 的撮合与投榜循环有同一类缺陷,一并修了(§14.10)。第六批(同一会话):match 经 `StartSourceLoop` / `StartRelayLoop` 起的循环与投榜循环的活性,一族 gauge 按点位区分(§14.10)。三批都**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。不改表、不改协议、不改 proto。
+> 第一、二批不改表、不改协议、不改 proto,不需要重新生成。第三批(2026-11-11,本会话):四张表的到期索引 `idx_0` 加 `op_id`、`player_id`(§2.4),**改了 proto 的索引选项,要先重新生成协议、删库重建**;未生成、未编译、未运行,待 Gemini 按 §8 末尾「第三批」验证。
+> 第四批(2026-11-11~12,「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话):GM 回收派发与 mail 过期清理按片分工、三个周期循环的活性指标与按副本判的停摆告警(§14)。第五批(同一会话):其余三个按片分工循环(guild / trade 终态清理、match 终局发件箱)的活性;六个循环的活性口径收进共享包 `go/shared/looplive`,每一轮各自 recover(mail 清理与 match 发件箱原来一轮 panic 会打死进程,trade 清理原来会让循环退出),并加对全部 Go 服务后台点位的「panic 过」告警(§14.3、§14.8);match 的撮合与投榜循环有同一类缺陷,一并修了(§14.10)。第六批(同一会话):match 经 `StartSourceLoop` / `StartRelayLoop` 起的循环与投榜循环的活性,一族 gauge 按点位区分(§14.10)。三批都**已落码,未编译、未运行**,待 Gemini 按 §14.7 验证。不改表、不改协议、不改 proto。
 
 ## 1. 问题
 
@@ -140,7 +140,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - `go/match/internal/authority/work_owner_test.go`:真 TiDB `TestWorkTiDBOutcomeOutboxDeliversOnlyOwnedShards`(结果只投本副本的 battle 片,个人首投与等待两页只投本副本的玩家片;一片都不归时什么都不投;不分工时其余行投出,已投的不重投)。
 - 既有用例不改:`TestOutcomeTiDBConcurrentReplicasDeliverEachRowOnce` 两个副本都没绑归属,仍是「全部片 + CAS 只投一次」。
 
-## 8. 给 Codex 的验证命令
+## 8. 给 Gemini 的验证命令
 
 工作目录都是仓库根目录下对应的 Go 模块,PowerShell 7;每条命令前先 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。按顺序跑,失败时保留编译错误全文、失败用例名与断言原文,不改弱断言,不连续重试。
 
@@ -282,7 +282,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - `go/trade/internal/data/asset_op_due_shard_test.go`:`TestCleanupTerminalOpsOwnedPutsShardFilterBeforeLimit`(录制驱动)。`go/trade/internal/svc/assetchannel_recovery_test.go`:`TestAssetOpCleanupOwner`,两处 `StartAssetOpCleanup` 调用补 `nil`。
 - `tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`(新):规则名单、级别、for;指标由 assetop 注册、service 是常量 label;阈值等于 `workshard.Shards`;两条规则同一组聚合 label;四个循环都拿到 metrics;告警名不重名。
 
-### 13.3 给 Codex 的验证命令
+### 13.3 给 Gemini 的验证命令
 
 工作目录同 §8,PowerShell 7,Go 命令前先 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。按顺序跑,失败保留编译错误全文、失败用例名与断言原文,不改弱断言,不连续重试。§8 第 1~8 步若还没跑,先跑完它们。
 
@@ -300,7 +300,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 ## 14. 第四、五批:GM 回收派发与 mail 过期清理按片分工、循环活性(2026-11-11~12)
 
-「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话。**已落码,未编译、未运行**,待 Codex 按 §14.7 验证。同批的第 35 条(mail 列表截断计数)结论写在[邮件设计](mail-system.md)文末 2026-11-11 节。不改表、不改协议、不改 proto,不需要重新生成。
+「缺口第 25 条残余与第 35 条:回收分工、活性指标、截断告警」会话。**已落码,未编译、未运行**,待 Gemini 按 §14.7 验证。同批的第 35 条(mail 列表截断计数)结论写在[邮件设计](mail-system.md)文末 2026-11-11 节。不改表、不改协议、不改 proto,不需要重新生成。
 
 ### 14.1 两个循环原来的样子
 
@@ -475,7 +475,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - `tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1`(新,第六批后 7 个用例):规则名单与停摆规则的形状;口径只有 `looplive` 一份、各个 gauge 都用它定义,match 一族按 `point` 区分并挂进 `register()`;每处循环(第六批后 11 处)都是起来 `Mark`、每轮经 `Round`、`Stop` 紧跟 `return`、不 defer;通用 panic 规则的式子(全部点位、按副本按点位、不用 `increase()`),各循环的点位名是代码常量,投榜不再另包 `safego.Run`;阈值与代码常量和服务配置同源;match 一族的点位名单、每个调用点的间隔写法登记与来源核对、阈值 ≥ 3 × (最长间隔 + 最长一轮预算);告警名不重名。
 - guild 的 `startAssetOpCleanup`(`guild.go`,package main)没有单测:它每轮各自 recover 是原有行为,本批只换了活性的写法,由契约测试核对写法。
 
-### 14.7 给 Codex 的验证命令
+### 14.7 给 Gemini 的验证命令
 
 工作目录是仓库根目录下对应的 Go 模块,PowerShell 7,Go 命令前先 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。按顺序跑,失败时保留编译错误全文、失败用例名与断言原文,不改弱断言,不连续重试。§8、§13.3 的步骤若还没跑,先跑完它们。
 

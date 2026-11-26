@@ -42,7 +42,7 @@ var Segments = []Segment{
 	{Domain: "cross_server", Group: "cross_server_error", Base: 13000, Width: 1000, Lo: 13000, Hi: 13000, Count: 1},
 	{Domain: "guild", Group: "guild_error", Base: 14000, Width: 1000, Lo: 14000, Hi: 14071, Count: 72},
 	{Domain: "friend", Group: "friend_error", Base: 15000, Width: 1000, Lo: 15000, Hi: 15009, Count: 10},
-	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16055, Count: 56},
+	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16063, Count: 64},
 	{Domain: "mail", Group: "mail_error", Base: 17000, Width: 1000, Lo: 17000, Hi: 17011, Count: 12},
 	{Domain: "chat", Group: "chat_error", Base: 18000, Width: 1000, Lo: 18000, Hi: 18006, Count: 7},
 	{Domain: "trade", Group: "trade_error", Base: 20000, Width: 1000, Lo: 20000, Hi: 20017, Count: 18},
@@ -59,6 +59,8 @@ var Segments = []Segment{
 	{Domain: "season", Group: "season_error", Base: 34000, Width: 1000, Lo: 34000, Hi: 34011, Count: 12},
 	{Domain: "trial_journal", Group: "trial_journal_error", Base: 35000, Width: 1000, Lo: 35000, Hi: 35008, Count: 9},
 	{Domain: "festival_beast", Group: "festival_beast_error", Base: 36000, Width: 1000, Lo: 36000, Hi: 36013, Count: 14},
+	{Domain: "spirit_shop", Group: "spirit_shop_error", Base: 37000, Width: 1000, Lo: 37000, Hi: 37010, Count: 11},
+	{Domain: "travel_pass", Group: "travel_pass_error", Base: 38000, Width: 1000, Lo: 38000, Hi: 38012, Count: 13},
 }
 
 // DomainOf 返回码所属的域名。不属于任何已声明段时返回空串。

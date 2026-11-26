@@ -30,6 +30,8 @@ private static final long serialVersionUID = 0L;
   private SeasonRuleTable() {
     name_ = "";
     desc_ = "";
+    honorTitleName_ = "";
+    honorBadgeIconKey_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -271,6 +273,84 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int HONOR_TITLE_NAME_FIELD_NUMBER = 16;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object honorTitleName_ = "";
+  /**
+   * <code>string honor_title_name = 16;</code>
+   * @return The honorTitleName.
+   */
+  @java.lang.Override
+  public java.lang.String getHonorTitleName() {
+    java.lang.Object ref = honorTitleName_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      honorTitleName_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string honor_title_name = 16;</code>
+   * @return The bytes for honorTitleName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getHonorTitleNameBytes() {
+    java.lang.Object ref = honorTitleName_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      honorTitleName_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int HONOR_BADGE_ICON_KEY_FIELD_NUMBER = 17;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object honorBadgeIconKey_ = "";
+  /**
+   * <code>string honor_badge_icon_key = 17;</code>
+   * @return The honorBadgeIconKey.
+   */
+  @java.lang.Override
+  public java.lang.String getHonorBadgeIconKey() {
+    java.lang.Object ref = honorBadgeIconKey_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      honorBadgeIconKey_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string honor_badge_icon_key = 17;</code>
+   * @return The bytes for honorBadgeIconKey.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getHonorBadgeIconKeyBytes() {
+    java.lang.Object ref = honorBadgeIconKey_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      honorBadgeIconKey_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -329,6 +409,12 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 15, desc_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(honorTitleName_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 16, honorTitleName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(honorBadgeIconKey_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 17, honorBadgeIconKey_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -392,6 +478,12 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(15, desc_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(honorTitleName_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(16, honorTitleName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(honorBadgeIconKey_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(17, honorBadgeIconKey_);
+    }
     return size;
   }
   @java.lang.Override
@@ -446,6 +538,10 @@ private static final long serialVersionUID = 0L;
         != other.getDefaultSealId()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (!getHonorTitleName()
+        .equals(other.getHonorTitleName())) return false;
+    if (!getHonorBadgeIconKey()
+        .equals(other.getHonorBadgeIconKey())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -491,6 +587,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getDefaultSealId();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + HONOR_TITLE_NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getHonorTitleName().hashCode();
+    hash = (37 * hash) + HONOR_BADGE_ICON_KEY_FIELD_NUMBER;
+    hash = (53 * hash) + getHonorBadgeIconKey().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -637,6 +737,8 @@ private static final long serialVersionUID = 0L;
       catchupPricePerPoint_ = 0L;
       defaultSealId_ = 0;
       desc_ = "";
+      honorTitleName_ = "";
+      honorBadgeIconKey_ = "";
       return this;
     }
 
@@ -715,6 +817,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00004000) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.honorTitleName_ = honorTitleName_;
+      }
+      if (((from_bitField0_ & 0x00010000) != 0)) {
+        result.honorBadgeIconKey_ = honorBadgeIconKey_;
+      }
     }
 
     @java.lang.Override
@@ -776,6 +884,16 @@ private static final long serialVersionUID = 0L;
       if (!other.getDesc().isEmpty()) {
         desc_ = other.desc_;
         bitField0_ |= 0x00004000;
+        onChanged();
+      }
+      if (!other.getHonorTitleName().isEmpty()) {
+        honorTitleName_ = other.honorTitleName_;
+        bitField0_ |= 0x00008000;
+        onChanged();
+      }
+      if (!other.getHonorBadgeIconKey().isEmpty()) {
+        honorBadgeIconKey_ = other.honorBadgeIconKey_;
+        bitField0_ |= 0x00010000;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -879,6 +997,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00004000;
               break;
             } // case 122
+            case 130: {
+              honorTitleName_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 130
+            case 138: {
+              honorBadgeIconKey_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00010000;
+              break;
+            } // case 138
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1452,6 +1580,150 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object honorTitleName_ = "";
+    /**
+     * <code>string honor_title_name = 16;</code>
+     * @return The honorTitleName.
+     */
+    public java.lang.String getHonorTitleName() {
+      java.lang.Object ref = honorTitleName_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        honorTitleName_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string honor_title_name = 16;</code>
+     * @return The bytes for honorTitleName.
+     */
+    public com.google.protobuf.ByteString
+        getHonorTitleNameBytes() {
+      java.lang.Object ref = honorTitleName_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        honorTitleName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string honor_title_name = 16;</code>
+     * @param value The honorTitleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHonorTitleName(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      honorTitleName_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string honor_title_name = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHonorTitleName() {
+      honorTitleName_ = getDefaultInstance().getHonorTitleName();
+      bitField0_ = (bitField0_ & ~0x00008000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string honor_title_name = 16;</code>
+     * @param value The bytes for honorTitleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHonorTitleNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      honorTitleName_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object honorBadgeIconKey_ = "";
+    /**
+     * <code>string honor_badge_icon_key = 17;</code>
+     * @return The honorBadgeIconKey.
+     */
+    public java.lang.String getHonorBadgeIconKey() {
+      java.lang.Object ref = honorBadgeIconKey_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        honorBadgeIconKey_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string honor_badge_icon_key = 17;</code>
+     * @return The bytes for honorBadgeIconKey.
+     */
+    public com.google.protobuf.ByteString
+        getHonorBadgeIconKeyBytes() {
+      java.lang.Object ref = honorBadgeIconKey_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        honorBadgeIconKey_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string honor_badge_icon_key = 17;</code>
+     * @param value The honorBadgeIconKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHonorBadgeIconKey(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      honorBadgeIconKey_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string honor_badge_icon_key = 17;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHonorBadgeIconKey() {
+      honorBadgeIconKey_ = getDefaultInstance().getHonorBadgeIconKey();
+      bitField0_ = (bitField0_ & ~0x00010000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string honor_badge_icon_key = 17;</code>
+     * @param value The bytes for honorBadgeIconKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHonorBadgeIconKeyBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      honorBadgeIconKey_ = value;
+      bitField0_ |= 0x00010000;
       onChanged();
       return this;
     }

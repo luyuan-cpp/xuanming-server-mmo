@@ -48,11 +48,11 @@ constexpr SeasonRuleTable::ParseTableT_ SeasonRuleTable::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      15, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294934528,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      15,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -64,105 +64,133 @@ constexpr SeasonRuleTable::ParseTableT_ SeasonRuleTable::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.id_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.id_)}},
       // string name = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.name_)}},
       // uint64 starts_at_ms = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SeasonRuleTable, _impl_.starts_at_ms_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SeasonRuleTable, _impl_.starts_at_ms_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.starts_at_ms_)}},
       // uint64 ends_at_ms = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SeasonRuleTable, _impl_.ends_at_ms_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SeasonRuleTable, _impl_.ends_at_ms_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.ends_at_ms_)}},
       // bool enabled = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SeasonRuleTable, _impl_.enabled_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SeasonRuleTable, _impl_.enabled_), 6>(),
+       {40, 6, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.enabled_)}},
       // uint32 seal_max_points = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.seal_max_points_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.seal_max_points_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.seal_max_points_)}},
       // uint32 pve_win_points = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.pve_win_points_), 7>(),
-       {56, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.pve_win_points_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pve_win_points_)}},
       // uint32 pvp_win_points = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.pvp_win_points_), 8>(),
-       {64, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.pvp_win_points_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pvp_win_points_)}},
       // uint32 pvp_other_points = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.pvp_other_points_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.pvp_other_points_), 11>(),
+       {72, 11, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pvp_other_points_)}},
       // uint32 max_health_bps_cap = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.max_health_bps_cap_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.max_health_bps_cap_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.max_health_bps_cap_)}},
       // uint32 defense_bps_cap = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.defense_bps_cap_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.defense_bps_cap_), 13>(),
+       {88, 13, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.defense_bps_cap_)}},
       // uint32 catchup_currency_type = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.catchup_currency_type_), 13>(),
-       {96, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.catchup_currency_type_), 15>(),
+       {96, 15, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.catchup_currency_type_)}},
       // uint64 catchup_price_per_point = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SeasonRuleTable, _impl_.catchup_price_per_point_), 12>(),
-       {104, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SeasonRuleTable, _impl_.catchup_price_per_point_), 14>(),
+       {104, 14, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.catchup_price_per_point_)}},
       // uint32 default_seal_id = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.default_seal_id_), 14>(),
-       {112, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonRuleTable, _impl_.default_seal_id_), 16>(),
+       {112, 16, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.default_seal_id_)}},
       // string desc = 15;
       {::_pbi::TcParser::FastUS1,
        {122, 1, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.desc_)}},
+      // string honor_title_name = 16;
+      {::_pbi::TcParser::FastUS2,
+       {386, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_title_name_)}},
+      // string honor_badge_icon_key = 17;
+      {::_pbi::TcParser::FastUS2,
+       {394, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_badge_icon_key_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 2;
       {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 starts_at_ms = 3;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.starts_at_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.starts_at_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 ends_at_ms = 4;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.ends_at_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.ends_at_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool enabled = 5;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.enabled_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.enabled_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 seal_max_points = 6;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.seal_max_points_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.seal_max_points_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 pve_win_points = 7;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pve_win_points_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pve_win_points_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 pvp_win_points = 8;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pvp_win_points_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pvp_win_points_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 pvp_other_points = 9;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pvp_other_points_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.pvp_other_points_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_health_bps_cap = 10;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.max_health_bps_cap_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.max_health_bps_cap_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 defense_bps_cap = 11;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.defense_bps_cap_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.defense_bps_cap_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 catchup_currency_type = 12;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.catchup_currency_type_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.catchup_currency_type_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 catchup_price_per_point = 13;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.catchup_price_per_point_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.catchup_price_per_point_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 default_seal_id = 14;
-      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.default_seal_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.default_seal_id_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 15;
       {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.desc_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string honor_title_name = 16;
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_title_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string honor_badge_icon_key = 17;
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_badge_icon_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\17\0\4\0\0\0\0\0\0\0\0\0\0\0\0\4"
+      "\17\0\4\0\0\0\0\0\0\0\0\0\0\0\0\4\20\24\0\0\0\0\0\0"
       "SeasonRuleTable"
       "name"
       "desc"
+      "honor_title_name"
+      "honor_badge_icon_key"
     }},
   };
 }
@@ -176,6 +204,12 @@ inline constexpr SeasonRuleTable::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         desc_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        honor_title_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        honor_badge_icon_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         starts_at_ms_{::uint64_t{0u}},
@@ -444,7 +478,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_._has_bits_),
-        18, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.starts_at_ms_),
@@ -460,21 +494,25 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.catchup_price_per_point_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.default_seal_id_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.desc_),
-        3,
-        0,
-        2,
+        PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.honor_title_name_),
+        PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.honor_badge_icon_key_),
         5,
+        0,
         4,
-        6,
         7,
+        6,
         8,
         9,
         10,
         11,
-        13,
         12,
+        13,
+        15,
         14,
+        16,
         1,
+        2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -485,7 +523,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::SeasonRuleTable)},
-        {33, sizeof(::SeasonRuleTableData)},
+        {37, sizeof(::SeasonRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -494,7 +532,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_seasonrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026seasonrule_table.proto\"\345\002\n\017SeasonRuleT"
+    "\n\026seasonrule_table.proto\"\235\003\n\017SeasonRuleT"
     "able\022\n\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\024\n\014starts"
     "_at_ms\030\003 \001(\004\022\022\n\nends_at_ms\030\004 \001(\004\022\017\n\007enab"
     "led\030\005 \001(\010\022\027\n\017seal_max_points\030\006 \001(\r\022\026\n\016pv"
@@ -503,16 +541,18 @@ const char descriptor_table_protodef_seasonrule_5ftable_2eproto[] ABSL_ATTRIBUTE
     "th_bps_cap\030\n \001(\r\022\027\n\017defense_bps_cap\030\013 \001("
     "\r\022\035\n\025catchup_currency_type\030\014 \001(\r\022\037\n\027catc"
     "hup_price_per_point\030\r \001(\004\022\027\n\017default_sea"
-    "l_id\030\016 \001(\r\022\014\n\004desc\030\017 \001(\t\"5\n\023SeasonRuleTa"
-    "bleData\022\036\n\004data\030\001 \003(\0132\020.SeasonRuleTableB"
-    "A\n\016com.game.tableB\031SeasonRuleTableOuterC"
-    "lassP\001Z\022generated/pb/tableb\006proto3"
+    "l_id\030\016 \001(\r\022\014\n\004desc\030\017 \001(\t\022\030\n\020honor_title_"
+    "name\030\020 \001(\t\022\034\n\024honor_badge_icon_key\030\021 \001(\t"
+    "\"5\n\023SeasonRuleTableData\022\036\n\004data\030\001 \003(\0132\020."
+    "SeasonRuleTableBA\n\016com.game.tableB\031Seaso"
+    "nRuleTableOuterClassP\001Z\022generated/pb/tab"
+    "leb\006proto3"
 };
 static ::absl::once_flag descriptor_table_seasonrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_seasonrule_5ftable_2eproto = {
     false,
     false,
-    514,
+    570,
     descriptor_table_protodef_seasonrule_5ftable_2eproto,
     "seasonrule_table.proto",
     &descriptor_table_seasonrule_5ftable_2eproto_once,
@@ -543,7 +583,9 @@ PROTOBUF_NDEBUG_INLINE SeasonRuleTable::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         name_(arena, from.name_),
-        desc_(arena, from.desc_) {}
+        desc_(arena, from.desc_),
+        honor_title_name_(arena, from.honor_title_name_),
+        honor_badge_icon_key_(arena, from.honor_badge_icon_key_) {}
 
 SeasonRuleTable::SeasonRuleTable(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -574,7 +616,9 @@ PROTOBUF_NDEBUG_INLINE SeasonRuleTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         name_(arena),
-        desc_(arena) {}
+        desc_(arena),
+        honor_title_name_(arena),
+        honor_badge_icon_key_(arena) {}
 
 inline void SeasonRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -598,6 +642,8 @@ inline void SeasonRuleTable::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.name_.Destroy();
   this_._impl_.desc_.Destroy();
+  this_._impl_.honor_title_name_.Destroy();
+  this_._impl_.honor_badge_icon_key_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -635,24 +681,31 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.desc_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.honor_title_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.honor_badge_icon_key_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.starts_at_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.pve_win_points_) -
-        reinterpret_cast<char*>(&_impl_.starts_at_ms_)) + sizeof(_impl_.pve_win_points_));
+        reinterpret_cast<char*>(&_impl_.ends_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.starts_at_ms_)) + sizeof(_impl_.ends_at_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
-    ::memset(&_impl_.pvp_win_points_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.default_seal_id_) -
-        reinterpret_cast<char*>(&_impl_.pvp_win_points_)) + sizeof(_impl_.default_seal_id_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.seal_max_points_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.catchup_currency_type_) -
+        reinterpret_cast<char*>(&_impl_.seal_max_points_)) + sizeof(_impl_.catchup_currency_type_));
   }
+  _impl_.default_seal_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -677,7 +730,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -696,7 +749,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint64 starts_at_ms = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_starts_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -705,7 +758,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint64 ends_at_ms = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_ends_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -714,7 +767,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // bool enabled = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_enabled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -723,7 +776,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 seal_max_points = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_seal_max_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -732,7 +785,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 pve_win_points = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_pve_win_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -741,7 +794,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 pvp_win_points = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_pvp_win_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -750,7 +803,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 pvp_other_points = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_pvp_other_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -759,7 +812,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 max_health_bps_cap = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_max_health_bps_cap() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -768,7 +821,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 defense_bps_cap = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_defense_bps_cap() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -777,7 +830,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 catchup_currency_type = 12;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_catchup_currency_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -786,7 +839,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint64 catchup_price_per_point = 13;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_catchup_price_per_point() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -795,7 +848,7 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
   }
 
   // uint32 default_seal_id = 14;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_default_seal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -810,6 +863,26 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SeasonRuleTable.desc");
       target = stream->WriteStringMaybeAliased(15, _s, target);
+    }
+  }
+
+  // string honor_title_name = 16;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_honor_title_name().empty()) {
+      const ::std::string& _s = this_._internal_honor_title_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SeasonRuleTable.honor_title_name");
+      target = stream->WriteStringMaybeAliased(16, _s, target);
+    }
+  }
+
+  // string honor_badge_icon_key = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_honor_badge_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_honor_badge_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SeasonRuleTable.honor_badge_icon_key");
+      target = stream->WriteStringMaybeAliased(17, _s, target);
     }
   }
 
@@ -853,93 +926,109 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
                                         this_._internal_desc());
       }
     }
-    // uint64 starts_at_ms = 3;
+    // string honor_title_name = 16;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_honor_title_name().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_honor_title_name());
+      }
+    }
+    // string honor_badge_icon_key = 17;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_honor_badge_icon_key().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_honor_badge_icon_key());
+      }
+    }
+    // uint64 starts_at_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_starts_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_starts_at_ms());
       }
     }
     // uint32 id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // bool enabled = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_enabled() != 0) {
         total_size += 2;
       }
     }
     // uint64 ends_at_ms = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_ends_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_ends_at_ms());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 seal_max_points = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_seal_max_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_seal_max_points());
       }
     }
     // uint32 pve_win_points = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_pve_win_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pve_win_points());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint32 pvp_win_points = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_pvp_win_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pvp_win_points());
       }
     }
     // uint32 pvp_other_points = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_pvp_other_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pvp_other_points());
       }
     }
     // uint32 max_health_bps_cap = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_max_health_bps_cap() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_health_bps_cap());
       }
     }
     // uint32 defense_bps_cap = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_defense_bps_cap() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_defense_bps_cap());
       }
     }
     // uint64 catchup_price_per_point = 13;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_catchup_price_per_point() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_catchup_price_per_point());
       }
     }
     // uint32 catchup_currency_type = 12;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_catchup_currency_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_catchup_currency_type());
       }
     }
+  }
+   {
     // uint32 default_seal_id = 14;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_default_seal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_default_seal_id());
@@ -983,71 +1072,89 @@ void SeasonRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_honor_title_name().empty()) {
+        _this->_internal_set_honor_title_name(from._internal_honor_title_name());
+      } else {
+        if (_this->_impl_.honor_title_name_.IsDefault()) {
+          _this->_internal_set_honor_title_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_honor_badge_icon_key().empty()) {
+        _this->_internal_set_honor_badge_icon_key(from._internal_honor_badge_icon_key());
+      } else {
+        if (_this->_impl_.honor_badge_icon_key_.IsDefault()) {
+          _this->_internal_set_honor_badge_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_starts_at_ms() != 0) {
         _this->_impl_.starts_at_ms_ = from._impl_.starts_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_enabled() != 0) {
         _this->_impl_.enabled_ = from._impl_.enabled_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_ends_at_ms() != 0) {
         _this->_impl_.ends_at_ms_ = from._impl_.ends_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_seal_max_points() != 0) {
         _this->_impl_.seal_max_points_ = from._impl_.seal_max_points_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_pve_win_points() != 0) {
         _this->_impl_.pve_win_points_ = from._impl_.pve_win_points_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_pvp_win_points() != 0) {
         _this->_impl_.pvp_win_points_ = from._impl_.pvp_win_points_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_pvp_other_points() != 0) {
         _this->_impl_.pvp_other_points_ = from._impl_.pvp_other_points_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_max_health_bps_cap() != 0) {
         _this->_impl_.max_health_bps_cap_ = from._impl_.max_health_bps_cap_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_defense_bps_cap() != 0) {
         _this->_impl_.defense_bps_cap_ = from._impl_.defense_bps_cap_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_catchup_price_per_point() != 0) {
         _this->_impl_.catchup_price_per_point_ = from._impl_.catchup_price_per_point_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_catchup_currency_type() != 0) {
         _this->_impl_.catchup_currency_type_ = from._impl_.catchup_currency_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
-      if (from._internal_default_seal_id() != 0) {
-        _this->_impl_.default_seal_id_ = from._impl_.default_seal_id_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_default_seal_id() != 0) {
+      _this->_impl_.default_seal_id_ = from._impl_.default_seal_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1071,6 +1178,8 @@ void SeasonRuleTable::InternalSwap(SeasonRuleTable* PROTOBUF_RESTRICT PROTOBUF_N
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.honor_title_name_, &other->_impl_.honor_title_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.honor_badge_icon_key_, &other->_impl_.honor_badge_icon_key_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.default_seal_id_)
       + sizeof(SeasonRuleTable::_impl_.default_seal_id_)

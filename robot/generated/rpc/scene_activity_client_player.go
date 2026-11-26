@@ -146,3 +146,95 @@ func (sceneActivityClientPlayerRpc) decodeClaimFestivalBeastReward(reply *base.M
 	}
 	return resp, nil
 }
+
+// GetTravelPassState 异步调用 SceneActivityClientPlayer.GetTravelPassState(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) GetTravelPassState(c *pkg.GameClient, req *scene.GetTravelPassStateRequest, timeout time.Duration, done func(*scene.GetTravelPassStateResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerGetTravelPassStateMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetTravelPassState(reply, err))
+	})
+}
+
+// GetTravelPassStateSync 同步调用 SceneActivityClientPlayer.GetTravelPassState(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) GetTravelPassStateSync(ctx context.Context, c *pkg.GameClient, req *scene.GetTravelPassStateRequest, timeout time.Duration) (*scene.GetTravelPassStateResponse, error) {
+	return r.decodeGetTravelPassState(c.CallSync(ctx, game.SceneActivityClientPlayerGetTravelPassStateMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeGetTravelPassState(reply *base.MessageContent, err error) (*scene.GetTravelPassStateResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetTravelPassStateResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.GetTravelPassState reply: %w", err)
+	}
+	return resp, nil
+}
+
+// UnlockTravelPassPremium 异步调用 SceneActivityClientPlayer.UnlockTravelPassPremium(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) UnlockTravelPassPremium(c *pkg.GameClient, req *scene.UnlockTravelPassPremiumRequest, timeout time.Duration, done func(*scene.UnlockTravelPassPremiumResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerUnlockTravelPassPremiumMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUnlockTravelPassPremium(reply, err))
+	})
+}
+
+// UnlockTravelPassPremiumSync 同步调用 SceneActivityClientPlayer.UnlockTravelPassPremium(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) UnlockTravelPassPremiumSync(ctx context.Context, c *pkg.GameClient, req *scene.UnlockTravelPassPremiumRequest, timeout time.Duration) (*scene.UnlockTravelPassPremiumResponse, error) {
+	return r.decodeUnlockTravelPassPremium(c.CallSync(ctx, game.SceneActivityClientPlayerUnlockTravelPassPremiumMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeUnlockTravelPassPremium(reply *base.MessageContent, err error) (*scene.UnlockTravelPassPremiumResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.UnlockTravelPassPremiumResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.UnlockTravelPassPremium reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ClaimTravelPassReward 异步调用 SceneActivityClientPlayer.ClaimTravelPassReward(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) ClaimTravelPassReward(c *pkg.GameClient, req *scene.ClaimTravelPassRewardRequest, timeout time.Duration, done func(*scene.ClaimTravelPassRewardResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerClaimTravelPassRewardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeClaimTravelPassReward(reply, err))
+	})
+}
+
+// ClaimTravelPassRewardSync 同步调用 SceneActivityClientPlayer.ClaimTravelPassReward(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) ClaimTravelPassRewardSync(ctx context.Context, c *pkg.GameClient, req *scene.ClaimTravelPassRewardRequest, timeout time.Duration) (*scene.ClaimTravelPassRewardResponse, error) {
+	return r.decodeClaimTravelPassReward(c.CallSync(ctx, game.SceneActivityClientPlayerClaimTravelPassRewardMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeClaimTravelPassReward(reply *base.MessageContent, err error) (*scene.ClaimTravelPassRewardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ClaimTravelPassRewardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.ClaimTravelPassReward reply: %w", err)
+	}
+	return resp, nil
+}
+
+// EquipTravelPassCosmetic 异步调用 SceneActivityClientPlayer.EquipTravelPassCosmetic(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) EquipTravelPassCosmetic(c *pkg.GameClient, req *scene.EquipTravelPassCosmeticRequest, timeout time.Duration, done func(*scene.EquipTravelPassCosmeticResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerEquipTravelPassCosmeticMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeEquipTravelPassCosmetic(reply, err))
+	})
+}
+
+// EquipTravelPassCosmeticSync 同步调用 SceneActivityClientPlayer.EquipTravelPassCosmetic(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) EquipTravelPassCosmeticSync(ctx context.Context, c *pkg.GameClient, req *scene.EquipTravelPassCosmeticRequest, timeout time.Duration) (*scene.EquipTravelPassCosmeticResponse, error) {
+	return r.decodeEquipTravelPassCosmetic(c.CallSync(ctx, game.SceneActivityClientPlayerEquipTravelPassCosmeticMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeEquipTravelPassCosmetic(reply *base.MessageContent, err error) (*scene.EquipTravelPassCosmeticResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.EquipTravelPassCosmeticResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.EquipTravelPassCosmetic reply: %w", err)
+	}
+	return resp, nil
+}

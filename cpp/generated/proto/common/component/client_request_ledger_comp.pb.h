@@ -586,6 +586,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kScrollCraftRevisionFieldNumber = 28,
     kCraftedSkillTableIdFieldNumber = 27,
     kScrollBonusFragmentsFieldNumber = 29,
+    kTravelPassClaimedCountFieldNumber = 30,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -882,11 +883,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_scroll_bonus_fragments(::uint32_t value);
 
   public:
+  // uint32 travel_pass_claimed_count = 30;
+  void clear_travel_pass_claimed_count() ;
+  [[nodiscard]] ::uint32_t travel_pass_claimed_count() const;
+  void set_travel_pass_claimed_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_travel_pass_claimed_count() const;
+  void _internal_set_travel_pass_claimed_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 29,
+      ::google::protobuf::internal::TcParseTable<5, 30,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -944,6 +955,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint64_t scroll_craft_revision_;
     ::uint32_t crafted_skill_table_id_;
     ::uint32_t scroll_bonus_fragments_;
+    ::uint32_t travel_pass_claimed_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1954,6 +1966,30 @@ inline ::uint32_t ClientRequestRecord::_internal_scroll_bonus_fragments() const 
 inline void ClientRequestRecord::_internal_set_scroll_bonus_fragments(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scroll_bonus_fragments_ = value;
+}
+
+// uint32 travel_pass_claimed_count = 30;
+inline void ClientRequestRecord::clear_travel_pass_claimed_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.travel_pass_claimed_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+}
+inline ::uint32_t ClientRequestRecord::travel_pass_claimed_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.travel_pass_claimed_count)
+  return _internal_travel_pass_claimed_count();
+}
+inline void ClientRequestRecord::set_travel_pass_claimed_count(::uint32_t value) {
+  _internal_set_travel_pass_claimed_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.travel_pass_claimed_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_travel_pass_claimed_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.travel_pass_claimed_count_;
+}
+inline void ClientRequestRecord::_internal_set_travel_pass_claimed_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.travel_pass_claimed_count_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -23,6 +23,7 @@
 
 #include "core/constants/fps.h"
 #include "entt/src/entt/entity/entity.hpp"
+#include "player/system/team_follow_formation.h"
 #include "proto/scene/player_movement.pb.h" // TeamFollowStopReason:停止驱动的原因,会发给客户端
 
 // 队长离开本节点后,原随从最多等这么久(帧)看队长的去留(TeamFollowAwaitLeaderComp)。要盖住一次交接最长的冻结
@@ -46,6 +47,8 @@ public:
 
 	// 记下本人入队序号(决定名次)。PlayerTeamSystem 每次应用成员关系时调用。
 	static void RememberJoinSeq(entt::entity player, uint32_t joinSeq);
+	// 记下队长当前队伍的跑图阵型样式;若队形已建立则当场热切,下一 tick 平滑过渡到位。
+	static void RememberFormationStyle(entt::entity leader, TeamFollowStyle style);
 
 	// 把 follower 接到 leader 身后,由服务器驱动走位。调用方(PlayerTeamSystem::RegroupToLeader)保证:
 	// 两人同在一个场景实例、leader 是 follower 当前队伍的队长、交接 / 战斗 / 会话守卫都已通过。

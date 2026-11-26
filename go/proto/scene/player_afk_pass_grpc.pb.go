@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneAfkPassClientPlayer_GetAfkPass_FullMethodName   = "/SceneAfkPassClientPlayer/GetAfkPass"
-	SceneAfkPassClientPlayer_BuyAfkPass_FullMethodName   = "/SceneAfkPassClientPlayer/BuyAfkPass"
-	SceneAfkPassClientPlayer_GmSetAfkPass_FullMethodName = "/SceneAfkPassClientPlayer/GmSetAfkPass"
+	SceneAfkPassClientPlayer_GetAfkPass_FullMethodName         = "/SceneAfkPassClientPlayer/GetAfkPass"
+	SceneAfkPassClientPlayer_BuyAfkPass_FullMethodName         = "/SceneAfkPassClientPlayer/BuyAfkPass"
+	SceneAfkPassClientPlayer_GmSetAfkPass_FullMethodName       = "/SceneAfkPassClientPlayer/GmSetAfkPass"
+	SceneAfkPassClientPlayer_SetAfkPassSettings_FullMethodName = "/SceneAfkPassClientPlayer/SetAfkPassSettings"
+	SceneAfkPassClientPlayer_AckHostedRecap_FullMethodName     = "/SceneAfkPassClientPlayer/AckHostedRecap"
 )
 
 // SceneAfkPassClientPlayerClient is the client API for SceneAfkPassClientPlayer service.
@@ -34,6 +36,11 @@ type SceneAfkPassClientPlayerClient interface {
 	BuyAfkPass(ctx context.Context, in *BuyAfkPassRequest, opts ...grpc.CallOption) (*BuyAfkPassResponse, error)
 	// GM:设定剩余时长(gate 的 GM 消息清单与 scene 的 GM 闸两道锁,生产环境整条关掉)。
 	GmSetAfkPass(ctx context.Context, in *GmSetAfkPassRequest, opts ...grpc.CallOption) (*GmSetAfkPassResponse, error)
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	// 修改离线托管偏好设置(例如离队 / 解散自动回主城安全区)。
+	SetAfkPassSettings(ctx context.Context, in *SetAfkPassSettingsRequest, opts ...grpc.CallOption) (*SetAfkPassSettingsResponse, error)
+	// 确认已阅离线托管收获简报。
+	AckHostedRecap(ctx context.Context, in *AckHostedRecapRequest, opts ...grpc.CallOption) (*AckHostedRecapResponse, error)
 }
 
 type sceneAfkPassClientPlayerClient struct {
@@ -74,6 +81,26 @@ func (c *sceneAfkPassClientPlayerClient) GmSetAfkPass(ctx context.Context, in *G
 	return out, nil
 }
 
+func (c *sceneAfkPassClientPlayerClient) SetAfkPassSettings(ctx context.Context, in *SetAfkPassSettingsRequest, opts ...grpc.CallOption) (*SetAfkPassSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetAfkPassSettingsResponse)
+	err := c.cc.Invoke(ctx, SceneAfkPassClientPlayer_SetAfkPassSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAfkPassClientPlayerClient) AckHostedRecap(ctx context.Context, in *AckHostedRecapRequest, opts ...grpc.CallOption) (*AckHostedRecapResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AckHostedRecapResponse)
+	err := c.cc.Invoke(ctx, SceneAfkPassClientPlayer_AckHostedRecap_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneAfkPassClientPlayerServer is the server API for SceneAfkPassClientPlayer service.
 // All implementations must embed UnimplementedSceneAfkPassClientPlayerServer
 // for forward compatibility.
@@ -84,6 +111,11 @@ type SceneAfkPassClientPlayerServer interface {
 	BuyAfkPass(context.Context, *BuyAfkPassRequest) (*BuyAfkPassResponse, error)
 	// GM:设定剩余时长(gate 的 GM 消息清单与 scene 的 GM 闸两道锁,生产环境整条关掉)。
 	GmSetAfkPass(context.Context, *GmSetAfkPassRequest) (*GmSetAfkPassResponse, error)
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	// 修改离线托管偏好设置(例如离队 / 解散自动回主城安全区)。
+	SetAfkPassSettings(context.Context, *SetAfkPassSettingsRequest) (*SetAfkPassSettingsResponse, error)
+	// 确认已阅离线托管收获简报。
+	AckHostedRecap(context.Context, *AckHostedRecapRequest) (*AckHostedRecapResponse, error)
 	mustEmbedUnimplementedSceneAfkPassClientPlayerServer()
 }
 
@@ -102,6 +134,12 @@ func (UnimplementedSceneAfkPassClientPlayerServer) BuyAfkPass(context.Context, *
 }
 func (UnimplementedSceneAfkPassClientPlayerServer) GmSetAfkPass(context.Context, *GmSetAfkPassRequest) (*GmSetAfkPassResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GmSetAfkPass not implemented")
+}
+func (UnimplementedSceneAfkPassClientPlayerServer) SetAfkPassSettings(context.Context, *SetAfkPassSettingsRequest) (*SetAfkPassSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAfkPassSettings not implemented")
+}
+func (UnimplementedSceneAfkPassClientPlayerServer) AckHostedRecap(context.Context, *AckHostedRecapRequest) (*AckHostedRecapResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AckHostedRecap not implemented")
 }
 func (UnimplementedSceneAfkPassClientPlayerServer) mustEmbedUnimplementedSceneAfkPassClientPlayerServer() {
 }
@@ -179,6 +217,42 @@ func _SceneAfkPassClientPlayer_GmSetAfkPass_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneAfkPassClientPlayer_SetAfkPassSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAfkPassSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAfkPassClientPlayerServer).SetAfkPassSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAfkPassClientPlayer_SetAfkPassSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAfkPassClientPlayerServer).SetAfkPassSettings(ctx, req.(*SetAfkPassSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAfkPassClientPlayer_AckHostedRecap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AckHostedRecapRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAfkPassClientPlayerServer).AckHostedRecap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAfkPassClientPlayer_AckHostedRecap_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAfkPassClientPlayerServer).AckHostedRecap(ctx, req.(*AckHostedRecapRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneAfkPassClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneAfkPassClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -197,6 +271,14 @@ var SceneAfkPassClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GmSetAfkPass",
 			Handler:    _SceneAfkPassClientPlayer_GmSetAfkPass_Handler,
+		},
+		{
+			MethodName: "SetAfkPassSettings",
+			Handler:    _SceneAfkPassClientPlayer_SetAfkPassSettings_Handler,
+		},
+		{
+			MethodName: "AckHostedRecap",
+			Handler:    _SceneAfkPassClientPlayer_AckHostedRecap_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

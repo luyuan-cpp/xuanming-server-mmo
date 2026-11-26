@@ -41,7 +41,7 @@
 
 > 2026-10-16:镜像改为与仓库同一个钉版引用(`deploy/docker-compose.yml`、`deploy/k8s/manifests/infra/kafka.yaml`、
 > `kafka-topic-init.yaml` 四处相同,见 `deploy/k8s/README.md`「镜像钉版本」);换版本时与那四处同改,本 runbook 的两处示例一并更新。
-> 钉版已落码,未验证:digest 与入口命令待 Codex 按 V3 核对(见 `docs/ops/godb-pipeline-launch-todo.md` §6.2),现网 broker 版本待 V0 核对。
+> 钉版已落码,未验证:digest 与入口命令待 Gemini 按 V3 核对(见 `docs/ops/godb-pipeline-launch-todo.md` §6.2),现网 broker 版本待 V0 核对。
 
 ```yaml
 services:
@@ -133,7 +133,7 @@ kafkautil.EnsureTopics(brokers, []TopicSpec{{
 > [`db-task-kafka-partition-contract.md`](../design/db-task-kafka-partition-contract.md)
 > 停写、排空，并同时切换 login/db 的 `TopicGeneration`。
 
-> 2026-10-16 补注(S5b,已落码,未编译、未测试,待 Codex 验证):`TopicSpec` 现有 `RetentionBytes`(每分区 topic 级
+> 2026-10-16 补注(S5b,已落码,未编译、未测试,待 Gemini 验证):`TopicSpec` 现有 `RetentionBytes`(每分区 topic 级
 > `retention.bytes`:0 = 不管理、沿用 broker 缺省;>0 = 建 topic 时带上并在每次启动时与 `retention.ms` 一起增量设置;<0 拒绝)。
 > db 与 login 各自的 `KafkaConfig.RetentionBytes`(optional)把它传给 `EnsureTopics`;K8s 上由 `k8s_deploy.ps1` 按 Kafka 盘预算
 > 同值渲染进两个 ConfigMap,盘的大小与 db_task 的保留量在同一个公式里对账,见 `deploy/k8s/README.md`「Kafka 磁盘预算与 db_task retention.bytes」。

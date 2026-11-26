@@ -1,6 +1,6 @@
 # AOI 单向关注与范围外同步
 
-状态：服务端已落码（2026-11-05），未编译，待 Codex 按文末「验证」执行；Java 版待做。2026-11-10 空间关注改为任一方位置变化后按距离重判（见「空间关注的评估时机」），这部分 Java 版早已按同一口径实现；同日加了战斗关注与名额空出后补回附近的人（见「战斗关注」「名额空出后补回附近的人」）；2026-11-11 加了 NPC 仇恨名单与服务器压力裁表（见「仇恨名单」「服务器压力」）。这三批 Java 版待做，C++ 都未编译。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
+状态：服务端已落码（2026-11-05），未编译，待 Gemini 按文末「验证」执行；Java 版待做。2026-11-10 空间关注改为任一方位置变化后按距离重判（见「空间关注的评估时机」），这部分 Java 版早已按同一口径实现；同日加了战斗关注与名额空出后补回附近的人（见「战斗关注」「名额空出后补回附近的人」）；2026-11-11 加了 NPC 仇恨名单与服务器压力裁表（见「仇恨名单」「服务器压力」）。这三批 Java 版待做，C++ 都未编译。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
 
 ## 前言
 
@@ -230,7 +230,7 @@
 
 ### 验证
 
-未编译。交给 Codex，在仓库根目录用 VS 2026 Developer PowerShell 串行执行：
+未编译。交给 Gemini，在仓库根目录用 VS 2026 Developer PowerShell 串行执行：
 
 1. 先编库：`msbuild cpp/libs/modules/modules.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`，再 `msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`。测试工程链接预编好的库，改了库不先编库就会跑旧代码。
 2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。2026-11-11 的用例在「仇恨名单」一节（一起打怪互相算友方、治疗仇恨、玩家混战不推友方、怪死后友方按脱战结束、名单上限与补位）与「服务器压力」一节（压力升降、每秒决定一次与防抖、按权重和距离裁表并在回落后补回、新建场景拿到当前压力）；`aoi_delivery_test.vcxproj` 加编了 `combat_engagement.cpp` 与 `aoi_load.cpp`。同日对照另一份分析补的用例：双方都不动的隐身再显形、视野半径变化触发重判、同一帧的变化合成一条消息。

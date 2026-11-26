@@ -110,6 +110,12 @@ namespace
 		return joinSeq != nullptr ? joinSeq->joinSeq : 0;
 	}
 
+	TeamFollowStyle StyleOf(entt::entity leader)
+	{
+		const auto* styleComp = tlsEcs.actorRegistry.try_get<TeamFollowStyleComp>(leader);
+		return styleComp != nullptr ? styleComp->style : TeamFollowStyle::kColumn;
+	}
+
 	// 正在离开本节点:归属交接在途(冻结 / 交接意图)或退出中。此刻的状态已经或即将落盘交出去,不能再写。
 	bool IsLeavingNode(entt::entity entity)
 	{
@@ -210,7 +216,12 @@ namespace
 		{
 			Location accepted;
 			if (!NavQuerySystem::ValidateMove(*nav, ToLocation(ToFollowPoint(transform->location())),
-				ToLocation(target), accepted)) return false;
+				ToLocation(target), accepted))
+			{
+				// 阵型侧翼点在窄道转角偶发被严格掩码拦截时,退回队长轨迹安全中心点再验一次,不中断跟随。
+				if (!NavQuerySystem::ValidateMove(*nav, ToLocation(ToFollowPoint(transform->location())),
+					ToLocation(step.trailPosition), accepted)) return false;
+			}
 			target = ToFollowPoint(accepted);
 		}
 
@@ -458,6 +469,7 @@ namespace
 		member.joinSeq = joinSeq;
 		const char* placement = "snap";
 		bool teleport = false;
+		FollowPoint teleportTarget{};
 		if (const auto odo = formation.Trail().NearestOdo(position, kTeamFollowSnapToTrailRadius))
 		{
 			// 1. 已经站在队长走过的路上(例如整队打完一场战斗):原地接上,槽位靠前就沿路赶过去,靠后就等。
@@ -471,8 +483,11 @@ namespace
 		}
 		else
 		{
-			// 3. 看不见队长、离得太远或中间隔着墙:直接放进槽位。
+			// 3. 看不见队长、离得太远或中间隔着墙:直接放进经导航校验后的阵型槽位。
 			member.cursorOdo = formation.SlotOdo(rank);
+			double appliedLateral = 0.0;
+			teleportTarget = formation.SlotPosition(rank, MakeWalkableCheck(leader), &appliedLateral);
+			member.lateralOffset = appliedLateral;
 			placement = "teleport";
 			teleport = true;
 		}
@@ -494,7 +509,7 @@ namespace
 		auto& driven = registry.emplace_or_replace<TeamFollowerComp>(follower, next);
 		if (teleport)
 		{
-			if (!TeleportIntoSlot(follower, driven, leader, formation.Trail().PointAt(member.cursorOdo)))
+			if (!TeleportIntoSlot(follower, driven, leader, teleportTarget))
 			{
 				formation.Remove(followerId);
 				ReleaseFollower(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
@@ -517,7 +532,8 @@ namespace
 	{
 		auto& registry = tlsEcs.actorRegistry;
 		const auto members = comp.formation.Members();
-		comp.formation = TeamFollowFormation(leaderPosition, comp.formation.Spacing());
+		const auto preservedStyle = comp.formation.Style();
+		comp.formation = TeamFollowFormation(leaderPosition, comp.formation.Spacing(), preservedStyle);
 		for (const auto& member : members)
 		{
 			const auto follower = LivePlayer(member.playerId);
@@ -741,6 +757,20 @@ void TeamFollowSystem::RememberJoinSeq(entt::entity player, const uint32_t joinS
 	tlsEcs.actorRegistry.emplace_or_replace<TeamFollowJoinSeqComp>(player, TeamFollowJoinSeqComp{joinSeq});
 }
 
+void TeamFollowSystem::RememberFormationStyle(entt::entity leader, const TeamFollowStyle style)
+{
+	auto& registry = tlsEcs.actorRegistry;
+	if (!registry.valid(leader))
+	{
+		return;
+	}
+	registry.emplace_or_replace<TeamFollowStyleComp>(leader, TeamFollowStyleComp{style});
+	if (auto* comp = registry.try_get<TeamFollowFormationComp>(leader))
+	{
+		comp->formation.SetStyle(style);
+	}
+}
+
 bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, const bool walkAllowed)
 {
 	auto& registry = tlsEcs.actorRegistry;
@@ -799,8 +829,9 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 	if (comp == nullptr)
 	{
 		comp = &registry.emplace<TeamFollowFormationComp>(
-			leader, TeamFollowFormationComp{TeamFollowFormation(ToFollowPoint(leaderTransform->location())), teamId,
-											 SceneOf(leader)});
+			leader, TeamFollowFormationComp{
+						TeamFollowFormation(ToFollowPoint(leaderTransform->location()), kTeamFollowSpacing, StyleOf(leader)),
+						teamId, SceneOf(leader)});
 	}
 	if (comp->formation.Members().size() >= kTeamFollowMaxMembers)
 	{

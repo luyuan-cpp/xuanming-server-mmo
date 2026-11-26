@@ -2,9 +2,9 @@
 
 - 日期:2026-10-16
 - 状态:设计 v0.2;**2026-10-16 已按 §7 三组落码(未编译、未测试),落码记录与出入见 §13**。*2026-10-20 回填(只读核对 PROGRESS 回执,10-22 订正):§8 第二轮(绿跑)的 C++ 部分已有证据。`routing_identity_test` 113/113 含 `KickFence` 10 个;`cross_zone_test` 313/313 含 `ReleaseFence` 8 个、`ReleaseFenceEcs` 22 个。出处是 PROGRESS「2026-10-19 Codex：会话释放夹具修复核验完成，跨区随机全量313项通过」,跑的是合并前源码。Go 侧 scene_manager / player_locator / login 的全量单测另有 10-19 回执。2026-10-22 又有一轮:29 个 C++ 测试 EXE 共 2624 PASS,其中 cross_zone_test 339/339、routing_identity_test 140/140。第一轮(红跑)的证据没有记录;§8 第 5 步的可选联机(robot 同频道重进、travel_smoke / channel_smoke)没有实跑。*已按「正确性」「发布与可实施性」两路对抗复核修订(逐条处置见 §12);
-  下一步:Codex 按 §8 两轮验证(命令汇总见 §13 开头的链接)。
+  下一步:Gemini 按 §8 两轮验证(命令汇总见 §13 开头的链接)。
 - 2026-11-20(v0.3):§10 第 1 条「e 方案 C」落码 —— scene 按 (gate 实例, session_id) 认会话,gate 实例取自 RPC0 入站连接的
-  握手身份;login 的跨实例同号随之改回踢线(§12.3 第 1 点)。设计、两处措辞的定论与验证见 §14,**未编译、未测试,待 Codex 验证**。
+  握手身份;login 的跨实例同号随之改回踢线(§12.3 第 1 点)。设计、两处措辞的定论与验证见 §14,**未编译、未测试,待 Gemini 验证**。
 - 范围:login → gate 踢线(a)、player_locator → scene_manager 离场清理(b)、scene_manager → scene 的 `ReleasePlayer`(c)、
   scene_manager 落点(d)、login → player_locator 断线 / 登出上报(e)。scene 入场栅栏本身、存盘链、MySQL 行内围栏都不改。
 - 上游:[scene-enter-session-fence.md](scene-enter-session-fence.md)(下称 fence)§7 三条待办、§9 残余 2 与「ExitGame / 断线」可选加固;
@@ -274,7 +274,7 @@ message KickPlayerEvent {
 8. `cpp/libs/services/gate/session/comp/session_info_comp.h`:`loginGeneration` 的注释(:62-69)改两处。一是读取方多了一个:
    「盖章;另由踢线身份栅栏只读比较。写入仍只经 ApplyLoginBinding / ApplyRouteIdentity」。二是「scene 自发的换图路由带的是 0」
    改为「带实体代次(≤ 会话值),旧版 scene 为 0」。
-9. 生成物(Codex 重生,不手改):`gate_event.pb.*`、`go/proto/contracts/kafka/gate_event.pb.go`、`gate_kafka_command_router.cpp`。
+9. 生成物(Gemini 重生,不手改):`gate_event.pb.*`、`go/proto/contracts/kafka/gate_event.pb.go`、`gate_kafka_command_router.cpp`。
    工作区里的 `gate_kafka_command_router.cpp` 已按入口生成器重构的新模板重生:payload 分支逐事件 `ParseFromString` 后直接调
    `GateEventHandler::KickPlayerEventHandler(event)`,信封分支只拼 `set_session_id`。本批重生后相对**重生前的工作区**只应多出一处:
    信封分支 Kick 多一行 `event.set_player_id(command.player_id());`(按同名同型自动映射)。payload 分支本来就整份解出
@@ -369,7 +369,7 @@ C++ `cpp/tests/routing_identity_test/routing_identity_test.cpp`(已 include `ses
 - `SessionHostingNewerOrEqualLoginSkips`、`OlderSessionGenerationKicks`、`ZeroKickerGenerationSkipsComparison`、`LegacySessionGenerationZeroKicks`
 - `ClassifyDoesNotTouchSessionGeneration`:构造 `SessionInfo`,调用前后 `loginGeneration` 不变。
 
-红运行证据(v0.2 改):按 §8 分两轮交 Codex。第一轮只含 proto、生成、纯重构接缝(kicker 接缝、新增参数只透传不使用)
+红运行证据(v0.2 改):按 §8 分两轮交 Gemini。第一轮只含 proto、生成、纯重构接缝(kicker 接缝、新增参数只透传不使用)
 与全部测试,期望恰好是表中标「红」的用例失败;第二轮落修复,要求全绿。这样能按 AGENTS §11.4 拿到旧行为上的红跑记录。
 
 ### 2.8 残余
@@ -1270,7 +1270,7 @@ W1 的 gate 部分(`gate_event_handler.cpp` 守护段、生成器新用例)有�
 W3 的前置条件(v0.2 补):接手记录 README §4 写明「全域到账续批」写入方(不在 Claude Desktop 会话列表里,疑为 Codex 或 CLI)截至
 2026-10-15 23:05 仍在改 `player_lifecycle.cpp`,并要求围栏代码合并等它停手。W3 开工前须确认该写入方已停手,或已被告知
 `player_lifecycle.cpp/.h` 里本线要动的区段(`IsHandoffRequested` 旁的新函数、三处发送点、疏散票据、码表)归本线;开工时与提交前
-各做一次 `git diff HEAD -- <file>` 快照比对,不一致就停下报告。否则一方整文件写回会抹掉另一方的改动,而两边都要等 Codex 编译才会发现。
+各做一次 `git diff HEAD -- <file>` 快照比对,不一致就停下报告。否则一方整文件写回会抹掉另一方的改动,而两边都要等 Gemini 编译才会发现。
 README §4 的同步由主线做(本文只改设计稿)。
 
 ### 组间关系
@@ -1286,7 +1286,7 @@ README §4 的同步由主线做(本文只改设计稿)。
 - W2 的 `reconnectlogic.go` 与 W1 的 `setdisconnectinglogic.go` / `markofflinelogic.go` 同包不同文件,互不调用。
 - b 与 d 在 W2 内同批;c 与 d 同改 `enterscenelogic.go`,同组同一执行者顺序落,c 只移动派发、不碰 Lua。
 
-## 8. proto 生成与给 Codex 的验证顺序
+## 8. proto 生成与给 Gemini 的验证顺序
 
 **前置门禁**(任一不满足就不开跑,报告等待):
 
@@ -1404,7 +1404,7 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 |---|---|---|
 | v0.1 | 2026-10-16 | 初稿:按接手记录 §3.3 的选定做法汇总四份调研,抽查关键事实。补正了一处调研写「未核实」的点:非 0 码在交接应答里一律走 `ResolveTravelOutcome(kFailed)`。补充了 a 的「实例号不明按同一连接处理」(防自踢)、落点 Lua 的 ARGV[4] 缺省按 `any`(保住现有直接 EVAL 的用例)、疏散票据带代次的落点位置。未改代码 |
 | v0.3 | 2026-11-20 | §10 第 1 条「e 方案 C」落码:定下不变量 2 的措辞(同一会话 = 同一 (gate 实例, session_id))与「连接身份是请求身份的一部分、不是栅栏前的另一道判定」;RPC0 入站侧握手时把对端 node_uuid 记在连接的 channel 上;scene 入场栅栏、客户端消息入口(含 ExitGame)、入场被拒提示、改派条目按实例认会话;login 跨实例同号改回踢线(删 `skip_cross_instance`)。正文 §0、§1.1、§1.4、§2.2 ⑤、§2.5、§6.6、§6.8、§10、§12.3 同步改写,详见 §14。未编译、未测试 |
-| v0.2 | 2026-10-16 | 按「正确性」(C-F1–F8)与「发布与可实施性」(R-F1–F14)两路对抗复核修订,逐条处置见 §12。主要变化:①发布 / 回滚总顺序改为硬约束(§0),player_locator 先于 scene_manager 与 login;②b 写明 `keep_newer` 不漏删的前提,Reconnect 重放分支补比代次,`keep_conflict` 改用「会话有效」口径;③d 的 legacy 行不降级已有身份,samePlacement 推路由失败不回滚身份,`expectLoc` 零值语义写明并由行为用例守住三处生产构造点;④a 复读确认已提交时补挂断线租约,本链实例号为空一律不踢,T4 反向顺序登记为残余,§1.4 如实写明 R13 下 d1 仍成立;⑤e 的风险核对改为如实描述对账器兜底;⑥§7 按工作区重新核对在途改动,生成器用例改放新文件,player_locator 包内测试约定唯一假实现与前缀,W3 加「全域到账续批」写入方停手的前置条件;⑦§8 改为生成基线比对 + 两轮 Codex 运行(先复现后修复);⑧§9 Java 结论按 PARITY.md 改写并补 ContractSync 同步要求。未改代码,未编译、未测试 |
+| v0.2 | 2026-10-16 | 按「正确性」(C-F1–F8)与「发布与可实施性」(R-F1–F14)两路对抗复核修订,逐条处置见 §12。主要变化:①发布 / 回滚总顺序改为硬约束(§0),player_locator 先于 scene_manager 与 login;②b 写明 `keep_newer` 不漏删的前提,Reconnect 重放分支补比代次,`keep_conflict` 改用「会话有效」口径;③d 的 legacy 行不降级已有身份,samePlacement 推路由失败不回滚身份,`expectLoc` 零值语义写明并由行为用例守住三处生产构造点;④a 复读确认已提交时补挂断线租约,本链实例号为空一律不踢,T4 反向顺序登记为残余,§1.4 如实写明 R13 下 d1 仍成立;⑤e 的风险核对改为如实描述对账器兜底;⑥§7 按工作区重新核对在途改动,生成器用例改放新文件,player_locator 包内测试约定唯一假实现与前缀,W3 加「全域到账续批」写入方停手的前置条件;⑦§8 改为生成基线比对 + 两轮 Gemini 运行(先复现后修复);⑧§9 Java 结论按 PARITY.md 改写并补 ContractSync 同步要求。未改代码,未编译、未测试 |
 
 ## 12. 复核意见处置表
 
@@ -1471,7 +1471,7 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 
 ## 13. 落码记录(2026-10-16,全部未编译、未测试)
 
-按 §7 三组并行落码,每组「实现 → 只读复核 → 修复」各一轮。三组复核都没有发现正确性或数据一致性问题;下表只列与设计正文的出入和留给后续的项。给 Codex 的命令汇总在 `docs/handoff/landing-fencing-takeover-20261016/codex-verification.md`（已清理，见 `ccf2840b2`）。
+按 §7 三组并行落码,每组「实现 → 只读复核 → 修复」各一轮。三组复核都没有发现正确性或数据一致性问题;下表只列与设计正文的出入和留给后续的项。给 Gemini 的命令汇总在 `docs/handoff/landing-fencing-takeover-20261016/codex-verification.md`（已清理，见 `ccf2840b2`）。
 
 ### 13.1 W1(a + e)
 

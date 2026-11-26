@@ -71,3 +71,29 @@ void SceneAppearanceClientPlayerHandler::NotifyAppearanceState(entt::entity play
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneAppearanceClientPlayerHandler::EquipPetCosmetic(entt::entity player,const ::EquipPetCosmeticRequest* request,
+	::EquipPetCosmeticResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::EquipPetCosmetic(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAppearanceClientPlayerHandler::EquipSkillVfx(entt::entity player,const ::EquipSkillVfxRequest* request,
+	::EquipSkillVfxResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::EquipSkillVfx(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}

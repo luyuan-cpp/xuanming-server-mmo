@@ -430,7 +430,7 @@ battle / scene 进程没有 Prometheus 端点 [C]，结算类信号只有结构�
 
 ## 9. 改动清单与批次
 
-所有改动遵守 AGENTS §3：不手改生成物；生成式 handler 只在守护段内写。proto 生成、导表、编译、测试由 Codex 执行（§10）。
+所有改动遵守 AGENTS §3：不手改生成物；生成式 handler 只在守护段内写。proto 生成、导表、编译、测试由 Gemini 执行（§10）。
 
 | 批次 | 内容 | 主要文件 | 前置 |
 |---|---|---|---|
@@ -450,11 +450,11 @@ battle / scene 进程没有 Prometheus 端点 [C]，结算类信号只有结构�
 **与其他会话的冲突**：
 - **进场门禁会话**：占用 `player_lifecycle.*`、`scene.vcxproj/.filters`、`scene_handler.cpp`、gate 进场链、4 个 proto。D3 必须等它落地。
 - **client-request-ordering 会话**：计划改 guild logic（E2）与 match logic。B 批动手前重新 `git status`，有改动就先协调。
-- **proto 生成**：全量运行，会把他人未提交的 proto 改动一起生成进产物。运行时机由 Codex 与各会话协调（§10）。
+- **proto 生成**：全量运行，会把他人未提交的 proto 改动一起生成进产物。运行时机由 Gemini 与各会话协调（§10）。
 
 ---
 
-## 10. 验证（交 Codex 执行）
+## 10. 验证（交 Gemini 执行）
 
 顺序：proto 生成 → 导表 → Go → C++ → 客户端 → 联机冒烟。C++ MSBuild 一律串行 `/m:1`。
 

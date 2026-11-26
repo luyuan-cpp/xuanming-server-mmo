@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Codex 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。
 
 ## 0. 结论
 
@@ -145,7 +145,7 @@
 
 ### 5.6 充值限额
 
-**2026-11-19 已落码**（「充值按年龄段限额闸接入 go/payment」会话，在支付会话确认 go/payment 与 Tip.xlsx 改完之后），未生成、未编译、未测试，待 Codex 验证（命令见 `docs/PROGRESS.md` 同日「未成年人充值限额闸」条目）。数据接口沿用本方案：`GetAccountRealName(player_id)` 回 pi，出生日期、周岁、单次与每月上限取 `go/shared/antiaddiction`。
+**2026-11-19 已落码**（「充值按年龄段限额闸接入 go/payment」会话，在支付会话确认 go/payment 与 Tip.xlsx 改完之后），未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「未成年人充值限额闸」条目）。数据接口沿用本方案：`GetAccountRealName(player_id)` 回 pi，出生日期、周岁、单次与每月上限取 `go/shared/antiaddiction`。
 
 - **开关**：`Payment.Compliance.MinorSpendingGate` 三个取值。
   - `none`（缺省）：不接实名，生产模式下 wechat_pay、alipay、apple、google 四个 App 渠道拒启。
@@ -248,7 +248,7 @@ AntiAddiction:
 | go/payment（2026-11-19 已落码，见 §5.6） | `internal/config/config.go` 与 `config_test.go`；`internal/core/service.go`、`workers.go`（指标登记），新增 `minor.go`、`minor_test.go`；`internal/data/repo.go`、`tables.go`，新增 `spend.go`、`spend_test.go`、`spend_tidb_test.go`；`internal/constants/constants.go`、`internal/server/server.go`、`internal/mall/client.go`（退款原因是否退订单那笔）；`payment.go`、`channels.go`、`etc/payment.yaml`；客户端仓 `Assets/Scripts/Game/Jubaozhai/PaymentClient.cs`（5 个码的文案）；`proto/payment/payment_table.proto`（意图加 4 列、新表 `payment_spend`）；`go/shared/accountdirectory/real_name.go`（构造时校验密钥）；`data/tip/Tip.xlsx` payment 段 5 个码 |
 | 文档（约 5） | 本文、`docs/README.md`、`docs/PROGRESS.md`、第三方登录设计 §七、Java 仓 `PARITY.md` |
 
-分两批交 Codex：第一批协议、tip、Go 共用、data_service、login、gate；第二批网关、客户端、K8s。
+分两批交 Gemini：第一批协议、tip、Go 共用、data_service、login、gate；第二批网关、客户端、K8s。
 
 **落码时的调整（2026-11-19）**：
 
@@ -261,7 +261,7 @@ AntiAddiction:
 
 | 项 | 状态与原因 |
 |---|---|
-| K8s 部署参数 | **2026-11-19 已落码，未运行，待 Codex 跑契约测试**（命令见 `docs/PROGRESS.md` 同日「实名与防沉迷接进 K8s 部署脚本」条目）。`k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId`（要么都给要么都不给）渲染 login 顶层 `AntiAddiction` 段：`Enabled: true`、`PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]`、`Nppa.AppId / BizId`、`Nppa.SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"`；`-LoginAntiAddictionExtraPlayDays`（逗号分隔的北京日期）与接口测试用的 `-LoginNppaCheckUrl / -LoginNppaQueryUrl / -LoginNppaLoginoutUrl` 给了才写，`DailySubmitLimit` 不写（缺省 5）。secretKey 从部署机环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`（32 位十六进制，任何档位都没有回落值）经工作负载密钥目录的单键 Secret `login-nppa` 注入 login 容器的同名变量，Pod 模板带指纹。不粘滞、防误关（线上开着而本次漏传或换了 AppId / BizId 就在写操作之前拒绝，确认开关同第三方登录 `-ConfirmLoginAuthProviderChange`）、`dev_tools.ps1` 照传与 `k8s-image-*` / `k8s-release-*` 拒绝、摘要行 `login_anti_addiction=` 都与小游戏同一套。login 是 SQL 写者：`AntiAddiction` 段要照抄进运维预置的 `runtimeConfigSecret` 才生效；部署另把 AppId / BizId 明文注入 login 主容器（`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`），login 启动时与运行配置比（`config.checkExpectedAntiAddiction`），漏抄、关着或抄成别的应用都拒启，不会带着关掉的防沉迷起来；所以开、关、换应用都是先改那份 Secret、不单独滚动 login，紧接着部署。data-service 与 payment 的清单各从 `domain-service-secrets` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`（键 `account-directory-payment`，照 trade 那把写成 `optional: false`）；data_service 的跨用途复用检查（`validateGlobalCallerSecrets`）也管这一把。这把不用运维预置：2026-11-20 起它和其余 15 把 zone 工作负载引用的内部调用密钥一起由部署维护（托管键表 `$script:ManagedDomainServiceSecrets`，门禁 `Initialize-ManagedDomainServiceSecrets`、写入 `Sync-ManagedDomainServiceSecrets`）：缺的补齐、全集群一个值，值不同、过短或与别的键同值时在任何写操作之前拒绝，带 `-ResyncDomainServiceSecrets` 才统一，见开服手册 §1 与 `docs/PROGRESS.md` 2026-11-20「部署替运维维护 domain-service-secrets 的内部调用密钥」条目。本机 `go_services.ps1` 给 data_service 与 payment 发同一把开发密钥 |
+| K8s 部署参数 | **2026-11-19 已落码，未运行，待 Gemini 跑契约测试**（命令见 `docs/PROGRESS.md` 同日「实名与防沉迷接进 K8s 部署脚本」条目）。`k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId`（要么都给要么都不给）渲染 login 顶层 `AntiAddiction` 段：`Enabled: true`、`PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]`、`Nppa.AppId / BizId`、`Nppa.SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"`；`-LoginAntiAddictionExtraPlayDays`（逗号分隔的北京日期）与接口测试用的 `-LoginNppaCheckUrl / -LoginNppaQueryUrl / -LoginNppaLoginoutUrl` 给了才写，`DailySubmitLimit` 不写（缺省 5）。secretKey 从部署机环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`（32 位十六进制，任何档位都没有回落值）经工作负载密钥目录的单键 Secret `login-nppa` 注入 login 容器的同名变量，Pod 模板带指纹。不粘滞、防误关（线上开着而本次漏传或换了 AppId / BizId 就在写操作之前拒绝，确认开关同第三方登录 `-ConfirmLoginAuthProviderChange`）、`dev_tools.ps1` 照传与 `k8s-image-*` / `k8s-release-*` 拒绝、摘要行 `login_anti_addiction=` 都与小游戏同一套。login 是 SQL 写者：`AntiAddiction` 段要照抄进运维预置的 `runtimeConfigSecret` 才生效；部署另把 AppId / BizId 明文注入 login 主容器（`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`），login 启动时与运行配置比（`config.checkExpectedAntiAddiction`），漏抄、关着或抄成别的应用都拒启，不会带着关掉的防沉迷起来；所以开、关、换应用都是先改那份 Secret、不单独滚动 login，紧接着部署。data-service 与 payment 的清单各从 `domain-service-secrets` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`（键 `account-directory-payment`，照 trade 那把写成 `optional: false`）；data_service 的跨用途复用检查（`validateGlobalCallerSecrets`）也管这一把。这把不用运维预置：2026-11-20 起它和其余 15 把 zone 工作负载引用的内部调用密钥一起由部署维护（托管键表 `$script:ManagedDomainServiceSecrets`，门禁 `Initialize-ManagedDomainServiceSecrets`、写入 `Sync-ManagedDomainServiceSecrets`）：缺的补齐、全集群一个值，值不同、过短或与别的键同值时在任何写操作之前拒绝，带 `-ResyncDomainServiceSecrets` 才统一，见开服手册 §1 与 `docs/PROGRESS.md` 2026-11-20「部署替运维维护 domain-service-secrets 的内部调用密钥」条目。本机 `go_services.ps1` 给 data_service 与 payment 发同一把开发密钥 |
 | go/payment 限额闸 | **2026-11-19 已落码，未生成、未编译、未测试**（§5.6；命令见 `docs/PROGRESS.md` 同日「未成年人充值限额闸」条目）。K8s 上 payment 的 ConfigMap 要带 `DataServiceRpc`（集群的 etcd 发现）与 `Payment.Compliance` 的新键，归支付会话的 K8s 批次；密钥注入见上一行 |
 | 人工换实名 | 2026-11-20 已落码：`LoginAdmin.ResetAccountRealName`（§5.2「客服重置实名」） |
 

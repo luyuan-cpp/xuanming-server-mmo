@@ -135,4 +135,65 @@ public interface TournamentRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
-}
+
+  /**
+   * <code>bool bo3_top4_enabled = 21;</code>
+   * @return The bo3Top4Enabled.
+   */
+  boolean getBo3Top4Enabled();
+
+  /**
+   * <code>uint32 intermission_seconds = 22;</code>
+   * @return The intermissionSeconds.
+   */
+  int getIntermissionSeconds();
+
+  /**
+   * <code>bool public_knockout_replay = 23;</code>
+   * @return The publicKnockoutReplay.
+   */
+  boolean getPublicKnockoutReplay();
+
+  /**
+   * <code>uint32 salute_gold_amount = 24;</code>
+   * @return The saluteGoldAmount.
+   */
+  int getSaluteGoldAmount();
+
+  /**
+   * <code>uint32 salute_item_id = 25;</code>
+   * @return The saluteItemId.
+   */
+  int getSaluteItemId();
+
+  /**
+   * <code>uint32 salute_item_count = 26;</code>
+   * @return The saluteItemCount.
+   */
+  int getSaluteItemCount();
+
+  /**
+   * <code>bool warmup_spar_enabled = 27;</code>
+   * @return The warmupSparEnabled.
+   */
+  boolean getWarmupSparEnabled();
+
+  /**
+   * <code>bool prediction_enabled = 28;</code>
+   * @return The predictionEnabled.
+   */
+  boolean getPredictionEnabled();
+
+  /**
+   * <code>uint32 prediction_reward_min_hits = 29;</code>
+   * @return The predictionRewardMinHits.
+   */
+  int getPredictionRewardMinHits();
+
+  /**
+   * <code>bool third_place_match_enabled = 30;</code>
+   * @return The thirdPlaceMatchEnabled.
+   */
+  boolean getThirdPlaceMatchEnabled();
+
+ 

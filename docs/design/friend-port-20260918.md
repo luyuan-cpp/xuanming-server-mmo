@@ -202,7 +202,7 @@ Commit
 
 ---
 
-## 7. Codex 验证清单
+## 7. Gemini 验证清单
 
 **本节是增量,不是替代**:批次 F1 的完整清单已经写在 `PROGRESS.md` 的 `## 2026-09-18 friend 移植 F1 批` 条目里(proto-gen 的四条通过标准、`go/friend` 的 gofmt/tidy/build/vet/test、空库 `-migrate` 的四表断言、常驻启动横幅与 etcd NodeInfo 核对、缓存链路手工验证)。**那份的每一步通过标准仍然有效,不在这里重抄。** 本节相对它的四处变化:
 

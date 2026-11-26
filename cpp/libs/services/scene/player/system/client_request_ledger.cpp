@@ -118,6 +118,7 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.craftedSkillTableId = record->crafted_skill_table_id();
 	result.scrollCraftRevision = record->scroll_craft_revision();
 	result.scrollBonusFragments = record->scroll_bonus_fragments();
+	result.travelPassClaimedCount = record->travel_pass_claimed_count();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -164,6 +165,7 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_crafted_skill_table_id(result.craftedSkillTableId);
 	record->set_scroll_craft_revision(result.scrollCraftRevision);
 	record->set_scroll_bonus_fragments(result.scrollBonusFragments);
+	record->set_travel_pass_claimed_count(result.travelPassClaimedCount);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }

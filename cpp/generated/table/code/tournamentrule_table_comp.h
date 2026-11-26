@@ -94,6 +94,50 @@ struct TournamentRuleDescComp {
     std::string_view value;
 };
 
+struct TournamentRuleBo3_top4_enabledComp {
+    bool value;
+};
+
+struct TournamentRuleIntermission_secondsComp {
+    uint32_t value;
+};
+
+struct TournamentRulePublic_knockout_replayComp {
+    bool value;
+};
+
+struct TournamentRuleSalute_gold_amountComp {
+    uint32_t value;
+};
+
+struct TournamentRuleSalute_item_idComp {
+    uint32_t value;
+};
+
+struct TournamentRuleSalute_item_countComp {
+    uint32_t value;
+};
+
+struct TournamentRuleWarmup_spar_enabledComp {
+    bool value;
+};
+
+struct TournamentRulePrediction_enabledComp {
+    bool value;
+};
+
+struct TournamentRulePrediction_reward_min_hitsComp {
+    uint32_t value;
+};
+
+struct TournamentRuleThird_place_match_enabledComp {
+    bool value;
+};
+
+struct TournamentRuleLeyline_ban_enabledComp {
+    bool value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -159,3 +203,31 @@ inline TournamentRuleInvite_ttl_secondsComp MakeTournamentRuleInvite_ttl_seconds
 inline TournamentRuleDescComp MakeTournamentRuleDescComp(const TournamentRuleTable& row) {
     return { std::string_view(row.desc()) };
 }
+inline TournamentRuleBo3_top4_enabledComp MakeTournamentRuleBo3_top4_enabledComp(const TournamentRuleTable& row) {
+    return { row.bo3_top4_enabled() };
+}
+inline TournamentRuleIntermission_secondsComp MakeTournamentRuleIntermission_secondsComp(const TournamentRuleTable& row) {
+    return { row.intermission_seconds() };
+}
+inline TournamentRulePublic_knockout_replayComp MakeTournamentRulePublic_knockout_replayComp(const TournamentRuleTable& row) {
+    return { row.public_knockout_replay() };
+}
+inline TournamentRuleSalute_gold_amountComp MakeTournamentRuleSalute_gold_amountComp(const TournamentRuleTable& row) {
+    return { row.salute_gold_amount() };
+}
+inline TournamentRuleSalute_item_idComp MakeTournamentRuleSalute_item_idComp(const TournamentRuleTable& row) {
+    return { row.salute_item_id() };
+}
+inline TournamentRuleSalute_item_countComp MakeTournamentRuleSalute_item_countComp(const TournamentRuleTable& row) {
+    return { row.salute_item_count() };
+}
+inline TournamentRuleWarmup_spar_enabledComp MakeTournamentRuleWarmup_spar_enabledComp(const TournamentRuleTable& row) {
+    return { row.warmup_spar_enabled() };
+}
+inline TournamentRulePrediction_enabledComp MakeTournamentRulePrediction_enabledComp(const TournamentRuleTable& row) {
+    return { row.prediction_enabled() };
+}
+inline TournamentRulePrediction_reward_min_hitsComp MakeTournamentRulePrediction_reward_min_hitsComp(const TournamentRuleTable& row) {
+    return { row.prediction_reward_min_hits() };
+}
+inline TournamentRuleThird_place_match_enabledComp MakeTournamentRuleThird_place_match_enabledComp(const TournamentR

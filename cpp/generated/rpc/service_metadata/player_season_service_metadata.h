@@ -14,3 +14,31 @@ constexpr uint32_t SceneSeasonClientPlayerEquipSeasonSealIndex = 1;
 constexpr uint32_t SceneSeasonClientPlayerCatchupSeasonSealMessageId = 455;
 constexpr uint32_t SceneSeasonClientPlayerCatchupSeasonSealIndex = 2;
 #define SceneSeasonClientPlayerCatchupSeasonSealMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(2)
+
+constexpr uint32_t SceneSeasonClientPlayerEquipWuxingFormationMessageId = 515;
+constexpr uint32_t SceneSeasonClientPlayerEquipWuxingFormationIndex = 3;
+#define SceneSeasonClientPlayerEquipWuxingFormationMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(3)
+
+constexpr uint32_t SceneSeasonClientPlayerGetWuxingTowerStateMessageId = 516;
+constexpr uint32_t SceneSeasonClientPlayerGetWuxingTowerStateIndex = 4;
+#define SceneSeasonClientPlayerGetWuxingTowerStateMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(4)
+
+constexpr uint32_t SceneSeasonClientPlayerStartWuxingTowerRunMessageId = 517;
+constexpr uint32_t SceneSeasonClientPlayerStartWuxingTowerRunIndex = 5;
+#define SceneSeasonClientPlayerStartWuxingTowerRunMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(5)
+
+constexpr uint32_t SceneSeasonClientPlayerPickWuxingTowerSigilMessageId = 518;
+constexpr uint32_t SceneSeasonClientPlayerPickWuxingTowerSigilIndex = 6;
+#define SceneSeasonClientPlayerPickWuxingTowerSigilMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(6)
+
+constexpr uint32_t SceneSeasonClientPlayerAbandonWuxingTowerRunMessageId = 519;
+constexpr uint32_t SceneSeasonClientPlayerAbandonWuxingTowerRunIndex = 7;
+#define SceneSeasonClientPlayerAbandonWuxingTowerRunMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(7)
+
+constexpr uint32_t SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId = 520;
+constexpr uint32_t SceneSeasonClientPlayerSaveBattleBuildBookmarkIndex = 8;
+#define SceneSeasonClientPlayerSaveBattleBuildBookmarkMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(8)
+
+constexpr uint32_t SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId = 521;
+constexpr uint32_t SceneSeasonClientPlayerDeleteBattleBuildBookmarkIndex = 9;
+#define SceneSeasonClientPlayerDeleteBattleBuildBookmarkMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(9)

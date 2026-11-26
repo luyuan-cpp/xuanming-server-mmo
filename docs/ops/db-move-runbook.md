@@ -473,7 +473,7 @@ Java 进程(网关的 `mmorpg` 库,`mall_game` 的 `COMMERCE_JDBC_URL`)不做动
 
 `cutover`、`audit` 的 `-metrics-targets` 不列这些进程。它们的账号写进 `-roster` 或者已经 ACTIVE,照样由 `prepare` 锁、`cutover` 解。
 
-## 10. 给 Codex 的验证要求
+## 10. 给 Gemini 的验证要求
 
 **以下都没有跑过。** 按顺序执行,前一项不过就停下来报告,保留证据:工具的完整输出和退出码、本地日志、`etcdctl get` 结果、`git rev-parse HEAD`。
 

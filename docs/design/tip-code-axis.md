@@ -326,7 +326,7 @@ message 的取法没有变：上游只填 tip 码、没有参数文案时，通�
 
 ---
 
-## 6. 验证记录（Codex）
+## 6. 验证记录（Gemini）
 
 2026-09-03 在 Windows live checkout 依次执行；导表器使用
 `protoc 35.1`、Python 3.14.7 / protobuf 7.36.0，C++ 使用 VS 18 MSBuild
@@ -407,7 +407,7 @@ jinja2 3.1.6 / protobuf 7.36.1）、go1.26.5。
   Codex 已用 35.1 完成过一次全量导表 + 二次跑零差异，本轮的改动
   （filters/文档/删孤儿/conftest）不影响导表产物。
 - **没跑 C++ / Java 构建**。本轮对 C++ 侧只动了工程文件的条目增删，未触碰任何 `.h/.cc`；
-  已用 XML 解析 + 悬空引用归零替代编译验证。真正的 `msbuild` 由 Codex 上一轮完成
+  已用 XML 解析 + 悬空引用归零替代编译验证。真正的 `msbuild` 由 Gemini 上一轮完成
   （0 warning / 0 error，表测试 24/24 与 37/37）。
 - `no-raw-pointer-member` 仍 **SKIP**（缺 `no_raw_ptr_check.exe` / `clang-query`），与本次改动无关。
 

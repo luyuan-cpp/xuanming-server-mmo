@@ -1,7 +1,7 @@
 # 入场会话栅栏:登录代次(login_generation)
 
 - 日期:2026-10-14
-- 状态:已定稿,代码落在同一批改动里;**未编译、未测试,待 Codex 验证**(验证步骤见 §11)。*2026-10-20 回填(只读核对 PROGRESS 回执,10-22 补):C++ 单测已绿。`cross_zone_test` 随机全量 313/313 含 `EnterFence` 5 个、`EnterFenceEcs` 15 个;`routing_identity_test` 113/113 含 `LoginGeneration` 10 个。出处是 PROGRESS「2026-10-19 Codex：会话释放夹具修复核验完成，跨区随机全量313项通过」,跑的是合并前源码。Go 侧 login 519+375、scene_manager 444+226、player_locator 117+18 的全量单测见 PROGRESS 10-19 各条回执。2026-10-22 又有一轮:29 个 C++ 测试 EXE 共 2624 PASS(其中 cross_zone_test 339/339、routing_identity_test 140/140),出处是 PROGRESS「2026-10-22 全球同服验收：C++29套收口及Unity真实失败（Java 0.1.0-SNAPSHOT）」。真实环境的同节点顶号场景(两台设备连不同 gate)没有实跑。*
+- 状态:已定稿,代码落在同一批改动里;**未编译、未测试,待 Gemini 验证**(验证步骤见 §11)。*2026-10-20 回填(只读核对 PROGRESS 回执,10-22 补):C++ 单测已绿。`cross_zone_test` 随机全量 313/313 含 `EnterFence` 5 个、`EnterFenceEcs` 15 个;`routing_identity_test` 113/113 含 `LoginGeneration` 10 个。出处是 PROGRESS「2026-10-19 Codex：会话释放夹具修复核验完成，跨区随机全量313项通过」,跑的是合并前源码。Go 侧 login 519+375、scene_manager 444+226、player_locator 117+18 的全量单测见 PROGRESS 10-19 各条回执。2026-10-22 又有一轮:29 个 C++ 测试 EXE 共 2624 PASS(其中 cross_zone_test 339/339、routing_identity_test 140/140),出处是 PROGRESS「2026-10-22 全球同服验收：C++29套收口及Unity真实失败（Java 0.1.0-SNAPSHOT）」。真实环境的同节点顶号场景(两台设备连不同 gate)没有实跑。*
 - 范围:login → player_locator → scene_manager → gate → scene 的入场链。存盘链不改(见 §8)。
 - 来源:`cross-zone-scene-travel.md` §13.9「scene 侧会话栅栏」、§13.8、§13.3 L4 登记的待办;
   本文取代那几处"遇到过期 epoch 应直接拒绝"的口径(epoch 修不了同节点顶号,见 §1)。
@@ -358,7 +358,7 @@ P 随后经新会话重登通过栅栏时,按 P 快照里的旧号无条件擦,�
 
 ## 11. 改动清单与验证
 
-手写文件(生成产物由 Codex 重生,不手改):
+手写文件(生成产物由 Gemini 重生,不手改):
 
 - proto(4):`proto/player_locator/player_locator.proto`、`proto/scene_manager/scene_manager_service.proto`、
   `proto/contracts/kafka/gate_event.proto`、`proto/scene/scene.proto`。
@@ -373,7 +373,7 @@ P 随后经新会话重登通过栅栏时,按 P 快照里的旧号无条件擦,�
   `cpp/nodes/scene/handler/rpc/scene_handler.cpp`(守护段)、`cpp/tests/cross_zone_test/cross_zone_test.cpp`。
 - 文档:本文、`docs/README.md`、`docs/PROGRESS.md`、`cross-zone-scene-travel.md`、`shared-redis-split-by-purpose.md`。
 
-给 Codex 的命令、通过标准与失败时要保留的内容写在 `docs/PROGRESS.md` 本次条目里。要点:
+给 Gemini 的命令、通过标准与失败时要保留的内容写在 `docs/PROGRESS.md` 本次条目里。要点:
 
 - **不要用 `dev.bat proto`**:它固定用默认 `proto_gen.yaml`(`enable_unity_client: true`),会往未授权的
   客户端仓写文件,失败分支还会 `pause`。用 `dev_tools.ps1 -Command proto-gen-build`,再

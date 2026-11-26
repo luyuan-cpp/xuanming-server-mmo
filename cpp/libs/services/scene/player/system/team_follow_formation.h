@@ -123,12 +123,21 @@ private:
 	std::deque<Node> nodes;
 };
 
+// 跑图跟随队形样式(与 proto teampb::TeamFollowFormationStyle 数值一一对应,默认 0 = 长蛇纵队)。
+enum class TeamFollowStyle : uint8_t
+{
+	kColumn = 0,  // 长蛇纵队(沿队长轨迹单列)
+	kEchelon = 1, // 雁行两翼(左右斜翼错开,遇墙自动收拢回队长轨迹)
+	kWuxing = 2,  // 五行聚阵(左右护翼 + 中后阵眼,遇墙自动收拢回队长轨迹)
+};
+
 // 队形里的一名队员(纯数据)。
 struct TeamFollowMember
 {
 	uint64_t playerId{0};
 	uint32_t joinSeq{0};          // 入队序号(TeamMemberRecord.join_seq):决定在队伍里排第几,与组队界面同序
 	double cursorOdo{0.0};        // 自己站在轨迹上的里程
+	double lateralOffset{0.0};    // 当前相对轨迹的水平侧移(米,右正左负;长蛇纵队与窄道自动归 0)
 	bool suspended{false};        // 本 tick 不能动(战斗中 / 断线保留):原地站着,名次照留。由调用方每 tick 写入
 	bool needsPlacement{false};   // 落后超过 kTeamFollowMaxLag:不再为他保留轨迹,能动时直接放进槽位
 };
@@ -137,21 +146,25 @@ struct TeamFollowMember
 struct TeamFollowStep
 {
 	uint64_t playerId{0};
-	FollowPoint position;   // 这一 tick 之后应在的位置
-	double moved{0.0};      // 沿轨迹走过的路程;0 = 站着
-	bool placed{false};     // 直接放进槽位(调用方按瞬移处理,不当成走路)
-	bool suspended{false};  // 暂停中,position 无意义
+	FollowPoint position;       // 这一 tick 之后应在的位置(含经导航校验的侧移)
+	FollowPoint trailPosition;  // 对应轨迹中心点(窄道夹角兜底用,必在队长走过的安全路上)
+	double moved{0.0};          // 这一 tick 的水平移动距离;0 = 站着
+	bool placed{false};         // 直接放进槽位(调用方按瞬移处理,不当成走路)
+	bool suspended{false};      // 暂停中,position 无意义
 };
 
-// 一个队长的队形:轨迹 + 按名次排好的队员。
+// 一个队长的队形:轨迹 + 按名次排好的队员 + 阵型样式。
 class TeamFollowFormation
 {
 public:
-	explicit TeamFollowFormation(const FollowPoint& leader, double spacing = kTeamFollowSpacing);
+	explicit TeamFollowFormation(const FollowPoint& leader, double spacing = kTeamFollowSpacing,
+								 TeamFollowStyle style = TeamFollowStyle::kColumn);
 
 	[[nodiscard]] TeamFollowTrail& Trail() { return trail; }
 	[[nodiscard]] const TeamFollowTrail& Trail() const { return trail; }
 	[[nodiscard]] double Spacing() const { return spacing; }
+	[[nodiscard]] TeamFollowStyle Style() const { return style; }
+	void SetStyle(TeamFollowStyle nextStyle) { style = nextStyle; }
 
 	// 按 (joinSeq, playerId) 升序;下标就是名次,0 紧跟队长。
 	[[nodiscard]] const std::vector<TeamFollowMember>& Members() const { return members; }
@@ -167,8 +180,18 @@ public:
 	// 调用方每 tick 在 Tick 之前写入:这名队员本 tick 能不能动。不在队形里时什么都不做。
 	void SetSuspended(uint64_t playerId, bool suspended);
 
-	// 名次 rank 的槽位里程:max(尾部, 头部 - (rank+1) × 间距)。轨迹不够长时落在尾部。
+	// 名次 rank 在当前阵型下的纵向落后路程(米)与理想横向偏移(米,右正左负)。
+	[[nodiscard]] double SlotLag(std::size_t rank) const;
+	[[nodiscard]] double TargetLateral(std::size_t rank) const;
+	// 名次 rank 的槽位里程:max(尾部, 头部 - SlotLag(rank))。轨迹不够长时落在尾部。
 	[[nodiscard]] double SlotOdo(std::size_t rank) const;
+	// 在轨迹 odo 处计算经过墙体安全校验后的槽位点(侧移不可走时依次折半、退回轨迹中心点)。
+	[[nodiscard]] FollowPoint ResolveSlotPoint(double odo, double desiredLateral,
+											   const TeamFollowTrail::WalkableCheck& walkable,
+											   double* appliedLateral = nullptr) const;
+	// 名次 rank 的当前目标槽位点(带导航安全校验,用于瞬移落位)。
+	[[nodiscard]] FollowPoint SlotPosition(std::size_t rank, const TeamFollowTrail::WalkableCheck& walkable,
+										   double* appliedLateral = nullptr) const;
 	// 回收下限:所有仍受保护的队员游标的最大值;没有这样的队员时为极小值。
 	[[nodiscard]] double ProtectOdo() const;
 	// 修剪下限:min(头部 - (队员上限 + 1) × 间距, 所有仍受保护的队员游标)。
@@ -187,6 +210,7 @@ private:
 	TeamFollowTrail trail;
 	std::vector<TeamFollowMember> members;
 	double spacing;
+	TeamFollowStyle style{TeamFollowStyle::kColumn};
 };
 
 // ---- 被驱动队员的移动广播节流(纯函数) ----

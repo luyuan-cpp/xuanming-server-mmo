@@ -1,0 +1,130 @@
+{
+ "data": [
+  {
+   "free_gold": 5000,
+   "free_item_count": 0,
+   "free_item_id": 0,
+   "id": 101,
+   "pass_id": 1,
+   "premium_cosmetic_key": "frame_travel_qingyun_s1",
+   "premium_cosmetic_name": "青云游历头像框",
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3405,
+   "required_points": 30,
+   "tier_index": 1
+  },
+  {
+   "free_gold": 0,
+   "free_item_count": 2,
+   "free_item_id": 3403,
+   "id": 102,
+   "pass_id": 1,
+   "premium_gold": 10000,
+   "premium_item_count": 0,
+   "premium_item_id": 0,
+   "required_points": 60,
+   "tier_index": 2
+  },
+  {
+   "free_gold": 0,
+   "free_item_count": 10,
+   "free_item_id": 3406,
+   "id": 103,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3401,
+   "required_points": 90,
+   "tier_index": 3
+  },
+  {
+   "free_gold": 8000,
+   "free_item_count": 0,
+   "free_item_id": 0,
+   "id": 104,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 3,
+   "premium_item_id": 3403,
+   "required_points": 120,
+   "tier_index": 4
+  },
+  {
+   "free_gold": 0,
+   "free_item_count": 1,
+   "free_item_id": 3405,
+   "id": 105,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3402,
+   "required_points": 150,
+   "tier_index": 5
+  },
+  {
+   "free_gold": 0,
+   "free_item_count": 2,
+   "free_item_id": 3403,
+   "id": 106,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3405,
+   "required_points": 180,
+   "tier_index": 6
+  },
+  {
+   "free_gold": 10000,
+   "free_item_count": 0,
+   "free_item_id": 0,
+   "id": 107,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3407,
+   "required_points": 210,
+   "tier_index": 7
+  },
+  {
+   "free_gold": 0,
+   "free_item_count": 15,
+   "free_item_id": 3406,
+   "id": 108,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 3,
+   "premium_item_id": 3403,
+   "required_points": 240,
+   "tier_index": 8
+  },
+  {
+   "free_gold": 0,
+   "free_item_count": 2,
+   "free_item_id": 3403,
+   "id": 109,
+   "pass_id": 1,
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3408,
+   "required_points": 270,
+   "tier_index": 9
+  },
+  {
+   "free_cosmetic_key": "title_travel_free_s1",
+   "free_cosmetic_name": "游历初成",
+   "free_gold": 15000,
+   "free_item_count": 0,
+   "free_item_id": 0,
+   "id": 110,
+   "pass_id": 1,
+   "premium_cosmetic_key": "title_travel_qingyun_s1",
+   "premium_cosmetic_name": "青云雅客",
+   "premium_gold": 0,
+   "premium_item_count": 1,
+   "premium_item_id": 3402,
+   "required_points": 300,
+   "tier_index": 10
+  }
+ ]
+}

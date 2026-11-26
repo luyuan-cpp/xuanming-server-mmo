@@ -74,6 +74,8 @@ TEST(PlayerHandoffGate, PlayerStateRequestsMayBeRetriedOnAnotherNode)
 		{SceneAfkPassClientPlayer::descriptor(), "GetAfkPass"},
 		{SceneAfkPassClientPlayer::descriptor(), "BuyAfkPass"},
 		{SceneAfkPassClientPlayer::descriptor(), "GmSetAfkPass"},
+		{SceneAfkPassClientPlayer::descriptor(), "SetAfkPassSettings"},
+		{SceneAfkPassClientPlayer::descriptor(), "AckHostedRecap"},
 		// 技能服务按方法列:看技能、升技能读写的是玩家自己的技能表。
 		{SceneSkillClientPlayer::descriptor(), "ListSkills"},
 		{SceneSkillClientPlayer::descriptor(), "UpgradeSkill"},

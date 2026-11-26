@@ -1,7 +1,7 @@
 # etcd MVCC 压缩与空间维护 Runbook
 
 > **状态**:v3 — 2026-11-05,P0-C 阶段 2 收尾(负责人 11-05「按最标准的方法做」):etcd 换成官方镜像并按 tag@摘要钉死,压缩只靠 etcd 内置的
-> 自动压缩,阶段 1 的压缩 CronJob `etcd-compact` 退役,空间与无主告警落进 `deploy/k8s/etcd-alerts.yaml`。**未验证**(待 Codex 执行,见 §9)。
+> 自动压缩,阶段 1 的压缩 CronJob `etcd-compact` 退役,空间与无主告警落进 `deploy/k8s/etcd-alerts.yaml`。**未验证**(待 Gemini 执行,见 §9)。
 > 历史:v1(2026-10-15)阶段 1a + 1b 的 CronJob;v1.1 同日审查修订;v2(2026-10-30)`etcd.yaml` 加压缩 / 配额 env、探针排除 NOSPACE、抓取注解。
 > **范围**:K8s 的三套 etcd(`deploy/k8s/manifests/infra/etcd.yaml` 主 etcd、`etcd-id-secondary.yaml` 发号器副记录、`etcd-id-registry.yaml` 全局登记处)
 > 与本机 / Linux 预发共用的 compose etcd(`deploy/docker-compose.yml`,调试栈 `deploy/debug/compose.game.yml` 同一镜像)的历史压缩、碎片整理、空间告警处置。
@@ -79,7 +79,7 @@
 
 `etcd.yaml` 的 env 带 `ETCD_AUTO_COMPACTION_MODE=revision`、`ETCD_AUTO_COMPACTION_RETENTION=1000000`、`ETCD_QUOTA_BACKEND_BYTES=3221225472`。
 官方镜像里 etcd 就是 1 号进程,这些 `ETCD_*` 环境变量由 etcd 自己按同名命令行参数解析(etcd 文档「Configuration flags」),没有包装脚本。
-确认生效(§9 交给 Codex 实测一次):
+确认生效(§9 交给 Gemini 实测一次):
 
 ```powershell
 $ctx = '<context>'; $ns = 'mmorpg-infra'
@@ -313,7 +313,7 @@ login、guild、match 只由发号器发号,match 随 A7c、login 与 guild 2026
    - 发号器两套同样滚动;它们不可用时新块预留失败,但手里的块还能用很久(发号器运维手册)。
 3. **回滚**:把镜像改回原来的引用再滚一次(只在同一小版本内回滚;3.6 之后不能靠换镜像回 3.5)。已压缩的历史不可恢复,业务不读历史。
 
-## 9. 未验证项(待 Codex)
+## 9. 未验证项(待 Gemini)
 
 本手册与对应改动只做了静态编写,没有运行任何命令。
 

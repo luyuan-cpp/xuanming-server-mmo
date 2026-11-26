@@ -64,7 +64,7 @@
 
 # S5 捐献、帮会升级与帮会商店(批次 B5)— 第 1 部分:结论、决策、依赖、状态机
 
-> 状态:设计稿,未落码、未编译,待 Codex 验证。遵守 `00_contract.md`;依赖 S1(B1 表)、S4(B4a/B4b 资产通道,**以 `s4_asset_part7.md` 勘误为准**)、S2(B2 管理/推送/表校验)。2026-09-16 按对抗评审修订,逐条结论见 `s5_economy_review.md`。全节共 9 部分。行号为 2026-09-15/16 核对值,并行会话在改同一工作树,落码前按函数名重新定位。
+> 状态:设计稿,未落码、未编译,待 Gemini 验证。遵守 `00_contract.md`;依赖 S1(B1 表)、S4(B4a/B4b 资产通道,**以 `s4_asset_part7.md` 勘误为准**)、S2(B2 管理/推送/表校验)。2026-09-16 按对抗评审修订,逐条结论见 `s5_economy_review.md`。全节共 9 部分。行号为 2026-09-15/16 核对值,并行会话在改同一工作树,落码前按函数名重新定位。
 
 ## 5.0 结论(先读这段)
 
@@ -561,7 +561,7 @@ func PeriodKey(limitPeriod uint32, t time.Time) (uint32, bool)
   - 原因:在 RR 下,对不存在的计数器主键做 `FOR UPDATE`、`AllocateSeq` 对非唯一索引 idx_3 做范围 `FOR UPDATE`,都会拿到间隙锁。不同玩家首次捐献时,玩家 id 相邻就可能落进同一个间隙:间隙锁彼此兼容,但随后各自 INSERT 的插入意向锁会互相等待,形成 1213 死锁。
   - RC 下,InnoDB 只锁已存在的记录,不加间隙锁(唯一键冲突检查除外)。
   - 正确性不依赖间隙锁:同一玩家的请求由成员行锁(T-D/T-S)和 seq 行锁(AllocateSeq)串行化;计数器主键里含 player_id,不同玩家永远不会碰同一行。
-  - 前提:MySQL `binlog_format=ROW`(MySQL 8 默认值;STATEMENT 格式下 RC 写入会报 1665)。TiDB 悲观事务支持 RC。Codex 第 3 步核对。
+  - 前提:MySQL `binlog_format=ROW`(MySQL 8 默认值;STATEMENT 格式下 RC 写入会报 1665)。TiDB 悲观事务支持 RC。Gemini 第 3 步核对。
 - **锁序**(S1 §2.1):`guild → guild_member → guild_application → guild_player_op_seq → guild_asset_op → guild_daily_counter`。每个事务都按这个顺序第一次触碰各表的行;同一行之后再 UPDATE,不算新加锁。
 - **预算**:T-D/T-S/T-U 用 `txCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)`;Finalize 用 2000ms,ClaimDue 用 1000ms。B2 §6.2a 已在 DSN 上把 `innodb_lock_wait_timeout` 设为 1 秒,锁等待会在 1s 内以 1205 返回,不会拖满 ctx;ctx 先到期时,驱动关闭连接,服务端随之回滚。
 - **重试助手** `withTxRetry(ctx, op string, fn)`:遇到 1213(死锁)或 1062(计数器 INSERT 撞上并发插入)时整事务重做,最多再试 2 次,每次先等 `20ms×attempt`。
@@ -1271,11 +1271,11 @@ private void MaybeAutoRequest()
 7'. A `GetGuildShop` → balance 0;执行 full 模式第 12 步的三个断言。
 8'. 打印 `GUILD_ECONOMY_SMOKE_OK mode=degraded guild_id=…`;A `DisbandGuild`。
 
-完整路径每个游戏日只能跑一次;Codex 在第 6 步重建开发库之后首跑必为 `full`,再跑一次应为 `degraded`。可选的手动项:第 5 步前强杀 guild 进程再重启,A 再查 → 捐献由重投循环完成、资金只加一次;scene 日志 `[AssetOp] rpc=debit … outcome=1` 对每个 seq 恰有一条非只读记录。
+完整路径每个游戏日只能跑一次;Gemini 在第 6 步重建开发库之后首跑必为 `full`,再跑一次应为 `degraded`。可选的手动项:第 5 步前强杀 guild 进程再重启,A 再查 → 捐献由重投循环完成、资金只加一次;scene 日志 `[AssetOp] rpc=debit … outcome=1` 对每个 seq 恰有一条非只读记录。
 
 <!-- s5_economy_part9.md -->
 
-# S5 经济(B5)— 第 9 部分:文件清单、Codex 验证、契约偏差
+# S5 经济(B5)— 第 9 部分:文件清单、Gemini 验证、契约偏差
 
 ## 5.41 文件清单(三个子批次;每批开工前需用户授权)
 
@@ -1323,9 +1323,9 @@ private void MaybeAutoRequest()
 
 `robot/guild_economy_smoke.go`、`robot/guild_smoke_scenario.go`、`robot/config/config.go`、`robot/etc/guild_smoke.yaml`(4);客户端 `tools/gen_messageids.ps1`、`GuildClient.cs`、`GuildWindow.cs`、`GuildUiRoot.cs`、`GameplayWindow.cs`、`AttributeClient.cs`、`PetClient.cs`、`GuildUiTests.cs`(8)。文档 `docs/design/guild-phase2.md` §S5(含运维节:告警规则、assetopfix 用法、回档补偿)与 `PROGRESS.md` 不计名额。
 
-**顺序与部署**:B5a → B5b → B5c。B5a 的 4 个 data_service/k8s 文件必须与 B5b 同次或更早部署,否则 guild 取不到 `guild_asset_op` 号段,经济写 RPC 全部回 `ErrIDGenUnavailable`。B5a 单独提交时,Codex 只验证第 1–5 步;`go/guild` 编译在 B5b 完成后一起验证(proto 新增 RPC 后,若 server 桩要求实现方法,单独的 B5a 可能编不过 guild)。
+**顺序与部署**:B5a → B5b → B5c。B5a 的 4 个 data_service/k8s 文件必须与 B5b 同次或更早部署,否则 guild 取不到 `guild_asset_op` 号段,经济写 RPC 全部回 `ErrIDGenUnavailable`。B5a 单独提交时,Gemini 只验证第 1–5 步;`go/guild` 编译在 B5b 完成后一起验证(proto 新增 RPC 后,若 server 桩要求实现方法,单独的 B5a 可能编不过 guild)。
 
-## 5.42 Codex 验证(串行,工作目录 `E:\work\xuanming-server-mmo`)
+## 5.42 Gemini 验证(串行,工作目录 `E:\work\xuanming-server-mmo`)
 
 0. 加载 buildenv;`git status --short proto data generated go/proto go/shared/generated cpp/generated robot tools/data_table_exporter/state > pre-b5-status.txt`,客户端仓同样存一份。并行会话(trade/team/chat)的未提交生成物在生成前后必须保持不变,有冲突先停下报告。
 1. **前置核对**:逐条运行 §5.2 的核对命令;再运行 §5.10 的断言核对命令并记录命中。
@@ -1375,17 +1375,17 @@ private void MaybeAutoRequest()
 | # | 级别 | 问题 | 处理 | 落点 |
 |---|---|---|---|---|
 | 1 | 阻断 | outbox 状态编号与 S4 E1 相反;列归属冲突 | **已采纳**。状态沿用 S1 与 E1 的 1..4(UNSPECIFIED=0),删除本节原 0..3 方案;SQL 一律绑定 `assetop.Status*`(记号 ?P/?A/?R/?X),不写字面量。21–25 列与 idx_3 推荐由 B1 建全,B1 漏建时 B5a 补;写明 `last_reason`(最近一次)与 `reason_tip_id`(终态)的分工,并请主设计回写 S1、S4 E2 与 S6 偏差 6 | §5.3、§5.6、§5.43-1 |
-| 2 | 主要 | RR 间隙锁使不同玩家首捐死锁;错误抛成 gRPC 错误,客户端被迫重连 | **已采纳**。T-D/T-S/T-U/Finalize/ClaimDue/清理全部改用 `sql.LevelReadCommitted`,并论证正确性只靠成员行锁和 seq 行锁;1213/1062 整事务重试,用尽后与 1205、txCtx 到期一起归为 `ErrEconomyBusy` → `GuildAssetPending`;补 50 个相邻新玩家并发的集成测试。锁等待不在事务里 SET:B2 §6.2a 已在 DSN 上设为 1s,在事务里 SET 会污染连接池,所以直接引用 B2 的设置;Codex 增加 `binlog_format=ROW` 核对 | §5.15、§5.39-2、§5.42-6 |
+| 2 | 主要 | RR 间隙锁使不同玩家首捐死锁;错误抛成 gRPC 错误,客户端被迫重连 | **已采纳**。T-D/T-S/T-U/Finalize/ClaimDue/清理全部改用 `sql.LevelReadCommitted`,并论证正确性只靠成员行锁和 seq 行锁;1213/1062 整事务重试,用尽后与 1205、txCtx 到期一起归为 `ErrEconomyBusy` → `GuildAssetPending`;补 50 个相邻新玩家并发的集成测试。锁等待不在事务里 SET:B2 §6.2a 已在 DSN 上设为 1s,在事务里 SET 会污染连接池,所以直接引用 B2 的设置;Gemini 增加 `binlog_format=ROW` 核对 | §5.15、§5.39-2、§5.42-6 |
 | 3 | 主要 | 重复声明 GuildNotifier,`notifier` 变量不存在 | **已采纳**。删除 S5 的接口和 `EconomyDeps.Notifier`,改为 B2 同款 `WithEconomy(EconomyDeps)` Option,推送统一走 `l.notify(...)`;升级推送按 B2 §14 排除操作者;`changeKindLabel` 追加三个值 | §5.24、§5.26、§5.30 |
 | 4 | 主要 | 异步结算后客户端不刷新;异步 REJECTED 玩家看不到 | **已采纳**。改 B2 的 `HandleGuildChanged`:推送 FUNDS_CHANGED/DELIVERY_DONE 且目标是本人时,触发 AssetsChanged,并置 DonationsQueued/ShopQueued(已离帮也刷背包)。`DrainQueued` 依次发出。两个读 RPC 增加 `recent_results`/`recent_orders`(10 分钟内、≤5 条,沿唯一键倒序扫 20 行)。客户端按 op_id 比对"消失的待结算单",显示终态文案;`AssetReasonText` 补 27000;补 EditMode 用例 5–8 | §5.5.2、§5.21、§5.34、§5.38 |
 | 5 | 主要 | 离帮/被踢/解散后照扣货币,资金作废 | **已采纳**。B2 的 Leave/Kick/Disband 事务按锁序追加"未决捐献截止提前到 now";Finalize 时若捐献者已不是绑定帮会的成员(含帮会已解散),资金和帮贡都不记,同一事务插入 `DONATE_REFUND` 退款指令并退回次数。新增 kind=4、`TX_GUILD_DONATE_REFUND` 与 scene 白名单,放在 B5a;退款被 16 行上限挡住时保持 PENDING 重试。产品规则列为契约偏差 7,交用户拍板 | §5.1 R5、§5.19.3、§5.20、§5.43-7 |
 | 6 | 主要 | 批大小/单笔预算/租约矛盾;配置未接线;老行饿死新行 | **已采纳(改法不同)**。不改 B4b 的串行 Tick,由 guild 配置强制 `LeaseMs ≥ Batch×OpBudgetMs + 5000`,默认 Batch 10、Lease 30s、Interval 1s;`loopConfigFrom` 从 `config.AppConfig.AssetOp` 取值。ClaimDue 分两档:先领 attempts<3 的行,再补老行。补租约并发集成测试(⑥)和两档领取测试;并发 worker 作为给 B4b 的后续建议 | §5.19.1、§5.29、§5.39、§5.43-12 |
-| 7 | 主要 | 冒烟同日不能重跑;账号与 S6/S4 冲突 | **已采纳**。账号改为 robot_9214/9215(B2 占 9211–9213,S6 占 9216–9219)。第 2 步读用量判定 full/degraded;degraded 只跑可重复的断言,并打印 `mode=degraded`。Codex 在重建开发库后首跑必须是 full,再跑一次应为 degraded | §5.40、§5.42-8 |
+| 7 | 主要 | 冒烟同日不能重跑;账号与 S6/S4 冲突 | **已采纳**。账号改为 robot_9214/9215(B2 占 9211–9213,S6 占 9216–9219)。第 2 步读用量判定 full/degraded;degraded 只跑可重复的断言,并打印 `mode=degraded`。Gemini 在重建开发库后首跑必须是 full,再跑一次应为 degraded | §5.40、§5.42-8 |
 | 8 | 次要 | 默认行与校验器和 B2 冲突 | **已采纳(取 B2 为基线)**。只保留 B2 的 `validateGuildTables`,B5 往里追加 3 条规则,B5 自己的校验器只管 Donate/Shop。沿用 B2 的 5 级行、1 级 50 人、截止 600s,只改 `upgrade_cost_funds` 列;GuildShop 204 等级 6→5;`GuildLevel.xlsx` 进入 B5a 清单;附 B2 断言核对命令 | §5.9、§5.10、§5.11 |
 | 9 | 次要 | 漏 servicecontext.go;多列 go.mod;filters;SegmentMinter 不存在 | **已采纳**。B5b 加入 `servicecontext.go`(字段 :35、初始化 :107、Stop :136),删掉 go.mod;B5a 加入 `table.vcxproj.filters`;改用 `&idsegment.Minter{Name, Segment}`(不设 Fallback),并做 nil 接口处理 | §5.29、§5.41 |
 | 10 | 次要 | 闸门 zone 取自缓存,合服后可能被绕过 | **已采纳**。T-D/T-S 事务的第一句读 `guild.zone_id`,T-U 从加锁的帮会行取;闸门 `l.economyFence` 在事务内、提交前检查,读失败按封锁处理。R4 补充合服窗口下的论证(S2 §8.5 申请时已校验 zone) | §5.1 R2/R4、§5.15–§5.18 |
 | 11 | 次要 | 回包用 toProtoGuild 会清零待审数 | **已采纳**。所有经济写 RPC 回包改用 `guildInfoFor(ctx, g, playerID)`;补单测断言 `pending_application_count` 不为 0 | §5.5.4、§5.25、§5.26、§5.39 |
-| 12 | 次要 | 写死 tip 码与交易类型数值 | **已采纳**。新增常量 `constants.AssetReasonCurrencyInsufficient`(取生成常量),SQL 中的 kind、stream、tx_type、status 全部改为绑定参数;`tipCodes()` 同步;Codex 增加 `rg` 字面量守卫 | §5.12、§5.15、§5.42-7 |
+| 12 | 次要 | 写死 tip 码与交易类型数值 | **已采纳**。新增常量 `constants.AssetReasonCurrencyInsufficient`(取生成常量),SQL 中的 kind、stream、tx_type、status 全部改为绑定参数;`tipCodes()` 同步;Gemini 增加 `rg` 字面量守卫 | §5.12、§5.15、§5.42-7 |
 | 13 | 次要 | Finalize/OnAssetFinalized 缺 ACTIVITY_REWARD 分支 | **已采纳**。两处都按 kind 显式 switch:DONATE、SHOP、ACTIVITY_REWARD(只做 CAS,推 DELIVERY_DONE)、DONATE_REFUND、未知 kind(打 ERROR,只做 CAS,不推送);补测试 10 | §5.19.3、§5.30、§5.39 |
 | 14 | 次要 | 卡死的发物行无恢复路径;没校验最大堆叠 | **已采纳**。新增 `cmd/assetopfix`(list/resolve,限 UNKNOWN 且 attempts≥10 的行,要求二次确认、核对流水,打 ERROR 审计日志,复用同一个 Finalize);告警规则写进 guild-phase2.md。规则 4 改为按 `max_stack_size` 计算 `MaxBuyCount`(堆叠为 1 时恒为 1),随视图下发 `max_buy_count` | §5.11、§5.23、§5.27 |
 | 15 | 次要 | 终态行与计数行没有清理 | **已采纳**。B5 实现分批清理:终态 op 与计数行各保留 30 天(可配);Finalize 把 `next_attempt_ms` 写成终结时刻,清理走 idx_0;计数行按日键/周键数值域分别删除;每条语句一个 RC 事务。S6"v1.1 再清理"因此提前,列为偏差 13 | §5.22、§5.43-13 |
@@ -1442,7 +1442,7 @@ SQL事务仅负责帮会侧预留与终态记账；跨Scene资产操作仍保留
 
 **验证（2026-11-05）**：Unity 6000.6.0f1 的 14 组相关 EditMode 测试 501/501，零失败、零跳过，进程退出 0；其中帮会恢复 83、文件存储 12，目标源码在测试前后及当前工作区 SHA-256 一致。旧行为的损坏恢复红灯 17 项、确认期间合法替换红灯 4 项均已在最终回归通过。覆盖原始字节变化、空/超长/无效编码、占用/删除失败、角色与存储实例隔离、换角重连和异步提示优先级；未运行联网冒烟或播放器打包。证据见 交接文档 §5（原 `docs/handoff/guild-economy-recovery-exits-handoff-20261023.md`，已清理，见 `ccf2840b2`）。
 
-**审核与修复（2026-11-10，Claude Code）**：两路只读审核在资产安全部分未发现问题。「保留作废结论」原先只对本人申请列表成立，窗口停在捐献 / 商店页时会被进页自动补拉立刻覆盖，预读发现已在别的帮、重连后重发被拒同样如此；已按上文 §5.44.1 的推广规则修复客户端，未编译、待 Codex 验证。2026-11-11 又修正两处同类问题：作废确认那一击读完快照之后、持锁复核之前槽位被替换时，以及服务端回包后按原内容清理本机记录时发现已被替换时，原先都按存储故障提示、会引导玩家再点一次而恢复新记录，现按本节首段只提示变化；未编译。详见 交接文档 §8（原 `docs/handoff/guild-economy-recovery-exits-handoff-20261023.md`，已清理，见 `ccf2840b2`）。
+**审核与修复（2026-11-10，Claude Code）**：两路只读审核在资产安全部分未发现问题。「保留作废结论」原先只对本人申请列表成立，窗口停在捐献 / 商店页时会被进页自动补拉立刻覆盖，预读发现已在别的帮、重连后重发被拒同样如此；已按上文 §5.44.1 的推广规则修复客户端，未编译、待 Gemini 验证。2026-11-11 又修正两处同类问题：作废确认那一击读完快照之后、持锁复核之前槽位被替换时，以及服务端回包后按原内容清理本机记录时发现已被替换时，原先都按存储故障提示、会引导玩家再点一次而恢复新记录，现按本节首段只提示变化；未编译。详见 交接文档 §8（原 `docs/handoff/guild-economy-recovery-exits-handoff-20261023.md`，已清理，见 `ccf2840b2`）。
 
 **负责人定（2026-11-10）：作废确认须在警告写出满 1 秒之后。** 超窗（§5.44.1 出口 ②）与损坏记录的作废确认都适用：除状态栏仍是那句警告、记录内容未变之外，这一击距这句警告写出还须满 1 秒，按客户端单调时钟计（`GuildClient` 注入的 `monotonicMs`，不用墙钟）。不满 1 秒的点击不算确认：不作废、不发包、不重新计时，状态栏照旧；满 1 秒后的下一击照常确认。重新警告（首次、文案或内容变化、换角、重连之后）从新的写出时刻起算；§5.44.1 客户端实现补充里的结论沿用只是把同一句警告放回状态栏，不重新计时。读取失败与内容被替换的处理不变。起因：第一次点击只写警告、不进 Busy，按钮保持可点，连点两下时第二下会在玩家读到警告之前完成作废。不改布局、按钮与文案。客户端已于 2026-11-11 改好（`GuildClient.EconomyRetireConfirmDelayMs`，未编译），实现与用例见 交接文档 §8.3（原 `docs/handoff/guild-economy-recovery-exits-handoff-20261023.md`，已清理，见 `ccf2840b2`）。
 

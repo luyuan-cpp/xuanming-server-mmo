@@ -107,7 +107,7 @@ P1  preflight   zone_<src>_db / zone_<dst>_db 都存在;从表清单 JSON 发现
 G   guard       0 个玩家 / 源库行数 > 映射数 / 与 -expected-src-players 不符 → 拒绝
 P2  preflight   etcd 场景节点注册表里源区一条注册都没有(-etcd-endpoints,正面证据)且 scene_nodes:zone:{src}:load 为空
                 (2026-10-23 起;负载集为空不能单独证明下线,见 cross-zone-scene-travel.md §13.10)
-P3  preflight   db_task_zone_{src}[_g{gen}] 在唯一权威组上 LAG=0(2026-10-15 起;已落码,未编译、未测试,待 Codex 验证):
+P3  preflight   db_task_zone_{src}[_g{gen}] 在唯一权威组上 LAG=0(2026-10-15 起;已落码,未编译、未测试,待 Gemini 验证):
                 候选 = zone 组 db_rpc_consumer_group_z{src} + legacy 组 db_rpc_consumer_group(-kafka-legacy-group),
                 或 -kafka-group 显式指定的一个;恰好一个组在本 topic 上有已提交位点才只对它算 LAG,
                 两组都有(交接没收尾,先 kafka_offset_reset.ps1 -FinalizeHandoff)/ 都没有 / CLI 读不出一律拒绝
@@ -115,7 +115,7 @@ P3  preflight   db_task_zone_{src}[_g{gen}] 在唯一权威组上 LAG=0(2026-10-
 P4  preflight   kafka:{retry,processing,dead}:queue:<topic> 三个列表都空
                 (2026-10-16 更正)另含每个 db 实例的 kafka:retry:processing:<topic>:<实例>(实例取自 ZSET
                 kafka:retry:instances:<topic>,db 多实例起),以及经 SCAN MATCH 发现的 kafka:retry:queue:<topic>:p*
-                (2026-10-15 起,④ 按分区 ready 列表;已落码,未编译、未测试,待 Codex 验证);任一读不到整体拒绝
+                (2026-10-15 起,④ 按分区 ready 列表;已落码,未编译、未测试,待 Gemini 验证);任一读不到整体拒绝
                 (preflight.go::dbTaskQueueKeys;见 merge-zone-runbook.md §5 P4 行)
 P5  preflight   源区玩家没有在持的 lock:player:{id}
 P6  preflight   源区玩家没有 player:session:{id}

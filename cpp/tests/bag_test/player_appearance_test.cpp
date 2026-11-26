@@ -10,9 +10,12 @@
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
+#include "proto/common/component/player_pet_comp.pb.h"
+#include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/data_service/data_service.pb.h"
 #include "proto/scene/player_appearance.pb.h"
@@ -24,8 +27,13 @@
 #include "table/code/appearanceseries_table.h"
 #include "table/code/characterappearance_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
+#include "table/code/petcosmetic_table.h"
+#include "table/code/skill_table.h"
+#include "table/code/skillvfxcosmetic_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
 namespace
@@ -106,9 +114,13 @@ protected:
 	void SetUp() override
 	{
 		ItemTableManager::Instance().Load();
+		PetTableManager::Instance().Load();
+		SkillTableManager::Instance().Load();
 		AppearanceSeriesTableManager::Instance().Load();
 		CharacterAppearanceTableManager::Instance().Load();
 		AppearanceRuleTableManager::Instance().Load();
+		PetCosmeticTableManager::Instance().Load();
+		SkillVfxCosmeticTableManager::Instance().Load();
 		ASSERT_TRUE(PlayerAppearanceSystem::ValidateTables());
 
 		const auto &ruleRow = *AppearanceRuleTableManager::Instance().FindAll().data().begin();
@@ -525,5 +537,174 @@ TEST_F(PlayerAppearanceSystemTest, AllNineActiveAppearancesHaveCompleteBiographi
 		++withBiography;
 	}
 	EXPECT_EQ(withBiography, 9u);
+}
+
+TEST(PlayerAppearanceRulesTest, PetAndSkillCosmeticBitmapsTintAndSpeciesRules)
+{
+	std::string petBits(2, '\0');
+	petBits[1] = static_cast<char>(1u << 4); // 未知高位保留
+	EXPECT_FALSE(player_appearance::IsPetCosmeticOwned(petBits, 1));
+	EXPECT_TRUE(player_appearance::MarkPetCosmeticOwned(petBits, 1));
+	EXPECT_TRUE(player_appearance::IsPetCosmeticOwned(petBits, 1));
+	EXPECT_EQ(static_cast<unsigned char>(petBits[1]), 0x10u);
+
+	std::string vfxBits(2, '\0');
+	vfxBits[1] = static_cast<char>(1u << 2);
+	EXPECT_FALSE(player_appearance::IsSkillVfxOwned(vfxBits, 2));
+	EXPECT_TRUE(player_appearance::MarkSkillVfxOwned(vfxBits, 2));
+	EXPECT_TRUE(player_appearance::IsSkillVfxOwned(vfxBits, 2));
+	EXPECT_EQ(static_cast<unsigned char>(vfxBits[1]), 0x04u);
+
+	EXPECT_TRUE(player_appearance::IsPetSpeciesCompatible(0, 6));
+	EXPECT_TRUE(player_appearance::IsPetSpeciesCompatible(6, 6));
+	EXPECT_FALSE(player_appearance::IsPetSpeciesCompatible(6, 7));
+
+	EXPECT_TRUE(player_appearance::IsValidTintHex(""));
+	EXPECT_TRUE(player_appearance::IsValidTintHex("#FFE28A"));
+	EXPECT_TRUE(player_appearance::IsValidTintHex("#00ffaa"));
+	EXPECT_FALSE(player_appearance::IsValidTintHex("FFE28A"));
+	EXPECT_FALSE(player_appearance::IsValidTintHex("#FFF"));
+	EXPECT_FALSE(player_appearance::IsValidTintHex("#GGGGGG"));
+}
+
+TEST_F(PlayerAppearanceSystemTest, PetCosmeticGrantEquipClearAndPerInstanceIsolation)
+{
+	auto &petComp = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+	auto *pet1 = petComp.add_pets();
+	pet1->set_pet_id(70001);
+	pet1->set_pet_table_id(6); // 绛铃
+	auto *pet2 = petComp.add_pets();
+	pet2->set_pet_id(70002);
+	pet2->set_pet_table_id(5); // 烛翎
+
+	// 未拥有时拒绝穿戴，不改灵宠实例。
+	EquipPetCosmeticRequest req;
+	req.set_client_request_id(8001);
+	req.set_pet_id(70001);
+	req.set_cosmetic_id(1);
+	EquipPetCosmeticResponse resp;
+	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 1, resp),
+			  static_cast<uint32_t>(kAppearanceNotOwned));
+
+	// 不存在的灵宠实例拒绝。
+	req.set_pet_id(99999);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 2, resp),
+			  static_cast<uint32_t>(kPetNotFound));
+
+	// 内部授权授予灵宠幻化 id=1(苍嶂麟)：不自动穿戴，且重复授予幂等。
+	bool alreadyOwned = true;
+	ASSERT_EQ(PlayerAppearanceSystem::GrantPetCosmetic(player, 1, kNowSec + 3, &alreadyOwned), kSuccess);
+	EXPECT_FALSE(alreadyOwned);
+	ASSERT_EQ(PlayerAppearanceSystem::GrantPetCosmetic(player, 1, kNowSec + 4, &alreadyOwned), kSuccess);
+	EXPECT_TRUE(alreadyOwned);
+	EXPECT_EQ(petComp.pets(0).cosmetic_id(), 0u);
+
+	// 仅对灵宠 70001 穿戴幻化 id=1，灵宠 70002 仍为原形。
+	req.set_client_request_id(8002);
+	req.set_pet_id(70001);
+	req.set_cosmetic_id(1);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 5, resp), kSuccess);
+	EXPECT_FALSE(resp.replayed());
+	EXPECT_EQ(resp.pet_id(), 70001u);
+	EXPECT_EQ(resp.equipped_cosmetic_id(), 1u);
+	EXPECT_EQ(petComp.pets(0).cosmetic_id(), 1u);
+	EXPECT_EQ(petComp.pets(1).cosmetic_id(), 0u);
+
+	uint32_t resolvedId = 0;
+	std::string resolvedArt;
+	PlayerAppearanceSystem::ResolvePetCosmeticVisual(player, petComp.pets(0), resolvedId, resolvedArt);
+	EXPECT_EQ(resolvedId, 1u);
+	EXPECT_EQ(resolvedArt, "07-cangzhanglin");
+
+	// 重复穿戴同一幻化幂等收敛。
+	req.set_client_request_id(8003);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 6, resp), kSuccess);
+	EXPECT_TRUE(resp.replayed());
+	EXPECT_EQ(resp.equipped_cosmetic_id(), 1u);
+
+	// 清除幻化(cosmetic_id=0)恢复原形，重复清除幂等收敛。
+	req.set_client_request_id(8004);
+	req.set_cosmetic_id(0);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 7, resp), kSuccess);
+	EXPECT_FALSE(resp.replayed());
+	EXPECT_EQ(resp.equipped_cosmetic_id(), 0u);
+	EXPECT_EQ(petComp.pets(0).cosmetic_id(), 0u);
+
+	req.set_client_request_id(8005);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 8, resp), kSuccess);
+	EXPECT_TRUE(resp.replayed());
+
+	// 角色冻结期间拒绝修改。
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+	req.set_client_request_id(8006);
+	req.set_cosmetic_id(1);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 9, resp),
+			  static_cast<uint32_t>(kAppearanceFrozen));
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+}
+
+TEST_F(PlayerAppearanceSystemTest, SkillVfxGrantEquipClearAndBattleSnapshotPropagation)
+{
+	auto &cls = tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player);
+	cls.set_class_(2); // 玄霄
+	auto &skills = tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player);
+
+	// 未拥有时拒绝启用。
+	EquipSkillVfxRequest req;
+	req.set_client_request_id(9001);
+	req.set_skill_table_id(1201);
+	req.set_cosmetic_id(1);
+	EquipSkillVfxResponse resp;
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 1, resp),
+			  static_cast<uint32_t>(kAppearanceNotOwned));
+
+	// 授予技能特效 id=1(适用于 1201 玄符落曜)，尚未习得技能前仍拒绝启用。
+	bool alreadyOwned = true;
+	ASSERT_EQ(PlayerAppearanceSystem::GrantSkillVfx(player, 1, kNowSec + 2, &alreadyOwned), kSuccess);
+	EXPECT_FALSE(alreadyOwned);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 3, resp),
+			  static_cast<uint32_t>(kAppearanceInvalid));
+
+	// 习得 1201 一重后，错配技能号 1202 仍拒绝；正确技能号 1201 成功启用并透传战斗快照。
+	auto *learned = skills.add_skill_list();
+	learned->set_skill_table_id(1201);
+	learned->set_rank(1);
+
+	req.set_client_request_id(9002);
+	req.set_skill_table_id(1202);
+	req.set_cosmetic_id(1);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 4, resp),
+			  static_cast<uint32_t>(kAppearanceInvalid));
+
+	req.set_client_request_id(9003);
+	req.set_skill_table_id(1201);
+	req.set_cosmetic_id(1);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 5, resp), kSuccess);
+	EXPECT_FALSE(resp.replayed());
+	EXPECT_EQ(resp.skill_table_id(), 1201u);
+	EXPECT_EQ(resp.equipped_cosmetic_id(), 1u);
+	ASSERT_EQ(resp.info().equipped_skill_vfx().count(1201u), 1u);
+	EXPECT_EQ(resp.info().equipped_skill_vfx().at(1201u), 1u);
+
+	BattlePlayerSnapshot battleSnap;
+	PlayerAppearanceSystem::FillBattleSkillVfx(player, battleSnap);
+	ASSERT_EQ(battleSnap.equipped_skill_vfx().count(1201u), 1u);
+	EXPECT_EQ(battleSnap.equipped_skill_vfx().at(1201u), 1u);
+
+	// 重复启用幂等收敛。
+	req.set_client_request_id(9004);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 6, resp), kSuccess);
+	EXPECT_TRUE(resp.replayed());
+
+	// 恢复默认(cosmetic_id=0)清除映射并使战斗快照为空。
+	req.set_client_request_id(9005);
+	req.set_cosmetic_id(0);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 7, resp), kSuccess);
+	EXPECT_FALSE(resp.replayed());
+	EXPECT_EQ(resp.equipped_cosmetic_id(), 0u);
+	EXPECT_EQ(resp.info().equipped_skill_vfx().count(1201u), 0u);
+
+	PlayerAppearanceSystem::FillBattleSkillVfx(player, battleSnap);
+	EXPECT_TRUE(battleSnap.equipped_skill_vfx().empty());
 }
 } // namespace

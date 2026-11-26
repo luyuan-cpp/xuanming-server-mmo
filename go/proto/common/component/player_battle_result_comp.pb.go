@@ -167,8 +167,14 @@ type PlayerBattleResult struct {
 	FestivalNewlyEligible          bool   `protobuf:"varint,32,opt,name=festival_newly_eligible,json=festivalNewlyEligible,proto3" json:"festival_newly_eligible,omitempty"`
 	MaterialAvailableUnitsAfter    uint64 `protobuf:"varint,33,opt,name=material_available_units_after,json=materialAvailableUnitsAfter,proto3" json:"material_available_units_after,omitempty"`
 	MaterialEarnableRemainingAfter uint32 `protobuf:"varint,34,opt,name=material_earnable_remaining_after,json=materialEarnableRemainingAfter,proto3" json:"material_earnable_remaining_after,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	// 单槽赛季印本局结算增量（非赛季合格局全 0/false）。
+	SeasonSealPointsAdded    uint32 `protobuf:"varint,35,opt,name=season_seal_points_added,json=seasonSealPointsAdded,proto3" json:"season_seal_points_added,omitempty"`
+	SeasonSealProgressAfter  uint32 `protobuf:"varint,36,opt,name=season_seal_progress_after,json=seasonSealProgressAfter,proto3" json:"season_seal_progress_after,omitempty"`
+	SeasonSealMaxPoints      uint32 `protobuf:"varint,37,opt,name=season_seal_max_points,json=seasonSealMaxPoints,proto3" json:"season_seal_max_points,omitempty"`
+	SeasonHonorNewlyUnlocked bool   `protobuf:"varint,38,opt,name=season_honor_newly_unlocked,json=seasonHonorNewlyUnlocked,proto3" json:"season_honor_newly_unlocked,omitempty"`
+	Surrendered              bool   `protobuf:"varint,39,opt,name=surrendered,proto3" json:"surrendered,omitempty"` // true = 本方通过 PVP 延迟投降结束本局（重登补弹与现场结算同口径展示「体面认输」）
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PlayerBattleResult) Reset() {
@@ -439,6 +445,41 @@ func (x *PlayerBattleResult) GetMaterialEarnableRemainingAfter() uint32 {
 	return 0
 }
 
+func (x *PlayerBattleResult) GetSeasonSealPointsAdded() uint32 {
+	if x != nil {
+		return x.SeasonSealPointsAdded
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonSealProgressAfter() uint32 {
+	if x != nil {
+		return x.SeasonSealProgressAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonSealMaxPoints() uint32 {
+	if x != nil {
+		return x.SeasonSealMaxPoints
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonHonorNewlyUnlocked() bool {
+	if x != nil {
+		return x.SeasonHonorNewlyUnlocked
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetSurrendered() bool {
+	if x != nil {
+		return x.Surrendered
+	}
+	return false
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -501,7 +542,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xa8\f\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb4\x0e\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -542,7 +583,12 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x16festival_required_wins\x18\x1f \x01(\rR\x14festivalRequiredWins\x126\n" +
 	"\x17festival_newly_eligible\x18  \x01(\bR\x15festivalNewlyEligible\x12C\n" +
 	"\x1ematerial_available_units_after\x18! \x01(\x04R\x1bmaterialAvailableUnitsAfter\x12I\n" +
-	"!material_earnable_remaining_after\x18\" \x01(\rR\x1ematerialEarnableRemainingAfter\"o\n" +
+	"!material_earnable_remaining_after\x18\" \x01(\rR\x1ematerialEarnableRemainingAfter\x127\n" +
+	"\x18season_seal_points_added\x18# \x01(\rR\x15seasonSealPointsAdded\x12;\n" +
+	"\x1aseason_seal_progress_after\x18$ \x01(\rR\x17seasonSealProgressAfter\x123\n" +
+	"\x16season_seal_max_points\x18% \x01(\rR\x13seasonSealMaxPoints\x12=\n" +
+	"\x1bseason_honor_newly_unlocked\x18& \x01(\bR\x18seasonHonorNewlyUnlocked\x12 \n" +
+	"\vsurrendered\x18' \x01(\bR\vsurrendered\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"

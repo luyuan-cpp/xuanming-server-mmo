@@ -105,7 +105,7 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 - 有 leader、日志里持续出现 `[loginqueue] queueLen zone=<id> err=...` = 读不出队列键(WRONGTYPE / ACL / 单键异常),锁照常续期但每拍都不出队(2026-10-14 之前这种情况零日志)
 - 日志里有 `goroutine_panic` 且 `point=login.queue_dispatcher_term`(指标 `safego_panic_total{point="login.queue_dispatcher_term"}` 在涨)= 出队路径有代码缺陷。该任期已放锁,本副本退避 TTL/3 后再参选,同 zone 备机可以接手;每个副本都 panic 就是每轮当选即 panic,队列照样不出,按栈修代码
 
-> (2026-10-15 补,已落码,未编译、未测试,待 Codex 验证)「队列在降、admit 不涨、robot 停在 rank=0」这一形状另查下面三条日志(见 `docs/handoff/launch-readiness-20261013/spec_G4b-G.md` §5.8 末尾补注):
+> (2026-10-15 补,已落码,未编译、未测试,待 Gemini 验证)「队列在降、admit 不涨、robot 停在 rank=0」这一形状另查下面三条日志(见 `docs/handoff/launch-readiness-20261013/spec_G4b-G.md` §5.8 末尾补注):
 > - `[loginqueue] PopAdmit dropped entries after zpopmin zone=<id> reason=write_failed popped=… dropped=… firstErr=…`(ERROR,每批一行)= 已弹出的条目写放行失败,这些玩家停在名次 0 直到 meta 过期(1h)。`firstErr` 含 `OOM` 即排队键所在实例写满(noeviction):弹出照常成功、写入全被拒,几拍之内整条队列被弹空,先扩内存或清堆积(见「故障应急」),再排查谁占了内存;其它错误按 Redis 连接 / 延迟排查。停服、丢租约已不会造成这条(弹出之后的写入有 3s 独立预算),滚动重启期间偶发一行可以接受,持续出现不行。
 > - `[loginqueue] PopAdmit dropped entries after zpopmin zone=<id> reason=meta_gone dropped=<n>`(INFO)= 队首条目已在队里等满 `QueueEntryTTL`(1h),令牌已失效,这些人查询回 EXPIRED、会重新入队;不写放行槽、不占名额、不计入 `login_queue_admit_total`。持续出现说明排队等待超过 1h。
 > - `[loginqueue] PopAdmit zone=<id> err=loginqueue: … ttl must be positive …`(ERROR,每拍一行)= `Queue.AdmitTTL` 或 `Queue.QueueEntryTTL` 被显式配成 0 或负数(配置的默认值只在键缺省时生效),dispatcher 不出队,条目原样留在队列;改配置后滚动重启。起服时的校验还没接上,`QueueEntryTTL` 非正时入队本身也会把整条队列删掉,不要配。
@@ -114,7 +114,7 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 > - 第一条括号里的「3s 独立预算」自停服、丢租约时起算:没有取消时弹出之后的写入不设截止,一批写多久都照写;取消之后 3s 内仍没写完的尾部才会丢,记进这行 `reason=write_failed`(`firstErr` 通常是 `context deadline exceeded`)。
 > - 第三条「起服时的校验还没接上」已过时:`Queue.Enabled=true` 时起服装配在构造排队之前校验,`AdmitTTL` / `QueueEntryTTL` 非正、或 `AdmitTTL` 不足 1ms,login 直接起不来(panic 信息含 `login queue: loginqueue: … ttl must be positive`)。上线环境看不到第三条的每拍 ERROR,看到的是起服失败;按同样的方法改配置。
 >
-> (2026-10-18 更正,上面「`ZCARD` 不降 = ZPOPMIN 没在跑」一条与两段补注;原文保留;已落码,未编译、未测试,待 Codex 验证。完整说明见设计稿 §5 决策树后的 2026-10-18 更正)
+> (2026-10-18 更正,上面「`ZCARD` 不降 = ZPOPMIN 没在跑」一条与两段补注;原文保留;已落码,未编译、未测试,待 Gemini 验证。完整说明见设计稿 §5 决策树后的 2026-10-18 更正)
 > - **「不降 = ZPOPMIN 没在跑」改读「不降 = 放行脚本没在跑,或在报错」。** 出队已是 `ZRANGE` + 每条一段 `admitEntryScript`,条目在放行写成之前一直在队列里。不降时先查下面的 ERROR 行。
 > - **两行 `PopAdmit dropped entries after zpopmin …` 已不存在**(`reason=write_failed` 的 ERROR、`reason=meta_gone` 的 INFO)。换成下面两行:
 >   - **ERROR 行**:`[loginqueue] PopAdmit zone=<id> err=…`。dispatcher 每拍至多一行,停服、丢租约时不打。err 里是以下之一:`admit script queueId=… admitted=… skipped=… untried=…: <原因>`、`zrange: …`、`skipped <n> entries without an admit slot, first queueId=…: …`。本拍已放行的人照样计入 `login_queue_admit_total`。按原因判读:
@@ -190,7 +190,7 @@ Redis 监控:queries/sec > 50k,p99 命令延迟 > 50ms
 **检查对象**:每个 zone 的 dispatcher tick、客户端轮询,以及 fast-path 预占。当前容量查询经 Lua 执行 `ZREMRANGEBYSCORE + ZCARD`,占位写入是一段 Lua `ZADD + PTTL`(剩余不足才 `PEXPIRE`,2026-10-15 起;放行时与 `SET` 放行槽同在一个 MULTI 里,以 `EVAL` 发出),不再是旧 SET 的 SCARD / SADD。dispatcher 每个非空拍只读一次 gate 目录(etcd),不再每放一个人读一次。不同路径的 Redis 命令数不同,用实测 QPS、延迟和调用占比定位,不沿用旧版固定命令数估算。
 **排查**:redis MONITOR 抽样 100 个命令,看哪类命令占比最大,反推哪层在打
 
-> (2026-10-18 补注,本模式;已落码,未编译、未测试,待 Codex 验证)
+> (2026-10-18 补注,本模式;已落码,未编译、未测试,待 Gemini 验证)
 > - **查询。** 排队中一次查询现在是 `GET` + `GETDEL` + 一次 `EVALSHA`(读状态脚本 `lookupStateScript`),此前是 `GET` + `GETDEL` + `HMGET` + `ZRANK` + `ZCARD`。查询从纯读变为偶尔带写:条目剩余 TTL 不足 `QueueEntryTTL` 时,把 meta、token 索引、队列键续到 1.25 倍。
 > - **续期写量(估算,未压测)。** 每条约每 `QueueEntryTTL`/4 续一次。4.5 万人排队、2s 轮询、`QueueEntryTTL`=1h 时,稳态约 100 条 `PEXPIRE`/s;入队洪峰期间另加约 2 × 入队速率。
 > - **出队。** 出队是一次 `ZRANGE` 加每条一次 `EVALSHA`(放行脚本 `admitEntryScript`)。
@@ -280,7 +280,7 @@ login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `
 | `login_queue_capacity` | Gauge | zone | `FreeSlots` 实际用的区容量:区服目录的 `zone_config.capacity`(读不到区服策略时按软上限)再按在接客的 gate 到自报 `max_connections` 90% 的承载封顶。每次算容量时写(快速通道每次 AssignGate、dispatcher 每个非空拍),排队关着时没有序列 |
 | `login_queue_configured_capacity` | Gauge | zone | 区服目录给本 zone 的容量,0 = 读不到区服策略。大于 `login_queue_capacity` = gate 台数装不下目录的容量,排队比配置的早开始拦人,持续 10 分钟报 `LoginQueueCapacityLimitedByGates`(`deploy/k8s/login-alerts.yaml`) |
 
-> (2026-10-18 补注,`login_queue_expired_total` 与 `login_queue_admit_total` 两行;已落码,未编译、未测试,待 Codex 验证)
+> (2026-10-18 补注,`login_queue_expired_total` 与 `login_queue_admit_total` 两行;已落码,未编译、未测试,待 Gemini 验证)
 > - **新增 reason `queue_gone`。** 含义:meta 在、没有放行、又不在队列。来源有三个:整个 zone 空闲超过 `QueueEntryTTL` 后队列键先到期;人工 `ZREM` / `DEL` 队列键;排队开着时混跑新旧版。
 >   - 持续非零,说明有人在排队开着时混跑新旧版,或手工动了队列键。
 >   - 执行「清空堆积」第一行之后出现一个尖峰,属预期。
@@ -364,7 +364,7 @@ redis-cli --scan --pattern 'queue:token:{q:1}:*' | xargs -r redis-cli DEL
 
 删除占位会让尚未连上的有效 gate 票据暂时不计入容量,下一拍可能再次放行。应先停止该 zone 的新准入并等待有效票据窗口结束,再执行清理并恢复准入;不能在正常放行中把删键当成日常降队列手段。新旧二进制混跑时应先完成版本收口,不要靠同时删新旧键修复容量语义。旧键 `admitted:zone:*` 是 2026-10-13(G4b-G)之前版本的残留,最后一个旧版本停写后 60s 内自行过期,不用删。
 
-> (2026-10-18 补注,本节;已落码,未编译、未测试,待 Codex 验证)
+> (2026-10-18 补注,本节;已落码,未编译、未测试,待 Gemini 验证)
 > - **自然过期的时长。** 队列键 `queue:{q:<z>}`、`queue:meta:*`、`queue:token:*` 现在是空闲 TTL,不清时在最后一次入队或排队中查询之后至多约 1.25×`QueueEntryTTL` 过期。上面提示里「60s / 1h」的 1h 改读「至多约 1.25h」。
 > - **`DEL 'queue:{q:<z>}'` 之后的客户端。** 仍在轮询的客户端下一次查询立即收到 EXPIRED(`queue_gone`,410),丢掉 token 重新走 `/api/assign-gate`,此前是停在名次 0 等 meta 过期。`login_queue_expired_total{reason="queue_gone"}` 随之出现尖峰,属预期。
 > - **只删队列键、不清 meta 时。** 不在队列的条目不再续期,meta 与 token 索引按剩余 TTL 自然过期。

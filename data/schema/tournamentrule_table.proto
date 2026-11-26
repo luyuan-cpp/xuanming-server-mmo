@@ -56,4 +56,26 @@ message TournamentRuleTable {
   uint32 invite_ttl_seconds = 19;
   // 规则说明
   string desc = 20;
+  // 半决赛与总决赛是否启用 BO3 与五行灵脉阵眼轮转(V2,默认 true)
+  bool bo3_top4_enabled = 21;
+  // BO3 局间换阵与灵脉公示倒计时秒数(V2,默认 60)
+  uint32 intermission_seconds = 22;
+  // 淘汰赛战报是否向全服公开回放(V2,默认 true)
+  bool public_knockout_replay = 23;
+  // 每日免费观道致敬绑定银两数量(V2,默认 5000)
+  uint32 salute_gold_amount = 24;
+  // 每日免费观道致敬绑定道具 ID(V2,FK -> Item.id,默认 20 灵兽口粮)
+  uint32 salute_item_id = 25 [(cfg_fk) = "Item"];
+  // 每日免费观道致敬绑定道具数量(V2,默认 3)
+  uint32 salute_item_count = 26;
+  // 报名与海选期是否开放零积分热身约战(V3,默认 true)
+  bool warmup_spar_enabled = 27;
+  // 淘汰赛阶段是否开放免费全服神机竞猜榜(V3,默认 true)
+  bool prediction_enabled = 28;
+  // 神机竞猜达标领奖所需最低命中场次(V3,默认 2)
+  uint32 prediction_reward_min_hits = 29;
+  // 四强及以上淘汰赛是否加赛季军争夺战(V3,默认 true)
+  bool third_place_match_enabled = 30;
+  // BO3 淘汰赛首局开战前是否开启双方队长五行灵脉禁选(V4,默认 true)
+  bool leyline_ban_enabled = 31;
 }

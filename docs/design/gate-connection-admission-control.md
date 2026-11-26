@@ -161,7 +161,7 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字 |
 | G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断。**（2026-11-12 状态：C++ 节点已有 Prometheus 出口，`MMORPG_METRICS_PORT`；fd 用量与 accept 降级的指标已加，见 P0-4。P1-4 列的连接类 SLI 同日另一批落码，未编译，见 P1-4。）** |
 
-> **2026-10-18 G4 落码说明(未编译、未验证,待 Codex 跑容器级对照与 kind 实测)**:进程启动时自抬软限并做门槛检查,
+> **2026-10-18 G4 落码说明(未编译、未验证,待 Gemini 跑容器级对照与 kind 实测)**:进程启动时自抬软限并做门槛检查,
 > 位置在引擎的 `Node::Initialize`(`LoadConfigs` / `InitLogSystem` 之后、`InitRpcServer` 连 Redis 之前),gate / scene / battle 都经过这里;
 > 纯判定在 `cpp/libs/engine/core/node/system/node/open_file_limit.h`。软限抬到 min(硬限, 1048576),只抬不降、不动硬限;
 > 需求 = 客户端面准入上限 + 4096(gate 取 `GateMaxConnections`,battle 取 `BattleMaxConnections`,scene 取 0);
@@ -270,7 +270,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P0-2 · 未认证连接：独立预算 + 死线 + LRU 淘汰（对应 G1，堵 SECURITY.md 自认的洞）
 
-分两半:死线已落码(2026-11-06,未编译,待 Codex 验证);独立预算、LRU 淘汰、按概率早拒 2026-11-19 落码(未编译、未运行,待 Codex 验证)。
+分两半:死线已落码(2026-11-06,未编译,待 Gemini 验证);独立预算、LRU 淘汰、按概率早拒 2026-11-19 落码(未编译、未运行,待 Gemini 验证)。
 
 **死线(已落码)。** 随客户端心跳一起做,设计见 [gate-client-heartbeat.md](gate-client-heartbeat.md) §5.1、§5.4:
 
@@ -396,7 +396,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P0-3 · 修 LogLevel（对应 G5）
 
-**状态（2026-11-10）**：下面第 1、2 条已落码。2026-11-04 Codex 在 Windows Debug 上验证通过：五个工程串行编译退出 0，`client_endpoint_test` 70/70，K8s 契约 283/283，14 种非法值都按预期拒启并以 1 退出。第 3 条 2026-11-10 落码，未编译，待 Codex 在 Linux 上验证。
+**状态（2026-11-10）**：下面第 1、2 条已落码。2026-11-04 Gemini 在 Windows Debug 上验证通过：五个工程串行编译退出 0，`client_endpoint_test` 70/70，K8s 契约 283/283，14 种非法值都按预期拒启并以 1 退出。第 3 条 2026-11-10 落码，未编译，待 Gemini 在 Linux 上验证。
 
 **定案：生产保持 2（INFO），不改 3（WARN）；G5 靠去掉那两行连接日志解决。** 原计划把生产值定到 3（WARN）来压住 G5，没有采用，原因有两点：
 - INFO 是业界和本仓其余服务（go-zero、Spring Boot）的默认生产级别。运维手册与演练取证大量依赖 INFO 行，如 `Player marked for unregistration`、`[DirtySave]`、启动横幅。改 WARN 要先逐条换掉这些判据，代价大于收益。
@@ -432,7 +432,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 > 已经是一份被本地魔改过的 muduo（整套 WIN32 分支）。但注意 `third_party/muduo`（Windows）
 > 与 `third_party/muduo-linux` 是**两份独立副本，必须同改**，否则 Windows 编过、Linux 的 clang `-Werror` 红。
 
-> **2026-11-12 落码说明（未编译、未运行，待 Codex 验证；G7、G8 一并处理）**
+> **2026-11-12 落码说明（未编译、未运行，待 Gemini 验证；G7、G8 一并处理）**
 >
 > 只把三个 errno 挪进「预期错误」不够：`Acceptor` 只对 `EMFILE` 让位，`ENFILE` / `ENOBUFS` / `ENOMEM` 不 abort 之后，监听 fd 一直可读，循环会原地空转，每圈还打两行 ERROR。所以改成下面这样：
 >
@@ -456,7 +456,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P1-1 · 把容量闸前移到 `Acceptor`（对应 G2）
 
-**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。**
+**状态（2026-11-12）：已落码，未编译、未运行，待 Gemini 验证。**
 
 **落码前的核对结论**：G2 原样成立。`Acceptor` 没有任何准入口子；`TcpServer::newConnection` 对每条 accept 成功的连接无条件建
 `TcpConnection`；容量判定在 `GateClientSessionHandler::HandleConnectionEstablished`（`client_session_handler.cpp`），拒绝靠 `forceClose`。
@@ -511,7 +511,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P1-2 · 拒绝时发 RST 而不是 FIN（消掉 60s TIME_WAIT）
 
-**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。**
+**状态（2026-11-12）：已落码，未编译、未运行，待 Gemini 验证。**
 
 **落码前的核对结论**：muduo 三份副本与 `cpp/` 下 `SO_LINGER` 零命中，所有关闭都走 FIN。
 
@@ -539,7 +539,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P1-3 · 全局新建连接速率闸（对应 G3）
 
-**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。阈值按下面的推导先定，没有等压测。**
+**状态（2026-11-12）：已落码，未编译、未运行，待 Gemini 验证。阈值按下面的推导先定，没有等压测。**
 
 **落码前的核对结论**：G3 原样成立，唯一的判据是会话总数。
 
@@ -593,7 +593,7 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 
 ### P1-4 · 埋点（对应 G13）
 
-**状态（2026-11-12）：已落码，未编译、未运行，待 Codex 验证。**
+**状态（2026-11-12）：已落码，未编译、未运行，待 Gemini 验证。**
 
 **落码前的核对结论**：gate 导出的只有排空迁移那一组（`gate_drain_migration_*`，11-12 另一个会话加的）与节点通用的 fd / accept 指标，
 本节列的六项连接类 SLI 一项都没有。握手超时只有 `[ClientHeartbeat] summary` 日志里的 `handshake_timeouts`。
@@ -649,7 +649,7 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 
 ### P1-1 ~ P1-4 · battle 直连面（2026-11-19）
 
-**状态：已落码，未编译、未运行，待 Codex 验证。** battle 节点的客户端直连（`cpp/nodes/battle/client/battle_client_edge.cpp`，
+**状态：已落码，未编译、未运行，待 Gemini 验证。** battle 节点的客户端直连（`cpp/nodes/battle/client/battle_client_edge.cpp`，
 设计见 [turn-based-battle-server.md](turn-based-battle-server.md) D27）同样对公网开放。原来它在连接回调里判 `BattleMaxConnections`，
 超限 `forceClose`（建完 `TcpConnection` 再关、走 FIN、留 TIME_WAIT），没有新建速率闸，也没有连接类指标。现在与 gate 同一套：
 
@@ -718,7 +718,7 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 (2026-09-29 更正:前置条件在 external 形态下已具备、podip 下不具备,见 §4.2.1。)
 
 **状态:gate 2026-11-19 落码;2026-11-20 纯逻辑挪进 core 的 `accept_admission.h`,battle 直连接上同一份,并加了「只限公网来源」。
-都未编译、未运行,待 Codex 验证。**
+都未编译、未运行,待 Gemini 验证。**
 
 前面几道都是全局的:持续超限时,合法新连接与攻击连接抢同一个速率桶,谁来得多谁占得多。这一道按来源前缀给每个来源一个小令牌桶,
 单个来源最多拿到全局速率的一成。做法照 §7 的约束:

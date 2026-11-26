@@ -1,6 +1,6 @@
 # 节点间 muduo RPC:每次调用的回调、延后回包与完整的完成语义(RpcChannel 改造)
 
-> 状态:**批 1–5 已实施,未编译,待 Codex 验证**(2026-10-15,Claude)。用户授权实施到第 5 批,升级口径选「同 zone 停服一次切换」;
+> 状态:**批 1–5 已实施,未编译,待 Gemini 验证**(2026-10-15,Claude)。用户授权实施到第 5 批,升级口径选「同 zone 停服一次切换」;
 > 实施与本文的偏离、未做项与验证步骤见 §18。批 6(玩家回包死链)与 gRPC 每次调用回调见 §19(2026-10-15 续,未编译)。**批 7 与剩余调用点迁移已实施,见 §20**(2026-10-16;两步都已 regen,`message_id.txt` 共 8 条墓碑;生成器测试随 Codex 后续验证通过;C++ 第一步随 Codex 整组串行构建编过,第二步之后的整解构建被无关的 `world.cpp` 缺 include 阻断;C++ 专项测试都未跑,见 §20.7);任务来源是交接 `docs/handoff/rpc-channel-batch7-handoff-20261015.md`（已清理，见 `ccf2840b2`）。
 > 本文不引用此前任何会话的方案为既定结论;`build/rpc-lambda-tools/`(被 .gitignore 忽略的早先尝试)不是本设计的一部分。
 > 事实核对基线:`54c9d775d`(2026-10-15 03:08)。行号以该提交为准,并发会话仍在改 gate 相关文件,动手前须重新核对。
@@ -352,7 +352,7 @@ enableRetry 重连建出的 channel 一出生就是关闭态(`RpcClient::CloseCh
 发起的 `CallMethod` 以 kNotSent 经 queueInLoop 投递,若排在拆除之后执行,回调里只能做 weak / try_get 查找(契约 (b) 本来就要求),不得依赖 ECS 与日志;
 Finalize 之后 acceptor 仍在监听,新连入的入站连接会建出未关闭的 channel(今天 scene 侧只经它单向推送)——这是既有问题,只登记。
 
-**2026-10-17 补:拆除前钩子(R7;已落码,未编译、未测试,待 Codex 验证)**。阶段 1 多了一个业务钩子 `Node::SetBeforeTeardown(BeforeTeardownFn)`(`node.h`,`using BeforeTeardownFn = std::function<void(Node &)>`)。
+**2026-10-17 补:拆除前钩子(R7;已落码,未编译、未测试,待 Gemini 验证)**。阶段 1 多了一个业务钩子 `Node::SetBeforeTeardown(BeforeTeardownFn)`(`node.h`,`using BeforeTeardownFn = std::function<void(Node &)>`)。
 `FinalizeTeardownInLoop` 在 `kafkaManager.Shutdown()`(producer 最后一次有界 flush)之后、`tlsRedis.Shutdown()` 之前调它,用成员 `beforeTeardownRan_` 保证每个 Node **只调一次**:
 gRPC 本地延后完成未排空(`GrpcClientLocalCompletionsDrained()` 为假)时本函数会 `queueInLoop` 重入自身让一轮,重入时不再调钩子(`kafkaManager.Shutdown()` 重入只返回缓存结果,不再 flush)。
 普通停机、身份冲突停机(冲突 drain 结束后走 `Shutdown()`)与 `~Node` 的兜底排空都经过 `FinalizeTeardownInLoop`,三条路都会调到它。调用时刻 Redis、ECS、节点注册表都还没拆,异步日志还在写文件;
@@ -384,7 +384,7 @@ lambda 捕获 `{sessionId, incarnation, clientRequestId, innerMessageId}`:
 - 显式映射函数 `RpcStatus → tip` 一处定义;"调用结果 → 客户端"的落点与 gRPC 的 `gate_rpc_reply_bridge` 放在一起,保持 gate 唯一一份事实源。
 - scene 侧仍回填 `session_id` 与 `message_content.id`(后者是客户端协议;前者在过渡期服务尚未迁移的旧 gate,收口后可删)。
 
-量级(推断,须 Codex 微基准确认):请求类消息每次 CallMethod 约 0.4–0.7µs(InflightIndex 节点 + 堆项 + std::function;libstdc++ SBO 仅 16B 会多一次分配),
+量级(推断,须 Gemini 微基准确认):请求类消息每次 CallMethod 约 0.4–0.7µs(InflightIndex 节点 + 堆项 + std::function;libstdc++ SBO 仅 16B 会多一次分配),
 2–4 万次/s/gate 约占单核 1–3%,小于今天一次往返的开销一个数量级;移动类走单向,零新增。
 
 ### 8.2 断线代发 ExitGame、PlayerEnterGameNode
@@ -554,8 +554,8 @@ C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed �
 |---|---|---|---|
 | 1 清理 | §9.3 的拒绝与死代码删除;`IsDispatchableMessageId` 修空槽崩溃(+ `scene_handler` 的 `gPlayerService.find` 判空);删 `game_rpc.proto` 与 core.vcxproj 三个失效 None 项;过期 `player_currency_response_handler.*`;孤儿 `route_message_response_handler.cpp`;回归测试 | Route 一族不再转发;空槽消息号回 RPC_ERROR 不再崩 | ~20 |
 | 2 改名 | `GameChannel` → `RpcChannel`、文件改名、方法改名;core 构建三件套;两个测试;注释(gate_security.h、SECURITY.md、两处守护段);AGENTS §11.7 / copilot-instructions 的引用名(需同意) | 无 | ~14 |
-| 3 核心(R1) | rpc_message.proto(+ 8 份生成物由 Codex 生成);`RpcChannel`(CallMethod / SendRequest / 超时 / OnDisconnect / Close / DoneClosure / 必回 / RPC_ERROR 回显);新增 `rpc_status.h`、`rpc_done_callback.h`、`rpc_channel_stats.{h,cpp}`;`InflightIndex` 上移 + gate 别名;`RpcClient` 每连接 channel;`RpcServer` weak 绑定;`RpcSession` weak channel;`node.{h,cpp}` 两段式 Finalize + `CloseAllRpcChannels`;构建三件套;三个新测试 TU + 夹具裸指针修正;文档更正注 | 服务端必回、回显 id;调用方不变 | ~30 |
-| 4 生成器 tag | `service_id_gen.go` + tmpl + golden 测试;3 份 metadata 头由 Codex 生成 | 无 | ~5 |
+| 3 核心(R1) | rpc_message.proto(+ 8 份生成物由 Gemini 生成);`RpcChannel`(CallMethod / SendRequest / 超时 / OnDisconnect / Close / DoneClosure / 必回 / RPC_ERROR 回显);新增 `rpc_status.h`、`rpc_done_callback.h`、`rpc_channel_stats.{h,cpp}`;`InflightIndex` 上移 + gate 别名;`RpcClient` 每连接 channel;`RpcServer` weak 绑定;`RpcSession` weak channel;`node.{h,cpp}` 两段式 Finalize + `CloseAllRpcChannels`;构建三件套;三个新测试 TU + 夹具裸指针修正;文档更正注 | 服务端必回、回显 id;调用方不变 | ~30 |
+| 4 生成器 tag | `service_id_gen.go` + tmpl + golden 测试;3 份 metadata 头由 Gemini 生成 | 无 | ~5 |
 | 5 切换(R2) | §8 全部调用点;gate 回包桥与 `SendEnvelope` / `FindLiveSession` 导出;握手钩子;删 `CallRemoteMethod` 与全局回包表;生成器停产 muduo 回包(§9.2);删生成回包文件;`InitReply` 义务;三节点 vcxproj / filters / CMakeLists;AGENTS §8 / copilot-instructions(需同意);stress_summarize 汇总段 | 调用方切到 id≠0 | ~45(多为删除) |
 | 6 玩家回包死链 | §9.2 末条 | 无 | ~30(多为删除) |
 | 7 收口(R3) | 删 id=0 旧规则分支;`RpcMethodMeta.handler` / `XxxImpl`;proto 方法删除(待墓碑与用户拍板)。**已实施,见 §20**(id=0 分支无可删;另含墓碑生成器、四个无发起端方法退役与剩余调用点迁移) | id=0 永不回 | ~40 |
@@ -588,10 +588,10 @@ C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed �
   `[C.handler, B.cont(kOk), A.done(kOk)]`、A 的响应同时带 C 的载荷与 B 写的字段、A 捕获的上下文不变。变体:B→C 超时 / C 断连时 B 仍 Run 并填业务码;B 忘了 Run 时 A 立即 kReplyDropped。
   拆除顺序:先 reset 两个 RpcClient、PumpLoop、等两端 DOWN,再在 loop 线程销毁两个 RpcServer。所有等待只用 `wait_for(5s)` 作活性上限,不拿时间窗当判据(AGENTS §11.4)。
 - 夹具裸成员 `EventLoop* loop_` 同批改为 `std::optional<std::reference_wrapper<EventLoop>>`(裸指针门禁覆盖测试工程,`Directory.Build.targets:50-53`)。
-- 微基准 `DISABLED_RpcChannelBench.*`(回环往返 1e5 次 ns/op、表开销),由 Codex 用 `--gtest_also_run_disabled_tests` 在改动前后各跑一次出对比表,Linux 镜像另跑一份。
+- 微基准 `DISABLED_RpcChannelBench.*`(回环往返 1e5 次 ns/op、表开销),由 Gemini 用 `--gtest_also_run_disabled_tests` 在改动前后各跑一次出对比表,Linux 镜像另跑一份。
   按 AGENTS §6,没有对比表不声称"无性能回退";现有压测机器人不移动,测不到逐条消息开销。
 
-## 16. 给 Codex 的验证步骤(每批交付时按批裁剪)
+## 16. 给 Gemini 的验证步骤(每批交付时按批裁剪)
 
 工作目录 `D:\luyuan\xuanming-server-mmo-cpp`,PowerShell,证据放仓库外 `$ev = "$env:TEMP\codex-rpc-channel-<ts>"`。
 
@@ -643,7 +643,7 @@ C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed �
 6. **`SendRequest` 不看 closed**:关机阶段 0 之后单向推送仍可发出(拆除期间给客户端的推送不受影响);关闭只拒新的 `CallMethod`。
 7. **PlayerEnterGameNode**:仍是单向;`SendRequest` 返回 false(本地没发出)时按 `kNotConnected` 处理,修掉以前被当成 `kSent` 清掉欠账的假成功。
 8. **可观测性收尾**:`stress_summarize.ps1` 新增「RPC0 call outcomes」段,扫 `binogsp_nodes` 与 `runogsp_nodes` 下 gate / scene 日志的最后一行
-   `[RpcChannel] summary`;微基准只写了用例,数据待 Codex。
+   `[RpcChannel] summary`;微基准只写了用例,数据待 Gemini。
 
 ### 18.2 已知行为变化(上线前需知)
 
@@ -677,7 +677,7 @@ C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed �
 - 规范与文档:`AGENTS.md` §8 / §11.7、`.github/copilot-instructions.md`、`docs/design/battle-transport-decision.md` §3.2 更正注、`docs/README.md`、
   `tools/scripts/gen_docs_index.py`;Java 仓 `PARITY.md` 两行。
 
-### 18.4 交给 Codex 的验证顺序(在 §16 的基础上)
+### 18.4 交给 Gemini 的验证顺序(在 §16 的基础上)
 
 1. 生成器源码已改:先 `proto-gen-build`,再 `proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`(AGENTS §4.1)。
    通过标准:`rpc_message.pb.h` 有 `kIdFieldNumber = 6` 与 `HANDLER_FAILED` / `REPLY_DROPPED`;`scene` / `gate_service` / `scene_admin` 三个 metadata 头末尾共多 24 个
@@ -860,13 +860,13 @@ WARN 的条数和 message_id.txt 的 diff(只改行、只追加、不删行)。
 7. Java:主仓提交本批后在 Java 仓重跑 ContractSync(当前 Java 工作区已同步了带墓碑的副本,但 `SOURCE.properties` 记的提交与内容对不上),
    再 `./mvnw -B -pl game-proto -am test`。
 
-**并发提醒**:其他 worktree(`.claude/worktrees/*`、Codex 工作树)里的生成器早于墓碑。从这些树合入时只带 proto 源码与手写代码,
+**并发提醒**:其他 worktree(`.claude/worktrees/*`、Gemini 工作树)里的生成器早于墓碑。从这些树合入时只带 proto 源码与手写代码,
 不带 message_id.txt 与生成物,统一在主工作区用新生成器 regen;合入后确认 message_id.txt 没有删行、`reserved:` 行没有变回活行。
 
 **双版本(AGENTS §12)**:墓碑格式与 Route 一族删除涉及客户端契约文件(message_id.txt 与 proto),Java 侧读墓碑已在 `15058ad` 完成,ContractSync 待主仓提交后重跑;
 四个方法的退役、RpcSession / 握手 / dev_tools 都是 C++ 服务端内部,Java 不适用。Java 仓 `PARITY.md` 已登记。
 
-## 21. 链路心跳:检测半开连接(2026-11-05 落码;11-08 Codex 编译通过、17 个单测全过;冒烟未跑,见 §21.11)
+## 21. 链路心跳:检测半开连接(2026-11-05 落码;11-08 Gemini 编译通过、17 个单测全过;冒烟未跑,见 §21.11)
 
 §8.3 的握手只在建连时确认一次对端身份,之后链路是否还活着没有人检测。本节补上传输层的存活检测。它纯属传输层,不触发任何业务逻辑(§8.3「重连为什么不需要业务逻辑」)。
 
@@ -999,7 +999,7 @@ Java 侧不需要改代码,只剩一项待做:同步 `game-proto` 里 `rpc_messa
 验证步骤见 `docs/PROGRESS.md` 2026-11-05「节点链路应用层心跳」条目:proto 生成 → 串行编译 → 单测 → 冒烟,另有可选的进程挂起演练。截至 2026-11-10:
 
 - **编译**:已通过。2026-11-08 Codex 主仓整解 `msbuild game.sln /m:1` exit 0,所在 HEAD `c17837c9c` 含本节全部代码;gate、scene、battle 的 Linux Debug 镜像 11-06 已构建通过。
-- **单测**:已通过。2026-11-08 Codex 在快照 `f6fddb466` 上全量运行 `rpc_controller_test`,328 PASS、0 FAIL,另有 2 个既有的 DISABLED 基准;本节 17 个用例全部 OK。原始日志在 `build/verification/muduo-minimal-linux-interop-20261022/resume-20261106T025137191Z/windows-tests-current/rpc_controller_test.stdout.log`。该快照与 main `e0790ad40` 的心跳相关源码逐文件零差异。
+- **单测**:已通过。2026-11-08 Gemini 在快照 `f6fddb466` 上全量运行 `rpc_controller_test`,328 PASS、0 FAIL,另有 2 个既有的 DISABLED 基准;本节 17 个用例全部 OK。原始日志在 `build/verification/muduo-minimal-linux-interop-20261022/resume-20261106T025137191Z/windows-tests-current/rpc_controller_test.stdout.log`。该快照与 main `e0790ad40` 的心跳相关源码逐文件零差异。
 - **未做**:冒烟(`[RpcChannel] summary` 的 `link_idle_closed` / `link_idle_deferred` 为 0)与可选的进程挂起演练,即上述条目的第 4、5 步。
 
 ## 附录 A:主要事实证据
