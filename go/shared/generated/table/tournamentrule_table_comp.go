@@ -137,6 +137,10 @@ type TournamentRuleLeyline_ban_enabledComp struct {
     Value bool
 }
 
+type TournamentRuleSkill_ban_slots_per_teamComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -264,5 +268,9 @@ func MakeTournamentRuleThird_place_match_enabledComp(row *pb.TournamentRuleTable
 
 func MakeTournamentRuleLeyline_ban_enabledComp(row *pb.TournamentRuleTable) TournamentRuleLeyline_ban_enabledComp {
     return TournamentRuleLeyline_ban_enabledComp{Value: row.LeylineBanEnabled}
+}
+
+func MakeTournamentRuleSkill_ban_slots_per_teamComp(row *pb.TournamentRuleTable) TournamentRuleSkill_ban_slots_per_teamComp {
+    return TournamentRuleSkill_ban_slots_per_teamComp{Value: row.SkillBanSlotsPerTeam}
 }
 

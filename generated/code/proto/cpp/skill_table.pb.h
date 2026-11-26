@@ -953,6 +953,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     kRarityTierFieldNumber = 60,
     kSecondaryTargetPolicyFieldNumber = 61,
     kExclusiveGroupFieldNumber = 62,
+    kBanPoolCategoryFieldNumber = 63,
   };
   // repeated uint32 skill_type = 2;
   [[nodiscard]] int skill_type_size()
@@ -1682,11 +1683,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
   void _internal_set_exclusive_group(::uint32_t value);
 
   public:
+  // uint32 ban_pool_category = 63;
+  void clear_ban_pool_category() ;
+  [[nodiscard]] ::uint32_t ban_pool_category() const;
+  void set_ban_pool_category(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ban_pool_category() const;
+  void _internal_set_ban_pool_category(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 62,
+      ::google::protobuf::internal::TcParseTable<5, 63,
                           3, 138,
                           9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1781,6 +1792,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     ::uint32_t rarity_tier_;
     ::uint32_t secondary_target_policy_;
     ::uint32_t exclusive_group_;
+    ::uint32_t ban_pool_category_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3973,6 +3985,30 @@ inline ::uint32_t SkillTable::_internal_exclusive_group() const {
 inline void SkillTable::_internal_set_exclusive_group(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exclusive_group_ = value;
+}
+
+// uint32 ban_pool_category = 63;
+inline void SkillTable::clear_ban_pool_category() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ban_pool_category_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x40000000U);
+}
+inline ::uint32_t SkillTable::ban_pool_category() const {
+  // @@protoc_insertion_point(field_get:SkillTable.ban_pool_category)
+  return _internal_ban_pool_category();
+}
+inline void SkillTable::set_ban_pool_category(::uint32_t value) {
+  _internal_set_ban_pool_category(value);
+  SetHasBit(_impl_._has_bits_[1], 0x40000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.ban_pool_category)
+}
+inline ::uint32_t SkillTable::_internal_ban_pool_category() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ban_pool_category_;
+}
+inline void SkillTable::_internal_set_ban_pool_category(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ban_pool_category_ = value;
 }
 
 // repeated .Skillrequired_item required_item = 21;

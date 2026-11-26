@@ -130,6 +130,7 @@ static void TournamentRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& R
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("salute_item_id"), TEXT("salute_item_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("salute_item_count"), TEXT("salute_item_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("prediction_reward_min_hits"), TEXT("prediction_reward_min_hits"), RowIndex, 2147483647.0, TEXT("uint32"));
+	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("skill_ban_slots_per_team"), TEXT("skill_ban_slots_per_team"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UTournamentRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

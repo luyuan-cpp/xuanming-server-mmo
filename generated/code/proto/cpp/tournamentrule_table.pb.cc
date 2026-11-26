@@ -48,11 +48,11 @@ constexpr TournamentRuleTable::ParseTableT_ TournamentRuleTable::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      31, 248,  // max_field_number, fast_idx_mask
+      32, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      2147483648,  // skipmap
+      0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      31,  // num_field_entries
+      32,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -252,10 +252,12 @@ constexpr TournamentRuleTable::ParseTableT_ TournamentRuleTable::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_.third_place_match_enabled_), _Internal::kHasBitsOffset + 29, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool leyline_ban_enabled = 31;
       {PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_.leyline_ban_enabled_), _Internal::kHasBitsOffset + 30, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 skill_ban_slots_per_team = 32;
+      {PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_.skill_ban_slots_per_team_), _Internal::kHasBitsOffset + 31, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\23\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\4\0\0\0\0\0\0\0\0\0\0\0"
+      "\23\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "TournamentRuleTable"
       "desc"
     }},
@@ -299,7 +301,8 @@ inline constexpr TournamentRuleTable::Impl_::Impl_(
         prediction_reward_min_hits_{0u},
         prediction_enabled_{false},
         third_place_match_enabled_{false},
-        leyline_ban_enabled_{false} {}
+        leyline_ban_enabled_{false},
+        skill_ban_slots_per_team_{0u} {}
 
 template <typename>
 constexpr TournamentRuleTable::TournamentRuleTable(::_pbi::ConstantInitialized,
@@ -553,7 +556,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_._has_bits_),
-        34, // hasbit index offset
+        35, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.rule_version_),
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.enabled_),
@@ -585,6 +588,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.prediction_reward_min_hits_),
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.third_place_match_enabled_),
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.leyline_ban_enabled_),
+        PROTOBUF_FIELD_OFFSET(::TournamentRuleTable, _impl_.skill_ban_slots_per_team_),
         1,
         2,
         18,
@@ -616,6 +620,7 @@ const ::uint32_t
         27,
         29,
         30,
+        31,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TournamentRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -626,7 +631,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::TournamentRuleTable)},
-        {65, sizeof(::TournamentRuleTableData)},
+        {67, sizeof(::TournamentRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -635,7 +640,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_tournamentrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\032tournamentrule_table.proto\"\337\006\n\023Tournam"
+    "\n\032tournamentrule_table.proto\"\201\007\n\023Tournam"
     "entRuleTable\022\n\n\002id\030\001 \001(\r\022\024\n\014rule_version"
     "\030\002 \001(\r\022\017\n\007enabled\030\003 \001(\010\022\030\n\020battle_config"
     "_id\030\004 \001(\r\022\030\n\020battle_team_size\030\005 \001(\r\022\027\n\017r"
@@ -657,16 +662,17 @@ const char descriptor_table_protodef_tournamentrule_5ftable_2eproto[] ABSL_ATTRI
     "\030\033 \001(\010\022\032\n\022prediction_enabled\030\034 \001(\010\022\"\n\032pr"
     "ediction_reward_min_hits\030\035 \001(\r\022!\n\031third_"
     "place_match_enabled\030\036 \001(\010\022\033\n\023leyline_ban"
-    "_enabled\030\037 \001(\010\"=\n\027TournamentRuleTableDat"
-    "a\022\"\n\004data\030\001 \003(\0132\024.TournamentRuleTableBE\n"
-    "\016com.game.tableB\035TournamentRuleTableOute"
-    "rClassP\001Z\022generated/pb/tableb\006proto3"
+    "_enabled\030\037 \001(\010\022 \n\030skill_ban_slots_per_te"
+    "am\030  \001(\r\"=\n\027TournamentRuleTableData\022\"\n\004d"
+    "ata\030\001 \003(\0132\024.TournamentRuleTableBE\n\016com.g"
+    "ame.tableB\035TournamentRuleTableOuterClass"
+    "P\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_tournamentrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_tournamentrule_5ftable_2eproto = {
     false,
     false,
-    1036,
+    1070,
     descriptor_table_protodef_tournamentrule_5ftable_2eproto,
     "tournamentrule_table.proto",
     &descriptor_table_tournamentrule_5ftable_2eproto_once,
@@ -716,9 +722,9 @@ TournamentRuleTable::TournamentRuleTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, leyline_ban_enabled_) -
+           offsetof(Impl_, skill_ban_slots_per_team_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::leyline_ban_enabled_));
+               sizeof(Impl_::skill_ban_slots_per_team_));
 
   // @@protoc_insertion_point(copy_constructor:TournamentRuleTable)
 }
@@ -733,9 +739,9 @@ inline void TournamentRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, leyline_ban_enabled_) -
+           offsetof(Impl_, skill_ban_slots_per_team_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::leyline_ban_enabled_));
+               sizeof(Impl_::skill_ban_slots_per_team_));
 }
 TournamentRuleTable::~TournamentRuleTable() {
   // @@protoc_insertion_point(destructor:TournamentRuleTable)
@@ -804,10 +810,10 @@ PROTOBUF_NOINLINE void TournamentRuleTable::Clear() {
         reinterpret_cast<char*>(&_impl_.intermission_seconds_) -
         reinterpret_cast<char*>(&_impl_.qualifier_draw_points_)) + sizeof(_impl_.intermission_seconds_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
     ::memset(&_impl_.salute_gold_amount_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.leyline_ban_enabled_) -
-        reinterpret_cast<char*>(&_impl_.salute_gold_amount_)) + sizeof(_impl_.leyline_ban_enabled_));
+        reinterpret_cast<char*>(&_impl_.skill_ban_slots_per_team_) -
+        reinterpret_cast<char*>(&_impl_.salute_gold_amount_)) + sizeof(_impl_.skill_ban_slots_per_team_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1112,6 +1118,15 @@ PROTOBUF_NOINLINE void TournamentRuleTable::Clear() {
     }
   }
 
+  // uint32 skill_ban_slots_per_team = 32;
+  if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+    if (this_._internal_skill_ban_slots_per_team() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          32, this_._internal_skill_ban_slots_per_team(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1307,7 +1322,7 @@ PROTOBUF_NOINLINE void TournamentRuleTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
     // uint32 salute_gold_amount = 24;
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_salute_gold_amount() != 0) {
@@ -1352,6 +1367,13 @@ PROTOBUF_NOINLINE void TournamentRuleTable::Clear() {
     if (CheckHasBit(cached_has_bits, 0x40000000U)) {
       if (this_._internal_leyline_ban_enabled() != 0) {
         total_size += 3;
+      }
+    }
+    // uint32 skill_ban_slots_per_team = 32;
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (this_._internal_skill_ban_slots_per_team() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_skill_ban_slots_per_team());
       }
     }
   }
@@ -1502,7 +1524,7 @@ void TournamentRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x7f000000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
     if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_salute_gold_amount() != 0) {
         _this->_impl_.salute_gold_amount_ = from._impl_.salute_gold_amount_;
@@ -1538,6 +1560,11 @@ void TournamentRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.leyline_ban_enabled_ = from._impl_.leyline_ban_enabled_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (from._internal_skill_ban_slots_per_team() != 0) {
+        _this->_impl_.skill_ban_slots_per_team_ = from._impl_.skill_ban_slots_per_team_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1560,8 +1587,8 @@ void TournamentRuleTable::InternalSwap(TournamentRuleTable* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_.leyline_ban_enabled_)
-      + sizeof(TournamentRuleTable::_impl_.leyline_ban_enabled_)
+      PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_.skill_ban_slots_per_team_)
+      + sizeof(TournamentRuleTable::_impl_.skill_ban_slots_per_team_)
       - PROTOBUF_FIELD_OFFSET(TournamentRuleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

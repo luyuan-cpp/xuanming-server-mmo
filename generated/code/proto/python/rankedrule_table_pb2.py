@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16rankedrule_table.proto\"\x9c\x05\n\x0fRankedRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x14\n\x0crule_version\x18\x02 \x01(\r\x12\x18\n\x10\x62\x61ttle_config_id\x18\x03 \x01(\r\x12\x1a\n\x12reference_class_id\x18\x04 \x01(\r\x12\x19\n\x11\x63ompetitive_level\x18\x05 \x01(\r\x12#\n\x1b\x64\x65\x66\x61ult_character_preset_id\x18\x06 \x01(\r\x12\x1d\n\x15\x64\x65\x66\x61ult_pet_preset_id\x18\x07 \x01(\r\x12\x1c\n\x14season_duration_days\x18\x08 \x01(\r\x12\x1b\n\x13wait_prompt_seconds\x18\t \x01(\r\x12\x1c\n\x14spread_tier1_seconds\x18\n \x01(\r\x12\x1b\n\x13spread_tier1_points\x18\x0b \x01(\r\x12\x1c\n\x14spread_tier2_seconds\x18\x0c \x01(\r\x12\x1b\n\x13spread_tier2_points\x18\r \x01(\r\x12\x1b\n\x13spread_tier3_points\x18\x0e \x01(\r\x12 \n\x18milestone_avatar_matches\x18\x0f \x01(\r\x12\x1e\n\x16milestone_card_matches\x18\x10 \x01(\r\x12\"\n\x1amilestone_talisman_matches\x18\x11 \x01(\r\x12\x1b\n\x13tier_qingfeng_centi\x18\x12 \x01(\r\x12\x1b\n\x13tier_yunzhang_centi\x18\x13 \x01(\r\x12\x1a\n\x12tier_tianshu_centi\x18\x14 \x01(\r\x12\x1b\n\x13tier_wushuang_centi\x18\x15 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x16 \x01(\t\x12\x1d\n\x15milestone_win_matches\x18\x17 \x01(\r\"5\n\x13RankedRuleTableData\x12\x1e\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x10.RankedRuleTableBA\n\x0e\x63om.game.tableB\x19RankedRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16rankedrule_table.proto\"\xe2\x05\n\x0fRankedRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x14\n\x0crule_version\x18\x02 \x01(\r\x12\x18\n\x10\x62\x61ttle_config_id\x18\x03 \x01(\r\x12\x1a\n\x12reference_class_id\x18\x04 \x01(\r\x12\x19\n\x11\x63ompetitive_level\x18\x05 \x01(\r\x12#\n\x1b\x64\x65\x66\x61ult_character_preset_id\x18\x06 \x01(\r\x12\x1d\n\x15\x64\x65\x66\x61ult_pet_preset_id\x18\x07 \x01(\r\x12\x1c\n\x14season_duration_days\x18\x08 \x01(\r\x12\x1b\n\x13wait_prompt_seconds\x18\t \x01(\r\x12\x1c\n\x14spread_tier1_seconds\x18\n \x01(\r\x12\x1b\n\x13spread_tier1_points\x18\x0b \x01(\r\x12\x1c\n\x14spread_tier2_seconds\x18\x0c \x01(\r\x12\x1b\n\x13spread_tier2_points\x18\r \x01(\r\x12\x1b\n\x13spread_tier3_points\x18\x0e \x01(\r\x12 \n\x18milestone_avatar_matches\x18\x0f \x01(\r\x12\x1e\n\x16milestone_card_matches\x18\x10 \x01(\r\x12\"\n\x1amilestone_talisman_matches\x18\x11 \x01(\r\x12\x1b\n\x13tier_qingfeng_centi\x18\x12 \x01(\r\x12\x1b\n\x13tier_yunzhang_centi\x18\x13 \x01(\r\x12\x1a\n\x12tier_tianshu_centi\x18\x14 \x01(\r\x12\x1b\n\x13tier_wushuang_centi\x18\x15 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x16 \x01(\t\x12\x1d\n\x15milestone_win_matches\x18\x17 \x01(\r\x12 \n\x18skill_ban_slots_per_team\x18\x18 \x01(\r\x12\"\n\x1askill_ban_min_rating_centi\x18\x19 \x01(\r\"5\n\x13RankedRuleTableData\x12\x1e\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x10.RankedRuleTableBA\n\x0e\x63om.game.tableB\x19RankedRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\031RankedRuleTableOuterClassP\001Z\022generated/pb/table'
   _globals['_RANKEDRULETABLE']._serialized_start=27
-  _globals['_RANKEDRULETABLE']._serialized_end=695
-  _globals['_RANKEDRULETABLEDATA']._serialized_start=697
-  _globals['_RANKEDRULETABLEDATA']._serialized_end=750
+  _globals['_RANKEDRULETABLE']._serialized_end=765
+  _globals['_RANKEDRULETABLEDATA']._serialized_start=767
+  _globals['_RANKEDRULETABLEDATA']._serialized_end=820
 # @@protoc_insertion_point(module_scope)

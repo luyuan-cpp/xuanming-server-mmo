@@ -82,6 +82,9 @@ message BattleStateS2C {
   repeated BattlePrepPetOption self_standby_pets = 36; // 论剑 V5 临阵唤灵本人剩余备选灵宠（仅本人可见，对手与观众清空）
   uint32 self_summon_pet_remaining = 37;               // 论剑 V5 临阵唤灵本人剩余可用次数（0/1，仅本人可见，对手与观众清空）
   uint32 summon_pet_unlock_round = 38;                 // 论剑 V5 临阵唤灵解锁回合号（正式自养竞技为 2，其余模式为 0）
+  repeated uint32 banned_skill_ids = 39;               // 本局最终生效的全场双边共同禁用技能（升序去重，0..6 个；观战/重连/回放全可见）
+  repeated uint32 team_a_banned_skill_ids = 40;        // A 队（team_index=0）最终生效的禁用技能（0..3 个）
+  repeated uint32 team_b_banned_skill_ids = 41;        // B 队（team_index=1）最终生效的禁用技能（0..3 个）
 }
 
 message BattleStartS2C {
@@ -226,12 +229,14 @@ message SurrenderVoteS2C {
   BattleSurrenderVoteState vote_state = 2;
 }
 
-// 论剑 V3 战前 15 秒明牌变阵提交（参战者；经战斗直连发往 battle 节点，仅战前变阵期有效）。
+// 论剑 V3 战前明牌变阵提交（参战者；经战斗直连发往 battle 节点，仅战前变阵期有效）。
 message UpdateBattlePrepRequest {
   uint64 battle_id = 1;
   uint32 selected_seal_id = 2; // 0 = 保持当前赛季印不变
   uint64 selected_pet_id = 3;  // 0 = 保持当前首发灵宠不变
   bool ready = 4;              // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
+  bool update_banned_skills = 5;        // true = 用下方 banned_skill_ids 原子替换本人禁用提名（允许空列表=清空）；false = 保持不变
+  repeated uint32 banned_skill_ids = 6; // 本人有序禁招提名列表（0..3，去重，须全部在白名单内）
 }
 
 message UpdateBattlePrepResponse {

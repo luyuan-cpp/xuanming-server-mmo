@@ -45,7 +45,7 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\032tournamentrule_table.proto\"\337\006\n\023Tournam" +
+      "\n\032tournamentrule_table.proto\"\201\007\n\023Tournam" +
       "entRuleTable\022\n\n\002id\030\001 \001(\r\022\024\n\014rule_version" +
       "\030\002 \001(\r\022\017\n\007enabled\030\003 \001(\010\022\030\n\020battle_config" +
       "_id\030\004 \001(\r\022\030\n\020battle_team_size\030\005 \001(\r\022\027\n\017r" +
@@ -67,10 +67,11 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
       "\030\033 \001(\010\022\032\n\022prediction_enabled\030\034 \001(\010\022\"\n\032pr" +
       "ediction_reward_min_hits\030\035 \001(\r\022!\n\031third_" +
       "place_match_enabled\030\036 \001(\010\022\033\n\023leyline_ban" +
-      "_enabled\030\037 \001(\010\"=\n\027TournamentRuleTableDat" +
-      "a\022\"\n\004data\030\001 \003(\0132\024.TournamentRuleTableBE\n" +
-      "\016com.game.tableB\035TournamentRuleTableOute" +
-      "rClassP\001Z\022generated/pb/tableb\006proto3"
+      "_enabled\030\037 \001(\010\022 \n\030skill_ban_slots_per_te" +
+      "am\030  \001(\r\"=\n\027TournamentRuleTableData\022\"\n\004d" +
+      "ata\030\001 \003(\0132\024.TournamentRuleTableBE\n\016com.g" +
+      "ame.tableB\035TournamentRuleTableOuterClass" +
+      "P\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -81,7 +82,7 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
     internal_static_TournamentRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_TournamentRuleTable_descriptor,
-        new java.lang.String[] { "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", });
+        new java.lang.String[] { "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", "SkillBanSlotsPerTeam", });
     internal_static_TournamentRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_TournamentRuleTableData_fieldAccessorTable = new

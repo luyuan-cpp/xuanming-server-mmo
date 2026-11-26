@@ -203,4 +203,10 @@ public final class TournamentRuleTableComp {
         }
     }
 
+    public record Skill_ban_slots_per_team(int value) {
+        public static Skill_ban_slots_per_team from(TournamentRuleTable row) {
+            return new Skill_ban_slots_per_team(row.getSkillBanSlotsPerTeam());
+        }
+    }
+
 }

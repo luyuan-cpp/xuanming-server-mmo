@@ -155,4 +155,16 @@ public final class RankedRuleTableComp {
         }
     }
 
+    public record Skill_ban_slots_per_team(int value) {
+        public static Skill_ban_slots_per_team from(RankedRuleTable row) {
+            return new Skill_ban_slots_per_team(row.getSkillBanSlotsPerTeam());
+        }
+    }
+
+    public record Skill_ban_min_rating_centi(int value) {
+        public static Skill_ban_min_rating_centi from(RankedRuleTable row) {
+            return new Skill_ban_min_rating_centi(row.getSkillBanMinRatingCenti());
+        }
+    }
+
 }

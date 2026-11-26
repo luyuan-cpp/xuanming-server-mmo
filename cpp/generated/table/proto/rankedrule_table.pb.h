@@ -251,6 +251,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedRuleTable final : public ::go
     kTierTianshuCentiFieldNumber = 20,
     kTierWushuangCentiFieldNumber = 21,
     kMilestoneWinMatchesFieldNumber = 23,
+    kSkillBanSlotsPerTeamFieldNumber = 24,
+    kSkillBanMinRatingCentiFieldNumber = 25,
   };
   // string desc = 22;
   void clear_desc() ;
@@ -487,12 +489,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedRuleTable final : public ::go
   void _internal_set_milestone_win_matches(::uint32_t value);
 
   public:
+  // uint32 skill_ban_slots_per_team = 24;
+  void clear_skill_ban_slots_per_team() ;
+  [[nodiscard]] ::uint32_t skill_ban_slots_per_team() const;
+  void set_skill_ban_slots_per_team(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_ban_slots_per_team() const;
+  void _internal_set_skill_ban_slots_per_team(::uint32_t value);
+
+  public:
+  // uint32 skill_ban_min_rating_centi = 25;
+  void clear_skill_ban_min_rating_centi() ;
+  [[nodiscard]] ::uint32_t skill_ban_min_rating_centi() const;
+  void set_skill_ban_min_rating_centi(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_ban_min_rating_centi() const;
+  void _internal_set_skill_ban_min_rating_centi(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:RankedRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          0, 44,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          0, 52,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -543,6 +565,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedRuleTable final : public ::go
     ::uint32_t tier_tianshu_centi_;
     ::uint32_t tier_wushuang_centi_;
     ::uint32_t milestone_win_matches_;
+    ::uint32_t skill_ban_slots_per_team_;
+    ::uint32_t skill_ban_min_rating_centi_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1367,6 +1391,54 @@ inline ::uint32_t RankedRuleTable::_internal_milestone_win_matches() const {
 inline void RankedRuleTable::_internal_set_milestone_win_matches(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.milestone_win_matches_ = value;
+}
+
+// uint32 skill_ban_slots_per_team = 24;
+inline void RankedRuleTable::clear_skill_ban_slots_per_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ban_slots_per_team_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t RankedRuleTable::skill_ban_slots_per_team() const {
+  // @@protoc_insertion_point(field_get:RankedRuleTable.skill_ban_slots_per_team)
+  return _internal_skill_ban_slots_per_team();
+}
+inline void RankedRuleTable::set_skill_ban_slots_per_team(::uint32_t value) {
+  _internal_set_skill_ban_slots_per_team(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:RankedRuleTable.skill_ban_slots_per_team)
+}
+inline ::uint32_t RankedRuleTable::_internal_skill_ban_slots_per_team() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_ban_slots_per_team_;
+}
+inline void RankedRuleTable::_internal_set_skill_ban_slots_per_team(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ban_slots_per_team_ = value;
+}
+
+// uint32 skill_ban_min_rating_centi = 25;
+inline void RankedRuleTable::clear_skill_ban_min_rating_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ban_min_rating_centi_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t RankedRuleTable::skill_ban_min_rating_centi() const {
+  // @@protoc_insertion_point(field_get:RankedRuleTable.skill_ban_min_rating_centi)
+  return _internal_skill_ban_min_rating_centi();
+}
+inline void RankedRuleTable::set_skill_ban_min_rating_centi(::uint32_t value) {
+  _internal_set_skill_ban_min_rating_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:RankedRuleTable.skill_ban_min_rating_centi)
+}
+inline ::uint32_t RankedRuleTable::_internal_skill_ban_min_rating_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_ban_min_rating_centi_;
+}
+inline void RankedRuleTable::_internal_set_skill_ban_min_rating_centi(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ban_min_rating_centi_ = value;
 }
 
 // -------------------------------------------------------------------

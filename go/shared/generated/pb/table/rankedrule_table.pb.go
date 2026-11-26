@@ -46,6 +46,8 @@ type RankedRuleTable struct {
 	TierWushuangCenti        uint32                 `protobuf:"varint,21,opt,name=tier_wushuang_centi,json=tierWushuangCenti,proto3" json:"tier_wushuang_centi,omitempty"`
 	Desc                     string                 `protobuf:"bytes,22,opt,name=desc,proto3" json:"desc,omitempty"`
 	MilestoneWinMatches      uint32                 `protobuf:"varint,23,opt,name=milestone_win_matches,json=milestoneWinMatches,proto3" json:"milestone_win_matches,omitempty"`
+	SkillBanSlotsPerTeam     uint32                 `protobuf:"varint,24,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`
+	SkillBanMinRatingCenti   uint32                 `protobuf:"varint,25,opt,name=skill_ban_min_rating_centi,json=skillBanMinRatingCenti,proto3" json:"skill_ban_min_rating_centi,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -241,6 +243,20 @@ func (x *RankedRuleTable) GetMilestoneWinMatches() uint32 {
 	return 0
 }
 
+func (x *RankedRuleTable) GetSkillBanSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillBanSlotsPerTeam
+	}
+	return 0
+}
+
+func (x *RankedRuleTable) GetSkillBanMinRatingCenti() uint32 {
+	if x != nil {
+		return x.SkillBanMinRatingCenti
+	}
+	return 0
+}
+
 type RankedRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*RankedRuleTable     `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -289,7 +305,7 @@ var File_rankedrule_table_proto protoreflect.FileDescriptor
 
 const file_rankedrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x16rankedrule_table.proto\"\xc5\b\n" +
+	"\x16rankedrule_table.proto\"\xb9\t\n" +
 	"\x0fRankedRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12!\n" +
 	"\frule_version\x18\x02 \x01(\rR\vruleVersion\x12(\n" +
@@ -314,7 +330,9 @@ const file_rankedrule_table_proto_rawDesc = "" +
 	"\x12tier_tianshu_centi\x18\x14 \x01(\rR\x10tierTianshuCenti\x12.\n" +
 	"\x13tier_wushuang_centi\x18\x15 \x01(\rR\x11tierWushuangCenti\x12\x12\n" +
 	"\x04desc\x18\x16 \x01(\tR\x04desc\x122\n" +
-	"\x15milestone_win_matches\x18\x17 \x01(\rR\x13milestoneWinMatches\";\n" +
+	"\x15milestone_win_matches\x18\x17 \x01(\rR\x13milestoneWinMatches\x126\n" +
+	"\x18skill_ban_slots_per_team\x18\x18 \x01(\rR\x14skillBanSlotsPerTeam\x12:\n" +
+	"\x1askill_ban_min_rating_centi\x18\x19 \x01(\rR\x16skillBanMinRatingCenti\";\n" +
 	"\x13RankedRuleTableData\x12$\n" +
 	"\x04data\x18\x01 \x03(\v2\x10.RankedRuleTableR\x04dataBA\n" +
 	"\x0ecom.game.tableB\x19RankedRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

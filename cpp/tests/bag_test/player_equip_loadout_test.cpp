@@ -93,8 +93,16 @@ bool ArmItemSegment(uint64_t lo, uint64_t hi)
 {
 	auto &seg = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
 	seg.Reset();
-	seg.Enable();
-	return seg.OnSegmentAllocated(lo, hi);
+	GuidSegmentClient::Options options;
+	options.mixIds = false;
+	options.kindName = "item";
+	options.initialStep = 100000;
+	if (!seg.Enable(options, [](const std::string &, uint32_t) { return true; },
+					[](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; }))
+		return false;
+	seg.Warm();
+	seg.OnResponse(0, lo, hi);
+	return seg.IsReady();
 }
 
 class PlayerEquipLoadoutTest : public ::testing::Test
@@ -207,7 +215,8 @@ protected:
 		db->set_player_id(kPlayerId);
 		db->mutable_equip_loadout_component()->set_unlocked_scheme_count(unlockedCount);
 		auto &persisted = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player_);
-		persisted.Replace(saved, kOwnerEpoch);
+		persisted.Replace(saved);
+		persisted.committed_owner_epoch = kOwnerEpoch;
 	}
 
 	uint64_t CurrentVersion()

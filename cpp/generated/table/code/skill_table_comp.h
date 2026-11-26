@@ -234,6 +234,10 @@ struct SkillExclusive_groupComp {
     uint32_t value;
 };
 
+struct SkillBan_pool_categoryComp {
+    uint32_t value;
+};
+
 struct SkillSkill_typeComp {
     std::span<const uint32_t> values;
 };
@@ -419,6 +423,9 @@ inline SkillSecondary_target_policyComp MakeSkillSecondary_target_policyComp(con
 }
 inline SkillExclusive_groupComp MakeSkillExclusive_groupComp(const SkillTable& row) {
     return { row.exclusive_group() };
+}
+inline SkillBan_pool_categoryComp MakeSkillBan_pool_categoryComp(const SkillTable& row) {
+    return { row.ban_pool_category() };
 }
 inline SkillSkill_typeComp MakeSkillSkill_typeComp(const SkillTable& row) {
     const auto& rf = row.skill_type();

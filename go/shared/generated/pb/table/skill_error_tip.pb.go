@@ -53,6 +53,7 @@ const (
 	SkillError_kSkillLoadoutNotLearned              SkillError = 7025
 	SkillError_kSkillLoadoutSchemeInvalid           SkillError = 7026
 	SkillError_kSkillLoadoutVersionChanged          SkillError = 7027
+	SkillError_kSkillBannedInBattle                 SkillError = 7028
 )
 
 // Enum value maps for SkillError.
@@ -87,6 +88,7 @@ var (
 		7025: "kSkillLoadoutNotLearned",
 		7026: "kSkillLoadoutSchemeInvalid",
 		7027: "kSkillLoadoutVersionChanged",
+		7028: "kSkillBannedInBattle",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
@@ -118,6 +120,7 @@ var (
 		"kSkillLoadoutNotLearned":              7025,
 		"kSkillLoadoutSchemeInvalid":           7026,
 		"kSkillLoadoutVersionChanged":          7027,
+		"kSkillBannedInBattle":                 7028,
 	}
 )
 
@@ -152,7 +155,7 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\xf8\x06\n" +
+	"\x15skill_error_tip.proto*\x93\a\n" +
 	"\vskill_error\x12\x12\n" +
 	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
@@ -182,7 +185,8 @@ const file_skill_error_tip_proto_rawDesc = "" +
 	"\x15kSkillLoadoutConflict\x10\xf06\x12\x1c\n" +
 	"\x17kSkillLoadoutNotLearned\x10\xf16\x12\x1f\n" +
 	"\x1akSkillLoadoutSchemeInvalid\x10\xf26\x12 \n" +
-	"\x1bkSkillLoadoutVersionChanged\x10\xf36B$\n" +
+	"\x1bkSkillLoadoutVersionChanged\x10\xf36\x12\x19\n" +
+	"\x14kSkillBannedInBattle\x10\xf46B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

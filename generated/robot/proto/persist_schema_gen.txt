@@ -612,6 +612,13 @@ state=bootstrap
 1=RewardedAdLedger#5 optional uint64 active_session_id
 1=RewardedAdLedger#6 optional uint64 active_session_issued_ms
 1=RewardedAdLedger#7 optional uint32 active_session_slot_id
+1=ClientRequestRecord#37 optional uint64 sealed_book_item_id
+1=ItemComp#7 optional SealedSkillBookData sealed_skill_book
+1=SealedSkillBookData#1 optional uint32 skill_table_id
+1=SealedSkillBookData#2 optional uint32 scroll_id
+1=SealedSkillBookData#3 optional uint32 rarity_tier
+1=SealedSkillBookData#4 optional string crafter_name
+1=SealedSkillBookData#5 optional uint64 crafter_player_id
 
 retired=player_database#10
 retired=player_database#17

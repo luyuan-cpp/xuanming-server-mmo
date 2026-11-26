@@ -146,4 +146,12 @@ struct FCfgRankedRuleRow : public FTableRowBase
 	/** 本季累计胜场锋芒称号门槛(V2=6) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
 	int32 milestone_win_matches = 0;
+
+	/** 正式论剑每队战前技能禁选槽数（0=关闭，3=每队禁3招；纳入配置指纹） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
+	int32 skill_ban_slots_per_team = 0;
+
+	/** 正式论剑开启战前技能禁选的全员最低段位分门槛（×100；160000=云章起开，0=全段位开；纳入配置指纹） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RankedRule")
+	int32 skill_ban_min_rating_centi = 0;
 };

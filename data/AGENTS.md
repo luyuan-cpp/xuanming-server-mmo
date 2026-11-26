@@ -215,13 +215,13 @@ cd tools/data_table_exporter && py -m pytest -q
 | **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 42 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **PlayerLevelExp** | `PlayerLevelExp.xlsx` | `playerlevelexp_table.proto` | 2 | 2 | 85 | — | — | — | — | — | — | — |
 | **RankedPreset** | `RankedPreset.xlsx` | `rankedpreset_table.proto` | 20 | 15 | 6 | — | — | `pet_table_id` | `pet_table_id→Pet.id` `skill_ids→Skill.id` `pet_entry_ids→PetEntry.id` | — | — | — |
-| **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 23 | 23 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
+| **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 25 | 25 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
 | **RewardedAdSlot** | `RewardedAdSlot.xlsx` | `rewardedadslot_table.proto` | 11 | 11 | 1 | — | — | — | — | — | — | — |
 | **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 11 | 11 | 1 | — | — | — | — | — | — | — |
 | **SeasonRule** | `SeasonRule.xlsx` | `seasonrule_table.proto` | 17 | 17 | 2 | — | — | — | — | — | — | — |
 | **SeasonSeal** | `SeasonSeal.xlsx` | `seasonseal_table.proto` | 12 | 12 | 8 | — | — | `season_id` | `season_id→SeasonRule.id` | — | — | — |
-| **Skill** | `Skill.xlsx` | `skill_table.proto` | 87 | 62 | 149 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
+| **Skill** | `Skill.xlsx` | `skill_table.proto` | 88 | 63 | 149 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **SkillScrollCraft** | `SkillScrollCraft.xlsx` | `skillscrollcraft_table.proto` | 16 | 16 | 7 | — | — | `fragment_item_id` | `fragment_item_id→Item.id` | — | — | — |
 | **SkillVfxCosmetic** | `SkillVfxCosmetic.xlsx` | `skillvfxcosmetic_table.proto` | 16 | 16 | 3 | — | — | `skill_table_id` | `skill_table_id→Skill.id` | `id` | — | — |
@@ -230,7 +230,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **TournamentReward** | `TournamentReward.xlsx` | `tournamentreward_table.proto` | 18 | 12 | 9 | — | — | `tier_kind` | `item_ids→Item.id` | — | — | — |
-| **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` `salute_item_id` | `battle_config_id→Dungeon.id` `salute_item_id→Item.id` | — | — | — |
+| **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 32 | 32 | 1 | — | — | `battle_config_id` `salute_item_id` | `battle_config_id→Dungeon.id` `salute_item_id→Item.id` | — | — | — |
 | **TravelPassSeason** | `TravelPassSeason.xlsx` | `travelpassseason_table.proto` | 15 | 15 | 1 | — | — | — | — | — | — | — |
 | **TravelPassTier** | `TravelPassTier.xlsx` | `travelpasstier_table.proto` | 14 | 14 | 10 | — | — | `pass_id` | `pass_id→TravelPassSeason.id` | — | — | — |
 | **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 12 | — | — | `chapter_id` | — | — | — | — |
@@ -239,6 +239,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **82** 张表、**1036** 个物理列、**883** 个进产物的字段。
+合计 **82** 张表、**1040** 个物理列、**887** 个进产物的字段。
 
 <!-- END GENERATED -->

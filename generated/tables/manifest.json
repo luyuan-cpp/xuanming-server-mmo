@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "schema_digest": "8a563f7a854d5bc4",
-  "version": 91,
-  "content_digest": "ef7bef927f934f49b4ce785a6ec6a5ab9ac6813066fb12c2c1b3d0bdfa7557d8",
-  "generated_at": "2026-11-26T09:25:47Z",
+  "schema_digest": "b1e2ceaf0dcdc786",
+  "version": 92,
+  "content_digest": "fce48066580fca9ac8195aa405be179b2fca354e84d69ef8deda014a4a617bfa",
+  "generated_at": "2026-11-26T09:43:24Z",
   "source_rev": {
-    "commit": "4c71d8095d0c9649b6f4b29d9757a58891c89732",
+    "commit": "ea4a34fdf47adcb9039c29025a655aa9b2e3e201",
     "data_dirty": true
   },
   "table_count": 82,
@@ -1492,21 +1492,21 @@
       "rows": 1,
       "source": {
         "file": "RankedRule.xlsx",
-        "size": 5747,
-        "sha256": "e487d4e503ea6c20dac27e8a3ed9e093a9912b7641f16245151775101b4ee1c9"
+        "size": 5867,
+        "sha256": "a6851bc68826adc9da0a4a892f23eaa5cc586dfa5522e644535e4d5199087905"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "rankedrule.json",
-          "size": 814,
-          "sha256": "c336daa0508d2b22e8de9f358bf3d761b68a5729ca251d0ee5b4b1e5c6390220"
+          "size": 889,
+          "sha256": "89a078a401c875bdca1539417738c14aa1ab61cec2afdac7440f898b42594e9c"
         },
         {
           "kind": "binary",
           "file": "rankedrule.pb",
-          "size": 169,
-          "sha256": "e64198d27e0acefded2cde2e81a75a3692fa3bbe7ff58c9a4b96ce1e04847150"
+          "size": 177,
+          "sha256": "808f77bc50e88b2e7a15f8c718d339f450ee889b6404aaa57a39970091d1c92f"
         }
       ]
     },
@@ -1642,21 +1642,21 @@
       "rows": 149,
       "source": {
         "file": "Skill.xlsx",
-        "size": 31318,
-        "sha256": "aa50a701ad689c92eef8675442f38fcfb29889a4d0859491028ae71bd87c3a23"
+        "size": 31590,
+        "sha256": "e6c5c902edd609c9bb807c014762f4f35257f93394d06e8220a6589be80e14f8"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skill.json",
-          "size": 146366,
-          "sha256": "e605ca136c78d83ac7f9b0193bccb4ee20fe8ce37674cfa682af727c1e3951f5"
+          "size": 147959,
+          "sha256": "46e5e8499481667fe7cabf22ca0b0e687ee29c2f6edb36b3a08b87ecf625d360"
         },
         {
           "kind": "binary",
           "file": "skill.pb",
-          "size": 30664,
-          "sha256": "290bc6749443f8ea80a797d97054b4e2d0ef17c1491a530f019bc5a6da7d352c"
+          "size": 30841,
+          "sha256": "5f3e342c0d896669a47ac9fd3ba5cf61244b227fcb0e61e065caafaf20ca2e57"
         }
       ]
     },
@@ -1717,21 +1717,21 @@
       "rows": 3,
       "source": {
         "file": "SkillVfxCosmetic.xlsx",
-        "size": 6331,
-        "sha256": "13393d4532729c6a1d1a35f9e75ecd75b16ae016207053c6866a976f13a640fd"
+        "size": 6288,
+        "sha256": "49c6fbdc51d26c3ae133ffa7d79f0dc8ce2ac974be29c013d69b62dca3d2494b"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skillvfxcosmetic.json",
-          "size": 1702,
-          "sha256": "6e0fd86d00774a6f0f9b6250a5eafcd4b19f00f2a0fa60b6859d031845d504b6"
+          "size": 1646,
+          "sha256": "30c491520f66c8921dc15bdb05857620230e7477696d8ac51f8e53f77d87c878"
         },
         {
           "kind": "binary",
           "file": "skillvfxcosmetic.pb",
-          "size": 825,
-          "sha256": "3597736a6397ff56a5d9d76f001235917bccd7e42b90db174a124f246c2fd6f1"
+          "size": 820,
+          "sha256": "d01561ef7859e824702b2e519fbce2664172e9015e6f21cc8605222b3db3ae89"
         }
       ]
     },
@@ -1867,21 +1867,21 @@
       "rows": 1,
       "source": {
         "file": "TournamentRule.xlsx",
-        "size": 6158,
-        "sha256": "8491053ef300ad2a9deb0de671e8605bf5fbeba17816e6292541df5a2deeecca"
+        "size": 6191,
+        "sha256": "dfe4024bf09a8f15e6f0db9748ca453a77147b160989aca5421a6609c912afc7"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "tournamentrule.json",
-          "size": 1082,
-          "sha256": "308584fb59d895c560dc8360c40284c783324985f8b4da73aac42eae901e25c6"
+          "size": 1116,
+          "sha256": "bfd52dfc1963ef4f7ae3c5992c652e8ca0a1b1e12d47c1c530e3712b137f34dd"
         },
         {
           "kind": "binary",
           "file": "tournamentrule.pb",
-          "size": 261,
-          "sha256": "e3d2cfa9a27ea7a62d0c62c56ec47bc457fe3bd86ca8d12b62acf97ceab08a3e"
+          "size": 264,
+          "sha256": "f3f7c7fa60450e1d944d53c4dd6045d23ca238e1680669bbd41a27b8571e7bcd"
         }
       ]
     },

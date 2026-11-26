@@ -383,6 +383,9 @@ type BattleStateS2C struct {
 	SelfStandbyPets              []*BattlePrepPetOption    `protobuf:"bytes,36,rep,name=self_standby_pets,json=selfStandbyPets,proto3" json:"self_standby_pets,omitempty"`                                             // 论剑 V5 临阵唤灵本人剩余备选灵宠（仅本人可见，对手与观众清空）
 	SelfSummonPetRemaining       uint32                    `protobuf:"varint,37,opt,name=self_summon_pet_remaining,json=selfSummonPetRemaining,proto3" json:"self_summon_pet_remaining,omitempty"`                     // 论剑 V5 临阵唤灵本人剩余可用次数（0/1，仅本人可见，对手与观众清空）
 	SummonPetUnlockRound         uint32                    `protobuf:"varint,38,opt,name=summon_pet_unlock_round,json=summonPetUnlockRound,proto3" json:"summon_pet_unlock_round,omitempty"`                           // 论剑 V5 临阵唤灵解锁回合号（正式自养竞技为 2，其余模式为 0）
+	BannedSkillIds               []uint32                  `protobuf:"varint,39,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`                                        // 本局最终生效的全场双边共同禁用技能（升序去重，0..6 个；观战/重连/回放全可见）
+	TeamABannedSkillIds          []uint32                  `protobuf:"varint,40,rep,packed,name=team_a_banned_skill_ids,json=teamABannedSkillIds,proto3" json:"team_a_banned_skill_ids,omitempty"`                     // A 队（team_index=0）最终生效的禁用技能（0..3 个）
+	TeamBBannedSkillIds          []uint32                  `protobuf:"varint,41,rep,packed,name=team_b_banned_skill_ids,json=teamBBannedSkillIds,proto3" json:"team_b_banned_skill_ids,omitempty"`                     // B 队（team_index=1）最终生效的禁用技能（0..3 个）
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -681,6 +684,27 @@ func (x *BattleStateS2C) GetSummonPetUnlockRound() uint32 {
 		return x.SummonPetUnlockRound
 	}
 	return 0
+}
+
+func (x *BattleStateS2C) GetBannedSkillIds() []uint32 {
+	if x != nil {
+		return x.BannedSkillIds
+	}
+	return nil
+}
+
+func (x *BattleStateS2C) GetTeamABannedSkillIds() []uint32 {
+	if x != nil {
+		return x.TeamABannedSkillIds
+	}
+	return nil
+}
+
+func (x *BattleStateS2C) GetTeamBBannedSkillIds() []uint32 {
+	if x != nil {
+		return x.TeamBBannedSkillIds
+	}
+	return nil
 }
 
 type BattleStartS2C struct {
@@ -1802,15 +1826,17 @@ func (x *SurrenderVoteS2C) GetVoteState() *BattleSurrenderVoteState {
 	return nil
 }
 
-// 论剑 V3 战前 15 秒明牌变阵提交（参战者；经战斗直连发往 battle 节点，仅战前变阵期有效）。
+// 论剑 V3 战前明牌变阵提交（参战者；经战斗直连发往 battle 节点，仅战前变阵期有效）。
 type UpdateBattlePrepRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	BattleId       uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	SelectedSealId uint32                 `protobuf:"varint,2,opt,name=selected_seal_id,json=selectedSealId,proto3" json:"selected_seal_id,omitempty"` // 0 = 保持当前赛季印不变
-	SelectedPetId  uint64                 `protobuf:"varint,3,opt,name=selected_pet_id,json=selectedPetId,proto3" json:"selected_pet_id,omitempty"`    // 0 = 保持当前首发灵宠不变
-	Ready          bool                   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                           // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	BattleId           uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	SelectedSealId     uint32                 `protobuf:"varint,2,opt,name=selected_seal_id,json=selectedSealId,proto3" json:"selected_seal_id,omitempty"`             // 0 = 保持当前赛季印不变
+	SelectedPetId      uint64                 `protobuf:"varint,3,opt,name=selected_pet_id,json=selectedPetId,proto3" json:"selected_pet_id,omitempty"`                // 0 = 保持当前首发灵宠不变
+	Ready              bool                   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                                       // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
+	UpdateBannedSkills bool                   `protobuf:"varint,5,opt,name=update_banned_skills,json=updateBannedSkills,proto3" json:"update_banned_skills,omitempty"` // true = 用下方 banned_skill_ids 原子替换本人禁用提名（允许空列表=清空）；false = 保持不变
+	BannedSkillIds     []uint32               `protobuf:"varint,6,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`      // 本人有序禁招提名列表（0..3，去重，须全部在白名单内）
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *UpdateBattlePrepRequest) Reset() {
@@ -1869,6 +1895,20 @@ func (x *UpdateBattlePrepRequest) GetReady() bool {
 		return x.Ready
 	}
 	return false
+}
+
+func (x *UpdateBattlePrepRequest) GetUpdateBannedSkills() bool {
+	if x != nil {
+		return x.UpdateBannedSkills
+	}
+	return false
+}
+
+func (x *UpdateBattlePrepRequest) GetBannedSkillIds() []uint32 {
+	if x != nil {
+		return x.BannedSkillIds
+	}
+	return nil
 }
 
 type UpdateBattlePrepResponse struct {
@@ -2812,7 +2852,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x05label\x18\x06 \x01(\tR\x05label\x12'\n" +
 	"\x0ftelegraph_round\x18\a \x01(\rR\x0etelegraphRound\x12#\n" +
 	"\rstate_version\x18\b \x01(\x04R\fstateVersion\x12(\n" +
-	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xac\x0f\n" +
+	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xc2\x10\n" +
 	"\x0eBattleStateS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vround_index\x18\x02 \x01(\rR\n" +
@@ -2860,7 +2900,10 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"team_pings\x18# \x03(\v2\x13.BattleTacticalPingR\tteamPings\x12@\n" +
 	"\x11self_standby_pets\x18$ \x03(\v2\x14.BattlePrepPetOptionR\x0fselfStandbyPets\x129\n" +
 	"\x19self_summon_pet_remaining\x18% \x01(\rR\x16selfSummonPetRemaining\x125\n" +
-	"\x17summon_pet_unlock_round\x18& \x01(\rR\x14summonPetUnlockRound\"T\n" +
+	"\x17summon_pet_unlock_round\x18& \x01(\rR\x14summonPetUnlockRound\x12(\n" +
+	"\x10banned_skill_ids\x18' \x03(\rR\x0ebannedSkillIds\x124\n" +
+	"\x17team_a_banned_skill_ids\x18( \x03(\rR\x13teamABannedSkillIds\x124\n" +
+	"\x17team_b_banned_skill_ids\x18) \x03(\rR\x13teamBBannedSkillIds\"T\n" +
 	"\x0eBattleStartS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
 	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\x89\x02\n" +
@@ -2950,12 +2993,14 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x10SurrenderVoteS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x128\n" +
 	"\n" +
-	"vote_state\x18\x02 \x01(\v2\x19.BattleSurrenderVoteStateR\tvoteState\"\x9e\x01\n" +
+	"vote_state\x18\x02 \x01(\v2\x19.BattleSurrenderVoteStateR\tvoteState\"\xfa\x01\n" +
 	"\x17UpdateBattlePrepRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10selected_seal_id\x18\x02 \x01(\rR\x0eselectedSealId\x12&\n" +
 	"\x0fselected_pet_id\x18\x03 \x01(\x04R\rselectedPetId\x12\x14\n" +
-	"\x05ready\x18\x04 \x01(\bR\x05ready\"\x81\x01\n" +
+	"\x05ready\x18\x04 \x01(\bR\x05ready\x120\n" +
+	"\x14update_banned_skills\x18\x05 \x01(\bR\x12updateBannedSkills\x12(\n" +
+	"\x10banned_skill_ids\x18\x06 \x03(\rR\x0ebannedSkillIds\"\x81\x01\n" +
 	"\x18UpdateBattlePrepResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
 	"\n" +

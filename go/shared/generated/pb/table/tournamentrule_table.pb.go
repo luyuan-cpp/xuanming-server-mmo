@@ -54,6 +54,7 @@ type TournamentRuleTable struct {
 	PredictionRewardMinHits     uint32                 `protobuf:"varint,29,opt,name=prediction_reward_min_hits,json=predictionRewardMinHits,proto3" json:"prediction_reward_min_hits,omitempty"`
 	ThirdPlaceMatchEnabled      bool                   `protobuf:"varint,30,opt,name=third_place_match_enabled,json=thirdPlaceMatchEnabled,proto3" json:"third_place_match_enabled,omitempty"`
 	LeylineBanEnabled           bool                   `protobuf:"varint,31,opt,name=leyline_ban_enabled,json=leylineBanEnabled,proto3" json:"leyline_ban_enabled,omitempty"`
+	SkillBanSlotsPerTeam        uint32                 `protobuf:"varint,32,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -305,6 +306,13 @@ func (x *TournamentRuleTable) GetLeylineBanEnabled() bool {
 	return false
 }
 
+func (x *TournamentRuleTable) GetSkillBanSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillBanSlotsPerTeam
+	}
+	return 0
+}
+
 type TournamentRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*TournamentRuleTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -353,8 +361,7 @@ var File_tournamentrule_table_proto protoreflect.FileDescriptor
 
 const file_tournamentrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1atournamentrule_table.proto\"\xfd\n" +
-	"\n" +
+	"\x1atournamentrule_table.proto\"\xb5\v\n" +
 	"\x13TournamentRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12!\n" +
 	"\frule_version\x18\x02 \x01(\rR\vruleVersion\x12\x18\n" +
@@ -387,7 +394,8 @@ const file_tournamentrule_table_proto_rawDesc = "" +
 	"\x12prediction_enabled\x18\x1c \x01(\bR\x11predictionEnabled\x12;\n" +
 	"\x1aprediction_reward_min_hits\x18\x1d \x01(\rR\x17predictionRewardMinHits\x129\n" +
 	"\x19third_place_match_enabled\x18\x1e \x01(\bR\x16thirdPlaceMatchEnabled\x12.\n" +
-	"\x13leyline_ban_enabled\x18\x1f \x01(\bR\x11leylineBanEnabled\"C\n" +
+	"\x13leyline_ban_enabled\x18\x1f \x01(\bR\x11leylineBanEnabled\x126\n" +
+	"\x18skill_ban_slots_per_team\x18  \x01(\rR\x14skillBanSlotsPerTeam\"C\n" +
 	"\x17TournamentRuleTableData\x12(\n" +
 	"\x04data\x18\x01 \x03(\v2\x14.TournamentRuleTableR\x04dataBE\n" +
 	"\x0ecom.game.tableB\x1dTournamentRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

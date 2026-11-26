@@ -154,4 +154,6 @@ message SkillTable {
   uint32 secondary_target_policy = 61;
   // 战法构筑互斥组：0=无互斥；>0=同组被动/战法不可同时装配或同时生效（如 E03 灵法专修与 E04 兵锋专修同为 1）。
   uint32 exclusive_group = 62;
+  // 竞技战前技能禁选池分类（docs/planning/battle-prep-skill-ban-v1.md）：0=不可禁（豁免），1=控场障碍，2=爆发与毒火，3=辅助/护盾/绝学，4=灵宠策略。
+  uint32 ban_pool_category = 63;
 }

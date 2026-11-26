@@ -14,6 +14,8 @@
    "reference_class_id": 1,
    "rule_version": 2,
    "season_duration_days": 56,
+   "skill_ban_min_rating_centi": 160000,
+   "skill_ban_slots_per_team": 3,
    "spread_tier1_points": 100,
    "spread_tier1_seconds": 30,
    "spread_tier2_points": 200,

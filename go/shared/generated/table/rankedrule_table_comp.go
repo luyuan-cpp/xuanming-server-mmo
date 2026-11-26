@@ -105,6 +105,14 @@ type RankedRuleMilestone_win_matchesComp struct {
     Value uint32
 }
 
+type RankedRuleSkill_ban_slots_per_teamComp struct {
+    Value uint32
+}
+
+type RankedRuleSkill_ban_min_rating_centiComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -200,5 +208,13 @@ func MakeRankedRuleDescComp(row *pb.RankedRuleTable) RankedRuleDescComp {
 
 func MakeRankedRuleMilestone_win_matchesComp(row *pb.RankedRuleTable) RankedRuleMilestone_win_matchesComp {
     return RankedRuleMilestone_win_matchesComp{Value: row.MilestoneWinMatches}
+}
+
+func MakeRankedRuleSkill_ban_slots_per_teamComp(row *pb.RankedRuleTable) RankedRuleSkill_ban_slots_per_teamComp {
+    return RankedRuleSkill_ban_slots_per_teamComp{Value: row.SkillBanSlotsPerTeam}
+}
+
+func MakeRankedRuleSkill_ban_min_rating_centiComp(row *pb.RankedRuleTable) RankedRuleSkill_ban_min_rating_centiComp {
+    return RankedRuleSkill_ban_min_rating_centiComp{Value: row.SkillBanMinRatingCenti}
 }
 

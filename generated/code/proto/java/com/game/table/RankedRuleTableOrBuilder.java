@@ -153,4 +153,16 @@ public interface RankedRuleTableOrBuilder extends
    * @return The milestoneWinMatches.
    */
   int getMilestoneWinMatches();
+
+  /**
+   * <code>uint32 skill_ban_slots_per_team = 24;</code>
+   * @return The skillBanSlotsPerTeam.
+   */
+  int getSkillBanSlotsPerTeam();
+
+  /**
+   * <code>uint32 skill_ban_min_rating_centi = 25;</code>
+   * @return The skillBanMinRatingCenti.
+   */
+  int getSkillBanMinRatingCenti();
 }

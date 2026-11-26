@@ -668,11 +668,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateBattlePrepRequest final : pub
 
   // accessors -------------------------------------------------------
   enum : int {
+    kBannedSkillIdsFieldNumber = 6,
     kBattleIdFieldNumber = 1,
     kSelectedPetIdFieldNumber = 3,
     kSelectedSealIdFieldNumber = 2,
     kReadyFieldNumber = 4,
+    kUpdateBannedSkillsFieldNumber = 5,
   };
+  // repeated uint32 banned_skill_ids = 6;
+  [[nodiscard]] int banned_skill_ids_size()
+      const;
+  private:
+  int _internal_banned_skill_ids_size() const;
+
+  public:
+  void clear_banned_skill_ids() ;
+  [[nodiscard]] ::uint32_t banned_skill_ids(int index) const;
+  void set_banned_skill_ids(int index, ::uint32_t value);
+  void add_banned_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& banned_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_banned_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_banned_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_banned_skill_ids();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -713,11 +735,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateBattlePrepRequest final : pub
   void _internal_set_ready(bool value);
 
   public:
+  // bool update_banned_skills = 5;
+  void clear_update_banned_skills() ;
+  [[nodiscard]] bool update_banned_skills() const;
+  void set_update_banned_skills(bool value);
+
+  private:
+  bool _internal_update_banned_skills() const;
+  void _internal_set_update_banned_skills(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:UpdateBattlePrepRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -746,10 +778,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateBattlePrepRequest final : pub
         const UpdateBattlePrepRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> banned_skill_ids_;
+    ::google::protobuf::internal::CachedSize _banned_skill_ids_cached_byte_size_;
     ::uint64_t battle_id_;
     ::uint64_t selected_pet_id_;
     ::uint32_t selected_seal_id_;
     bool ready_;
+    bool update_banned_skills_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7414,6 +7449,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     kTeamBFormationIdFieldNumber = 29,
     kTeamPingsFieldNumber = 35,
     kSelfStandbyPetsFieldNumber = 36,
+    kBannedSkillIdsFieldNumber = 39,
+    kTeamABannedSkillIdsFieldNumber = 40,
+    kTeamBBannedSkillIdsFieldNumber = 41,
     kWuxingSynergyActiveThisRoundFieldNumber = 32,
     kSeasonWeeklyAffixIdFieldNumber = 33,
     kBossWeeklyAffixIdFieldNumber = 34,
@@ -7856,6 +7894,66 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
   ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>* PROTOBUF_NONNULL _internal_mutable_self_standby_pets();
 
   public:
+  // repeated uint32 banned_skill_ids = 39;
+  [[nodiscard]] int banned_skill_ids_size()
+      const;
+  private:
+  int _internal_banned_skill_ids_size() const;
+
+  public:
+  void clear_banned_skill_ids() ;
+  [[nodiscard]] ::uint32_t banned_skill_ids(int index) const;
+  void set_banned_skill_ids(int index, ::uint32_t value);
+  void add_banned_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& banned_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_banned_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_banned_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_banned_skill_ids();
+
+  public:
+  // repeated uint32 team_a_banned_skill_ids = 40;
+  [[nodiscard]] int team_a_banned_skill_ids_size()
+      const;
+  private:
+  int _internal_team_a_banned_skill_ids_size() const;
+
+  public:
+  void clear_team_a_banned_skill_ids() ;
+  [[nodiscard]] ::uint32_t team_a_banned_skill_ids(int index) const;
+  void set_team_a_banned_skill_ids(int index, ::uint32_t value);
+  void add_team_a_banned_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& team_a_banned_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_team_a_banned_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_team_a_banned_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_team_a_banned_skill_ids();
+
+  public:
+  // repeated uint32 team_b_banned_skill_ids = 41;
+  [[nodiscard]] int team_b_banned_skill_ids_size()
+      const;
+  private:
+  int _internal_team_b_banned_skill_ids_size() const;
+
+  public:
+  void clear_team_b_banned_skill_ids() ;
+  [[nodiscard]] ::uint32_t team_b_banned_skill_ids(int index) const;
+  void set_team_b_banned_skill_ids(int index, ::uint32_t value);
+  void add_team_b_banned_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& team_b_banned_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_team_b_banned_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_team_b_banned_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_team_b_banned_skill_ids();
+
+  public:
   // bool wuxing_synergy_active_this_round = 32;
   void clear_wuxing_synergy_active_this_round() ;
   [[nodiscard]] bool wuxing_synergy_active_this_round() const;
@@ -7910,7 +8008,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 38,
+      ::google::protobuf::internal::TcParseTable<5, 41,
                           11, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7973,6 +8071,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     ::uint32_t team_b_formation_id_;
     ::google::protobuf::RepeatedPtrField< ::BattleTacticalPing > team_pings_;
     ::google::protobuf::RepeatedPtrField< ::BattlePrepPetOption > self_standby_pets_;
+    ::google::protobuf::RepeatedField<::uint32_t> banned_skill_ids_;
+    ::google::protobuf::internal::CachedSize _banned_skill_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> team_a_banned_skill_ids_;
+    ::google::protobuf::internal::CachedSize _team_a_banned_skill_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> team_b_banned_skill_ids_;
+    ::google::protobuf::internal::CachedSize _team_b_banned_skill_ids_cached_byte_size_;
     bool wuxing_synergy_active_this_round_;
     ::uint32_t season_weekly_affix_id_;
     ::uint32_t boss_weekly_affix_id_;
@@ -10655,7 +10759,7 @@ inline void BattleStateS2C::set_allocated_custom_duel_rules(::CustomDuelRules* P
 inline void BattleStateS2C::clear_wuxing_synergy_active_this_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.wuxing_synergy_active_this_round_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
 }
 inline bool BattleStateS2C::wuxing_synergy_active_this_round() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.wuxing_synergy_active_this_round)
@@ -10663,7 +10767,7 @@ inline bool BattleStateS2C::wuxing_synergy_active_this_round() const {
 }
 inline void BattleStateS2C::set_wuxing_synergy_active_this_round(bool value) {
   _internal_set_wuxing_synergy_active_this_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.wuxing_synergy_active_this_round)
 }
 inline bool BattleStateS2C::_internal_wuxing_synergy_active_this_round() const {
@@ -10679,7 +10783,7 @@ inline void BattleStateS2C::_internal_set_wuxing_synergy_active_this_round(bool 
 inline void BattleStateS2C::clear_season_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
 }
 inline ::uint32_t BattleStateS2C::season_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.season_weekly_affix_id)
@@ -10687,7 +10791,7 @@ inline ::uint32_t BattleStateS2C::season_weekly_affix_id() const {
 }
 inline void BattleStateS2C::set_season_weekly_affix_id(::uint32_t value) {
   _internal_set_season_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.season_weekly_affix_id)
 }
 inline ::uint32_t BattleStateS2C::_internal_season_weekly_affix_id() const {
@@ -10703,7 +10807,7 @@ inline void BattleStateS2C::_internal_set_season_weekly_affix_id(::uint32_t valu
 inline void BattleStateS2C::clear_boss_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.boss_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 inline ::uint32_t BattleStateS2C::boss_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.boss_weekly_affix_id)
@@ -10711,7 +10815,7 @@ inline ::uint32_t BattleStateS2C::boss_weekly_affix_id() const {
 }
 inline void BattleStateS2C::set_boss_weekly_affix_id(::uint32_t value) {
   _internal_set_boss_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.boss_weekly_affix_id)
 }
 inline ::uint32_t BattleStateS2C::_internal_boss_weekly_affix_id() const {
@@ -10827,7 +10931,7 @@ BattleStateS2C::_internal_mutable_self_standby_pets() {
 inline void BattleStateS2C::clear_self_summon_pet_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.self_summon_pet_remaining_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline ::uint32_t BattleStateS2C::self_summon_pet_remaining() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.self_summon_pet_remaining)
@@ -10835,7 +10939,7 @@ inline ::uint32_t BattleStateS2C::self_summon_pet_remaining() const {
 }
 inline void BattleStateS2C::set_self_summon_pet_remaining(::uint32_t value) {
   _internal_set_self_summon_pet_remaining(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.self_summon_pet_remaining)
 }
 inline ::uint32_t BattleStateS2C::_internal_self_summon_pet_remaining() const {
@@ -10851,7 +10955,7 @@ inline void BattleStateS2C::_internal_set_self_summon_pet_remaining(::uint32_t v
 inline void BattleStateS2C::clear_summon_pet_unlock_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.summon_pet_unlock_round_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 inline ::uint32_t BattleStateS2C::summon_pet_unlock_round() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.summon_pet_unlock_round)
@@ -10859,7 +10963,7 @@ inline ::uint32_t BattleStateS2C::summon_pet_unlock_round() const {
 }
 inline void BattleStateS2C::set_summon_pet_unlock_round(::uint32_t value) {
   _internal_set_summon_pet_unlock_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.summon_pet_unlock_round)
 }
 inline ::uint32_t BattleStateS2C::_internal_summon_pet_unlock_round() const {
@@ -10869,6 +10973,159 @@ inline ::uint32_t BattleStateS2C::_internal_summon_pet_unlock_round() const {
 inline void BattleStateS2C::_internal_set_summon_pet_unlock_round(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.summon_pet_unlock_round_ = value;
+}
+
+// repeated uint32 banned_skill_ids = 39;
+inline int BattleStateS2C::_internal_banned_skill_ids_size() const {
+  return _internal_banned_skill_ids().size();
+}
+inline int BattleStateS2C::banned_skill_ids_size() const {
+  return _internal_banned_skill_ids_size();
+}
+inline void BattleStateS2C::clear_banned_skill_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banned_skill_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline ::uint32_t BattleStateS2C::banned_skill_ids(int index) const {
+  // @@protoc_insertion_point(field_get:BattleStateS2C.banned_skill_ids)
+  return _internal_banned_skill_ids().Get(index);
+}
+inline void BattleStateS2C::set_banned_skill_ids(int index, ::uint32_t value) {
+  _internal_mutable_banned_skill_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:BattleStateS2C.banned_skill_ids)
+}
+inline void BattleStateS2C::add_banned_skill_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_banned_skill_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_add:BattleStateS2C.banned_skill_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& BattleStateS2C::banned_skill_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattleStateS2C.banned_skill_ids)
+  return _internal_banned_skill_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL BattleStateS2C::mutable_banned_skill_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:BattleStateS2C.banned_skill_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_banned_skill_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+BattleStateS2C::_internal_banned_skill_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.banned_skill_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+BattleStateS2C::_internal_mutable_banned_skill_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.banned_skill_ids_;
+}
+
+// repeated uint32 team_a_banned_skill_ids = 40;
+inline int BattleStateS2C::_internal_team_a_banned_skill_ids_size() const {
+  return _internal_team_a_banned_skill_ids().size();
+}
+inline int BattleStateS2C::team_a_banned_skill_ids_size() const {
+  return _internal_team_a_banned_skill_ids_size();
+}
+inline void BattleStateS2C::clear_team_a_banned_skill_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_a_banned_skill_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline ::uint32_t BattleStateS2C::team_a_banned_skill_ids(int index) const {
+  // @@protoc_insertion_point(field_get:BattleStateS2C.team_a_banned_skill_ids)
+  return _internal_team_a_banned_skill_ids().Get(index);
+}
+inline void BattleStateS2C::set_team_a_banned_skill_ids(int index, ::uint32_t value) {
+  _internal_mutable_team_a_banned_skill_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:BattleStateS2C.team_a_banned_skill_ids)
+}
+inline void BattleStateS2C::add_team_a_banned_skill_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_team_a_banned_skill_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_add:BattleStateS2C.team_a_banned_skill_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& BattleStateS2C::team_a_banned_skill_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattleStateS2C.team_a_banned_skill_ids)
+  return _internal_team_a_banned_skill_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL BattleStateS2C::mutable_team_a_banned_skill_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:BattleStateS2C.team_a_banned_skill_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_team_a_banned_skill_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+BattleStateS2C::_internal_team_a_banned_skill_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_a_banned_skill_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+BattleStateS2C::_internal_mutable_team_a_banned_skill_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.team_a_banned_skill_ids_;
+}
+
+// repeated uint32 team_b_banned_skill_ids = 41;
+inline int BattleStateS2C::_internal_team_b_banned_skill_ids_size() const {
+  return _internal_team_b_banned_skill_ids().size();
+}
+inline int BattleStateS2C::team_b_banned_skill_ids_size() const {
+  return _internal_team_b_banned_skill_ids_size();
+}
+inline void BattleStateS2C::clear_team_b_banned_skill_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_b_banned_skill_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::uint32_t BattleStateS2C::team_b_banned_skill_ids(int index) const {
+  // @@protoc_insertion_point(field_get:BattleStateS2C.team_b_banned_skill_ids)
+  return _internal_team_b_banned_skill_ids().Get(index);
+}
+inline void BattleStateS2C::set_team_b_banned_skill_ids(int index, ::uint32_t value) {
+  _internal_mutable_team_b_banned_skill_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:BattleStateS2C.team_b_banned_skill_ids)
+}
+inline void BattleStateS2C::add_team_b_banned_skill_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_team_b_banned_skill_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_add:BattleStateS2C.team_b_banned_skill_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& BattleStateS2C::team_b_banned_skill_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattleStateS2C.team_b_banned_skill_ids)
+  return _internal_team_b_banned_skill_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL BattleStateS2C::mutable_team_b_banned_skill_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_mutable_list:BattleStateS2C.team_b_banned_skill_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_team_b_banned_skill_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+BattleStateS2C::_internal_team_b_banned_skill_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_b_banned_skill_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+BattleStateS2C::_internal_mutable_team_b_banned_skill_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.team_b_banned_skill_ids_;
 }
 
 // -------------------------------------------------------------------
@@ -13383,7 +13640,7 @@ inline void SurrenderVoteS2C::set_allocated_vote_state(::BattleSurrenderVoteStat
 inline void UpdateBattlePrepRequest::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t UpdateBattlePrepRequest::battle_id() const {
   // @@protoc_insertion_point(field_get:UpdateBattlePrepRequest.battle_id)
@@ -13391,7 +13648,7 @@ inline ::uint64_t UpdateBattlePrepRequest::battle_id() const {
 }
 inline void UpdateBattlePrepRequest::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:UpdateBattlePrepRequest.battle_id)
 }
 inline ::uint64_t UpdateBattlePrepRequest::_internal_battle_id() const {
@@ -13407,7 +13664,7 @@ inline void UpdateBattlePrepRequest::_internal_set_battle_id(::uint64_t value) {
 inline void UpdateBattlePrepRequest::clear_selected_seal_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.selected_seal_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t UpdateBattlePrepRequest::selected_seal_id() const {
   // @@protoc_insertion_point(field_get:UpdateBattlePrepRequest.selected_seal_id)
@@ -13415,7 +13672,7 @@ inline ::uint32_t UpdateBattlePrepRequest::selected_seal_id() const {
 }
 inline void UpdateBattlePrepRequest::set_selected_seal_id(::uint32_t value) {
   _internal_set_selected_seal_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:UpdateBattlePrepRequest.selected_seal_id)
 }
 inline ::uint32_t UpdateBattlePrepRequest::_internal_selected_seal_id() const {
@@ -13431,7 +13688,7 @@ inline void UpdateBattlePrepRequest::_internal_set_selected_seal_id(::uint32_t v
 inline void UpdateBattlePrepRequest::clear_selected_pet_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.selected_pet_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t UpdateBattlePrepRequest::selected_pet_id() const {
   // @@protoc_insertion_point(field_get:UpdateBattlePrepRequest.selected_pet_id)
@@ -13439,7 +13696,7 @@ inline ::uint64_t UpdateBattlePrepRequest::selected_pet_id() const {
 }
 inline void UpdateBattlePrepRequest::set_selected_pet_id(::uint64_t value) {
   _internal_set_selected_pet_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:UpdateBattlePrepRequest.selected_pet_id)
 }
 inline ::uint64_t UpdateBattlePrepRequest::_internal_selected_pet_id() const {
@@ -13455,7 +13712,7 @@ inline void UpdateBattlePrepRequest::_internal_set_selected_pet_id(::uint64_t va
 inline void UpdateBattlePrepRequest::clear_ready() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ready_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline bool UpdateBattlePrepRequest::ready() const {
   // @@protoc_insertion_point(field_get:UpdateBattlePrepRequest.ready)
@@ -13463,7 +13720,7 @@ inline bool UpdateBattlePrepRequest::ready() const {
 }
 inline void UpdateBattlePrepRequest::set_ready(bool value) {
   _internal_set_ready(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:UpdateBattlePrepRequest.ready)
 }
 inline bool UpdateBattlePrepRequest::_internal_ready() const {
@@ -13473,6 +13730,81 @@ inline bool UpdateBattlePrepRequest::_internal_ready() const {
 inline void UpdateBattlePrepRequest::_internal_set_ready(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ready_ = value;
+}
+
+// bool update_banned_skills = 5;
+inline void UpdateBattlePrepRequest::clear_update_banned_skills() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.update_banned_skills_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool UpdateBattlePrepRequest::update_banned_skills() const {
+  // @@protoc_insertion_point(field_get:UpdateBattlePrepRequest.update_banned_skills)
+  return _internal_update_banned_skills();
+}
+inline void UpdateBattlePrepRequest::set_update_banned_skills(bool value) {
+  _internal_set_update_banned_skills(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:UpdateBattlePrepRequest.update_banned_skills)
+}
+inline bool UpdateBattlePrepRequest::_internal_update_banned_skills() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.update_banned_skills_;
+}
+inline void UpdateBattlePrepRequest::_internal_set_update_banned_skills(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.update_banned_skills_ = value;
+}
+
+// repeated uint32 banned_skill_ids = 6;
+inline int UpdateBattlePrepRequest::_internal_banned_skill_ids_size() const {
+  return _internal_banned_skill_ids().size();
+}
+inline int UpdateBattlePrepRequest::banned_skill_ids_size() const {
+  return _internal_banned_skill_ids_size();
+}
+inline void UpdateBattlePrepRequest::clear_banned_skill_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banned_skill_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t UpdateBattlePrepRequest::banned_skill_ids(int index) const {
+  // @@protoc_insertion_point(field_get:UpdateBattlePrepRequest.banned_skill_ids)
+  return _internal_banned_skill_ids().Get(index);
+}
+inline void UpdateBattlePrepRequest::set_banned_skill_ids(int index, ::uint32_t value) {
+  _internal_mutable_banned_skill_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:UpdateBattlePrepRequest.banned_skill_ids)
+}
+inline void UpdateBattlePrepRequest::add_banned_skill_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_banned_skill_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:UpdateBattlePrepRequest.banned_skill_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& UpdateBattlePrepRequest::banned_skill_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:UpdateBattlePrepRequest.banned_skill_ids)
+  return _internal_banned_skill_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL UpdateBattlePrepRequest::mutable_banned_skill_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:UpdateBattlePrepRequest.banned_skill_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_banned_skill_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+UpdateBattlePrepRequest::_internal_banned_skill_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.banned_skill_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+UpdateBattlePrepRequest::_internal_mutable_banned_skill_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.banned_skill_ids_;
 }
 
 // -------------------------------------------------------------------

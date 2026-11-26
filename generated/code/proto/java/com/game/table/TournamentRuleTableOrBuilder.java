@@ -201,4 +201,10 @@ public interface TournamentRuleTableOrBuilder extends
    * @return The leylineBanEnabled.
    */
   boolean getLeylineBanEnabled();
+
+  /**
+   * <code>uint32 skill_ban_slots_per_team = 32;</code>
+   * @return The skillBanSlotsPerTeam.
+   */
+  int getSkillBanSlotsPerTeam();
 }

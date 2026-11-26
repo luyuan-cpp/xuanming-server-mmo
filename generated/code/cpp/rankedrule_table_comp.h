@@ -106,6 +106,14 @@ struct RankedRuleMilestone_win_matchesComp {
     uint32_t value;
 };
 
+struct RankedRuleSkill_ban_slots_per_teamComp {
+    uint32_t value;
+};
+
+struct RankedRuleSkill_ban_min_rating_centiComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -179,4 +187,10 @@ inline RankedRuleDescComp MakeRankedRuleDescComp(const RankedRuleTable& row) {
 }
 inline RankedRuleMilestone_win_matchesComp MakeRankedRuleMilestone_win_matchesComp(const RankedRuleTable& row) {
     return { row.milestone_win_matches() };
+}
+inline RankedRuleSkill_ban_slots_per_teamComp MakeRankedRuleSkill_ban_slots_per_teamComp(const RankedRuleTable& row) {
+    return { row.skill_ban_slots_per_team() };
+}
+inline RankedRuleSkill_ban_min_rating_centiComp MakeRankedRuleSkill_ban_min_rating_centiComp(const RankedRuleTable& row) {
+    return { row.skill_ban_min_rating_centi() };
 }

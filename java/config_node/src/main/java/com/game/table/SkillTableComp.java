@@ -347,6 +347,12 @@ public final class SkillTableComp {
         }
     }
 
+    public record Ban_pool_category(int value) {
+        public static Ban_pool_category from(SkillTable row) {
+            return new Ban_pool_category(row.getBanPoolCategory());
+        }
+    }
+
     public record Skill_type(List<Integer> values) {
         public static Skill_type from(SkillTable row) {
             return new Skill_type(row.getSkillTypeList());

@@ -451,6 +451,12 @@ public interface SkillTableOrBuilder extends
   int getExclusiveGroup();
 
   /**
+   * <code>uint32 ban_pool_category = 63;</code>
+   * @return The banPoolCategory.
+   */
+  int getBanPoolCategory();
+
+  /**
    * <code>repeated .Skillrequired_item required_item = 21;</code>
    */
   java.util.List<com.game.table.Skillrequired_item> 

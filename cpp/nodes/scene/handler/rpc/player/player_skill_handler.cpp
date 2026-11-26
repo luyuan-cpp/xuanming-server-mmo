@@ -178,6 +178,7 @@ void SceneSkillClientPlayerHandler::SealSkillBook(entt::entity player,const ::Se
 ///<<< BEGIN WRITING YOUR CODE
 	PlayerCraftSystem::SealSkillBook(player, *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneSkillClientPlayerHandler::UnsealSkillBook(entt::entity player,const ::UnsealSkillBookRequest* request,
@@ -186,4 +187,5 @@ void SceneSkillClientPlayerHandler::UnsealSkillBook(entt::entity player,const ::
 ///<<< BEGIN WRITING YOUR CODE
 	PlayerCraftSystem::UnsealSkillBook(player, *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }

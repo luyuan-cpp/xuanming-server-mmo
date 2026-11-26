@@ -45,7 +45,7 @@ public final class RankedRuleTableOuterClass extends com.google.protobuf.Generat
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\026rankedrule_table.proto\"\234\005\n\017RankedRuleT" +
+      "\n\026rankedrule_table.proto\"\342\005\n\017RankedRuleT" +
       "able\022\n\n\002id\030\001 \001(\r\022\024\n\014rule_version\030\002 \001(\r\022\030" +
       "\n\020battle_config_id\030\003 \001(\r\022\032\n\022reference_cl" +
       "ass_id\030\004 \001(\r\022\031\n\021competitive_level\030\005 \001(\r\022" +
@@ -62,10 +62,12 @@ public final class RankedRuleTableOuterClass extends com.google.protobuf.Generat
       " \001(\r\022\033\n\023tier_yunzhang_centi\030\023 \001(\r\022\032\n\022tie" +
       "r_tianshu_centi\030\024 \001(\r\022\033\n\023tier_wushuang_c" +
       "enti\030\025 \001(\r\022\014\n\004desc\030\026 \001(\t\022\035\n\025milestone_wi" +
-      "n_matches\030\027 \001(\r\"5\n\023RankedRuleTableData\022\036" +
-      "\n\004data\030\001 \003(\0132\020.RankedRuleTableBA\n\016com.ga" +
-      "me.tableB\031RankedRuleTableOuterClassP\001Z\022g" +
-      "enerated/pb/tableb\006proto3"
+      "n_matches\030\027 \001(\r\022 \n\030skill_ban_slots_per_t" +
+      "eam\030\030 \001(\r\022\"\n\032skill_ban_min_rating_centi\030" +
+      "\031 \001(\r\"5\n\023RankedRuleTableData\022\036\n\004data\030\001 \003" +
+      "(\0132\020.RankedRuleTableBA\n\016com.game.tableB\031" +
+      "RankedRuleTableOuterClassP\001Z\022generated/p" +
+      "b/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -76,7 +78,7 @@ public final class RankedRuleTableOuterClass extends com.google.protobuf.Generat
     internal_static_RankedRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_RankedRuleTable_descriptor,
-        new java.lang.String[] { "Id", "RuleVersion", "BattleConfigId", "ReferenceClassId", "CompetitiveLevel", "DefaultCharacterPresetId", "DefaultPetPresetId", "SeasonDurationDays", "WaitPromptSeconds", "SpreadTier1Seconds", "SpreadTier1Points", "SpreadTier2Seconds", "SpreadTier2Points", "SpreadTier3Points", "MilestoneAvatarMatches", "MilestoneCardMatches", "MilestoneTalismanMatches", "TierQingfengCenti", "TierYunzhangCenti", "TierTianshuCenti", "TierWushuangCenti", "Desc", "MilestoneWinMatches", });
+        new java.lang.String[] { "Id", "RuleVersion", "BattleConfigId", "ReferenceClassId", "CompetitiveLevel", "DefaultCharacterPresetId", "DefaultPetPresetId", "SeasonDurationDays", "WaitPromptSeconds", "SpreadTier1Seconds", "SpreadTier1Points", "SpreadTier2Seconds", "SpreadTier2Points", "SpreadTier3Points", "MilestoneAvatarMatches", "MilestoneCardMatches", "MilestoneTalismanMatches", "TierQingfengCenti", "TierYunzhangCenti", "TierTianshuCenti", "TierWushuangCenti", "Desc", "MilestoneWinMatches", "SkillBanSlotsPerTeam", "SkillBanMinRatingCenti", });
     internal_static_RankedRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_RankedRuleTableData_fieldAccessorTable = new

@@ -158,7 +158,7 @@
      - `BattlePrepPlayerState` 追加：`repeated uint32 nominated_ban_skill_ids = 8;`
      - `BattlePrepState` 追加：`uint32 skill_ban_slots_per_team = 7;`、`repeated uint32 ban_candidate_skill_ids = 8;`、`repeated uint32 team_effective_ban_skill_ids = 9;`
    - `proto/battle/player_battle.proto`：
-     - `BattleStateS2C` 追加：`repeated uint32 banned_skill_ids = 36;`、`repeated uint32 team_a_banned_skill_ids = 37;`、`repeated uint32 team_b_banned_skill_ids = 38;`
+     - `BattleStateS2C` 追加：`repeated uint32 banned_skill_ids = 39;`、`repeated uint32 team_a_banned_skill_ids = 40;`、`repeated uint32 team_b_banned_skill_ids = 41;`
      - `UpdateBattlePrepRequest` 追加：`bool update_banned_skills = 5;`、`repeated uint32 banned_skill_ids = 6;`（`update_banned_skills = false` 保持既有提名不变；`true` 用 `banned_skill_ids` 原子替换，支持传空清空）。
 3. **客户端本地轻量记忆与战报展示边界**`【工程收敛定夺】`：
    - Unity 客户端按 `(player_id, "prep_skill_bans")` 本地记住上次确认的至多 3 个禁招 ID；进房开 Ban 且本人尚未提名/未锁定时，与服务端下发 `ban_candidate_skill_ids` 求交集后预勾一次（**绝不自动锁定**），换季失效旧技自动过滤；满足 WebGL2 / IL2CPP 单线程约束。

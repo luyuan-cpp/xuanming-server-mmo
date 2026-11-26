@@ -330,6 +330,28 @@ private static final long serialVersionUID = 0L;
     return milestoneWinMatches_;
   }
 
+  public static final int SKILL_BAN_SLOTS_PER_TEAM_FIELD_NUMBER = 24;
+  private int skillBanSlotsPerTeam_ = 0;
+  /**
+   * <code>uint32 skill_ban_slots_per_team = 24;</code>
+   * @return The skillBanSlotsPerTeam.
+   */
+  @java.lang.Override
+  public int getSkillBanSlotsPerTeam() {
+    return skillBanSlotsPerTeam_;
+  }
+
+  public static final int SKILL_BAN_MIN_RATING_CENTI_FIELD_NUMBER = 25;
+  private int skillBanMinRatingCenti_ = 0;
+  /**
+   * <code>uint32 skill_ban_min_rating_centi = 25;</code>
+   * @return The skillBanMinRatingCenti.
+   */
+  @java.lang.Override
+  public int getSkillBanMinRatingCenti() {
+    return skillBanMinRatingCenti_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -412,6 +434,12 @@ private static final long serialVersionUID = 0L;
     }
     if (milestoneWinMatches_ != 0) {
       output.writeUInt32(23, milestoneWinMatches_);
+    }
+    if (skillBanSlotsPerTeam_ != 0) {
+      output.writeUInt32(24, skillBanSlotsPerTeam_);
+    }
+    if (skillBanMinRatingCenti_ != 0) {
+      output.writeUInt32(25, skillBanMinRatingCenti_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -508,6 +536,14 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(23, milestoneWinMatches_);
     }
+    if (skillBanSlotsPerTeam_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(24, skillBanSlotsPerTeam_);
+    }
+    if (skillBanMinRatingCenti_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(25, skillBanMinRatingCenti_);
+    }
     return size;
   }
   @java.lang.Override
@@ -578,6 +614,10 @@ private static final long serialVersionUID = 0L;
         .equals(other.getDesc())) return false;
     if (getMilestoneWinMatches()
         != other.getMilestoneWinMatches()) return false;
+    if (getSkillBanSlotsPerTeam()
+        != other.getSkillBanSlotsPerTeam()) return false;
+    if (getSkillBanMinRatingCenti()
+        != other.getSkillBanMinRatingCenti()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -635,6 +675,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getDesc().hashCode();
     hash = (37 * hash) + MILESTONE_WIN_MATCHES_FIELD_NUMBER;
     hash = (53 * hash) + getMilestoneWinMatches();
+    hash = (37 * hash) + SKILL_BAN_SLOTS_PER_TEAM_FIELD_NUMBER;
+    hash = (53 * hash) + getSkillBanSlotsPerTeam();
+    hash = (37 * hash) + SKILL_BAN_MIN_RATING_CENTI_FIELD_NUMBER;
+    hash = (53 * hash) + getSkillBanMinRatingCenti();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -789,6 +833,8 @@ private static final long serialVersionUID = 0L;
       tierWushuangCenti_ = 0;
       desc_ = "";
       milestoneWinMatches_ = 0;
+      skillBanSlotsPerTeam_ = 0;
+      skillBanMinRatingCenti_ = 0;
       return this;
     }
 
@@ -891,6 +937,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00400000) != 0)) {
         result.milestoneWinMatches_ = milestoneWinMatches_;
       }
+      if (((from_bitField0_ & 0x00800000) != 0)) {
+        result.skillBanSlotsPerTeam_ = skillBanSlotsPerTeam_;
+      }
+      if (((from_bitField0_ & 0x01000000) != 0)) {
+        result.skillBanMinRatingCenti_ = skillBanMinRatingCenti_;
+      }
     }
 
     @java.lang.Override
@@ -975,6 +1027,12 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getMilestoneWinMatches() != 0) {
         setMilestoneWinMatches(other.getMilestoneWinMatches());
+      }
+      if (other.getSkillBanSlotsPerTeam() != 0) {
+        setSkillBanSlotsPerTeam(other.getSkillBanSlotsPerTeam());
+      }
+      if (other.getSkillBanMinRatingCenti() != 0) {
+        setSkillBanMinRatingCenti(other.getSkillBanMinRatingCenti());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1117,6 +1175,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00400000;
               break;
             } // case 184
+            case 192: {
+              skillBanSlotsPerTeam_ = input.readUInt32();
+              bitField0_ |= 0x00800000;
+              break;
+            } // case 192
+            case 200: {
+              skillBanMinRatingCenti_ = input.readUInt32();
+              bitField0_ |= 0x01000000;
+              break;
+            } // case 200
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1906,6 +1974,70 @@ private static final long serialVersionUID = 0L;
     public Builder clearMilestoneWinMatches() {
       bitField0_ = (bitField0_ & ~0x00400000);
       milestoneWinMatches_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int skillBanSlotsPerTeam_ ;
+    /**
+     * <code>uint32 skill_ban_slots_per_team = 24;</code>
+     * @return The skillBanSlotsPerTeam.
+     */
+    @java.lang.Override
+    public int getSkillBanSlotsPerTeam() {
+      return skillBanSlotsPerTeam_;
+    }
+    /**
+     * <code>uint32 skill_ban_slots_per_team = 24;</code>
+     * @param value The skillBanSlotsPerTeam to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSkillBanSlotsPerTeam(int value) {
+
+      skillBanSlotsPerTeam_ = value;
+      bitField0_ |= 0x00800000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 skill_ban_slots_per_team = 24;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSkillBanSlotsPerTeam() {
+      bitField0_ = (bitField0_ & ~0x00800000);
+      skillBanSlotsPerTeam_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int skillBanMinRatingCenti_ ;
+    /**
+     * <code>uint32 skill_ban_min_rating_centi = 25;</code>
+     * @return The skillBanMinRatingCenti.
+     */
+    @java.lang.Override
+    public int getSkillBanMinRatingCenti() {
+      return skillBanMinRatingCenti_;
+    }
+    /**
+     * <code>uint32 skill_ban_min_rating_centi = 25;</code>
+     * @param value The skillBanMinRatingCenti to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSkillBanMinRatingCenti(int value) {
+
+      skillBanMinRatingCenti_ = value;
+      bitField0_ |= 0x01000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 skill_ban_min_rating_centi = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSkillBanMinRatingCenti() {
+      bitField0_ = (bitField0_ & ~0x01000000);
+      skillBanMinRatingCenti_ = 0;
       onChanged();
       return this;
     }

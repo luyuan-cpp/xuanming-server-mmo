@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "8a563f7a854d5bc4";
+    public static final String SCHEMA_DIGEST = "b1e2ceaf0dcdc786";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",

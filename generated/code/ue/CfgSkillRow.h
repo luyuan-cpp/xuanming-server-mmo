@@ -331,6 +331,10 @@ struct FCfgSkillRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	int32 exclusive_group = 0;
 
+	/** 竞技战前技能禁选池分类（docs/planning/battle-prep-skill-ban-v1.md）：0=不可禁（豁免），1=控场障碍，2=爆发与毒火，3=辅助/护盾/绝学，4=灵宠策略。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 ban_pool_category = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	TArray<FCfgSkillRequiredItem> required_item;
 

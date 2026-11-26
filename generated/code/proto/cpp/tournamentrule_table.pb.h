@@ -259,6 +259,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     kPredictionEnabledFieldNumber = 28,
     kThirdPlaceMatchEnabledFieldNumber = 30,
     kLeylineBanEnabledFieldNumber = 31,
+    kSkillBanSlotsPerTeamFieldNumber = 32,
   };
   // string desc = 20;
   void clear_desc() ;
@@ -575,12 +576,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
   void _internal_set_leyline_ban_enabled(bool value);
 
   public:
+  // uint32 skill_ban_slots_per_team = 32;
+  void clear_skill_ban_slots_per_team() ;
+  [[nodiscard]] ::uint32_t skill_ban_slots_per_team() const;
+  void set_skill_ban_slots_per_team(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_ban_slots_per_team() const;
+  void _internal_set_skill_ban_slots_per_team(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TournamentRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 31,
-                          0, 56,
+      ::google::protobuf::internal::TcParseTable<5, 32,
+                          0, 64,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -639,6 +650,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     bool prediction_enabled_;
     bool third_place_match_enabled_;
     bool leyline_ban_enabled_;
+    ::uint32_t skill_ban_slots_per_team_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1655,6 +1667,30 @@ inline bool TournamentRuleTable::_internal_leyline_ban_enabled() const {
 inline void TournamentRuleTable::_internal_set_leyline_ban_enabled(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.leyline_ban_enabled_ = value;
+}
+
+// uint32 skill_ban_slots_per_team = 32;
+inline void TournamentRuleTable::clear_skill_ban_slots_per_team() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ban_slots_per_team_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline ::uint32_t TournamentRuleTable::skill_ban_slots_per_team() const {
+  // @@protoc_insertion_point(field_get:TournamentRuleTable.skill_ban_slots_per_team)
+  return _internal_skill_ban_slots_per_team();
+}
+inline void TournamentRuleTable::set_skill_ban_slots_per_team(::uint32_t value) {
+  _internal_set_skill_ban_slots_per_team(value);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  // @@protoc_insertion_point(field_set:TournamentRuleTable.skill_ban_slots_per_team)
+}
+inline ::uint32_t TournamentRuleTable::_internal_skill_ban_slots_per_team() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_ban_slots_per_team_;
+}
+inline void TournamentRuleTable::_internal_set_skill_ban_slots_per_team(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ban_slots_per_team_ = value;
 }
 
 // -------------------------------------------------------------------

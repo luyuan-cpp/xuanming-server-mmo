@@ -138,6 +138,10 @@ struct TournamentRuleLeyline_ban_enabledComp {
     bool value;
 };
 
+struct TournamentRuleSkill_ban_slots_per_teamComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -235,4 +239,7 @@ inline TournamentRuleThird_place_match_enabledComp MakeTournamentRuleThird_place
 }
 inline TournamentRuleLeyline_ban_enabledComp MakeTournamentRuleLeyline_ban_enabledComp(const TournamentRuleTable& row) {
     return { row.leyline_ban_enabled() };
+}
+inline TournamentRuleSkill_ban_slots_per_teamComp MakeTournamentRuleSkill_ban_slots_per_teamComp(const TournamentRuleTable& row) {
+    return { row.skill_ban_slots_per_team() };
 }

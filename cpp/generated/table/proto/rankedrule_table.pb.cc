@@ -48,11 +48,11 @@ constexpr RankedRuleTable::ParseTableT_ RankedRuleTable::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      23, 248,  // max_field_number, fast_idx_mask
+      25, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4286578688,  // skipmap
+      4261412864,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      23,  // num_field_entries
+      25,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -155,8 +155,14 @@ constexpr RankedRuleTable::ParseTableT_ RankedRuleTable::InternalGenerateParseTa
       {::_pbi::TcParser::FastV32S2,
        {440, 22, 0,
         PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.milestone_win_matches_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 skill_ban_slots_per_team = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.skill_ban_slots_per_team_)}},
+      // uint32 skill_ban_min_rating_centi = 25;
+      {::_pbi::TcParser::FastV32S2,
+       {456, 24, 0,
+        PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.skill_ban_min_rating_centi_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -212,10 +218,14 @@ constexpr RankedRuleTable::ParseTableT_ RankedRuleTable::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.desc_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 milestone_win_matches = 23;
       {PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.milestone_win_matches_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 skill_ban_slots_per_team = 24;
+      {PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.skill_ban_slots_per_team_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 skill_ban_min_rating_centi = 25;
+      {PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.skill_ban_min_rating_centi_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\17\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\4\0"
+      "\17\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\4\0\0\0\0\0\0\0\0\0"
       "RankedRuleTable"
       "desc"
     }},
@@ -251,7 +261,9 @@ inline constexpr RankedRuleTable::Impl_::Impl_(
         tier_yunzhang_centi_{0u},
         tier_tianshu_centi_{0u},
         tier_wushuang_centi_{0u},
-        milestone_win_matches_{0u} {}
+        milestone_win_matches_{0u},
+        skill_ban_slots_per_team_{0u},
+        skill_ban_min_rating_centi_{0u} {}
 
 template <typename>
 constexpr RankedRuleTable::RankedRuleTable(::_pbi::ConstantInitialized,
@@ -505,7 +517,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_._has_bits_),
-        26, // hasbit index offset
+        28, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.rule_version_),
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.battle_config_id_),
@@ -529,6 +541,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.tier_wushuang_centi_),
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.desc_),
         PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.milestone_win_matches_),
+        PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.skill_ban_slots_per_team_),
+        PROTOBUF_FIELD_OFFSET(::RankedRuleTable, _impl_.skill_ban_min_rating_centi_),
         1,
         2,
         3,
@@ -552,6 +566,8 @@ const ::uint32_t
         21,
         0,
         22,
+        23,
+        24,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RankedRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -562,7 +578,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::RankedRuleTable)},
-        {49, sizeof(::RankedRuleTableData)},
+        {53, sizeof(::RankedRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -571,7 +587,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_rankedrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026rankedrule_table.proto\"\234\005\n\017RankedRuleT"
+    "\n\026rankedrule_table.proto\"\342\005\n\017RankedRuleT"
     "able\022\n\n\002id\030\001 \001(\r\022\024\n\014rule_version\030\002 \001(\r\022\030"
     "\n\020battle_config_id\030\003 \001(\r\022\032\n\022reference_cl"
     "ass_id\030\004 \001(\r\022\031\n\021competitive_level\030\005 \001(\r\022"
@@ -588,16 +604,18 @@ const char descriptor_table_protodef_rankedrule_5ftable_2eproto[] ABSL_ATTRIBUTE
     " \001(\r\022\033\n\023tier_yunzhang_centi\030\023 \001(\r\022\032\n\022tie"
     "r_tianshu_centi\030\024 \001(\r\022\033\n\023tier_wushuang_c"
     "enti\030\025 \001(\r\022\014\n\004desc\030\026 \001(\t\022\035\n\025milestone_wi"
-    "n_matches\030\027 \001(\r\"5\n\023RankedRuleTableData\022\036"
-    "\n\004data\030\001 \003(\0132\020.RankedRuleTableBA\n\016com.ga"
-    "me.tableB\031RankedRuleTableOuterClassP\001Z\022g"
-    "enerated/pb/tableb\006proto3"
+    "n_matches\030\027 \001(\r\022 \n\030skill_ban_slots_per_t"
+    "eam\030\030 \001(\r\022\"\n\032skill_ban_min_rating_centi\030"
+    "\031 \001(\r\"5\n\023RankedRuleTableData\022\036\n\004data\030\001 \003"
+    "(\0132\020.RankedRuleTableBA\n\016com.game.tableB\031"
+    "RankedRuleTableOuterClassP\001Z\022generated/p"
+    "b/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_rankedrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_rankedrule_5ftable_2eproto = {
     false,
     false,
-    825,
+    895,
     descriptor_table_protodef_rankedrule_5ftable_2eproto,
     "rankedrule_table.proto",
     &descriptor_table_rankedrule_5ftable_2eproto_once,
@@ -647,9 +665,9 @@ RankedRuleTable::RankedRuleTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, milestone_win_matches_) -
+           offsetof(Impl_, skill_ban_min_rating_centi_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::milestone_win_matches_));
+               sizeof(Impl_::skill_ban_min_rating_centi_));
 
   // @@protoc_insertion_point(copy_constructor:RankedRuleTable)
 }
@@ -664,9 +682,9 @@ inline void RankedRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, milestone_win_matches_) -
+           offsetof(Impl_, skill_ban_min_rating_centi_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::milestone_win_matches_));
+               sizeof(Impl_::skill_ban_min_rating_centi_));
 }
 RankedRuleTable::~RankedRuleTable() {
   // @@protoc_insertion_point(destructor:RankedRuleTable)
@@ -730,11 +748,12 @@ PROTOBUF_NOINLINE void RankedRuleTable::Clear() {
         reinterpret_cast<char*>(&_impl_.milestone_avatar_matches_) -
         reinterpret_cast<char*>(&_impl_.season_duration_days_)) + sizeof(_impl_.milestone_avatar_matches_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.milestone_card_matches_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.milestone_win_matches_) -
-        reinterpret_cast<char*>(&_impl_.milestone_card_matches_)) + sizeof(_impl_.milestone_win_matches_));
+        reinterpret_cast<char*>(&_impl_.skill_ban_slots_per_team_) -
+        reinterpret_cast<char*>(&_impl_.milestone_card_matches_)) + sizeof(_impl_.skill_ban_slots_per_team_));
   }
+  _impl_.skill_ban_min_rating_centi_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -966,6 +985,24 @@ PROTOBUF_NOINLINE void RankedRuleTable::Clear() {
     }
   }
 
+  // uint32 skill_ban_slots_per_team = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_skill_ban_slots_per_team() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_skill_ban_slots_per_team(), target);
+    }
+  }
+
+  // uint32 skill_ban_min_rating_centi = 25;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_skill_ban_min_rating_centi() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          25, this_._internal_skill_ban_min_rating_centi(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1107,7 +1144,7 @@ PROTOBUF_NOINLINE void RankedRuleTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 milestone_card_matches = 16;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_milestone_card_matches() != 0) {
@@ -1155,6 +1192,22 @@ PROTOBUF_NOINLINE void RankedRuleTable::Clear() {
       if (this_._internal_milestone_win_matches() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_milestone_win_matches());
+      }
+    }
+    // uint32 skill_ban_slots_per_team = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_skill_ban_slots_per_team() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_skill_ban_slots_per_team());
+      }
+    }
+  }
+   {
+    // uint32 skill_ban_min_rating_centi = 25;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_skill_ban_min_rating_centi() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_skill_ban_min_rating_centi());
       }
     }
   }
@@ -1263,7 +1316,7 @@ void RankedRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_milestone_card_matches() != 0) {
         _this->_impl_.milestone_card_matches_ = from._impl_.milestone_card_matches_;
@@ -1299,6 +1352,16 @@ void RankedRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.milestone_win_matches_ = from._impl_.milestone_win_matches_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_skill_ban_slots_per_team() != 0) {
+        _this->_impl_.skill_ban_slots_per_team_ = from._impl_.skill_ban_slots_per_team_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (from._internal_skill_ban_min_rating_centi() != 0) {
+      _this->_impl_.skill_ban_min_rating_centi_ = from._impl_.skill_ban_min_rating_centi_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1321,8 +1384,8 @@ void RankedRuleTable::InternalSwap(RankedRuleTable* PROTOBUF_RESTRICT PROTOBUF_N
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.milestone_win_matches_)
-      + sizeof(RankedRuleTable::_impl_.milestone_win_matches_)
+      PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.skill_ban_min_rating_centi_)
+      + sizeof(RankedRuleTable::_impl_.skill_ban_min_rating_centi_)
       - PROTOBUF_FIELD_OFFSET(RankedRuleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

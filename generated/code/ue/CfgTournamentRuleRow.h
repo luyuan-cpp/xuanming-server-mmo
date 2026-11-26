@@ -178,4 +178,8 @@ struct FCfgTournamentRuleRow : public FTableRowBase
 	/** BO3 淘汰赛首局开战前是否开启双方队长五行灵脉禁选(V4,默认 true) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
 	bool leyline_ban_enabled = false;
+
+	/** 锦标赛每队战前技能禁选槽数（0=关闭，3=每队禁3招，BO3 每小局独立重禁） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	int32 skill_ban_slots_per_team = 0;
 };

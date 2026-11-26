@@ -1103,8 +1103,10 @@ type BattlePlayerSnapshot struct {
 	SeasonWeeklyAffixId uint32 `protobuf:"varint,30,opt,name=season_weekly_affix_id,json=seasonWeeklyAffixId,proto3" json:"season_weekly_affix_id,omitempty"`
 	// 玩家已启用的技能特效外观映射（skill_table_id -> SkillVfxCosmetic.id，纯战斗画面表现零数值）。
 	EquippedSkillVfx map[uint32]uint32 `protobuf:"bytes,31,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 本局所属队伍的队长标记（由 match 在锦标赛/组排成局时填入，用于 3 Ban 同票决胜；单排/路人全 false）。
+	IsTeamCaptain bool `protobuf:"varint,32,opt,name=is_team_captain,json=isTeamCaptain,proto3" json:"is_team_captain,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -1352,6 +1354,13 @@ func (x *BattlePlayerSnapshot) GetEquippedSkillVfx() map[uint32]uint32 {
 		return x.EquippedSkillVfx
 	}
 	return nil
+}
+
+func (x *BattlePlayerSnapshot) GetIsTeamCaptain() bool {
+	if x != nil {
+		return x.IsTeamCaptain
+	}
+	return false
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -2681,8 +2690,10 @@ type BattlePrepPlayerState struct {
 	SelectedPetTableId uint32                 `protobuf:"varint,5,opt,name=selected_pet_table_id,json=selectedPetTableId,proto3" json:"selected_pet_table_id,omitempty"`
 	SelectedPetName    string                 `protobuf:"bytes,6,opt,name=selected_pet_name,json=selectedPetName,proto3" json:"selected_pet_name,omitempty"`
 	Ready              bool                   `protobuf:"varint,7,opt,name=ready,proto3" json:"ready,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 本人当前提名的本局禁用技能有序列表（0..3，下标 0 为最高优先级；仅向同队下发）。
+	NominatedBanSkillIds []uint32 `protobuf:"varint,8,rep,packed,name=nominated_ban_skill_ids,json=nominatedBanSkillIds,proto3" json:"nominated_ban_skill_ids,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BattlePrepPlayerState) Reset() {
@@ -2764,17 +2775,27 @@ func (x *BattlePrepPlayerState) GetReady() bool {
 	return false
 }
 
-// 论剑 V3 战前 15 秒明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
+func (x *BattlePrepPlayerState) GetNominatedBanSkillIds() []uint32 {
+	if x != nil {
+		return x.NominatedBanSkillIds
+	}
+	return nil
+}
+
+// 论剑 V3 战前明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
 type BattlePrepState struct {
-	state              protoimpl.MessageState   `protogen:"open.v1"`
-	Active             bool                     `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                                          // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
-	DeadlineMs         uint64                   `protobuf:"varint,2,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                // 战前变阵截止时刻（Unix 毫秒，由房间定时器回填）
-	DurationSeconds    uint32                   `protobuf:"varint,3,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"` // 战前变阵总时长（秒，默认 15）
-	SelfAvailableSeals []*BattlePrepSealOption  `protobuf:"bytes,4,rep,name=self_available_seals,json=selfAvailableSeals,proto3" json:"self_available_seals,omitempty"`
-	SelfAvailablePets  []*BattlePrepPetOption   `protobuf:"bytes,5,rep,name=self_available_pets,json=selfAvailablePets,proto3" json:"self_available_pets,omitempty"`
-	TeamStates         []*BattlePrepPlayerState `protobuf:"bytes,6,rep,name=team_states,json=teamStates,proto3" json:"team_states,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                    protoimpl.MessageState   `protogen:"open.v1"`
+	Active                   bool                     `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                                          // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
+	DeadlineMs               uint64                   `protobuf:"varint,2,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                // 战前变阵截止时刻（Unix 毫秒，由房间定时器回填）
+	DurationSeconds          uint32                   `protobuf:"varint,3,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"` // 战前变阵总时长（秒，默认 15；开启技能禁选为 25）
+	SelfAvailableSeals       []*BattlePrepSealOption  `protobuf:"bytes,4,rep,name=self_available_seals,json=selfAvailableSeals,proto3" json:"self_available_seals,omitempty"`
+	SelfAvailablePets        []*BattlePrepPetOption   `protobuf:"bytes,5,rep,name=self_available_pets,json=selfAvailablePets,proto3" json:"self_available_pets,omitempty"`
+	TeamStates               []*BattlePrepPlayerState `protobuf:"bytes,6,rep,name=team_states,json=teamStates,proto3" json:"team_states,omitempty"`
+	SkillBanSlotsPerTeam     uint32                   `protobuf:"varint,7,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`                    // 本局每队可用技能禁用槽数（0=未启用，3=每队禁3招）
+	BanCandidateSkillIds     []uint32                 `protobuf:"varint,8,rep,packed,name=ban_candidate_skill_ids,json=banCandidateSkillIds,proto3" json:"ban_candidate_skill_ids,omitempty"`               // 本局白名单可禁技能 ID 列表（升序；仅参战者可见）
+	TeamEffectiveBanSkillIds []uint32                 `protobuf:"varint,9,rep,packed,name=team_effective_ban_skill_ids,json=teamEffectiveBanSkillIds,proto3" json:"team_effective_ban_skill_ids,omitempty"` // 按当前同队提名确定性聚合的本队生效禁招（仅同队可见，对手与观众清空）
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *BattlePrepState) Reset() {
@@ -2845,6 +2866,27 @@ func (x *BattlePrepState) GetSelfAvailablePets() []*BattlePrepPetOption {
 func (x *BattlePrepState) GetTeamStates() []*BattlePrepPlayerState {
 	if x != nil {
 		return x.TeamStates
+	}
+	return nil
+}
+
+func (x *BattlePrepState) GetSkillBanSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillBanSlotsPerTeam
+	}
+	return 0
+}
+
+func (x *BattlePrepState) GetBanCandidateSkillIds() []uint32 {
+	if x != nil {
+		return x.BanCandidateSkillIds
+	}
+	return nil
+}
+
+func (x *BattlePrepState) GetTeamEffectiveBanSkillIds() []uint32 {
+	if x != nil {
+		return x.TeamEffectiveBanSkillIds
 	}
 	return nil
 }
@@ -4257,8 +4299,10 @@ type RankedMatchContext struct {
 	UseFreePreset bool `protobuf:"varint,8,opt,name=use_free_preset,json=useFreePreset,proto3" json:"use_free_preset,omitempty"`
 	// 正式排位开局前本季连胜 >= 3 的成员连胜数（player_id -> win_streak；未达 3 连胜不填，保持 members 语义不变）。
 	MemberWinStreaks map[uint64]uint32 `protobuf:"bytes,9,rep,name=member_win_streaks,json=memberWinStreaks,proto3" json:"member_win_streaks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 成局时按 RankedRule 冻结的每队技能禁选槽数（0=未达云章门槛或关闭，3=每队禁3招）。
+	SkillBanSlotsPerTeam uint32 `protobuf:"varint,10,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *RankedMatchContext) Reset() {
@@ -4352,6 +4396,13 @@ func (x *RankedMatchContext) GetMemberWinStreaks() map[uint64]uint32 {
 		return x.MemberWinStreaks
 	}
 	return nil
+}
+
+func (x *RankedMatchContext) GetSkillBanSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillBanSlotsPerTeam
+	}
+	return 0
 }
 
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
@@ -4745,24 +4796,25 @@ func (x *BattleTrialJournalFacts) GetSelfParriedCleaveAtLeastOnce() bool {
 }
 
 type TournamentBattleContext struct {
-	state          protoimpl.MessageState   `protogen:"open.v1"`
-	SeasonId       uint32                   `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
-	MatchId        uint64                   `protobuf:"varint,2,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
-	BestOf         uint32                   `protobuf:"varint,3,opt,name=best_of,json=bestOf,proto3" json:"best_of,omitempty"`                                                       // 1=BO1, 3=BO3
-	GameIndex      uint32                   `protobuf:"varint,4,opt,name=game_index,json=gameIndex,proto3" json:"game_index,omitempty"`                                              // 当前第几小局(1..best_of)
-	WinsA          uint32                   `protobuf:"varint,5,opt,name=wins_a,json=winsA,proto3" json:"wins_a,omitempty"`                                                          // 本小局开打前 A 队已胜局数
-	WinsB          uint32                   `protobuf:"varint,6,opt,name=wins_b,json=winsB,proto3" json:"wins_b,omitempty"`                                                          // 本小局开打前 B 队已胜局数
-	LeylineElement TournamentLeylineElement `protobuf:"varint,7,opt,name=leyline_element,json=leylineElement,proto3,enum=TournamentLeylineElement" json:"leyline_element,omitempty"` // 本小局生效五行灵脉阵眼
-	SquadAId       uint64                   `protobuf:"varint,8,opt,name=squad_a_id,json=squadAId,proto3" json:"squad_a_id,omitempty"`
-	SquadAName     string                   `protobuf:"bytes,9,opt,name=squad_a_name,json=squadAName,proto3" json:"squad_a_name,omitempty"`
-	SquadBId       uint64                   `protobuf:"varint,10,opt,name=squad_b_id,json=squadBId,proto3" json:"squad_b_id,omitempty"`
-	SquadBName     string                   `protobuf:"bytes,11,opt,name=squad_b_name,json=squadBName,proto3" json:"squad_b_name,omitempty"`
-	SquadAEmblemId uint32                   `protobuf:"varint,12,opt,name=squad_a_emblem_id,json=squadAEmblemId,proto3" json:"squad_a_emblem_id,omitempty"` // V3: A 队官方预设道家队徽(1..8)
-	SquadBEmblemId uint32                   `protobuf:"varint,13,opt,name=squad_b_emblem_id,json=squadBEmblemId,proto3" json:"squad_b_emblem_id,omitempty"` // V3: B 队官方预设道家队徽(1..8)
-	IsWarmup       bool                     `protobuf:"varint,14,opt,name=is_warmup,json=isWarmup,proto3" json:"is_warmup,omitempty"`                       // V3: true=赛前零积分热身约战
-	IsThirdPlace   bool                     `protobuf:"varint,15,opt,name=is_third_place,json=isThirdPlace,proto3" json:"is_third_place,omitempty"`         // V3: true=四强季军争夺战(铜牌战)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                protoimpl.MessageState   `protogen:"open.v1"`
+	SeasonId             uint32                   `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	MatchId              uint64                   `protobuf:"varint,2,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	BestOf               uint32                   `protobuf:"varint,3,opt,name=best_of,json=bestOf,proto3" json:"best_of,omitempty"`                                                       // 1=BO1, 3=BO3
+	GameIndex            uint32                   `protobuf:"varint,4,opt,name=game_index,json=gameIndex,proto3" json:"game_index,omitempty"`                                              // 当前第几小局(1..best_of)
+	WinsA                uint32                   `protobuf:"varint,5,opt,name=wins_a,json=winsA,proto3" json:"wins_a,omitempty"`                                                          // 本小局开打前 A 队已胜局数
+	WinsB                uint32                   `protobuf:"varint,6,opt,name=wins_b,json=winsB,proto3" json:"wins_b,omitempty"`                                                          // 本小局开打前 B 队已胜局数
+	LeylineElement       TournamentLeylineElement `protobuf:"varint,7,opt,name=leyline_element,json=leylineElement,proto3,enum=TournamentLeylineElement" json:"leyline_element,omitempty"` // 本小局生效五行灵脉阵眼
+	SquadAId             uint64                   `protobuf:"varint,8,opt,name=squad_a_id,json=squadAId,proto3" json:"squad_a_id,omitempty"`
+	SquadAName           string                   `protobuf:"bytes,9,opt,name=squad_a_name,json=squadAName,proto3" json:"squad_a_name,omitempty"`
+	SquadBId             uint64                   `protobuf:"varint,10,opt,name=squad_b_id,json=squadBId,proto3" json:"squad_b_id,omitempty"`
+	SquadBName           string                   `protobuf:"bytes,11,opt,name=squad_b_name,json=squadBName,proto3" json:"squad_b_name,omitempty"`
+	SquadAEmblemId       uint32                   `protobuf:"varint,12,opt,name=squad_a_emblem_id,json=squadAEmblemId,proto3" json:"squad_a_emblem_id,omitempty"`                     // V3: A 队官方预设道家队徽(1..8)
+	SquadBEmblemId       uint32                   `protobuf:"varint,13,opt,name=squad_b_emblem_id,json=squadBEmblemId,proto3" json:"squad_b_emblem_id,omitempty"`                     // V3: B 队官方预设道家队徽(1..8)
+	IsWarmup             bool                     `protobuf:"varint,14,opt,name=is_warmup,json=isWarmup,proto3" json:"is_warmup,omitempty"`                                           // V3: true=赛前零积分热身约战
+	IsThirdPlace         bool                     `protobuf:"varint,15,opt,name=is_third_place,json=isThirdPlace,proto3" json:"is_third_place,omitempty"`                             // V3: true=四强季军争夺战(铜牌战)
+	SkillBanSlotsPerTeam uint32                   `protobuf:"varint,16,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"` // 战前技能禁选每队槽数（默认 3，0=关闭）
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *TournamentBattleContext) Reset() {
@@ -4898,6 +4950,13 @@ func (x *TournamentBattleContext) GetIsThirdPlace() bool {
 		return x.IsThirdPlace
 	}
 	return false
+}
+
+func (x *TournamentBattleContext) GetSkillBanSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillBanSlotsPerTeam
+	}
+	return 0
 }
 
 // ---- 五行幻境·轻肉鸽周常爬塔上下文与结算回传(docs/design/wuxing-gameplay-expansions-v1.md) ----
@@ -5055,6 +5114,7 @@ type CustomDuelRules struct {
 	AllowPublicSpectate         bool                   `protobuf:"varint,5,opt,name=allow_public_spectate,json=allowPublicSpectate,proto3" json:"allow_public_spectate,omitempty"`                           // true=允许全服公开观战
 	ChallengerCharacterPresetId uint32                 `protobuf:"varint,6,opt,name=challenger_character_preset_id,json=challengerCharacterPresetId,proto3" json:"challenger_character_preset_id,omitempty"` // 公平模板切磋时发起者所选人物预设（0=默认 101）
 	ChallengerPetPresetId       uint32                 `protobuf:"varint,7,opt,name=challenger_pet_preset_id,json=challengerPetPresetId,proto3" json:"challenger_pet_preset_id,omitempty"`                   // 公平模板切磋时发起者所选灵宠预设（0=默认 203）
+	SkillBanSlotsPerTeam        uint32                 `protobuf:"varint,8,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`                    // 战前纯禁招每队槽数（白名单 0 或 3；禁止与 use_free_preset=true 同开）
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -5134,6 +5194,13 @@ func (x *CustomDuelRules) GetChallengerCharacterPresetId() uint32 {
 func (x *CustomDuelRules) GetChallengerPetPresetId() uint32 {
 	if x != nil {
 		return x.ChallengerPetPresetId
+	}
+	return 0
+}
+
+func (x *CustomDuelRules) GetSkillBanSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillBanSlotsPerTeam
 	}
 	return 0
 }
@@ -5328,7 +5395,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x17_outgoing_heal_snapshot\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xdb\v\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x83\f\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -5365,7 +5432,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fformation_id\x18\x1c \x01(\rR\vformationId\x12>\n" +
 	"\rtower_context\x18\x1d \x01(\v2\x19.WuxingTowerBattleContextR\ftowerContext\x123\n" +
 	"\x16season_weekly_affix_id\x18\x1e \x01(\rR\x13seasonWeeklyAffixId\x12Y\n" +
-	"\x12equipped_skill_vfx\x18\x1f \x03(\v2+.BattlePlayerSnapshot.EquippedSkillVfxEntryR\x10equippedSkillVfx\x1a=\n" +
+	"\x12equipped_skill_vfx\x18\x1f \x03(\v2+.BattlePlayerSnapshot.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12&\n" +
+	"\x0fis_team_captain\x18  \x01(\bR\risTeamCaptain\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
@@ -5548,7 +5616,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fmagic_attack\x18\b \x01(\x04R\vmagicAttack\x12\x18\n" +
 	"\adefense\x18\t \x01(\x04R\adefense\x12&\n" +
 	"\x0fskill_table_ids\x18\n" +
-	" \x03(\rR\rskillTableIds\"\x9a\x02\n" +
+	" \x03(\rR\rskillTableIds\"\xd1\x02\n" +
 	"\x15BattlePrepPlayerState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -5557,7 +5625,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0fselected_pet_id\x18\x04 \x01(\x04R\rselectedPetId\x121\n" +
 	"\x15selected_pet_table_id\x18\x05 \x01(\rR\x12selectedPetTableId\x12*\n" +
 	"\x11selected_pet_name\x18\x06 \x01(\tR\x0fselectedPetName\x12\x14\n" +
-	"\x05ready\x18\a \x01(\bR\x05ready\"\xbd\x02\n" +
+	"\x05ready\x18\a \x01(\bR\x05ready\x125\n" +
+	"\x17nominated_ban_skill_ids\x18\b \x03(\rR\x14nominatedBanSkillIds\"\xec\x03\n" +
 	"\x0fBattlePrepState\x12\x16\n" +
 	"\x06active\x18\x01 \x01(\bR\x06active\x12\x1f\n" +
 	"\vdeadline_ms\x18\x02 \x01(\x04R\n" +
@@ -5566,7 +5635,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x14self_available_seals\x18\x04 \x03(\v2\x15.BattlePrepSealOptionR\x12selfAvailableSeals\x12D\n" +
 	"\x13self_available_pets\x18\x05 \x03(\v2\x14.BattlePrepPetOptionR\x11selfAvailablePets\x127\n" +
 	"\vteam_states\x18\x06 \x03(\v2\x16.BattlePrepPlayerStateR\n" +
-	"teamStates\"\xac\x01\n" +
+	"teamStates\x126\n" +
+	"\x18skill_ban_slots_per_team\x18\a \x01(\rR\x14skillBanSlotsPerTeam\x125\n" +
+	"\x17ban_candidate_skill_ids\x18\b \x03(\rR\x14banCandidateSkillIds\x12>\n" +
+	"\x1cteam_effective_ban_skill_ids\x18\t \x03(\rR\x18teamEffectiveBanSkillIds\"\xac\x01\n" +
 	"\x12BattleTacticalPing\x12(\n" +
 	"\x10sender_player_id\x18\x01 \x01(\x04R\x0esenderPlayerId\x12&\n" +
 	"\x0ftarget_actor_id\x18\x02 \x01(\x04R\rtargetActorId\x12#\n" +
@@ -5706,7 +5778,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rpet_preset_id\x18\x02 \x01(\rR\vpetPresetId\"d\n" +
 	"\x13RankedMemberLoadout\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x120\n" +
-	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\xde\x03\n" +
+	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\x96\x04\n" +
 	"\x12RankedMatchContext\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -5717,7 +5789,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12config_fingerprint\x18\x06 \x01(\tR\x11configFingerprint\x12.\n" +
 	"\amembers\x18\a \x03(\v2\x14.RankedMemberLoadoutR\amembers\x12&\n" +
 	"\x0fuse_free_preset\x18\b \x01(\bR\ruseFreePreset\x12W\n" +
-	"\x12member_win_streaks\x18\t \x03(\v2).RankedMatchContext.MemberWinStreaksEntryR\x10memberWinStreaks\x1aC\n" +
+	"\x12member_win_streaks\x18\t \x03(\v2).RankedMatchContext.MemberWinStreaksEntryR\x10memberWinStreaks\x126\n" +
+	"\x18skill_ban_slots_per_team\x18\n" +
+	" \x01(\rR\x14skillBanSlotsPerTeam\x1aC\n" +
 	"\x15MemberWinStreaksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xf7\x01\n" +
@@ -5760,7 +5834,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x1dheal_interrupt_backlash_count\x18\x16 \x01(\rR\x1ahealInterruptBacklashCount\x12,\n" +
 	"\x12stance_break_count\x18\x17 \x01(\rR\x10stanceBreakCount\x127\n" +
 	"\x18all_self_cleaves_parried\x18\x18 \x01(\bR\x15allSelfCleavesParried\x12G\n" +
-	"!self_parried_cleave_at_least_once\x18\x19 \x01(\bR\x1cselfParriedCleaveAtLeastOnce\"\x94\x04\n" +
+	"!self_parried_cleave_at_least_once\x18\x19 \x01(\bR\x1cselfParriedCleaveAtLeastOnce\"\xcc\x04\n" +
 	"\x17TournamentBattleContext\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12\x17\n" +
@@ -5782,7 +5856,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11squad_a_emblem_id\x18\f \x01(\rR\x0esquadAEmblemId\x12)\n" +
 	"\x11squad_b_emblem_id\x18\r \x01(\rR\x0esquadBEmblemId\x12\x1b\n" +
 	"\tis_warmup\x18\x0e \x01(\bR\bisWarmup\x12$\n" +
-	"\x0eis_third_place\x18\x0f \x01(\bR\fisThirdPlace\"\xd0\x01\n" +
+	"\x0eis_third_place\x18\x0f \x01(\bR\fisThirdPlace\x126\n" +
+	"\x18skill_ban_slots_per_team\x18\x10 \x01(\rR\x14skillBanSlotsPerTeam\"\xd0\x01\n" +
 	"\x18WuxingTowerBattleContext\x12\x19\n" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\x04R\x05runId\x12\x14\n" +
@@ -5793,7 +5868,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\x04R\x05runId\x12\x14\n" +
 	"\x05floor\x18\x03 \x01(\rR\x05floor\x12!\n" +
-	"\ftotal_rounds\x18\x04 \x01(\rR\vtotalRounds\"\x85\x03\n" +
+	"\ftotal_rounds\x18\x04 \x01(\rR\vtotalRounds\"\xbd\x03\n" +
 	"\x0fCustomDuelRules\x12&\n" +
 	"\x0fuse_free_preset\x18\x01 \x01(\bR\ruseFreePreset\x128\n" +
 	"\x18enable_polarity_rotation\x18\x02 \x01(\bR\x16enablePolarityRotation\x120\n" +
@@ -5801,7 +5876,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12ban_control_skills\x18\x04 \x01(\bR\x10banControlSkills\x122\n" +
 	"\x15allow_public_spectate\x18\x05 \x01(\bR\x13allowPublicSpectate\x12C\n" +
 	"\x1echallenger_character_preset_id\x18\x06 \x01(\rR\x1bchallengerCharacterPresetId\x127\n" +
-	"\x18challenger_pet_preset_id\x18\a \x01(\rR\x15challengerPetPresetId\"\x8b\x04\n" +
+	"\x18challenger_pet_preset_id\x18\a \x01(\rR\x15challengerPetPresetId\x126\n" +
+	"\x18skill_ban_slots_per_team\x18\b \x01(\rR\x14skillBanSlotsPerTeam\"\x8b\x04\n" +
 	"\x17BattleActorBuildSummary\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +

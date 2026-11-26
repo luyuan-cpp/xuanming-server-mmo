@@ -129,6 +129,8 @@ static void RankedRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowOb
 	RankedRuleTableCheckNarrowedField(RowObject, TEXT("tier_tianshu_centi"), TEXT("tier_tianshu_centi"), RowIndex, 2147483647.0, TEXT("uint32"));
 	RankedRuleTableCheckNarrowedField(RowObject, TEXT("tier_wushuang_centi"), TEXT("tier_wushuang_centi"), RowIndex, 2147483647.0, TEXT("uint32"));
 	RankedRuleTableCheckNarrowedField(RowObject, TEXT("milestone_win_matches"), TEXT("milestone_win_matches"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RankedRuleTableCheckNarrowedField(RowObject, TEXT("skill_ban_slots_per_team"), TEXT("skill_ban_slots_per_team"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RankedRuleTableCheckNarrowedField(RowObject, TEXT("skill_ban_min_rating_centi"), TEXT("skill_ban_min_rating_centi"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool URankedRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

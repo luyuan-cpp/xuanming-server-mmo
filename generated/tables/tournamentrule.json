@@ -30,6 +30,7 @@
    "salute_item_count": 3,
    "salute_item_id": 20,
    "settle_display_days": 5,
+   "skill_ban_slots_per_team": 3,
    "third_place_match_enabled": true,
    "warmup_spar_enabled": true
   }

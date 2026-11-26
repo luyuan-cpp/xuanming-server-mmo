@@ -106,6 +106,8 @@ message BattlePlayerSnapshot {
   uint32 season_weekly_affix_id = 30;
   // 玩家已启用的技能特效外观映射（skill_table_id -> SkillVfxCosmetic.id，纯战斗画面表现零数值）。
   map<uint32, uint32> equipped_skill_vfx = 31;
+  // 本局所属队伍的队长标记（由 match 在锦标赛/组排成局时填入，用于 3 Ban 同票决胜；单排/路人全 false）。
+  bool is_team_captain = 32;
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -348,16 +350,21 @@ message BattlePrepPlayerState {
   uint32 selected_pet_table_id = 5;
   string selected_pet_name = 6;
   bool ready = 7;
+  // 本人当前提名的本局禁用技能有序列表（0..3，下标 0 为最高优先级；仅向同队下发）。
+  repeated uint32 nominated_ban_skill_ids = 8;
 }
 
-// 论剑 V3 战前 15 秒明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
+// 论剑 V3 战前明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
 message BattlePrepState {
   bool active = 1;                                    // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
   uint64 deadline_ms = 2;                             // 战前变阵截止时刻（Unix 毫秒，由房间定时器回填）
-  uint32 duration_seconds = 3;                        // 战前变阵总时长（秒，默认 15）
+  uint32 duration_seconds = 3;                        // 战前变阵总时长（秒，默认 15；开启技能禁选为 25）
   repeated BattlePrepSealOption self_available_seals = 4;
   repeated BattlePrepPetOption self_available_pets = 5;
   repeated BattlePrepPlayerState team_states = 6;
+  uint32 skill_ban_slots_per_team = 7;                // 本局每队可用技能禁用槽数（0=未启用，3=每队禁3招）
+  repeated uint32 ban_candidate_skill_ids = 8;        // 本局白名单可禁技能 ID 列表（升序；仅参战者可见）
+  repeated uint32 team_effective_ban_skill_ids = 9;   // 按当前同队提名确定性聚合的本队生效禁招（仅同队可见，对手与观众清空）
 }
 
 // 论剑 V4 队内一键战术标点类型（零文字沟通，严格仅同队可见）。
@@ -614,6 +621,8 @@ message RankedMatchContext {
   bool use_free_preset = 8;
   // 正式排位开局前本季连胜 >= 3 的成员连胜数（player_id -> win_streak；未达 3 连胜不填，保持 members 语义不变）。
   map<uint64, uint32> member_win_streaks = 9;
+  // 成局时按 RankedRule 冻结的每队技能禁选槽数（0=未达云章门槛或关闭，3=每队禁3招）。
+  uint32 skill_ban_slots_per_team = 10;
 }
 
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
@@ -688,6 +697,7 @@ message TournamentBattleContext {
   uint32 squad_b_emblem_id = 13;                   // V3: B 队官方预设道家队徽(1..8)
   bool is_warmup = 14;                             // V3: true=赛前零积分热身约战
   bool is_third_place = 15;                        // V3: true=四强季军争夺战(铜牌战)
+  uint32 skill_ban_slots_per_team = 16;            // 战前技能禁选每队槽数（默认 3，0=关闭）
 }
 
 // ---- 五行幻境·轻肉鸽周常爬塔上下文与结算回传(docs/design/wuxing-gameplay-expansions-v1.md) ----
@@ -715,6 +725,7 @@ message CustomDuelRules {
   bool allow_public_spectate = 5;                  // true=允许全服公开观战
   uint32 challenger_character_preset_id = 6;       // 公平模板切磋时发起者所选人物预设（0=默认 101）
   uint32 challenger_pet_preset_id = 7;             // 公平模板切磋时发起者所选灵宠预设（0=默认 203）
+  uint32 skill_ban_slots_per_team = 8;             // 战前纯禁招每队槽数（白名单 0 或 3；禁止与 use_free_preset=true 同开）
 }
 
 // ---- 战报一键看配装·脱敏公开构筑摘要(严禁含私密概率/背包/冷却) ----

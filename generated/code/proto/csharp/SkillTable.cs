@@ -27,7 +27,7 @@ public static partial class SkillTableReflection {
           "dWUYAiABKAQiWQoWU2tpbGxyZXF1aXJlZF9yZXNvdXJjZRIeChZyZXF1aXJl",
           "ZF9yZXNvdXJjZV90eXBlGAEgASgNEh8KF3JlcXVpcmVkX3Jlc291cmNlX3Zh",
           "bHVlGAIgASgNIkoKElNraWxsY29zdF9yZXNvdXJjZRIYChBjb3N0X3Jlc291",
-          "cmNlX2lkGAEgASgNEhoKEmNvc3RfcmVzb3VyY2VfY29zdBgCIAEoDSKqCwoK",
+          "cmNlX2lkGAEgASgNEhoKEmNvc3RfcmVzb3VyY2VfY29zdBgCIAEoDSLFCwoK",
           "U2tpbGxUYWJsZRIKCgJpZBgBIAEoDRISCgpza2lsbF90eXBlGAIgAygNEhYK",
           "DnRhcmdldGluZ19tb2RlGAMgAygNEhYKDnJlcXVpcmVfdGFyZ2V0GAQgASgN",
           "EhUKDXRhcmdldF9zdGF0dXMYBSABKA0SEgoKY2FzdF9wb2ludBgGIAEoARIV",
@@ -57,19 +57,20 @@ public static partial class SkillTableReflection {
           "EhMKC2ZvcmJpZF9jb3B5GDkgASgNEhEKCXNlYXNvbl9pZBg6IAEoDRIRCglz",
           "Y3JvbGxfaWQYOyABKA0SEwoLcmFyaXR5X3RpZXIYPCABKA0SHwoXc2Vjb25k",
           "YXJ5X3RhcmdldF9wb2xpY3kYPSABKA0SFwoPZXhjbHVzaXZlX2dyb3VwGD4g",
-          "ASgNEioKDXJlcXVpcmVkX2l0ZW0YFSADKAsyEy5Ta2lsbHJlcXVpcmVkX2l0",
-          "ZW0SMgoRcmVxdWlyZWRfcmVzb3VyY2UYFiADKAsyFy5Ta2lsbHJlcXVpcmVk",
-          "X3Jlc291cmNlEioKDWNvc3RfcmVzb3VyY2UYFyADKAsyEy5Ta2lsbGNvc3Rf",
-          "cmVzb3VyY2UiKwoOU2tpbGxUYWJsZURhdGESGQoEZGF0YRgBIAMoCzILLlNr",
-          "aWxsVGFibGVCPAoOY29tLmdhbWUudGFibGVCFFNraWxsVGFibGVPdXRlckNs",
-          "YXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
+          "ASgNEhkKEWJhbl9wb29sX2NhdGVnb3J5GD8gASgNEioKDXJlcXVpcmVkX2l0",
+          "ZW0YFSADKAsyEy5Ta2lsbHJlcXVpcmVkX2l0ZW0SMgoRcmVxdWlyZWRfcmVz",
+          "b3VyY2UYFiADKAsyFy5Ta2lsbHJlcXVpcmVkX3Jlc291cmNlEioKDWNvc3Rf",
+          "cmVzb3VyY2UYFyADKAsyEy5Ta2lsbGNvc3RfcmVzb3VyY2UiKwoOU2tpbGxU",
+          "YWJsZURhdGESGQoEZGF0YRgBIAMoCzILLlNraWxsVGFibGVCPAoOY29tLmdh",
+          "bWUudGFibGVCFFNraWxsVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9w",
+          "Yi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillrequired_item), global::Skillrequired_item.Parser, new[]{ "RequiredItemType", "RequiredItemValue" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillrequired_resource), global::Skillrequired_resource.Parser, new[]{ "RequiredResourceType", "RequiredResourceValue" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillcost_resource), global::Skillcost_resource.Parser, new[]{ "CostResourceId", "CostResourceCost" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::SkillTable), global::SkillTable.Parser, new[]{ "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "ClassId", "Name", "Description", "IconKey", "Category", "UnlockLevel", "MaxRank", "TargetTeam", "MaxTargets", "ManaPercent", "CooldownRounds", "HealMultiplier", "HealPerLevel", "ExecuteHealThreshold", "ExecuteHealBonus", "RestoreManaPercent", "DispelCount", "Initiative", "PassiveStat", "PassivePercent", "BuffPercent", "BattleModel", "CasterMask", "AbilityKind", "PetMaxTargets", "InitEffect", "PrototypeCode", "MaxBattleUses", "HealthCostMode", "ActionTags", "AllowDeadTarget", "ForbidCopy", "SeasonId", "ScrollId", "RarityTier", "SecondaryTargetPolicy", "ExclusiveGroup", "RequiredItem", "RequiredResource", "CostResource" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SkillTable), global::SkillTable.Parser, new[]{ "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "ClassId", "Name", "Description", "IconKey", "Category", "UnlockLevel", "MaxRank", "TargetTeam", "MaxTargets", "ManaPercent", "CooldownRounds", "HealMultiplier", "HealPerLevel", "ExecuteHealThreshold", "ExecuteHealBonus", "RestoreManaPercent", "DispelCount", "Initiative", "PassiveStat", "PassivePercent", "BuffPercent", "BattleModel", "CasterMask", "AbilityKind", "PetMaxTargets", "InitEffect", "PrototypeCode", "MaxBattleUses", "HealthCostMode", "ActionTags", "AllowDeadTarget", "ForbidCopy", "SeasonId", "ScrollId", "RarityTier", "SecondaryTargetPolicy", "ExclusiveGroup", "BanPoolCategory", "RequiredItem", "RequiredResource", "CostResource" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SkillTableData), global::SkillTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -876,6 +877,7 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     rarityTier_ = other.rarityTier_;
     secondaryTargetPolicy_ = other.secondaryTargetPolicy_;
     exclusiveGroup_ = other.exclusiveGroup_;
+    banPoolCategory_ = other.banPoolCategory_;
     requiredItem_ = other.requiredItem_.Clone();
     requiredResource_ = other.requiredResource_.Clone();
     costResource_ = other.costResource_.Clone();
@@ -1592,6 +1594,18 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
   }
 
+  /// <summary>Field number for the "ban_pool_category" field.</summary>
+  public const int BanPoolCategoryFieldNumber = 63;
+  private uint banPoolCategory_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BanPoolCategory {
+    get { return banPoolCategory_; }
+    set {
+      banPoolCategory_ = value;
+    }
+  }
+
   /// <summary>Field number for the "required_item" field.</summary>
   public const int RequiredItemFieldNumber = 21;
   private static readonly pb::FieldCodec<global::Skillrequired_item> _repeated_requiredItem_codec
@@ -1699,6 +1713,7 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     if (RarityTier != other.RarityTier) return false;
     if (SecondaryTargetPolicy != other.SecondaryTargetPolicy) return false;
     if (ExclusiveGroup != other.ExclusiveGroup) return false;
+    if (BanPoolCategory != other.BanPoolCategory) return false;
     if(!requiredItem_.Equals(other.requiredItem_)) return false;
     if(!requiredResource_.Equals(other.requiredResource_)) return false;
     if(!costResource_.Equals(other.costResource_)) return false;
@@ -1768,6 +1783,7 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     if (RarityTier != 0) hash ^= RarityTier.GetHashCode();
     if (SecondaryTargetPolicy != 0) hash ^= SecondaryTargetPolicy.GetHashCode();
     if (ExclusiveGroup != 0) hash ^= ExclusiveGroup.GetHashCode();
+    if (BanPoolCategory != 0) hash ^= BanPoolCategory.GetHashCode();
     hash ^= requiredItem_.GetHashCode();
     hash ^= requiredResource_.GetHashCode();
     hash ^= costResource_.GetHashCode();
@@ -2016,6 +2032,10 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
       output.WriteRawTag(240, 3);
       output.WriteUInt32(ExclusiveGroup);
     }
+    if (BanPoolCategory != 0) {
+      output.WriteRawTag(248, 3);
+      output.WriteUInt32(BanPoolCategory);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -2253,6 +2273,10 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
       output.WriteRawTag(240, 3);
       output.WriteUInt32(ExclusiveGroup);
     }
+    if (BanPoolCategory != 0) {
+      output.WriteRawTag(248, 3);
+      output.WriteUInt32(BanPoolCategory);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -2431,6 +2455,9 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
     if (ExclusiveGroup != 0) {
       size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ExclusiveGroup);
+    }
+    if (BanPoolCategory != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(BanPoolCategory);
     }
     size += requiredItem_.CalculateSize(_repeated_requiredItem_codec);
     size += requiredResource_.CalculateSize(_repeated_requiredResource_codec);
@@ -2615,6 +2642,9 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
     if (other.ExclusiveGroup != 0) {
       ExclusiveGroup = other.ExclusiveGroup;
+    }
+    if (other.BanPoolCategory != 0) {
+      BanPoolCategory = other.BanPoolCategory;
     }
     requiredItem_.Add(other.requiredItem_);
     requiredResource_.Add(other.requiredResource_);
@@ -2890,6 +2920,10 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
           ExclusiveGroup = input.ReadUInt32();
           break;
         }
+        case 504: {
+          BanPoolCategory = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -3159,6 +3193,10 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
         }
         case 496: {
           ExclusiveGroup = input.ReadUInt32();
+          break;
+        }
+        case 504: {
+          BanPoolCategory = input.ReadUInt32();
           break;
         }
       }

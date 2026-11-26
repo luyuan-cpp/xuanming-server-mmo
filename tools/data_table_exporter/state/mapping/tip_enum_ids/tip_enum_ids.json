@@ -234,7 +234,8 @@
         "SkillLoadoutConflict": 7024,
         "SkillLoadoutNotLearned": 7025,
         "SkillLoadoutSchemeInvalid": 7026,
-        "SkillLoadoutVersionChanged": 7027
+        "SkillLoadoutVersionChanged": 7027,
+        "SkillBannedInBattle": 7028
       }
     },
     "buff_error": {

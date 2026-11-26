@@ -418,6 +418,17 @@ private static final long serialVersionUID = 0L;
     return leylineBanEnabled_;
   }
 
+  public static final int SKILL_BAN_SLOTS_PER_TEAM_FIELD_NUMBER = 32;
+  private int skillBanSlotsPerTeam_ = 0;
+  /**
+   * <code>uint32 skill_ban_slots_per_team = 32;</code>
+   * @return The skillBanSlotsPerTeam.
+   */
+  @java.lang.Override
+  public int getSkillBanSlotsPerTeam() {
+    return skillBanSlotsPerTeam_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -524,6 +535,9 @@ private static final long serialVersionUID = 0L;
     }
     if (leylineBanEnabled_ != false) {
       output.writeBool(31, leylineBanEnabled_);
+    }
+    if (skillBanSlotsPerTeam_ != 0) {
+      output.writeUInt32(32, skillBanSlotsPerTeam_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -652,6 +666,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(31, leylineBanEnabled_);
     }
+    if (skillBanSlotsPerTeam_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(32, skillBanSlotsPerTeam_);
+    }
     return size;
   }
   @java.lang.Override
@@ -738,6 +756,8 @@ private static final long serialVersionUID = 0L;
         != other.getThirdPlaceMatchEnabled()) return false;
     if (getLeylineBanEnabled()
         != other.getLeylineBanEnabled()) return false;
+    if (getSkillBanSlotsPerTeam()
+        != other.getSkillBanSlotsPerTeam()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -818,6 +838,8 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + LEYLINE_BAN_ENABLED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getLeylineBanEnabled());
+    hash = (37 * hash) + SKILL_BAN_SLOTS_PER_TEAM_FIELD_NUMBER;
+    hash = (53 * hash) + getSkillBanSlotsPerTeam();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -980,6 +1002,7 @@ private static final long serialVersionUID = 0L;
       predictionRewardMinHits_ = 0;
       thirdPlaceMatchEnabled_ = false;
       leylineBanEnabled_ = false;
+      skillBanSlotsPerTeam_ = 0;
       return this;
     }
 
@@ -1106,6 +1129,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x40000000) != 0)) {
         result.leylineBanEnabled_ = leylineBanEnabled_;
       }
+      if (((from_bitField0_ & 0x80000000) != 0)) {
+        result.skillBanSlotsPerTeam_ = skillBanSlotsPerTeam_;
+      }
     }
 
     @java.lang.Override
@@ -1214,6 +1240,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getLeylineBanEnabled() != false) {
         setLeylineBanEnabled(other.getLeylineBanEnabled());
+      }
+      if (other.getSkillBanSlotsPerTeam() != 0) {
+        setSkillBanSlotsPerTeam(other.getSkillBanSlotsPerTeam());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1396,6 +1425,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x40000000;
               break;
             } // case 248
+            case 256: {
+              skillBanSlotsPerTeam_ = input.readUInt32();
+              bitField0_ |= 0x80000000;
+              break;
+            } // case 256
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2441,6 +2475,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearLeylineBanEnabled() {
       bitField0_ = (bitField0_ & ~0x40000000);
       leylineBanEnabled_ = false;
+      onChanged();
+      return this;
+    }
+
+    private int skillBanSlotsPerTeam_ ;
+    /**
+     * <code>uint32 skill_ban_slots_per_team = 32;</code>
+     * @return The skillBanSlotsPerTeam.
+     */
+    @java.lang.Override
+    public int getSkillBanSlotsPerTeam() {
+      return skillBanSlotsPerTeam_;
+    }
+    /**
+     * <code>uint32 skill_ban_slots_per_team = 32;</code>
+     * @param value The skillBanSlotsPerTeam to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSkillBanSlotsPerTeam(int value) {
+
+      skillBanSlotsPerTeam_ = value;
+      bitField0_ |= 0x80000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 skill_ban_slots_per_team = 32;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSkillBanSlotsPerTeam() {
+      bitField0_ = (bitField0_ & ~0x80000000);
+      skillBanSlotsPerTeam_ = 0;
       onChanged();
       return this;
     }

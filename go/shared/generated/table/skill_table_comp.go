@@ -233,6 +233,10 @@ type SkillExclusive_groupComp struct {
     Value uint32
 }
 
+type SkillBan_pool_categoryComp struct {
+    Value uint32
+}
+
 type SkillSkill_typeComp struct {
     Values []uint32
 }
@@ -472,6 +476,10 @@ func MakeSkillSecondary_target_policyComp(row *pb.SkillTable) SkillSecondary_tar
 
 func MakeSkillExclusive_groupComp(row *pb.SkillTable) SkillExclusive_groupComp {
     return SkillExclusive_groupComp{Value: row.ExclusiveGroup}
+}
+
+func MakeSkillBan_pool_categoryComp(row *pb.SkillTable) SkillBan_pool_categoryComp {
+    return SkillBan_pool_categoryComp{Value: row.BanPoolCategory}
 }
 
 func MakeSkillSkill_typeComp(row *pb.SkillTable) SkillSkill_typeComp {

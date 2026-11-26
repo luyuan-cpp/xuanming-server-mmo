@@ -147,6 +147,10 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSkillLoadoutVersionChanged = 7027;</code>
      */
     kSkillLoadoutVersionChanged(7027),
+    /**
+     * <code>kSkillBannedInBattle = 7028;</code>
+     */
+    kSkillBannedInBattle(7028),
     UNRECOGNIZED(-1),
     ;
 
@@ -275,6 +279,10 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSkillLoadoutVersionChanged = 7027;</code>
      */
     public static final int kSkillLoadoutVersionChanged_VALUE = 7027;
+    /**
+     * <code>kSkillBannedInBattle = 7028;</code>
+     */
+    public static final int kSkillBannedInBattle_VALUE = 7028;
 
 
     public final int getNumber() {
@@ -330,6 +338,7 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
         case 7025: return kSkillLoadoutNotLearned;
         case 7026: return kSkillLoadoutSchemeInvalid;
         case 7027: return kSkillLoadoutVersionChanged;
+        case 7028: return kSkillBannedInBattle;
         default: return null;
       }
     }
@@ -395,7 +404,7 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025skill_error_tip.proto*\370\006\n\013skill_error\022" +
+      "\n\025skill_error_tip.proto*\223\007\n\013skill_error\022" +
       "\022\n\016kSkill_errorOK\020\000\022\032\n\025kSkillUnInterrupt" +
       "ible\020\3306\022\032\n\025kSkillInvalidTargetId\020\3316\022\030\n\023k" +
       "SkillInvalidTarget\020\3326\022\033\n\026kSkillCooldownN" +
@@ -417,8 +426,9 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
       "illLoadoutSlotLimitReached\020\3576\022\032\n\025kSkillL" +
       "oadoutConflict\020\3606\022\034\n\027kSkillLoadoutNotLea" +
       "rned\020\3616\022\037\n\032kSkillLoadoutSchemeInvalid\020\3626" +
-      "\022 \n\033kSkillLoadoutVersionChanged\020\3636B$\n\016co" +
-      "m.game.tableZ\022generated/pb/tableb\006proto3"
+      "\022 \n\033kSkillLoadoutVersionChanged\020\3636\022\031\n\024kS" +
+      "killBannedInBattle\020\3646B$\n\016com.game.tableZ" +
+      "\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

@@ -22,7 +22,7 @@ public static partial class TournamentruleTableReflection {
   static TournamentruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Chp0b3VybmFtZW50cnVsZV90YWJsZS5wcm90byLfBgoTVG91cm5hbWVudFJ1",
+          "Chp0b3VybmFtZW50cnVsZV90YWJsZS5wcm90byKBBwoTVG91cm5hbWVudFJ1",
           "bGVUYWJsZRIKCgJpZBgBIAEoDRIUCgxydWxlX3ZlcnNpb24YAiABKA0SDwoH",
           "ZW5hYmxlZBgDIAEoCBIYChBiYXR0bGVfY29uZmlnX2lkGAQgASgNEhgKEGJh",
           "dHRsZV90ZWFtX3NpemUYBSABKA0SFwoPcm9zdGVyX21heF9zaXplGAYgASgN",
@@ -41,15 +41,15 @@ public static partial class TournamentruleTableReflection {
           "X2l0ZW1fY291bnQYGiABKA0SGwoTd2FybXVwX3NwYXJfZW5hYmxlZBgbIAEo",
           "CBIaChJwcmVkaWN0aW9uX2VuYWJsZWQYHCABKAgSIgoacHJlZGljdGlvbl9y",
           "ZXdhcmRfbWluX2hpdHMYHSABKA0SIQoZdGhpcmRfcGxhY2VfbWF0Y2hfZW5h",
-          "YmxlZBgeIAEoCBIbChNsZXlsaW5lX2Jhbl9lbmFibGVkGB8gASgIIj0KF1Rv",
-          "dXJuYW1lbnRSdWxlVGFibGVEYXRhEiIKBGRhdGEYASADKAsyFC5Ub3VybmFt",
-          "ZW50UnVsZVRhYmxlQkUKDmNvbS5nYW1lLnRhYmxlQh1Ub3VybmFtZW50UnVs",
-          "ZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
-          "Mw=="));
+          "YmxlZBgeIAEoCBIbChNsZXlsaW5lX2Jhbl9lbmFibGVkGB8gASgIEiAKGHNr",
+          "aWxsX2Jhbl9zbG90c19wZXJfdGVhbRggIAEoDSI9ChdUb3VybmFtZW50UnVs",
+          "ZVRhYmxlRGF0YRIiCgRkYXRhGAEgAygLMhQuVG91cm5hbWVudFJ1bGVUYWJs",
+          "ZUJFCg5jb20uZ2FtZS50YWJsZUIdVG91cm5hbWVudFJ1bGVUYWJsZU91dGVy",
+          "Q2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTable), global::TournamentRuleTable.Parser, new[]{ "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTable), global::TournamentRuleTable.Parser, new[]{ "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", "SkillBanSlotsPerTeam" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTableData), global::TournamentRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -123,6 +123,7 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     predictionRewardMinHits_ = other.predictionRewardMinHits_;
     thirdPlaceMatchEnabled_ = other.thirdPlaceMatchEnabled_;
     leylineBanEnabled_ = other.leylineBanEnabled_;
+    skillBanSlotsPerTeam_ = other.skillBanSlotsPerTeam_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -504,6 +505,18 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
   }
 
+  /// <summary>Field number for the "skill_ban_slots_per_team" field.</summary>
+  public const int SkillBanSlotsPerTeamFieldNumber = 32;
+  private uint skillBanSlotsPerTeam_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SkillBanSlotsPerTeam {
+    get { return skillBanSlotsPerTeam_; }
+    set {
+      skillBanSlotsPerTeam_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -550,6 +563,7 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (PredictionRewardMinHits != other.PredictionRewardMinHits) return false;
     if (ThirdPlaceMatchEnabled != other.ThirdPlaceMatchEnabled) return false;
     if (LeylineBanEnabled != other.LeylineBanEnabled) return false;
+    if (SkillBanSlotsPerTeam != other.SkillBanSlotsPerTeam) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -588,6 +602,7 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (PredictionRewardMinHits != 0) hash ^= PredictionRewardMinHits.GetHashCode();
     if (ThirdPlaceMatchEnabled != false) hash ^= ThirdPlaceMatchEnabled.GetHashCode();
     if (LeylineBanEnabled != false) hash ^= LeylineBanEnabled.GetHashCode();
+    if (SkillBanSlotsPerTeam != 0) hash ^= SkillBanSlotsPerTeam.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -730,6 +745,10 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
       output.WriteRawTag(248, 1);
       output.WriteBool(LeylineBanEnabled);
     }
+    if (SkillBanSlotsPerTeam != 0) {
+      output.WriteRawTag(128, 2);
+      output.WriteUInt32(SkillBanSlotsPerTeam);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -864,6 +883,10 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
       output.WriteRawTag(248, 1);
       output.WriteBool(LeylineBanEnabled);
     }
+    if (SkillBanSlotsPerTeam != 0) {
+      output.WriteRawTag(128, 2);
+      output.WriteUInt32(SkillBanSlotsPerTeam);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -966,6 +989,9 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
     if (LeylineBanEnabled != false) {
       size += 2 + 1;
+    }
+    if (SkillBanSlotsPerTeam != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SkillBanSlotsPerTeam);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -1071,6 +1097,9 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
     if (other.LeylineBanEnabled != false) {
       LeylineBanEnabled = other.LeylineBanEnabled;
+    }
+    if (other.SkillBanSlotsPerTeam != 0) {
+      SkillBanSlotsPerTeam = other.SkillBanSlotsPerTeam;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -1215,6 +1244,10 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
           LeylineBanEnabled = input.ReadBool();
           break;
         }
+        case 256: {
+          SkillBanSlotsPerTeam = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -1356,6 +1389,10 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
         }
         case 248: {
           LeylineBanEnabled = input.ReadBool();
+          break;
+        }
+        case 256: {
+          SkillBanSlotsPerTeam = input.ReadUInt32();
           break;
         }
       }
