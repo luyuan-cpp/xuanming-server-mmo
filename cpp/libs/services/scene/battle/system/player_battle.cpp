@@ -63,6 +63,7 @@
 #include "modules/bag/item_hold.h" // 战斗道具预留(docs/design/battle-item-reservation.md)
 #include "player/system/player_mail_outbox.h" // 两包都放不下时掉落改投邮件(docs/design/battle-overflow-mail.md)
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/scene/comp/scene_comp.h"
 #include "table/proto/tip/bag_error_tip.pb.h" // kBagItemNotStacked:两包都放不下的 DEFER 原因(收件箱定向唤醒)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
@@ -1049,6 +1050,20 @@ namespace
 				message.set_season_seal_progress_after(result->season_seal_progress_after());
 				message.set_season_seal_max_points(result->season_seal_max_points());
 				message.set_season_honor_newly_unlocked(result->season_honor_newly_unlocked());
+				message.set_level_before(result->level_before());
+				message.set_level_after(result->level_after());
+				message.set_exp_gain(result->exp_gain());
+				message.set_total_exp_after(result->total_exp_after());
+				message.set_next_level_total_exp(result->next_level_total_exp());
+				message.set_battle_silver_diminished(result->battle_silver_diminished());
+				for (const auto& cur : result->currencies())
+				{
+					if (cur.currency_type() == static_cast<uint32_t>(kCurrencyGold))
+					{
+						message.set_silver_gain(cur.amount());
+						break;
+					}
+				}
 				if (result->season_id() != 0)
 				{
 					message.set_season_id(result->season_id());
@@ -1511,6 +1526,30 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	const DungeonTable* dungeonRow = request.battle_config_id() != 0
 		? DungeonTableManager::Instance().FindByIdSilent(request.battle_config_id()).first
 		: nullptr;
+	// 野外灵宠栖息地场景权威校验(docs/planning/world-map-play-v2.md §10)：
+	// 允许捕宠且绑定了野外地图(scene_id > 1)的栖息地副本，要求玩家此刻身处对应野外图，防原地跨图开战。
+	if (dungeonRow != nullptr && dungeonRow->allow_pet_capture() == 1 && dungeonRow->scene_id() > 1u)
+	{
+		uint32_t currentSceneConfigId = 0;
+		if (const auto* sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+			sceneEntityComp != nullptr && sceneEntityComp->sceneEntity != entt::null)
+		{
+			if (const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntityComp->sceneEntity))
+			{
+				currentSceneConfigId = sceneInfo->scene_config_id();
+			}
+		}
+		if (currentSceneConfigId != dungeonRow->scene_id())
+		{
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: wild pet habitat scene mismatch, player_id=" << playerId
+					 << " battle_id=" << battleId
+					 << " battle_config_id=" << request.battle_config_id()
+					 << " required_scene=" << dungeonRow->scene_id()
+					 << " current_scene=" << currentSceneConfigId;
+			response.mutable_error_message()->set_id(kFeatureUnavailable);
+			return;
+		}
+	}
 	const uint32_t bossTrialKind = dungeonRow != nullptr ? dungeonRow->boss_trial_kind() : turnbattle::kBossTrialKindNone;
 	const bool isBossTrial = turnbattle::IsBossTrialKind(bossTrialKind);
 	const bool isGuardRescue = bossTrialKind == turnbattle::kBossTrialKindGuardianRescue;
@@ -2347,14 +2386,15 @@ bool CollectApplicableInboxPets(entt::entity player, const ::BattleSettlementDat
 }
 
 bool HasCompleteBattleEffectInputs(entt::entity player, const ::BattleSettlementData& settlement,
-                                  const SettlementCurrencyGains& currencyGains)
+                                  const SettlementCurrencyGains& currencyGains,
+                                  const uint64_t finalExpGain)
 {
     if (!tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, CurrencyComp, PlayerCurrencyComp>(player))
         return false;
-    if (settlement.exp_gain() > 0) {
+    if (finalExpGain > 0) {
         const auto* level = tlsEcs.actorRegistry.try_get<LevelComp>(player);
         // 经验与金币、物品必须整笔应用。缺加载组件或累计溢出时保留原件，不能先发其它奖励再漏掉经验。
-        if (level == nullptr || settlement.exp_gain() > std::numeric_limits<uint64_t>::max() - level->total_exp())
+        if (level == nullptr || finalExpGain > std::numeric_limits<uint64_t>::max() - level->total_exp())
             return false;
     }
     if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
@@ -2440,7 +2480,8 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
                         const PlayerTrialJournalSystem::SettlementDelta* trialDelta = nullptr,
                         const PlayerEquipmentMaterialRewardSystem::BattleCreditDelta* materialDelta = nullptr,
                         const PlayerFestivalBeastSystem::SettlementDelta* festivalDelta = nullptr,
-                        const seasonrules::BattleCreditDelta* seasonDelta = nullptr)
+                        const seasonrules::BattleCreditDelta* seasonDelta = nullptr,
+                        const battleprogression::BattleProgressionDelta* progressionDelta = nullptr)
 {
     const uint64_t battleId = settlement.battle_id();
     auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
@@ -2453,6 +2494,17 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
     }
     const uint64_t recordedNowMs = TimeSystem::NowMillisecondsUTC();
     auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, recordedNowMs);
+    if (progressionDelta != nullptr)
+    {
+        entry.set_exp_gain(progressionDelta->expGain);
+        entry.set_level_before(progressionDelta->levelBefore);
+        entry.set_level_after(progressionDelta->levelAfter);
+        entry.set_total_exp_after(progressionDelta->totalExpAfter);
+        entry.set_next_level_total_exp(progressionDelta->nextLevelTotalExp);
+        entry.set_battle_silver_weekly_used(progressionDelta->weeklySilverUsedAfter);
+        entry.set_battle_silver_weekly_soft_cap(progressionDelta->weeklySilverSoftCap);
+        entry.set_battle_silver_diminished(progressionDelta->silverDiminished);
+    }
     entry.set_items_mailed(itemsMailed);
     entry.set_season_id(settlement.season_id() != 0 ? settlement.season_id()
                                                     : (seasonDelta != nullptr ? seasonDelta->seasonId : 0u));
@@ -2672,6 +2724,17 @@ bool PlayerBattleSystem::CompleteInboxSettlement(entt::entity player, const std:
         DeleteBattleLockIfMatch(settlement.player_id(), settlement.battle_id(), refollow);
         if (current != nullptr) RemoveInBattleComp(player);
         PushBattleEndToPlayer(player, settlement);
+        // 存盘确认后再同步面板（含最新累计修为/等级/新属性点）与跟随升级后的宝宝列表，避免未提交前假成功闪屏。
+        if (const auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player); history != nullptr) {
+            if (const auto* result = battle_result::FindByBattle(*history, settlement.battle_id()); result != nullptr) {
+                if (result->exp_gain() > 0 || result->level_after() > result->level_before()) {
+                    PlayerAttributeSystem::PushPanel(player);
+                }
+                if (result->level_after() > result->level_before()) {
+                    PetSystem::PushList(player);
+                }
+            }
+        }
     }
     return true;
 }
@@ -2789,23 +2852,49 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     ClientRequestLedgerComp materialRewardCandidate;
     std::string materialRewardBefore;
     PlayerEquipmentMaterialRewardSystem::BattleCreditDelta materialCreditDelta;
+    const auto* existingLedger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+    const bool ledgerValid = existingLedger != nullptr && !tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player);
+    if (ledgerValid) {
+        materialRewardBefore = existingLedger->SerializeAsString();
+        materialRewardCandidate = *existingLedger;
+    }
     if (creditsMaterialReward) {
-        const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
-        if (ledger == nullptr || tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) return false;
-        materialRewardBefore = ledger->SerializeAsString();
+        if (!ledgerValid) return false;
         const bool lightCardActive = AfkPassSystem::ExpiresAt(player) > (settlementNowMs / 1000ULL);
         const uint32_t accountStage1TradableUsed =
             PlayerEquipmentMaterialRewardSystem::KnownAccountStage1TradableUsed(player);
-        if (PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
+        if (PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*existingLedger, settlement,
             settlementNowMs, materialRewardCandidate, &materialCreditDelta, lightCardActive,
             accountStage1TradableUsed) != kSuccess) return false;
-    } else if (const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
-               ledger != nullptr && !tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) {
+    } else if (ledgerValid) {
         // 非达标局（例如 PVP 挂机未满足 3 回合/2 手动/有效贡献）同样记录 pvpLossIneligible 提示，不改动账本。
         ClientRequestLedgerComp unusedCandidate;
-        (void)PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
+        (void)PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*existingLedger, settlement,
             settlementNowMs, unusedCandidate, &materialCreditDelta);
     }
+
+    // G1：统一计算本局角色经验与银两周软上限候选（同时服务隔离模式与常规模式，帮战 V2 银两恒为 0）。
+    uint64_t currentWeekStartMs = 0, currentWeekNextMs = 0;
+    (void)PlayerEquipmentMaterialRewardSystem::ResolveWeek(settlementNowMs, currentWeekStartMs, currentWeekNextMs);
+    uint64_t explicitGold = 0;
+    if (const auto it = currencyGains.find(kCurrencyGold); it != currencyGains.end()) {
+        explicitGold = it->second;
+    }
+    const auto progressionRewards = PlayerAttributeSystem::LoadBattleProgressionRewards();
+    battleprogression::WeeklySilverRule weeklySilverRule;
+    const bool hasWeeklySilverRule = PlayerAttributeSystem::LoadWeeklySilverRule(weeklySilverRule);
+    battleprogression::BattleProgressionDelta progressionDelta;
+    BattleEconomyLedger economyCandidate;
+    const BattleEconomyLedger emptyEconomy;
+    battleprogression::PrepareEconomyLedger(
+        ledgerValid ? materialRewardCandidate.battle_economy() : emptyEconomy,
+        currentWeekStartMs, settlement, settlement.exp_gain(), explicitGold,
+        progressionRewards, hasWeeklySilverRule ? &weeklySilverRule : nullptr,
+        economyCandidate, progressionDelta);
+    if (ledgerValid && progressionDelta.ledgerChanged) {
+        *materialRewardCandidate.mutable_battle_economy() = economyCandidate;
+    }
+    const bool creditsLedger = creditsMaterialReward || (ledgerValid && progressionDelta.ledgerChanged);
 
     // 瑞兽迎春活动局结算：严格资产隔离（绝不回写场外血蓝/复活/宝宝/道具/经验/货币），
     // 同收件箱单帧原子入账活动期次胜场、永久神兽资格与全游戏材料自选额度。
@@ -2881,7 +2970,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         auto* currentTrialJournal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
         auto* currentFestival = tlsEcs.actorRegistry.try_get<PlayerFestivalBeastComp>(player);
         auto* currentTravelPass = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
-        if (creditsMaterialReward && (currentLedger == nullptr ||
+        if (creditsLedger && (currentLedger == nullptr ||
             currentLedger->SerializeAsString() != materialRewardBefore ||
             tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) {
             return false;
@@ -2902,9 +2991,44 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             currentTravelPass->SerializeAsString() != travelPassBefore)) {
             return false;
         }
-        if (creditsMaterialReward) {
+        if (!isFestivalBeast && progressionDelta.expGain > 0) {
+            const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
+            if (levelComp == nullptr ||
+                progressionDelta.expGain > std::numeric_limits<uint64_t>::max() - levelComp->total_exp()) {
+                return false;
+            }
+        }
+        SettlementCurrencyGains isolatedCurrencies;
+        const bool grantIsolatedSilver = !isFestivalBeast && progressionDelta.silverGain > 0;
+        if (grantIsolatedSilver) {
+            if (!tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player) ||
+                !CanCreditWholeBattleCurrency(player, kCurrencyGold, progressionDelta.silverGain)) {
+                return false;
+            }
+            if (IsSettlementCurrencyGainBlocked(player, kCurrencyGold)) {
+                LOG_WARN << "[PlayerBattle] metric=battle_settlement_currency_blocked source=inbox_isolated battle_id="
+                         << battleId << " currency_type=" << static_cast<uint32_t>(kCurrencyGold)
+                         << " amount=" << progressionDelta.silverGain << " player_id=" << playerId
+                         << ";currency gain blocked (global or this player), silver skipped in isolated battle";
+                if (creditsLedger && existingLedger != nullptr) {
+                    materialRewardCandidate.mutable_battle_economy()->set_battle_silver_this_week(
+                        existingLedger->battle_economy().battle_silver_this_week());
+                }
+                progressionDelta.silverGain = 0;
+                progressionDelta.weeklySilverUsedAfter =
+                    existingLedger != nullptr ? existingLedger->battle_economy().battle_silver_this_week() : 0;
+            } else {
+                const auto err = CurrencySystem::AddCurrency(
+                    player, kCurrencyGold, static_cast<int64_t>(progressionDelta.silverGain), TX_SYSTEM_GRANT, battleId);
+                if (err != kSuccess) {
+                    return false;
+                }
+                isolatedCurrencies[kCurrencyGold] = progressionDelta.silverGain;
+            }
+        }
+        if (creditsLedger) {
             currentLedger->Swap(&materialRewardCandidate);
-            if (materialCreditDelta.tradableUnitsAdded > 0) {
+            if (creditsMaterialReward && materialCreditDelta.tradableUnitsAdded > 0) {
                 PlayerEquipmentMaterialRewardSystem::OnStage1TradableCredited(player, settlementNowMs);
             }
         }
@@ -2921,15 +3045,35 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             LOG_INFO << "[PlayerBattle] metric=battle_item_hold_released player_id=" << playerId << " battle_id=" << battleId
                      << " reason=isolated_settlement_applied";
         }
+        if (!isFestivalBeast && tlsEcs.actorRegistry.any_of<LevelComp>(player)) {
+            battleprogression::LevelProgressResult lvlResult;
+            if (PlayerAttributeSystem::ApplyBattleExpAndLevelUp(player, progressionDelta.expGain, lvlResult)) {
+                progressionDelta.levelBefore = lvlResult.levelBefore;
+                progressionDelta.levelAfter = lvlResult.levelAfter;
+                progressionDelta.totalExpAfter = lvlResult.totalExpAfter;
+                progressionDelta.nextLevelTotalExp = lvlResult.nextLevelTotalExp;
+                progressionDelta.leveledUp = lvlResult.leveledUp;
+            }
+        }
         if (seasonPointsIncreased) {
             PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
             PlayerAttributeSystem::PushPanel(player);
         }
-        RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
-                           /*itemsMailed=*/false, nullptr, &materialCreditDelta,
+        RecordBattleResult(player, playerId, settlement, isolatedCurrencies, ItemCountMap{}, ItemCountMap{},
+                           /*itemsMailed=*/false,
+                           creditsTrialJournal ? &trialJournalDelta : nullptr,
+                           &materialCreditDelta,
                            isFestivalBeast ? &festivalBeastDelta : nullptr,
-                           creditsSeasonProgress ? &seasonCreditDelta : nullptr);
+                           creditsSeasonProgress ? &seasonCreditDelta : nullptr,
+                           !isFestivalBeast ? &progressionDelta : nullptr);
         return true;
+    }
+
+    // 常规分支同步战斗银两周软上限结果（未加载配置表时保持 explicitGold 原样，加载配置表后以 progressionDelta 为准）。
+    if (progressionDelta.silverGain > 0) {
+        currencyGains[kCurrencyGold] = progressionDelta.silverGain;
+    } else if (explicitGold > 0 && hasWeeklySilverRule) {
+        currencyGains.erase(kCurrencyGold);
     }
 
     const auto inboxIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
@@ -2939,7 +3083,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     std::set<uint64_t> inboxPets;
     std::map<std::string, uint32_t> skippedPets;
     std::string originalPets;
-    if (!HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
+    if (!HasCompleteBattleEffectInputs(player, settlement, currencyGains, progressionDelta.expGain) ||
         !CollectExactSettlementItems(settlement, inboxConsumed, inboxGained)) return false;
     if (!CollectApplicableInboxPets(player, settlement, inboxPets, skippedPets)) return false;
     // 消耗或掉落里有本节点 Item 表查不到的配置号:整笔 DEFER、零副作用(混版本持久字段保护设计 §12 载荷行、§13 第 10 条)。
@@ -3022,7 +3166,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         auto* currentSeason = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
         auto* currentTrialJournal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
         auto* currentTravelPass = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
-        if (creditsMaterialReward && (currentLedger == nullptr || currentLedger->SerializeAsString() != materialRewardBefore ||
+        if (creditsLedger && (currentLedger == nullptr || currentLedger->SerializeAsString() != materialRewardBefore ||
             tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) return kInvalidParameter;
         if (creditsSeasonProgress && (currentSeason == nullptr || currentSeason->SerializeAsString() != seasonProgressBefore))
             return kInvalidParameter;
@@ -3033,13 +3177,26 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
             (changesPets && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
             HasUnsupportedInboxConsumption(player, settlement) ||
-            !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
+            !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement, currencyGains, progressionDelta.expGain) ||
             !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, PlayerBattleResultComp>(player))
             return kInvalidParameter;
         const auto error = creditCurrencies();
         if (error != kSuccess) return error;
-        // 此处之后只有无失败的候选发布；额度、赛季印进度、试炼志进度、游历手记进度与货币、背包、收件箱水位同一次存盘。
-        if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
+        // 若银两命中获得封禁而被跳过，不把未入账的银两计入本周软上限账本。
+        for (const auto& [blockedType, blockedAmt] : blockedCurrencies) {
+            (void)blockedAmt;
+            if (blockedType == kCurrencyGold) {
+                if (existingLedger != nullptr) {
+                    materialRewardCandidate.mutable_battle_economy()->set_battle_silver_this_week(
+                        existingLedger->battle_economy().battle_silver_this_week());
+                }
+                progressionDelta.silverGain = 0;
+                progressionDelta.weeklySilverUsedAfter =
+                    existingLedger != nullptr ? existingLedger->battle_economy().battle_silver_this_week() : 0;
+            }
+        }
+        // 此处之后只有无失败的候选发布；额度、周经济账本、赛季印进度、试炼志进度、游历手记进度与货币、背包、收件箱水位同一次存盘。
+        if (creditsLedger) currentLedger->Swap(&materialRewardCandidate);
         if (creditsSeasonProgress && seasonPointsIncreased) currentSeason->Swap(&seasonProgressCandidate);
         if (creditsTrialJournal && trialJournalDelta.changed) currentTrialJournal->Swap(&trialJournalCandidate);
         if (creditsTravelPass && travelPassPointsIncreased) currentTravelPass->Swap(&travelPassCandidate);
@@ -3158,16 +3315,26 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         if (!inboxPets.empty()) PetSystem::PushList(player);
     }
 
-    // 经验与结算账本、近期战果同帧修改；CHARACTER / WALLET / PROFILE 脏行随同一存盘事务提交。
-    // 重投由收件箱账本拦住，不重复入账。
-    // 升级曲线尚无配置，先完整保留已实得经验；不按猜测的曲线改变等级，也不覆写携带的超上限等级。
-    if (settlement.exp_gain() > 0)
+    // 经验与升级、结算账本、近期战果同帧修改；CHARACTER / WALLET / PROFILE 脏行随同一存盘事务提交。
+    // 重投由收件箱账本拦住，不重复入账；面板与宝宝列表推送延后至 CompleteInboxSettlement 存盘确认后执行。
+    if (tlsEcs.actorRegistry.any_of<LevelComp>(player))
     {
-        auto& level = tlsEcs.actorRegistry.get<LevelComp>(player);
-        level.set_total_exp(level.total_exp() + settlement.exp_gain());
-        LOG_INFO << "[PlayerBattle] Experience settlement credited: player_id=" << playerId
-                 << " battle_id=" << battleId << " exp=" << settlement.exp_gain()
-                 << " total_exp=" << level.total_exp();
+        battleprogression::LevelProgressResult lvlResult;
+        if (PlayerAttributeSystem::ApplyBattleExpAndLevelUp(player, progressionDelta.expGain, lvlResult))
+        {
+            progressionDelta.levelBefore = lvlResult.levelBefore;
+            progressionDelta.levelAfter = lvlResult.levelAfter;
+            progressionDelta.totalExpAfter = lvlResult.totalExpAfter;
+            progressionDelta.nextLevelTotalExp = lvlResult.nextLevelTotalExp;
+            progressionDelta.leveledUp = lvlResult.leveledUp;
+            if (progressionDelta.expGain > 0)
+            {
+                LOG_INFO << "[PlayerBattle] Experience settlement credited: player_id=" << playerId
+                         << " battle_id=" << battleId << " exp=" << progressionDelta.expGain
+                         << " total_exp=" << lvlResult.totalExpAfter
+                         << " level=" << lvlResult.levelBefore << "->" << lvlResult.levelAfter;
+            }
+        }
     }
 
     // 只有 battle 最终结算携带的真实击杀事实推进任务。每只怪一条事实，顺序任务不会用同一次击杀跨过后续相同目标。
@@ -3190,7 +3357,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
                        creditsTrialJournal ? &trialJournalDelta : nullptr,
                        &materialCreditDelta,
                        nullptr,
-                       creditsSeasonProgress ? &seasonCreditDelta : nullptr);
+                       creditsSeasonProgress ? &seasonCreditDelta : nullptr,
+                       &progressionDelta);
     // 离线托管期间的战斗结算同帧汇总进收获简报(仅统计真实入账,与奖励、收件箱账本随同一存盘事务提交,不额外发产出)。
     {
         const bool won = (settlement.outcome() == ::BATTLE_OUTCOME_SIDE_A_WIN && settlement.player_team_index() == 0) ||
@@ -3208,7 +3376,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
                 ? std::numeric_limits<uint32_t>::max()
                 : static_cast<uint32_t>(itemCount + count);
         }
-        AfkPassSystem::RecordHostedBattleSettlement(player, won, settlement.exp_gain(), silverGained, itemCount,
+        AfkPassSystem::RecordHostedBattleSettlement(player, won, progressionDelta.expGain, silverGained, itemCount,
                                                     TimeSystem::NowSecondsUTC());
     }
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。

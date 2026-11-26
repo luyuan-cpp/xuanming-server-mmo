@@ -4496,6 +4496,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
     kMaxPassiveSlotsFieldNumber = 4,
     kMaxPursuitSlotsFieldNumber = 5,
     kMaxOpeningSlotsFieldNumber = 6,
+    kUnlockedSchemesFieldNumber = 9,
+    kMaxSchemesFieldNumber = 10,
   };
   // repeated .SkillLoadoutSchemeInfo schemes = 7;
   [[nodiscard]] int schemes_size()
@@ -4593,11 +4595,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
   void _internal_set_max_opening_slots(::uint32_t value);
 
   public:
+  // uint32 unlocked_schemes = 9;
+  void clear_unlocked_schemes() ;
+  [[nodiscard]] ::uint32_t unlocked_schemes() const;
+  void set_unlocked_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unlocked_schemes() const;
+  void _internal_set_unlocked_schemes(::uint32_t value);
+
+  public:
+  // uint32 max_schemes = 10;
+  void clear_max_schemes() ;
+  [[nodiscard]] ::uint32_t max_schemes() const;
+  void set_max_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_schemes() const;
+  void _internal_set_max_schemes(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillLoadoutSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           1, 52,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4634,6 +4656,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
     ::uint32_t max_passive_slots_;
     ::uint32_t max_pursuit_slots_;
     ::uint32_t max_opening_slots_;
+    ::uint32_t unlocked_schemes_;
+    ::uint32_t max_schemes_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11401,6 +11425,54 @@ inline void SkillLoadoutSnapshot::set_allocated_last_request_id(::std::string* P
     _impl_.last_request_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SkillLoadoutSnapshot.last_request_id)
+}
+
+// uint32 unlocked_schemes = 9;
+inline void SkillLoadoutSnapshot::clear_unlocked_schemes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_schemes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::unlocked_schemes() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.unlocked_schemes)
+  return _internal_unlocked_schemes();
+}
+inline void SkillLoadoutSnapshot::set_unlocked_schemes(::uint32_t value) {
+  _internal_set_unlocked_schemes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.unlocked_schemes)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_unlocked_schemes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_schemes_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_unlocked_schemes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_schemes_ = value;
+}
+
+// uint32 max_schemes = 10;
+inline void SkillLoadoutSnapshot::clear_max_schemes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_schemes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::max_schemes() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.max_schemes)
+  return _internal_max_schemes();
+}
+inline void SkillLoadoutSnapshot::set_max_schemes(::uint32_t value) {
+  _internal_set_max_schemes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.max_schemes)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_max_schemes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_schemes_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_max_schemes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_schemes_ = value;
 }
 
 // -------------------------------------------------------------------

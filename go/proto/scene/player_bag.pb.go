@@ -34,6 +34,7 @@ const (
 	EquipmentCraftChoice_POLISH_AFFIX       EquipmentCraftChoice_Operation = 4 // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
 	EquipmentCraftChoice_UNSEAL_TO_TRADABLE EquipmentCraftChoice_Operation = 5 // 解封剥离符(3409)：清空绑定装备全部绑定养成（强化/保底/词条/署名），仅恢复纯可交易原胚，不洗白B材料。
 	EquipmentCraftChoice_INHERIT_ENHANCE    EquipmentCraftChoice_Operation = 6 // 流派副套继承符(3410)：将同部位同等级段源装备的强化等级与保底无损继承给目标副套装备（目标转为仅自用绑定）。
+	EquipmentCraftChoice_UPGRADE_TIER       EquipmentCraftChoice_Operation = 7 // V1 装备原地无损升档：基础装(profile=1)与首饰(profile=2)纯银两升至同部位更高佩戴等级模板(config_id)，100% 保留强化、+11保底、词条/品相/打磨保底、宗师署名与可交易状态。
 )
 
 // Enum value maps for EquipmentCraftChoice_Operation.
@@ -46,6 +47,7 @@ var (
 		4: "POLISH_AFFIX",
 		5: "UNSEAL_TO_TRADABLE",
 		6: "INHERIT_ENHANCE",
+		7: "UPGRADE_TIER",
 	}
 	EquipmentCraftChoice_Operation_value = map[string]int32{
 		"UNSPECIFIED":        0,
@@ -55,6 +57,7 @@ var (
 		"POLISH_AFFIX":       4,
 		"UNSEAL_TO_TRADABLE": 5,
 		"INHERIT_ENHANCE":    6,
+		"UPGRADE_TIER":       7,
 	}
 )
 
@@ -2769,8 +2772,8 @@ func (x *EquipArtifactInfo) GetHealthThresholdBps() uint32 {
 type EquipmentCraftChoice struct {
 	state                   protoimpl.MessageState         `protogen:"open.v1"`
 	Operation               EquipmentCraftChoice_Operation `protobuf:"varint,1,opt,name=operation,proto3,enum=EquipmentCraftChoice_Operation" json:"operation,omitempty"`
-	ConfigId                uint32                         `protobuf:"varint,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"` // CREATE_ITEM使用；其余操作必须为0。
-	ItemId                  uint64                         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`       // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE目标使用；CREATE_ITEM必须为0。
+	ConfigId                uint32                         `protobuf:"varint,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"` // CREATE_ITEM / UPGRADE_TIER 目标模板使用；其余操作必须为0。
+	ItemId                  uint64                         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`       // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE / UPGRADE_TIER目标使用；CREATE_ITEM必须为0。
 	AffixSlot               uint32                         `protobuf:"varint,4,opt,name=affix_slot,json=affixSlot,proto3" json:"affix_slot,omitempty"`
 	AffixId                 uint32                         `protobuf:"varint,5,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"`                                                           // INSTALL_AFFIX / REFORGE_AFFIX使用；其余为0。
 	UseGuaranteeCharm       bool                           `protobuf:"varint,6,opt,name=use_guarantee_charm,json=useGuaranteeCharm,proto3" json:"use_guarantee_charm,omitempty"`                           // POLISH_AFFIX可选：额外消耗1张绑定「定星保底符(3405)」直接必达极品。
@@ -4310,7 +4313,7 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x0fper_round_limit\x18\x06 \x01(\rR\rperRoundLimit\x12!\n" +
 	"\fbattle_limit\x18\a \x01(\rR\vbattleLimit\x12#\n" +
 	"\ractive_rounds\x18\b \x01(\rR\factiveRounds\x120\n" +
-	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\"\xfa\x04\n" +
+	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\"\x8c\x05\n" +
 	"\x14EquipmentCraftChoice\x12=\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x1f.EquipmentCraftChoice.OperationR\toperation\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x17\n" +
@@ -4323,7 +4326,7 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x16proxy_master_player_id\x18\b \x01(\x04R\x13proxyMasterPlayerId\x12@\n" +
 	"\x1aexpected_polish_pity_count\x18\t \x01(\rH\x00R\x17expectedPolishPityCount\x88\x01\x01\x12$\n" +
 	"\x0esource_item_id\x18\n" +
-	" \x01(\x04R\fsourceItemId\"\x92\x01\n" +
+	" \x01(\x04R\fsourceItemId\"\xa4\x01\n" +
 	"\tOperation\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCREATE_ITEM\x10\x01\x12\x11\n" +
@@ -4331,7 +4334,8 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\rREFORGE_AFFIX\x10\x03\x12\x10\n" +
 	"\fPOLISH_AFFIX\x10\x04\x12\x16\n" +
 	"\x12UNSEAL_TO_TRADABLE\x10\x05\x12\x13\n" +
-	"\x0fINHERIT_ENHANCE\x10\x06B\x1d\n" +
+	"\x0fINHERIT_ENHANCE\x10\x06\x12\x10\n" +
+	"\fUPGRADE_TIER\x10\aB\x1d\n" +
 	"\x1b_expected_polish_pity_count\"\xae\x01\n" +
 	"\x16EquipmentCraftMaterial\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x12\n" +

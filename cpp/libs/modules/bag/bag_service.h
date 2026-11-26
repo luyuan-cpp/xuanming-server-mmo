@@ -129,6 +129,7 @@ public:
         BagType bagType{kInventory};
         ItemComp expected;
         ItemComp replacement;
+        bool allowConfigChange{false};
     };
     // 纯预览：在副本上模拟严格扣料后检查新增空间，不发号、不初始化、不写审计。
     static uint32_t CheckInventoryExchangeSpace(entt::entity playerEntity, const ItemCountMap& consumed,

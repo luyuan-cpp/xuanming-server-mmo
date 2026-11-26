@@ -27,11 +27,11 @@ SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".cc"}
 SKIPPED_PARTS = {"build", "Debug", "Release", "x64", "CMakeFiles", "generated"}
 
 MARKER = "直读存储等级:"
-MARKER_LABEL = re.compile(r"直读存储等级:\s*(加载器|存盘|GmSetLevel|管理端 dump)")
-# 允许直读的四处:文件 → 允许的场合。存盘与管理端 dump 目前整份拷贝 / 整份打印,没有 .level() 调用,所以没有标记。
+MARKER_LABEL = re.compile(r"直读存储等级:\s*(加载器|存盘|GmSetLevel|经验升级|管理端 dump)")
+# 允许直读的场合:文件 → 允许的场合。存盘与管理端 dump 目前整份拷贝 / 整份打印,没有 .level() 调用,所以没有标记。
 ALLOWED_MARKERS = {
     "cpp/libs/services/scene/player/system/player_database_loader.cpp": {"加载器", "存盘"},
-    "cpp/libs/services/scene/player/system/player_attribute.cpp": {"GmSetLevel"},
+    "cpp/libs/services/scene/player/system/player_attribute.cpp": {"GmSetLevel", "经验升级"},
     "cpp/nodes/scene/handler/rpc/scene_admin_handler.cpp": {"管理端 dump"},
 }
 

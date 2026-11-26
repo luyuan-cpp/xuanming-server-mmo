@@ -463,6 +463,7 @@ enum EquipmentCraftChoice_Operation : int {
   EquipmentCraftChoice_Operation_POLISH_AFFIX = 4,
   EquipmentCraftChoice_Operation_UNSEAL_TO_TRADABLE = 5,
   EquipmentCraftChoice_Operation_INHERIT_ENHANCE = 6,
+  EquipmentCraftChoice_Operation_UPGRADE_TIER = 7,
   EquipmentCraftChoice_Operation_EquipmentCraftChoice_Operation_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   EquipmentCraftChoice_Operation_EquipmentCraftChoice_Operation_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -473,11 +474,11 @@ extern const uint32_t EquipmentCraftChoice_Operation_internal_data_[];
 inline constexpr EquipmentCraftChoice_Operation EquipmentCraftChoice_Operation_Operation_MIN =
     static_cast<EquipmentCraftChoice_Operation>(0);
 inline constexpr EquipmentCraftChoice_Operation EquipmentCraftChoice_Operation_Operation_MAX =
-    static_cast<EquipmentCraftChoice_Operation>(6);
+    static_cast<EquipmentCraftChoice_Operation>(7);
 [[nodiscard]] inline bool EquipmentCraftChoice_Operation_IsValid(int value) {
-  return 0 <= value && value <= 6;
+  return 0 <= value && value <= 7;
 }
-inline constexpr int EquipmentCraftChoice_Operation_Operation_ARRAYSIZE = 6 + 1;
+inline constexpr int EquipmentCraftChoice_Operation_Operation_ARRAYSIZE = 7 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 EquipmentCraftChoice_Operation_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(EquipmentCraftChoice_Operation) {
@@ -492,7 +493,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& EquipmentCraftChoice_Operation_Name(EquipmentCraftChoice_Operation value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<EquipmentCraftChoice_Operation_descriptor, 0, 6>(
+  return ::google::protobuf::internal::NameOfDenseEnum<EquipmentCraftChoice_Operation_descriptor, 0, 7>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool EquipmentCraftChoice_Operation_Parse(
@@ -2757,6 +2758,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftChoice final : public
   static constexpr Operation POLISH_AFFIX = EquipmentCraftChoice_Operation_POLISH_AFFIX;
   static constexpr Operation UNSEAL_TO_TRADABLE = EquipmentCraftChoice_Operation_UNSEAL_TO_TRADABLE;
   static constexpr Operation INHERIT_ENHANCE = EquipmentCraftChoice_Operation_INHERIT_ENHANCE;
+  static constexpr Operation UPGRADE_TIER = EquipmentCraftChoice_Operation_UPGRADE_TIER;
   [[nodiscard]] static inline bool Operation_IsValid(int value) {
     return EquipmentCraftChoice_Operation_IsValid(value);
   }

@@ -776,7 +776,7 @@ func (x *SkillCatalogEntry) GetEquipped() bool {
 
 type SkillLoadoutSchemeInfo struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                               // 1..3
+	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                               // 1..6（1..3 永久免费；4..6 仙途轻享卡生效期可用）
 	RoleTag         uint32                 `protobuf:"varint,2,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                  // 0默认 / 1输出 / 2控场 / 3辅助
 	PassiveSkillIds []uint32               `protobuf:"varint,3,rep,packed,name=passive_skill_ids,json=passiveSkillIds,proto3" json:"passive_skill_ids,omitempty"` // 已装配被动战法 ID（按升序）
 	PursuitSkillIds []uint32               `protobuf:"varint,4,rep,packed,name=pursuit_skill_ids,json=pursuitSkillIds,proto3" json:"pursuit_skill_ids,omitempty"` // 已装配追击战法 ID
@@ -853,13 +853,15 @@ func (x *SkillLoadoutSchemeInfo) GetOpeningSkillIds() []uint32 {
 type SkillLoadoutSnapshot struct {
 	state           protoimpl.MessageState    `protogen:"open.v1"`
 	CustomEnabled   bool                      `protobuf:"varint,1,opt,name=custom_enabled,json=customEnabled,proto3" json:"custom_enabled,omitempty"`         // false = 尚未自定义保存（兼容全量非互斥模式）；true = 严格按当前方案生效
-	ActiveSchemeId  uint32                    `protobuf:"varint,2,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`    // 当前选中流派方案号（1..3）
+	ActiveSchemeId  uint32                    `protobuf:"varint,2,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`    // 当前选中流派方案号（1..6）
 	StateVersion    uint64                    `protobuf:"varint,3,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`            // 乐观锁版本号
 	MaxPassiveSlots uint32                    `protobuf:"varint,4,opt,name=max_passive_slots,json=maxPassiveSlots,proto3" json:"max_passive_slots,omitempty"` // 被动槽位上限（固定 3）
 	MaxPursuitSlots uint32                    `protobuf:"varint,5,opt,name=max_pursuit_slots,json=maxPursuitSlots,proto3" json:"max_pursuit_slots,omitempty"` // 追击槽位上限（固定 1）
 	MaxOpeningSlots uint32                    `protobuf:"varint,6,opt,name=max_opening_slots,json=maxOpeningSlots,proto3" json:"max_opening_slots,omitempty"` // 开场槽位上限（固定 1）
-	Schemes         []*SkillLoadoutSchemeInfo `protobuf:"bytes,7,rep,name=schemes,proto3" json:"schemes,omitempty"`                                           // 全部 3 套方案（按 scheme_id 升序）
+	Schemes         []*SkillLoadoutSchemeInfo `protobuf:"bytes,7,rep,name=schemes,proto3" json:"schemes,omitempty"`                                           // 已解锁方案及历史已存扩展方案（按 scheme_id 升序）
 	LastRequestId   string                    `protobuf:"bytes,8,opt,name=last_request_id,json=lastRequestId,proto3" json:"last_request_id,omitempty"`
+	UnlockedSchemes uint32                    `protobuf:"varint,9,opt,name=unlocked_schemes,json=unlockedSchemes,proto3" json:"unlocked_schemes,omitempty"` // 当前已解锁的方案槽位数（免费 3；仙途轻享卡生效 6）
+	MaxSchemes      uint32                    `protobuf:"varint,10,opt,name=max_schemes,json=maxSchemes,proto3" json:"max_schemes,omitempty"`               // 方案槽位总上限（含轻享卡扩展，固定 6）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -948,6 +950,20 @@ func (x *SkillLoadoutSnapshot) GetLastRequestId() string {
 		return x.LastRequestId
 	}
 	return ""
+}
+
+func (x *SkillLoadoutSnapshot) GetUnlockedSchemes() uint32 {
+	if x != nil {
+		return x.UnlockedSchemes
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSnapshot) GetMaxSchemes() uint32 {
+	if x != nil {
+		return x.MaxSchemes
+	}
+	return 0
 }
 
 type SaveSkillLoadoutRequest struct {
@@ -2681,7 +2697,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\brole_tag\x18\x02 \x01(\rR\aroleTag\x12*\n" +
 	"\x11passive_skill_ids\x18\x03 \x03(\rR\x0fpassiveSkillIds\x12*\n" +
 	"\x11pursuit_skill_ids\x18\x04 \x03(\rR\x0fpursuitSkillIds\x12*\n" +
-	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\"\xeb\x02\n" +
+	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\"\xb7\x03\n" +
 	"\x14SkillLoadoutSnapshot\x12%\n" +
 	"\x0ecustom_enabled\x18\x01 \x01(\bR\rcustomEnabled\x12(\n" +
 	"\x10active_scheme_id\x18\x02 \x01(\rR\x0eactiveSchemeId\x12#\n" +
@@ -2690,7 +2706,11 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x11max_pursuit_slots\x18\x05 \x01(\rR\x0fmaxPursuitSlots\x12*\n" +
 	"\x11max_opening_slots\x18\x06 \x01(\rR\x0fmaxOpeningSlots\x121\n" +
 	"\aschemes\x18\a \x03(\v2\x17.SkillLoadoutSchemeInfoR\aschemes\x12&\n" +
-	"\x0flast_request_id\x18\b \x01(\tR\rlastRequestId\"\x99\x02\n" +
+	"\x0flast_request_id\x18\b \x01(\tR\rlastRequestId\x12)\n" +
+	"\x10unlocked_schemes\x18\t \x01(\rR\x0funlockedSchemes\x12\x1f\n" +
+	"\vmax_schemes\x18\n" +
+	" \x01(\rR\n" +
+	"maxSchemes\"\x99\x02\n" +
 	"\x17SaveSkillLoadoutRequest\x12\x1b\n" +
 	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x19\n" +
 	"\brole_tag\x18\x02 \x01(\rR\aroleTag\x12*\n" +

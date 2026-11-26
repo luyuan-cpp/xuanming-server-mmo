@@ -5,6 +5,7 @@
 
 #include <google/protobuf/unknown_field_set.h>
 
+#include "engine/core/time/system/time.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
@@ -897,4 +898,65 @@ TEST_F(PlayerSkillBookTest, SkillLoadoutEnforcesSlotLimitsExclusiveGroupAndSyncs
     PlayerSkillSystem::SwitchLoadout(player, sw, swReplay);
     ASSERT_FALSE(swReplay.has_error_message());
     EXPECT_TRUE(swReplay.replayed());
+}
+
+TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromThreeToSixAndPreservesSavedSchemesOnExpiry)
+{
+    const auto player = NewPlayer(1, 80, 100000);
+    Own(player, 12001, 1);
+    Own(player, 12003, 1);
+    auto& u64 = tlsEcs.actorRegistry.emplace_or_replace<PlayerUint64Comp>(player);
+    u64.set_afk_pass_expires_at(0);
+
+    // 1. 未开通轻享卡：仅解锁 3 套，保存或切换方案 4 被拒绝。
+    ListSkillsResponse book;
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 3u);
+    EXPECT_EQ(book.loadout().max_schemes(), 6u);
+    EXPECT_EQ(book.loadout().schemes_size(), 3);
+
+    SaveSkillLoadoutRequest save4;
+    save4.set_scheme_id(4);
+    save4.set_role_tag(1);
+    save4.add_passive_skill_ids(12001);
+    save4.set_state_version(book.loadout().state_version());
+    save4.set_request_id("loadout-lightcard-save4-0001");
+    SaveSkillLoadoutResponse saveResp;
+    PlayerSkillSystem::SaveLoadout(player, save4, saveResp);
+    EXPECT_EQ(saveResp.error_message().id(), kSkillLoadoutSchemeInvalid);
+
+    // 2. 开通轻享卡：解锁 6 套方案，可保存并激活方案 4。
+    u64.set_afk_pass_expires_at(TimeSystem::NowSecondsUTC() + 3600);
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 6u);
+    EXPECT_EQ(book.loadout().schemes_size(), 6);
+
+    save4.set_state_version(book.loadout().state_version());
+    save4.set_request_id("loadout-lightcard-save4-0002");
+    PlayerSkillSystem::SaveLoadout(player, save4, saveResp);
+    ASSERT_FALSE(saveResp.has_error_message());
+    EXPECT_EQ(saveResp.state().loadout().active_scheme_id(), 4u);
+    EXPECT_GT(PlayerSkillSystem::CollectPassiveBonus(player).physicalAttack, 0.0);
+
+    // 3. 轻享卡到期：回退为 3 格解锁，但已存方案 4 完整保留不丢失；可切回 1..3，切回 4 与写 5 需续卡。
+    u64.set_afk_pass_expires_at(1);
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 3u);
+    EXPECT_EQ(book.loadout().schemes_size(), 4); // 1,2,3 + 保留的已存方案 4
+
+    SwitchSkillLoadoutRequest sw1;
+    sw1.set_scheme_id(1);
+    sw1.set_state_version(book.loadout().state_version());
+    sw1.set_request_id("loadout-lightcard-sw1-0001");
+    SwitchSkillLoadoutResponse swResp;
+    PlayerSkillSystem::SwitchLoadout(player, sw1, swResp);
+    ASSERT_FALSE(swResp.has_error_message());
+    EXPECT_EQ(swResp.state().loadout().active_scheme_id(), 1u);
+
+    SwitchSkillLoadoutRequest sw4;
+    sw4.set_scheme_id(4);
+    sw4.set_state_version(swResp.state().loadout().state_version());
+    sw4.set_request_id("loadout-lightcard-sw4-0001");
+    PlayerSkillSystem::SwitchLoadout(player, sw4, swResp);
+    EXPECT_EQ(swResp.error_message().id(), kSkillLoadoutSchemeInvalid);
 }

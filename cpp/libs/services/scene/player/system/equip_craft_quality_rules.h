@@ -47,6 +47,27 @@ inline constexpr uint64_t kProxyFeeMinGold = 50;
 inline constexpr uint64_t kProxyFeeMaxGold = 100;
 inline constexpr uint64_t kProxyTaxBps = 500; // 5% 主城代打摊位银两税销毁。
 
+// V1 装备原地无损升档（基础装 profile=1 / 首饰 profile=2）：纯银两消耗，每跨一档（10级）按档计费，0 打造材料，不污染可交易状态。
+inline constexpr uint64_t kUpgradeTierBaseGoldPerStep = 100;
+inline constexpr uint64_t kUpgradeTierAccessoryGoldPerStep = 60;
+
+inline constexpr bool CanUpgradeTier(uint32_t sourceProfile, uint32_t sourceKind, uint32_t sourceLevel,
+                                     uint32_t sourceClass, uint32_t targetProfile, uint32_t targetKind,
+                                     uint32_t targetLevel, uint32_t targetClass) {
+    if (sourceProfile != 1u && sourceProfile != 2u) return false;
+    if (targetProfile != sourceProfile || targetKind != sourceKind || targetClass != sourceClass) return false;
+    return targetLevel > sourceLevel;
+}
+
+inline constexpr uint64_t UpgradeTierGoldCost(uint32_t equipProfile, uint32_t sourceLevel, uint32_t targetLevel) {
+    if ((equipProfile != 1u && equipProfile != 2u) || targetLevel <= sourceLevel) return 0u;
+    const uint32_t srcTier = sourceLevel / 10u;
+    const uint32_t dstTier = targetLevel / 10u;
+    const uint64_t steps = dstTier > srcTier ? static_cast<uint64_t>(dstTier - srcTier) : 1ull;
+    const uint64_t perStep = equipProfile == 1u ? kUpgradeTierBaseGoldPerStep : kUpgradeTierAccessoryGoldPerStep;
+    return steps * perStep;
+}
+
 inline constexpr uint32_t kScrollBonusFragmentsCount = 2;
 inline constexpr uint32_t kMaxRareSkillRatioBps = 1000; // 永久技能稀世占比硬红线 <= 10%。
 

@@ -5324,3 +5324,60 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - 验证证据：`pytest tests/test_cpp_wt_travel_pass.py tests/test_latest_cpp_sync_systems.py -v` **7/7 PASS**，`test_cpp_wt_spirit_shop.py` **6/6 PASS**。
 - **Java 独立服务端（`xuanming-server-mmo`）**：并行会话 `ContractSync` 已落盘游历手记协议与表，因 `game-player-store` `0015.schema` 正由并行会话演进，已在 `PARITY.md` 顶部登记，未碰 `player_state.proto` / `0015.schema`。
 - **提交与作图**：未执行 `git commit` / `git push`；已产出 12 件纯功能 UI 切图清单供负责人转发异机 Codex 作图。
+
+
+## 2026-11-26 Antigravity：衣柜「灵宠幻化 + 技能特效」三端全链路接入（530–531、`PetCosmetic`/`SkillVfxCosmetic`、12 张无字切图、Java 第 17 代台账）
+
+- **设计与配表协议（`xuanming-server-mmo-cpp`）**：
+  - 设计文档：[docs/planning/wardrobe-pet-morph-and-skill-vfx-v1.md](planning/wardrobe-pet-morph-and-skill-vfx-v1.md)（已通过 `gen_docs_index.py --check`）。
+  - 权威配置表：`data/schema/petcosmetic_table.proto` + `data/PetCosmetic.xlsx`（3 项：`1 苍嶂麟 07-cangzhanglin`、`2 绯耳灵 14-feierling`、`3 月弦师 12-yuexianshi`，`mall_sku_id=0` 暂未上架待运营填真 SKU）；`data/schema/skillvfxcosmetic_table.proto` + `data/SkillVfxCosmetic.xlsx`（3 项：`1 鎏金符纹 skill=1201 #FFE28A`、`2 紫霄惊雷 skill=1202 #D2A8FF`、`3 寒星流华 skill=1203 #A8F5FF`），均启用 `cfg_ids_permanent=true` 与 `cfg_bit_index=true`（已由 `run.py --bitindex-bootstrap` 初始化映射文件并导出全部 `.pb` 表）。
+  - 协议与消息号：`player_comp.proto`（`12..14` 拥有位图与技能特效穿戴映射）、`player_pet_comp.proto`（`PetInstance.cosmetic_id=26` 按灵宠实例隔离）、`player_pet.proto`（`PetInfo.{cosmetic_id=22, cosmetic_art_key=23}`）、`player_appearance.proto`（`PlayerAppearanceInfo` `16..21` + 尾部新增 RPC `530=SceneAppearanceClientPlayerEquipPetCosmetic` / `531=SceneAppearanceClientPlayerEquipSkillVfx`）、`battle_data.proto`（战斗快照与演员态外观字段）。`proto-gen-run` exit 0。
+- **C++ 服务端（`xuanming-server-mmo-cpp`）**：
+  - `appearance_rules.h`、`player_appearance.{h,cpp}`、`player_appearance_handler.cpp`、`player_pet.cpp`、`player_battle.cpp`、`turn_battle_engine.cpp`、`player_appearance_test.cpp`。纯外观零战斗/成长数值，授形不自动穿戴，穿戴走权威校验与持久落盘，战斗快照/演员态透传灵宠幻化键与技能特效映射。
+  - 验证：`test_cpp_no_raw_pointer_member.py` **13/13 OK**；MSBuild 串行构建 `table.lib` / `proto.lib` / `rpc.lib` / `scene.lib` / `battle.lib` / `bag_test.exe` 及 `player_appearance_handler.cpp` 均 0 错误；`bag_test.exe --gtest_filter="PlayerAppearance*"` **11/11 PASS**（含 3 项新增灵宠幻化与技能特效单测）。另注：`turn_battle_engine_test.vcxproj` 链接当前受并行会话 `ranked_battle_test.cpp(967)` 遗留 `set_attack` 编译错阻塞（`battle.lib` 已 0 错误编过）。
+- **Unity 客户端（`mmorpg-client`）**：
+  - 导表/协议：`sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1` exit 0；12 张无字切图自 `D:\work\image\designs\wardrobe-cosmetics-ui-20261125\sprites\` 逐字节 SHA-256 核验无误并补齐 `.meta` 落盘至 `Assets/Resources/UI/Ugui/WardrobeCosmetics/`。
+  - 核心与 UI：`WardrobeCosmeticModels.cs`、`AppearanceClient.cs`、`CommerceClient.cs`（`HasSellableOfficialSku` 在售 SKU 实时门禁，严禁为未上架项伪造购买按钮）、`CommerceWindow.cs`、`JubaozhaiUiRoot.cs`（`OpenOfficialMallSubTab(PermanentWardrobe)`）、`AppearanceUiArt.cs`、`AppearanceUiRoot.{cs,Layout.cs,Cosmetics.cs}`（同一衣柜窗口「人物 / 灵宠 / 特效」三页签、宽屏/窄屏列表→详情、`RectMask2D` 裁切 8 帧特效实时播放与重播、原形对比、更换灵宠）；战斗与灵宠视觉接线 `BattleArtCatalog.cs` / `BattleFx.cs` / `BattlePresenter.cs` / `PetPanel.cs` / `PetCultivationPanel.cs`（缺图优雅回退原宠与默认特效）。
+  - 验证：`client_compile_check.ps1` 全量 **774 文件 0 错误**；EditMode NUnit（`WardrobeCosmeticsTests` + `AppearanceClientTests`）**16 PASS / 0 FAIL / 1 SKIP**（唯一跳过为需 Unity Editor 运行时的 `Resources.Load` 人物志用例）。
+- **Java 独立服务端（`xuanming-server-mmo`）**：
+  - `player_state.proto`（`AppearanceState` `7..9`、`PetEntry.cosmetic_id=26`，推进第 17 代持久台账 `0017.schema`）、`PlayerAppearance.java`、`PlayerPets.java`、`AppearanceTables.java`、`AppearanceFeature.java`、`AppearanceService.java`、`PetTables.java`、`PetService.java`、`SceneBattleTables.java`、`BattleSnapshots.java`、`TurnBattleEngine.java`、`AppearanceFeatureTest.java`。
+  - 验证：`game-scene` `AppearanceFeatureTest + PlayerAppearanceTest + PetServiceTest` **58/58 PASS**，`game-player-store` `PlayerStateSchemaLedgerTest`（第 17 代台账）**1/1 PASS**，`game-battle-engine` 全量 **2454/2457 PASS**（仅 3 项并行会话 S2 技能总数/MVP 战报字段基线测试未更新，与衣柜无关），已登记 `PARITY.md`。
+- **提交状态**：三仓均未执行 `git commit` / `git push`，待负责人确认。
+
+
+## 2026-11-26 Antigravity：《论剑 / 人宠会武》V4 全栈落码与三仓验收（队内战术标点 532–533、复盘高光徽记、连胜破势与重登补弹 `surrendered` 闭环）
+
+- **设计与协议（`xuanming-server-mmo-cpp`）**：
+  - 设计文档：[docs/planning/ranked-play-v4-team-tactics-and-highlights.md](planning/ranked-play-v4-team-tactics-and-highlights.md)。
+  - 协议追加（末尾追加零号位漂移，由 Gemini 执行 `dev.bat proto` + `ContractSync` + 客户端生成）：`battle_data.proto`（`BattleActorState.win_streak=48`、`BattlePingKind`、`BattleTacticalPing`、`BattleHighlightKind`、`BattleSettlementData` `37..42` 复用既有 `33..35`、`RankedMatchContext.member_win_streaks=9`）；`player_battle.proto`（`BattleStateS2C.team_pings=35`、`SendBattlePingRequest/Response`、`BattlePingS2C`、RPC `532=BattleClientPlayerSendBattlePing` / `533=BattleClientPlayerNotifyBattlePing`）；`player_battle_result_comp.proto`（`PlayerBattleResult.surrendered=39`）；`match_service.proto`（`RankedPlayerSeasonSummary` `16..17`、`RankedBattleSettlementView` `21..22`）；`match_authority.proto`（`MatchRankedPlayerSeasonRecord` `16..17`）。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - C++ `battle` / `scene`：`turn_battle_constants.h`、`turn_battle_engine.{h,cpp}`（`SubmitBattlePing` / `FillTeamPingsForViewer` 阵营校验 + 每回合 2 次确定性限频 + 同玩家覆写 + 回合推进清空；`AccumulateRoundMvpMetrics` / `RecordDispelLanded` / `ComputeHighlightKind` 5 枚战术徽记 + `ended_opponent_streak`）、`configured_battle_effects.cpp`、`battle_room_manager.{h,cpp}`（`HandleSendBattlePing` 同队单播 + `RedactStateForViewer` 对敌/观众强制清空 `team_pings`）、`battle_client_edge.cpp`、`player_battle.cpp`（透传 `surrendered`）、`ranked_battle_test.cpp`。
+  - Go `match`：`go/match/internal/authority/{ranked.go,ranked_test.go}`（持久化 `current_win_streak` / `best_win_streak`，正式论剑透传 `member_win_streaks`（`>=3`），结算记录 `win_streak_after` / `ended_opponent_streak`，纯荣誉零 Elo/材料通胀）。
+  - 验证证据（Gemini 执行）：`test_cpp_no_raw_pointer_member.py` **13/13 OK**；MSBuild 串行 `/m:1` `table.lib` / `battle.lib` / `scene.lib` / `battle.exe` / `turn_battle_engine_test.exe` **0 警告 0 错误**；`turn_battle_engine_test.exe --gtest_filter="RankedBattleTest.*:TableBattleDataProviderTest.*"` **24/24 PASS**（`RankedBattleTest` 15/15 + `TableBattleDataProviderTest` 9/9）；Go `match` `go test -count=1 ./...` **PASS=632, FAIL=0**。
+- **Java 独立服务端（`xuanming-server-mmo`）**：
+  - `game-battle-engine` / `game-battle` / `game-match` / `game-scene` / `game-player-store`（第 16 代持久台账 `0016.schema` 登记 `BattleResultEntryState.surrendered=39`，并行会话已在之上顺延至第 17 代）全量同构实现，已登记 `PARITY.md`。
+  - 验证证据（Gemini 执行）：`ContractSync --check` **通过（契约一致）**；`game-player-store` `PlayerStateSchemaLedgerTest` + `PlayerStateSchemaPolicyTest` **5/5 PASS**；`game-battle-engine` `RankedBattleEngineTest` + `TournamentLeylineBattleEngineTest` **13/13 PASS**；`game-battle` `BattleProtocolTest` + `BattleTacticalPrepRoomTest` + `BattleViewsTest` + `BattleEdgeHandlerTest` **61/61 PASS**；`game-scene` `CoreGameplayLoopParityTest` **5/5 PASS**；`game-match` 全部 273 个主源码编译 0 错误（`testCompile` 当前受无关并行会话残留的 `GuildWarMatchStartTest.java` 8 处编译错阻塞，未越权修改该无关文件）。
+- **Unity 客户端（`mmorpg-client`）**：
+  - `DirectRoutingBattleTransport.cs`、`RpcGuard.cs`、`BattleClient.cs`、`RankedModels.cs`、`RankedClient.cs`、`SeasonEconomyUiArt.cs`（预绑 `UI/Ugui/RankedPlayV4/` 12 枚透明切图键，缺图安全回退）、`BattleUnitView.cs`、`BattleUiRoot.cs`、`BattleScreen.cs`、`RankedSettlementPanel.cs`、`BattleClientAutoBattleTests.cs`、`RankedClientTests.cs`。
+  - 验证证据（Gemini 执行）：`client_compile_check.ps1` **780/780 文件 0 错误**；EditMode NUnit（`RankedClientTests` + `BattleClientAutoBattleTests` + `DirectRoutingBattleTransportTests` + `DamageNumberLayoutTests`）**70/70 PASS**。
+- **提交与作图**：三仓均未执行 `git commit` / `git push`；配套 12 件无字切图 + 3 张状态预览的纯功能需求单（不含任何画风/配色/字体限制）已直接内联输出供转发异机 Codex 作图。
+
+
+## 2026-11-26 Antigravity：大世界地图玩法 V2 收口与高可玩性增量闭环（M1 验收加固 + M1.5 纳入月汐湾 + M2-Lite 三图野外灵宠栖息地生态遇敌）
+
+- **范围与不硬扩展原则**：
+  - M1 15 张无字 RGBA 切图（Azure `image/main@e26ece7`）经逐字节 SHA-256 核验与 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/` 15/15 完全一致，`.meta` `spriteBorder` 与 `CONTROL-USAGE.md` 一致；修复 `CityTravelUiRoot.cs` 首次入场未自动拉总览导致 HUD 地图灵潮角标未亮的问题（首次 `HasDirectory` 自动拉一次 + 关图期间每 60s 轻量刷新）并校准 `CityTravelWindow.WorldMapV2.cs` 2 处文字安全区宽度；清除 `docs/planning/world-map-play-v2.md §7` 中曾干扰作图风格的配色/材质描述。
+  - **M1.5 纳入月汐湾（Scene 3）**：随着月汐湾已成为开放大世界图（`clientOnly: false`），将 Go `scene_manager` 与 Java `game-scene-manager` 默认开放图扩至 `[1, 2, 3, 5]`、灵潮/今日旺地轮转池扩至 `[2, 3, 5]`，并基于 `yuexi-bay-20261115/navigation.json` 唯一连通域追加 `MysteryMerchantSpot.xlsx` 行 `13..15`。
+  - **M2-Lite 三图野外灵宠栖息地（零新协议 / 零新表结构 / 零新增战力通胀）**：通过 `tools/scripts/world_map_habitat_xlsx_patch.py` 扩展 `Monster.xlsx`（`201..209`）、`Dungeon.xlsx`（`202/203/205`，`allow_pet_capture=1, max_team_size=1, scene_id=2/3/5`）、`PlayMode.xlsx`（`402/403/405` `PVE_SOLO`），让八景岛（云鹤10级/竹风狸/霞角鹿）、月汐湾（金猊10级/灵狐/符小虎）、碧渊水宫（玄潮龟/汐螺/露华灵）拥有差异化可捕灵宠生态，完全复用既有捕宠战斗引擎与灵宠图集。
+- **双服务端权威防伪校验**：
+  - C++ `scene`（`cpp/libs/services/scene/battle/system/player_battle.cpp`）与 Java `game-scene`（`PlayerBattleService.java`）均在 `PrepareBattle` 中对 `allow_pet_capture == 1 && scene_id > 1` 强制校验玩家当前 `scene_config_id == dungeon.scene_id`（不符回 `kFeatureUnavailable` 且零写锁，主城演练 `Dungeon 4` 不受限），同步补齐 C++ `PrepareWildPetHabitatRequiresMatchingWildScene` 与 Java `PrepareBattleTest#野外灵宠栖息地必须在对应野外图备战_主城演练不受限`。
+- **Unity 客户端与 UI 接入（`mmorpg-client`）**：
+  - `WorldMapOverviewModels.cs` 新增 `WorldMapHabitatInfo`、`FindHabitat`、`FormatHabitatSummary`、`FormatWildHabitatHeadline`；`BattleMatchEntryClient.cs` 新增 `StartWildPetHabitat(uint dungeonConfigId)`（在 `CanStart` 前先拦组队态，避免队员收到队长发起误导提示）；`CityTravelWindow.cs` 抽屉展示野外地图可捕灵宠生态；`CityTravelUiRoot.cs` 新增野外地图底部居中「寻宠遇敌」HUD 浮条（`WildPetHabitatBar`，优先加载 `UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}`，缺图无缝回落至既有 `WorldMapV2` 切图，当前即刻可玩）。
+- **验证证据**：
+  - 导表：`python tools/data_table_exporter/run.py` **exit 0（81 表 / Deploy 14 OK, 0 failed）**；`mmorpg-client/tools/sync_tables.ps1` **exit 0（81/81 一致）**。
+  - Go：`scene_manager/internal/logic` M1+M1.5 定向用例 **PASS**；`match/internal/catalog`（加载新 `PlayMode`/`Dungeon`）**PASS**。
+  - C++：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`check_log_text_english.py` **exit 0**；串行 MSBuild `/m:1` `scene.lib` / `battle.lib` / `turn_battle_engine_test.exe` **0 错误**；`turn_battle_engine_test.exe --gtest_filter="TableBattleDataProviderTest.*"` **9/9 PASS**（注：`bag_test.exe` / `scene.exe` 链接暂受同工作区并行会话 `player_battle_settlement_test.cpp:4283` 与 `main.cpp:162` 阻断，我方修改 0 错误）。
+  - Java（`xuanming-server-mmo`）：精准同步 4 张 `.pb` 与 `manifest.json` 对应条目；`game-scene-manager` `WorldMapOverviewTest` **PASS**、`game-table` 全套 **PASS**、`game-battle-engine` `TableBattleDataTest` **PASS**、`game-scene` `PrepareBattleTest#野外灵宠栖息地必须在对应野外图备战_主城演练不受限` **1/1 PASS**（全类 48/49 PASS，唯一 1 错为并行会话未 install 的 `game-proto` `SupportEffectSummaryOrBuilder`）；已更新 `PARITY.md`。
+  - Unity：`client_compile_check.ps1` **exit 0（780 文件 0 错误）**；`MmorpgClient.Tests.EditMode.Tianyong` **66 个测试文件 0 错误编译**；.NET 实跑 `WorldMapOverviewTests` 4 组纯 C# 用例 **4/4 PASS**。
+- **Codex 纯功能 UI 交接与提交状态**：
+  - 产出纯功能无画风交接单 [docs/planning/ui-handoff/world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md)（3 张可选专属透明 PNG + 1 张审图预览），并在回复中内联自包含作图清单供直接转发异机 Codex；三仓均未执行 `git commit` / `git push`。

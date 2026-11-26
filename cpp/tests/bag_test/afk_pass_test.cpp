@@ -506,3 +506,20 @@ TEST_F(AfkPassSystemTest, SettingsAndHostedRecapLifecycleSurviveCrossNodeAndAckI
 	EXPECT_EQ(AfkPassSystem::AckHostedRecap(player, kNow + 100, kNow + 620, info), kSuccess);
 	EXPECT_FALSE(info.has_hosted_recap());
 }
+
+TEST_F(AfkPassSystemTest, LightCardPopulatesLoadoutSlotsAndStage2TradableFlag)
+{
+	AfkPassInfo info;
+	AfkPassSystem::FillInfo(player, kNow, info);
+	EXPECT_EQ(info.unlocked_loadout_slots(), 3u);
+	EXPECT_FALSE(info.stage2_tradable_enabled());
+
+	::BuyAfkPassResponse bought;
+	ASSERT_EQ(AfkPassSystem::Buy(player, Request(7801), kNow, bought), kSuccess);
+	EXPECT_EQ(bought.info().unlocked_loadout_slots(), 6u);
+	EXPECT_TRUE(bought.info().stage2_tradable_enabled());
+
+	ASSERT_EQ(AfkPassSystem::GmSet(player, 0, kNow + 5, info), kSuccess);
+	EXPECT_EQ(info.unlocked_loadout_slots(), 3u);
+	EXPECT_FALSE(info.stage2_tradable_enabled());
+}

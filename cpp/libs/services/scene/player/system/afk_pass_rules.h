@@ -84,4 +84,19 @@ namespace afk_pass
 	{
 		return expiresAt > nowUnixSec;
 	}
+
+	// 仙途轻享卡纯便利方案槽位扩展（零战力加成，免费 3 格 → 轻享卡生效 6 格）。
+	inline constexpr uint32_t kBaseLoadoutSlots = 3;
+	inline constexpr uint32_t kLightCardBonusLoadoutSlots = 3;
+	inline constexpr uint32_t kLightCardLoadoutSlots = kBaseLoadoutSlots + kLightCardBonusLoadoutSlots;
+
+	constexpr bool IsActive(uint64_t expiresAt, uint64_t nowUnixSec)
+	{
+		return expiresAt > nowUnixSec;
+	}
+
+	constexpr uint32_t UnlockedLoadoutSlots(bool active)
+	{
+		return active ? kLightCardLoadoutSlots : kBaseLoadoutSlots;
+	}
 } // namespace afk_pass

@@ -76,6 +76,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [core-gameplay-loop.md](planning/core-gameplay-loop.md) — 《五行奇谈》核心循环 V1｜有空就玩
 - [equipment-economy-charter.md](planning/equipment-economy-charter.md) — 《五行奇谈》个人开发经济体系、稳物价、官方 7:3 与游戏内防骗设计总纲
 - [equipment-eight-slot-planning.md](planning/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
+- [equipment-loadout-presets-v1.md](planning/equipment-loadout-presets-v1.md) — 装备流派方案预设（一键多套换装 + 付费扩展套位）完整设计方案 V1
 - [equipment-quality-and-skill-crafting-v1.md](planning/equipment-quality-and-skill-crafting-v1.md) — 《五行奇谈》V1 装备窄区间品相、率土式永久保值制书与轻量化手艺设计
 - [equipment-recycling-trade-economy-candidate.md](planning/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
 - [equipment-recycling-trade-economy-v1.md](planning/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
@@ -91,6 +92,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-festival-beast-v1.md](planning/battle-festival-beast-v1.md) — 瑞兽迎春：轻量活动首发 V1
 - [battle-jianghu-grudge-duel-bounty-v1.md](planning/battle-jianghu-grudge-duel-bounty-v1.md) — 《五行奇谈》江湖恩怨、擂台生死状与灵潮劫火悬赏设计（V1）
 - [battle-jianghu-grudge-duel-phase1-implementation-plan.md](planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md) — 江湖恩怨与天墉生死状 · 一期（M1–M3）实施计划
+- [battle-prep-skill-ban-v1.md](planning/battle-prep-skill-ban-v1.md) — 《五行奇谈》战前技能禁选（每方 3 Ban · 方案 A）玩法与全端工程设计（V1）
 - [battle-season-one-simple-design.md](planning/battle-season-one-simple-design.md) — 破阵之季 · 首季玩法与 Gemini 逻辑交接
 - [battle-skill-and-pet-cultivation-expansion.md](planning/battle-skill-and-pet-cultivation-expansion.md) — 战斗战法深度与宝宝养成全量扩展设计（扩展包 A+B+C+D）
 - [boss-trial-planning-ui.md](planning/boss-trial-planning-ui.md) — 首领试炼：深度策略玩法 V2、UI 美术规格与双机交接
@@ -126,6 +128,10 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [world-map-play-v1.md](planning/world-map-play-v1.md) — 《五行奇谈》地图顺手拾取首版：野外主动捡，战斗优先
 - [world-map-play-v2.md](planning/world-map-play-v2.md) — 《五行奇谈》世界地图生态、双层潮汐聚人与低人口在场感设计（V2）
 
+#### 未分类
+
+- [growing-passive-skills-v2.md](planning/growing-passive-skills-v2.md) — 率土式叠加成长战法 V2 扩展设计（《兵法叠势卷》6 项永久成长被动）
+
 #### 成套策划
 
 - [skill-planning/](planning/skill-planning/README.md) — 自由技能体系策划总览
@@ -135,17 +141,21 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [activity-travel-pass-ui-handoff.md](planning/ui-handoff/activity-travel-pass-ui-handoff.md) — 青云游历手记与活动种草卡 UI 美术作图交接清单
 - [battle-art-prompts.md](planning/ui-handoff/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
 - [battle-festival-beast-ui-handoff.md](planning/ui-handoff/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
+- [battle-prep-skill-ban-ui-handoff.md](planning/ui-handoff/battle-prep-skill-ban-ui-handoff.md) — 战前技能禁选（每方 3 Ban · 方案 A）UI 纯功能作图交接清单
 - [battle-season-one-ui-handoff.md](planning/ui-handoff/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
+- [equipment-loadout-presets-ui-handoff.md](planning/ui-handoff/equipment-loadout-presets-ui-handoff.md) — 装备流派方案预设（一键多套换装）UI 纯功能需求清单
+- [growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md) — 率土式叠加成长战法 V2（《兵法叠势卷》）纯功能图标交接单
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v2-ui-handoff.md](planning/ui-handoff/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
-- [latest-expansions-ui-handoff.md](planning/ui-handoff/latest-expansions-ui-handoff.md) — 近期新玩法增量 UI 切片需求清单（五行扩展 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉）
+- [latest-expansions-ui-handoff.md](planning/ui-handoff/latest-expansions-ui-handoff.md) — 近期新玩法剩余增量 UI 切片需求清单（论剑 V4 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉 / 野外栖息地）
 - [official-passport-ui-handoff.md](planning/ui-handoff/official-passport-ui-handoff.md) — 官方通行证与账号注册 · Unity UI 异机交接
 - [ranked-play-v2-ui-handoff.md](planning/ui-handoff/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
 - [season-team-tournament-v1-ui-handoff.md](planning/ui-handoff/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
 - [season-team-tournament-v2-ui-handoff.md](planning/ui-handoff/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
 - [season-team-tournament-v3-ui-handoff.md](planning/ui-handoff/season-team-tournament-v3-ui-handoff.md) — 《群仙问道赛》V3+V4 增量 UI 需求清单（模块 D / E / F / G / H / I / J）
 - [trial-journal-v2-ui-handoff.md](planning/ui-handoff/trial-journal-v2-ui-handoff.md) — 《五行试炼志 V2》UI 功能需求与作图清单
+- [world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md) — 大世界野外灵宠栖息地 HUD 浮条 UI 美术作图交接清单
 
 ### 技术与架构设计文档(`design/`)
 

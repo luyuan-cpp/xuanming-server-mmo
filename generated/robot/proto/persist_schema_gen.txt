@@ -571,6 +571,17 @@ state=bootstrap
 1=PlayerProfileComp#13 optional bytes skill_vfx_owned_bits
 1=PlayerProfileComp#14 map map<uint32,uint32> equipped_skill_vfx
 1=PlayerBattleResult#39 optional bool surrendered
+1=BattleEconomyLedger#1 optional uint64 week_starts_at_ms
+1=BattleEconomyLedger#2 optional uint64 battle_silver_this_week
+1=BattleEconomyLedger#3 optional uint64 battle_exp_this_week
+1=ClientRequestLedgerComp#5 optional BattleEconomyLedger battle_economy
+1=PlayerBattleResult#40 optional uint32 level_before
+1=PlayerBattleResult#41 optional uint32 level_after
+1=PlayerBattleResult#42 optional uint64 total_exp_after
+1=PlayerBattleResult#43 optional uint64 next_level_total_exp
+1=PlayerBattleResult#44 optional uint64 battle_silver_weekly_used
+1=PlayerBattleResult#45 optional uint64 battle_silver_weekly_soft_cap
+1=PlayerBattleResult#46 optional bool battle_silver_diminished
 
 retired=player_database#10
 retired=player_database#17

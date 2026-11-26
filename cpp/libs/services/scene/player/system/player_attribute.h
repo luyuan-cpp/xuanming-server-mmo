@@ -6,6 +6,7 @@
 
 #include <entt/src/entt/entity/entity.hpp>
 
+#include "battle_progression_rules.h"
 #include "player_level_rules.h"
 
 class AttributePanelInfo;
@@ -113,6 +114,20 @@ public:
 	// GM:设等级(1..kMaxLevel,绝对设值),直接重算并推面板与宠物列表。降级不清加点:超额的池按 0 生效,
 	// 设回原等级后原样生效。存储等级原本超上限时会被覆写,打 WARN 留痕(GM 只在 dev/test 开放)。
 	static uint32_t GmSetLevel(entt::entity player, uint32_t level);
+
+	// 战斗结算经验入账与平滑升级(docs/planning/player-leveling-and-battle-economy-v1.md):
+	//   - 只写内存组件并执行属性/宠物重算与升级任务推进，不在此处推面板或触发额外存盘（由收件箱确认落盘后统一公开）；
+	//   - 严守混版本超上限携带等级与 GM 调高级号只升不降保护；total_exp 溢出或缺失 LevelComp 返回 false。
+	static bool ApplyBattleExpAndLevelUp(entt::entity player, uint64_t expGain,
+										 battleprogression::LevelProgressResult& out);
+
+	// 启动 / 热更校验 PlayerLevelExp / BattleProgressionReward / BattleProgressionRule 三张表自洽。
+	static bool ValidateProgressionTables();
+
+	// 读取当前生效表快照中的经验曲线、模式奖励与周银两规则（表未加载时返回空/false，兼容未载表旧单测）。
+	static std::vector<battleprogression::LevelExpRow> LoadLevelExpRows();
+	static std::vector<battleprogression::ModeRewardRow> LoadBattleProgressionRewards();
+	static bool LoadWeeklySilverRule(battleprogression::WeeklySilverRule& out);
 
 	// 主动推面板(升级 / GM / 外部加成变化);BuildPanel 失败时不推。
 	static void PushPanel(entt::entity player);

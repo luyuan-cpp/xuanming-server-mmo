@@ -588,6 +588,10 @@ protected:
         clientRequest->set_seq(1);
         clientRequest->set_enhance_success(true);
         clientRequest->set_enhance_level(3);
+        auto *battleEconomy = clientRequests.mutable_battle_economy();
+        battleEconomy->set_week_starts_at_ms(1900000000000ULL);
+        battleEconomy->set_battle_silver_this_week(600);
+        battleEconomy->set_battle_exp_this_week(1000);
 
         // 物品数量预留(battle-item-reservation.md):一份战斗预留、一行物品,覆盖三个可携带类型
         // (PlayerItemHoldComp / ItemHold / ItemHoldLine)。加载原样挂上、存盘原样拷回,不做整理,每层的未知字段都要原样留下。

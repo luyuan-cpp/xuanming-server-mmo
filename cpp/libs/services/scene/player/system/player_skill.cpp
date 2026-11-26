@@ -14,6 +14,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"  // PlayerTravelHandoffComp
+#include "player/system/afk_pass.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_craft.h"
 #include "player/system/player_level_rules.h"
@@ -341,8 +342,13 @@ namespace
 		return equipped;
 	}
 
+	uint32_t UnlockedSchemesFor(entt::entity player)
+	{
+		return skillloadout::UnlockedSchemes(AfkPassSystem::IsActiveNow(player));
+	}
+
 	void FillLoadoutSnapshot(const PlayerSkillListComp &list, uint32_t classId, bool classHasClassSkills,
-							 uint32_t level, SkillLoadoutSnapshot &out)
+							 uint32_t level, uint32_t unlockedSchemes, SkillLoadoutSnapshot &out)
 	{
 		out.Clear();
 		const bool customEnabled = skillloadout::ValidSchemeId(list.active_loadout_scheme_id());
@@ -353,12 +359,18 @@ namespace
 		out.set_max_pursuit_slots(skillloadout::kMaxPursuitSlots);
 		out.set_max_opening_slots(skillloadout::kMaxOpeningSlots);
 		out.set_last_request_id(list.loadout_last_request_id());
+		out.set_unlocked_schemes(unlockedSchemes);
+		out.set_max_schemes(skillloadout::kMaxSchemes);
 
 		for (uint32_t schemeId = 1; schemeId <= skillloadout::kMaxSchemes; ++schemeId)
 		{
+			const auto *stored = FindLoadoutScheme(list, schemeId);
+			if (schemeId > unlockedSchemes && stored == nullptr)
+			{
+				continue;
+			}
 			auto *info = out.add_schemes();
 			info->set_scheme_id(schemeId);
-			const auto *stored = FindLoadoutScheme(list, schemeId);
 			if (stored != nullptr)
 			{
 				info->set_role_tag(stored->role_tag());
@@ -852,7 +864,7 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	PlayerSupportEffectSystem::Build(player, support);
 	const bool craftGateEnabled = PlayerCraftSystem::IsCraftUnlockGateEnabled();
 	const auto equippedNonActive = CollectEquippedNonActiveSkills(list, classId, classHasClassSkills, level);
-	FillLoadoutSnapshot(list, classId, classHasClassSkills, level, *response.mutable_loadout());
+	FillLoadoutSnapshot(list, classId, classHasClassSkills, level, UnlockedSchemesFor(player), *response.mutable_loadout());
 	for (const auto *row : rows)
 	{
 		auto* entry = response.add_catalog();
@@ -1309,7 +1321,8 @@ void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutR
 			const auto *entry = FindEntry(list, skillId);
 			meta.learned = entry != nullptr && IsUsable(*row, *entry, classId, classHasClassSkills, level);
 			return meta;
-		});
+		},
+		UnlockedSchemesFor(player));
 	if (validationErr != skillloadout::Error::None)
 	{
 		finish(MapLoadoutError(validationErr));
@@ -1384,7 +1397,7 @@ void PlayerSkillSystem::SwitchLoadout(entt::entity player, const SwitchSkillLoad
 		finish(kInvalidParameter);
 		return;
 	}
-	if (!skillloadout::ValidSchemeId(request.scheme_id()))
+	if (!skillloadout::ValidSchemeId(request.scheme_id(), UnlockedSchemesFor(player)))
 	{
 		finish(kSkillLoadoutSchemeInvalid);
 		return;

@@ -7,10 +7,11 @@
 #include <vector>
 
 // 人物战法构筑装配纯规则（布局层，不依赖 ECS / Protobuf）：
-// 3 套流派方案，每套支持 3 被动 + 1 追击 + 1 开场，主动技全量可用，同 exclusive_group 互斥。
+// 免费 3 套 + 仙途轻享卡生效期扩展至 6 套流派方案，每套支持 3 被动 + 1 追击 + 1 开场，主动技全量可用，同 exclusive_group 互斥。
 namespace skillloadout {
 
-inline constexpr uint32_t kMaxSchemes = 3;
+inline constexpr uint32_t kBaseMaxSchemes = 3;
+inline constexpr uint32_t kMaxSchemes = 6;
 inline constexpr uint32_t kMaxRoleTag = 3;
 inline constexpr uint32_t kMaxPassiveSlots = 3;
 inline constexpr uint32_t kMaxPursuitSlots = 1;
@@ -34,8 +35,12 @@ struct SkillMeta {
     uint32_t exclusiveGroup = 0;  // 0 无互斥；>0 同组不可同时装配
 };
 
-inline bool ValidSchemeId(uint32_t schemeId) {
-    return schemeId >= 1u && schemeId <= kMaxSchemes;
+inline constexpr uint32_t UnlockedSchemes(bool lightCardActive) {
+    return lightCardActive ? kMaxSchemes : kBaseMaxSchemes;
+}
+
+inline bool ValidSchemeId(uint32_t schemeId, uint32_t maxAllowed = kMaxSchemes) {
+    return schemeId >= 1u && schemeId <= maxAllowed;
 }
 
 inline bool ValidRoleTag(uint32_t roleTag) {
@@ -65,8 +70,9 @@ inline Error ValidateScheme(uint32_t schemeId, uint32_t roleTag,
                             const std::vector<uint32_t>& passiveIds,
                             const std::vector<uint32_t>& pursuitIds,
                             const std::vector<uint32_t>& openingIds,
-                            LookupFn&& lookup) {
-    if (!ValidSchemeId(schemeId)) {
+                            LookupFn&& lookup,
+                            uint32_t maxAllowedSchemes = kMaxSchemes) {
+    if (!ValidSchemeId(schemeId, maxAllowedSchemes)) {
         return Error::InvalidScheme;
     }
     if (!ValidRoleTag(roleTag)) {

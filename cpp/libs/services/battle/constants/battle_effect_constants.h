@@ -21,7 +21,9 @@ enum class BattleModifier : uint32_t {
     IncomingDamage = 16, OutgoingShield = 17, OutgoingPhysicalDamage = 18,
     OutgoingMagicDamage = 19, SelfGrowingDefense = 20,
     NextPhysicalAttack = 21, NextMagicAttack = 22,
-    ForbidPhysical = 23, ForbidMagic = 24, kCount
+    ForbidPhysical = 23, ForbidMagic = 24,
+    SelfGrowingDirectDamage = 25, DefensePenetration = 26,
+    PeriodicDamageBonus = 27, AllControlResist = 28, kCount
 };
 enum class SecondaryTargetPolicy : uint32_t {
     Random = 0,
@@ -40,7 +42,8 @@ enum class BattleDamageOrigin : uint32_t {
 };
 enum class BattleTrigger : uint32_t {
     Start = 0, AfterBasic = 1, AfterSkill = 2, AfterTake = 3,
-    AfterPeriodic = 4, AfterDodge = 5, RoundStart = 6, kCount
+    AfterPeriodic = 4, AfterDodge = 5, RoundStart = 6,
+    AfterDirectAttack = 7, AfterControlAttempt = 8, AfterSupportCast = 9, kCount
 };
 enum class BattleStateKind : uint32_t {
     None = 0, SealActive = 1, SealMagic = 2, SealPhysical = 3,

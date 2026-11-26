@@ -6826,6 +6826,174 @@
     1
    ],
    "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合首次承受敌方直接伤害或援护分担扣血时叠 1 层，每层使自身直接伤害提高 6%，持续至战斗结束，最多叠加 5 层（+30%）；阵亡暂停，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12023",
+   "id": 12023,
+   "init_effect": [
+    120230
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "承锋蓄势",
+   "pet_max_targets": 1,
+   "prototype_code": "G04",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 7,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合主动攻击（普攻或主动攻击技）首次命中敌方造成扣血时叠 1 层，每层使自身攻击无视目标护甲与防御 4%，持续至战斗结束，最多叠加 5 层（20%）；阵亡暂停，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12024",
+   "id": 12024,
+   "init_effect": [
+    120240
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "循隙破甲",
+   "pet_max_targets": 1,
+   "prototype_code": "G05",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 7,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合自己施加的中毒或灼烧首次造成实际扣血时叠 1 层，每层使自身持续伤害提高 6%，持续至战斗结束，最多叠加 5 层（+30%）；阵亡暂停，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12025",
+   "id": 12025,
+   "init_effect": [
+    120250
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "蚀骨愈深",
+   "pet_max_targets": 1,
+   "prototype_code": "G06",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 7,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合首次成为敌方行动控制目标时（命中、抵抗或护阵抵挡皆计）叠 1 层，每层使自身全部行动控制抵抗提高 5%，持续至战斗结束，最多叠加 5 层（+25%）；阵亡暂停，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12026",
+   "id": 12026,
+   "init_effect": [
+    120260
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "磐石道心",
+   "pet_max_targets": 1,
+   "prototype_code": "G07",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 7,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合主动施放治疗、护盾或回生印技能时叠 1 层（每轮限 1 层），每层使自身施放护盾的容量提高 5%，持续至战斗结束，最多叠加 5 层（+25%）；阵亡暂停，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12027",
+   "id": 12027,
+   "init_effect": [
+    120270
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "厚泽蓄灵",
+   "pet_max_targets": 1,
+   "prototype_code": "G08",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 7,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "description": "灵宠专属被动：每回合主动攻击（普攻或主动攻击技）首次命中敌方造成扣血时叠 1 层，每层使自身直接伤害提高 6%，持续至战斗结束，最多叠加 5 层（+30%）；阵亡或被劝退即清零层数，复活或重召后可重新叠加，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12028",
+   "id": 12028,
+   "init_effect": [
+    120280
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "兽威渐盛",
+   "pet_max_targets": 1,
+   "prototype_code": "G09",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 7,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
   }
  ]
 }

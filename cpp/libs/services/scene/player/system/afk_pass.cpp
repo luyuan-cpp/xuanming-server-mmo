@@ -9,6 +9,7 @@
 
 #include "muduo/base/Logging.h"
 
+#include "engine/core/time/system/time.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "infra/storage/redis_cluster/redis_cluster_client.h" // tlsPlayerRedis:投影属于玩家域
 #include "modules/currency/constants/currency.h"
@@ -17,6 +18,7 @@
 #include "player/system/afk_pass_rules.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/connection_lost_hold.h" // PlayerConnectionLostComp:判定战斗结算是否处于离线托管中
+#include "player/system/player_attribute.h"
 #include "player/system/player_lifecycle.h" // RequestKeyProgressSave
 #include "player/system/player_mutability.h"
 #include "thread_context/ecs_context.h"
@@ -25,6 +27,7 @@
 #include "table/proto/tip/afk_pass_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 
+#include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"   // PlayerUint64Comp:事实源
 #include "proto/common/database/player_cache.pb.h"  // PlayerAllData:提交回调的快照
 #include "proto/common/rollback/transaction_log.pb.h" // TX_AFK_PASS_BUY
@@ -174,6 +177,16 @@ uint64_t AfkPassSystem::ExpiresAt(entt::entity player)
 	return profile != nullptr ? profile->afk_pass_expires_at() : 0;
 }
 
+bool AfkPassSystem::IsActive(entt::entity player, uint64_t nowUnixSec)
+{
+	return afk_pass::IsActive(ExpiresAt(player), nowUnixSec);
+}
+
+bool AfkPassSystem::IsActiveNow(entt::entity player)
+{
+	return IsActive(player, TimeSystem::NowSecondsUTC());
+}
+
 bool AfkPassSystem::AutoReturnCityOnTeamEnd(entt::entity player)
 {
 	auto &registry = tlsEcs.actorRegistry;
@@ -188,8 +201,12 @@ bool AfkPassSystem::AutoReturnCityOnTeamEnd(entt::entity player)
 void AfkPassSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, AfkPassInfo &info)
 {
 	info.Clear();
-	info.set_expires_at(ExpiresAt(player));
+	const uint64_t expiresAt = ExpiresAt(player);
+	const bool active = afk_pass::IsActive(expiresAt, nowUnixSec);
+	info.set_expires_at(expiresAt);
 	info.set_server_now(nowUnixSec);
+	info.set_unlocked_loadout_slots(afk_pass::UnlockedLoadoutSlots(active));
+	info.set_stage2_tradable_enabled(active);
 	if (auto &registry = tlsEcs.actorRegistry; registry.valid(player))
 	{
 		if (const auto *profile = registry.try_get<PlayerUint64Comp>(player))
@@ -308,6 +325,10 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 								   ClientRequestResult{});
 	// 尽快落盘:投影随这次提交写出,玩家开通后马上断线也来得及让 player_locator 看到(1 秒节流)。
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_pass_buy");
+	if (registry.all_of<PlayerAttributeComp>(player))
+	{
+		PlayerAttributeSystem::PushPanel(player);
+	}
 
 	LOG_INFO << "[AfkPass] metric=afk_pass_bought player_id=" << playerId << " expires_before=" << before
 			 << " expires_after=" << *after << " price=" << price << " currency_type=" << rule.priceCurrencyType
@@ -345,6 +366,10 @@ uint32_t AfkPassSystem::GmSet(entt::entity player, uint32_t remainingSeconds, ui
 	const uint64_t after = afk_pass::GmExpiry(nowUnixSec, remainingSeconds);
 	profile->set_afk_pass_expires_at(after);
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_pass_gm_set");
+	if (registry.all_of<PlayerAttributeComp>(player))
+	{
+		PlayerAttributeSystem::PushPanel(player);
+	}
 	// GM 改的不是资产,不写流水;这一行带前后值,是唯一的留痕。
 	LOG_INFO << "[AfkPass] metric=afk_pass_gm_set player_id=" << guid->value << " expires_before=" << before
 			 << " expires_after=" << after << " remaining_seconds=" << remainingSeconds;

@@ -326,10 +326,11 @@ message EquipmentCraftChoice {
     POLISH_AFFIX = 4;  // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
     UNSEAL_TO_TRADABLE = 5; // 解封剥离符(3409)：清空绑定装备全部绑定养成（强化/保底/词条/署名），仅恢复纯可交易原胚，不洗白B材料。
     INHERIT_ENHANCE = 6;    // 流派副套继承符(3410)：将同部位同等级段源装备的强化等级与保底无损继承给目标副套装备（目标转为仅自用绑定）。
+    UPGRADE_TIER = 7;       // V1 装备原地无损升档：基础装(profile=1)与首饰(profile=2)纯银两升至同部位更高佩戴等级模板(config_id)，100% 保留强化、+11保底、词条/品相/打磨保底、宗师署名与可交易状态。
   }
   Operation operation = 1;
-  uint32 config_id = 2; // CREATE_ITEM使用；其余操作必须为0。
-  uint64 item_id = 3;   // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE目标使用；CREATE_ITEM必须为0。
+  uint32 config_id = 2; // CREATE_ITEM / UPGRADE_TIER 目标模板使用；其余操作必须为0。
+  uint64 item_id = 3;   // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE / UPGRADE_TIER目标使用；CREATE_ITEM必须为0。
   uint32 affix_slot = 4;
   uint32 affix_id = 5;  // INSTALL_AFFIX / REFORGE_AFFIX使用；其余为0。
   bool use_guarantee_charm = 6;        // POLISH_AFFIX可选：额外消耗1张绑定「定星保底符(3405)」直接必达极品。

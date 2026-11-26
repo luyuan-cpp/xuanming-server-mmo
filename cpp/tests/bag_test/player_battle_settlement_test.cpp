@@ -44,6 +44,12 @@
 #include "table/code/petrule_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
+#include "table/code/attributeallocratio_table.h"
+#include "table/code/attributerule_table.h"
+#include "table/code/class_table.h"
+#include "table/code/playerlevelexp_table.h"
+#include "table/code/battleprogressionreward_table.h"
+#include "table/code/battleprogressionrule_table.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/mission_table.h"
@@ -52,11 +58,16 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
+#include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_festival_beast_comp.pb.h"
 #include "proto/common/component/player_login_comp.pb.h" // LOGIN_FIRST
 #include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
+#include "proto/scene/player_attribute.pb.h"
+#include "proto/match/match_service.pb.h"
+#include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/comp/last_persisted_snapshot_comp.h"
@@ -2996,6 +3007,7 @@ TEST_F(PlayerBattleSettlementTest, AssetDebitGetsInBattleRetryUntilFightingFreez
 // 互斥表的 RESOLVING / FREEZING 两行)
 // ============================================================================
 #include "engine/core/time/system/time.h"
+#include "modules/scene/comp/scene_comp.h"
 #include "proto/scene/scene.pb.h"
 #include "services/scene/player/system/player_lifecycle.h"
 
@@ -3094,6 +3106,52 @@ TEST_F(PlayerBattleSettlementTest, PrepareNotBlockedByExpiredSceneChangeSlot) {
         EXPECT_EQ(response.error_message().id(), kRefusedAtSnapshot) << "sent_at_ms=" << sentAtMs;
         EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player)) << "sent_at_ms=" << sentAtMs;
     }
+}
+
+// 野外灵宠栖息地(allow_pet_capture=1 且 scene_id>1)必须身处对应野外图才能备战，主城演练(scene_id=1)不受限。
+TEST_F(PlayerBattleSettlementTest, PrepareWildPetHabitatRequiresMatchingWildScene) {
+    DungeonTableManager::Instance().Load();
+    const auto* habitat = DungeonTableManager::Instance().FindByIdSilent(202).first;
+    ASSERT_NE(habitat, nullptr);
+    ASSERT_EQ(habitat->allow_pet_capture(), 1u);
+    ASSERT_EQ(habitat->scene_id(), 2u);
+
+    const SceneEntity scene = tlsEcs.sceneRegistry.create();
+    auto& sceneInfo = tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene);
+    sceneInfo.set_scene_config_id(1);
+    tlsEcs.actorRegistry.emplace<SceneEntityComp>(player, SceneEntityComp{scene});
+
+    // 身在主城(1)请求八景岛栖息地(202)：必须被场景校验拒绝。
+    {
+        auto req = MakePrepareRequest(playerId, 807);
+        req.set_battle_config_id(202);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), static_cast<uint32_t>(kFeatureUnavailable));
+        EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+    }
+
+    // 身在主城(1)请求普通捕宠演练(4, scene_id=1)：不触发野外场景限制，放行至快照阶段。
+    {
+        auto req = MakePrepareRequest(playerId, 808);
+        req.set_battle_config_id(4);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), kRefusedAtSnapshot);
+    }
+
+    // 切到八景岛(2)请求八景岛栖息地(202)：通过场景校验，放行至快照阶段。
+    sceneInfo.set_scene_config_id(2);
+    {
+        auto req = MakePrepareRequest(playerId, 809);
+        req.set_battle_config_id(202);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), kRefusedAtSnapshot);
+    }
+
+    tlsEcs.actorRegistry.remove<SceneEntityComp>(player);
+    tlsEcs.sceneRegistry.destroy(scene);
 }
 
 // ---------------------------------------------------------------------------
@@ -4114,4 +4172,304 @@ TEST_F(PlayerBattleCaptureSettlementTest, PersistedInboxReplayDoesNotMintCapture
     EXPECT_EQ(persistedPets.SerializeAsString(), Pets().SerializeAsString());
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(0u, KillProgress());
+}
+
+// ============================================================================
+// G1: 玩家平滑升级曲线 (1->85) + 全玩法经验/银两周软上限结算验证
+// ============================================================================
+class PlayerBattleProgressionTest : public PlayerBattleSettlementTest {
+protected:
+    struct ScopedProgressionTables {
+        std::shared_ptr<const PlayerLevelExpTableManager::Snapshot> prevLevelExp;
+        std::shared_ptr<const BattleProgressionRewardTableManager::Snapshot> prevRewards;
+        std::shared_ptr<const BattleProgressionRuleTableManager::Snapshot> prevRules;
+        ScopedProgressionTables() {
+            prevLevelExp = PlayerLevelExpTableManager::Instance().CurrentSnapshot();
+            prevRewards = BattleProgressionRewardTableManager::Instance().CurrentSnapshot();
+            prevRules = BattleProgressionRuleTableManager::Instance().CurrentSnapshot();
+            PlayerLevelExpTableManager::Instance().Load();
+            BattleProgressionRewardTableManager::Instance().Load();
+            BattleProgressionRuleTableManager::Instance().Load();
+        }
+        ~ScopedProgressionTables() {
+            PlayerLevelExpTableManager::Instance().InstallSnapshot(prevLevelExp);
+            BattleProgressionRewardTableManager::Instance().InstallSnapshot(prevRewards);
+            BattleProgressionRuleTableManager::Instance().InstallSnapshot(prevRules);
+        }
+    };
+
+    void SetUp() override {
+        PlayerBattleSettlementTest::SetUp();
+        tables = std::make_unique<ScopedProgressionTables>();
+        ClassTableManager::Instance().Load();
+        AttributePoolTableManager::Instance().Load();
+        AttributeDimensionTableManager::Instance().Load();
+        AttributeAllocRatioTableManager::Instance().Load();
+        AttributeRuleTableManager::Instance().Load();
+        PetTableManager::Instance().Load();
+        PetRuleTableManager::Instance().Load();
+
+        auto& lvl = tlsEcs.actorRegistry.get_or_emplace<LevelComp>(player);
+        lvl.set_level(1);
+        lvl.set_total_exp(0);
+        tlsEcs.actorRegistry.get_or_emplace<PlayerUint32Comp>(player).set_class_(1);
+        (void)tlsEcs.actorRegistry.get_or_emplace<PlayerAttributeComp>(player);
+        auto& bags = tlsEcs.actorRegistry.get_or_emplace<PlayerBagsComp>(player);
+        for (auto& bag : bags.bags) bag.SetPlayerGuid(playerId);
+        PlayerAttributeSystem::InitializeOnLoad(player);
+
+        // 重置默认 settlement，避免继承父类 12 显式金币污染 G1 银两断言。
+        settlement.set_gold_gain(0);
+        settlement.set_exp_gain(0);
+        settlement.clear_defeated_monsters();
+        settlement.set_player_team_index(0);
+        settlement.set_total_rounds(4);
+        settlement.set_manual_action_rounds(3);
+        settlement.set_effective_combat_contribution(true);
+    }
+
+    void TearDown() override {
+        GainBlockService::ClearAllGlobalBlocks();
+        tables.reset();
+        PlayerBattleSettlementTest::TearDown();
+    }
+
+    std::unique_ptr<ScopedProgressionTables> tables;
+};
+
+TEST_F(PlayerBattleProgressionTest, ExportedProgressionTablesPassStartupValidationAndMilestones) {
+    EXPECT_TRUE(PlayerAttributeSystem::ValidateProgressionTables());
+    const auto rows = PlayerAttributeSystem::LoadLevelExpRows();
+    ASSERT_EQ(85u, rows.size());
+    EXPECT_EQ(0u, rows[0].requiredTotalExp);       // Lv1
+    EXPECT_EQ(900u, rows[3].requiredTotalExp);     // Lv4 (首胜 1000 EXP 直升 Lv4)
+    EXPECT_EQ(4500u, rows[9].requiredTotalExp);    // Lv10
+    EXPECT_EQ(20000u, rows[29].requiredTotalExp);  // Lv30
+    EXPECT_EQ(70000u, rows[59].requiredTotalExp);  // Lv60
+    EXPECT_EQ(210000u, rows[79].requiredTotalExp); // Lv80
+    EXPECT_EQ(300000u, rows[84].requiredTotalExp); // Lv85
+}
+
+TEST_F(PlayerBattleProgressionTest, FirstPveSoloBossWinJumpsLv1ToLv4UpdatesPanelAndPet) {
+    auto& petComp = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* pet = petComp.add_pets();
+    pet->set_pet_id(5001);
+    pet->set_pet_table_id(1);
+    pet->set_level(1);
+
+    settlement.set_match_mode(match::MATCH_MODE_PVE_SOLO);
+    settlement.set_battle_difficulty(1);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    const auto& lvl = tlsEcs.actorRegistry.get<LevelComp>(player);
+    EXPECT_EQ(4u, lvl.level());
+    EXPECT_EQ(1000u, lvl.total_exp());
+    EXPECT_EQ(600u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(4u, petComp.pets(0).level());
+
+    AttributePanelInfo panel;
+    ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+    EXPECT_EQ(4u, panel.level());
+    EXPECT_EQ(1000u, panel.total_exp());
+    EXPECT_EQ(100u, panel.current_level_exp());
+    EXPECT_EQ(500u, panel.next_level_exp());
+    EXPECT_FALSE(panel.is_max_level());
+
+    ASSERT_EQ(1, Results().entries_size());
+    const auto& res = Results().entries(0);
+    EXPECT_EQ(1u, res.level_before());
+    EXPECT_EQ(4u, res.level_after());
+    EXPECT_EQ(1000u, res.exp_gain());
+    ASSERT_EQ(1, res.currencies_size());
+    EXPECT_EQ(static_cast<uint32_t>(kCurrencyGold), res.currencies(0).currency_type());
+    EXPECT_EQ(600u, res.currencies(0).amount());
+    EXPECT_EQ(1000u, res.total_exp_after());
+    EXPECT_EQ(1400u, res.next_level_total_exp());
+    EXPECT_EQ(600u, res.battle_silver_weekly_used());
+    EXPECT_EQ(30000u, res.battle_silver_weekly_soft_cap());
+    EXPECT_FALSE(res.battle_silver_diminished());
+}
+
+TEST_F(PlayerBattleProgressionTest, IsolatedPvpTeamWinGrantsProgressionWithoutBattleDamage) {
+    const uint32_t hpBefore = tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health();
+    const uint32_t mpBefore = tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana();
+
+    settlement.set_match_mode(match::MATCH_MODE_PVP_TEAM);
+    settlement.set_use_free_preset(true);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    settlement.set_health(1);
+    settlement.set_mana(0);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    const auto& lvl = tlsEcs.actorRegistry.get<LevelComp>(player);
+    EXPECT_EQ(4u, lvl.level());
+    EXPECT_EQ(1300u, lvl.total_exp());
+    EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_GE(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health(), hpBefore);
+    EXPECT_GE(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana(), mpBefore);
+    ASSERT_EQ(1, Results().entries_size());
+    EXPECT_EQ(1300u, Results().entries(0).exp_gain());
+    ASSERT_EQ(1, Results().entries(0).currencies_size());
+    EXPECT_EQ(1000u, Results().entries(0).currencies(0).amount());
+    EXPECT_EQ(4u, Results().entries(0).level_after());
+}
+
+TEST_F(PlayerBattleProgressionTest, UnqualifiedPvpLossChallengeAndFestivalBeastGrantZero) {
+    // 1. 不达标 PVP 负（回合不足 3）
+    settlement.set_battle_id(8101);
+    settlement.set_match_mode(match::MATCH_MODE_5V5);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_B_WIN);
+    settlement.set_total_rounds(2);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 2. 切磋胜局恒为 0
+    settlement.set_battle_id(8102);
+    settlement.set_match_mode(match::MATCH_MODE_PVP_CHALLENGE);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    settlement.set_total_rounds(5);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 3. 瑞兽迎春关闭普通经验与银两（纯规则硬拒 + 结算分支跳过）
+    {
+        BattleSettlementData fb = settlement;
+        fb.set_battle_id(8103);
+        fb.set_match_mode(match::MATCH_MODE_PVE_TEAM);
+        fb.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+        fb.mutable_festival_beast()->set_activity_instance_id(99);
+        uint32_t lm = 0, diff = 0, tier = 0;
+        EXPECT_FALSE(battleprogression::ResolveBattleLookupKey(fb, lm, diff, tier));
+        BattleEconomyLedger cur, cand;
+        battleprogression::BattleProgressionDelta fbDelta;
+        battleprogression::WeeklySilverRule rule;
+        ASSERT_TRUE(PlayerAttributeSystem::LoadWeeklySilverRule(rule));
+        battleprogression::PrepareEconomyLedger(cur, 1000, fb, 0, 0,
+            PlayerAttributeSystem::LoadBattleProgressionRewards(), &rule, cand, fbDelta);
+        EXPECT_EQ(0u, fbDelta.expGain);
+        EXPECT_EQ(0u, fbDelta.silverGain);
+    }
+
+    // 4. 达标 5V5 负局给安慰奖励 (+800 EXP, +500 银两，对应 BattleProgressionReward 表第 10 行)
+    settlement.set_battle_id(8104);
+    settlement.set_match_mode(match::MATCH_MODE_5V5);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_B_WIN);
+    settlement.set_total_rounds(4);
+    settlement.set_manual_action_rounds(2);
+    settlement.set_effective_combat_contribution(true);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(800u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(500u, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
+
+TEST_F(PlayerBattleProgressionTest, GuildWarGrantsExpOnlyWithZeroSilver) {
+    settlement.set_battle_id(8201);
+    settlement.set_match_mode(match::MATCH_MODE_GUILD_WAR_PVP);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(800u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).battle_economy().battle_silver_this_week());
+
+    settlement.set_battle_id(8202);
+    settlement.set_match_mode(match::MATCH_MODE_GUILD_WAR_SIEGE);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(1300u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
+
+TEST_F(PlayerBattleProgressionTest, WeeklySilverCapSplitsAcrossSoftCapAndClampsAtHardCapWhileExpFull) {
+    battleprogression::WeeklySilverRule rule;
+    ASSERT_TRUE(PlayerAttributeSystem::LoadWeeklySilverRule(rule));
+    const auto rewards = PlayerAttributeSystem::LoadBattleProgressionRewards();
+
+    // 1. 跨 30,000 软上限精确拆分：已有 29,500 + 原始 1,000 -> 500 满额 + 500*20% = 600，账本到 30,100。
+    auto& economy = *tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).mutable_battle_economy();
+    economy.set_week_starts_at_ms(std::numeric_limits<uint64_t>::max() - 10);
+    economy.set_battle_silver_this_week(29500);
+    settlement.set_battle_id(8301);
+    settlement.set_match_mode(match::MATCH_MODE_PVE_TEAM);
+    settlement.set_battle_difficulty(2); // 1300 EXP, 1000 silver
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(1300u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(600u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(30100u, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).battle_economy().battle_silver_this_week());
+    ASSERT_EQ(1, Results().entries_size());
+    EXPECT_TRUE(Results().entries(0).battle_silver_diminished());
+
+    // 2. 逼近 45,000 硬封顶：已有 44,900 + 原始 1,000 (衰减后 200，受余量 100 截断) -> 实得 100，再胜实得 0 但经验仍满额。
+    tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).mutable_battle_economy()->set_battle_silver_this_week(44900);
+    settlement.set_battle_id(8302);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(2600u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(700u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(45000u, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).battle_economy().battle_silver_this_week());
+
+    settlement.set_battle_id(8303);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(3900u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(700u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 3. 纯规则跨周清零与抗时钟回拨验证
+    BattleEconomyLedger cur;
+    cur.set_week_starts_at_ms(2000);
+    cur.set_battle_silver_this_week(45000);
+    BattleEconomyLedger candRollback;
+    battleprogression::BattleProgressionDelta deltaRollback;
+    battleprogression::PrepareEconomyLedger(cur, 1000, settlement, 0, 0, rewards, &rule, candRollback, deltaRollback);
+    EXPECT_EQ(2000u, candRollback.week_starts_at_ms());
+    EXPECT_EQ(0u, deltaRollback.silverGain);
+
+    BattleEconomyLedger candNewWeek;
+    battleprogression::BattleProgressionDelta deltaNewWeek;
+    battleprogression::PrepareEconomyLedger(cur, 3000, settlement, 0, 0, rewards, &rule, candNewWeek, deltaNewWeek);
+    EXPECT_EQ(3000u, candNewWeek.week_starts_at_ms());
+    EXPECT_EQ(1000u, deltaNewWeek.silverGain);
+    EXPECT_EQ(1000u, candNewWeek.battle_silver_this_week());
+    EXPECT_FALSE(deltaNewWeek.silverDiminished);
+}
+
+TEST_F(PlayerBattleProgressionTest, BlockedGoldSkipsSilverWithoutConsumingWeeklyCap) {
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    settlement.set_battle_id(8401);
+    settlement.set_match_mode(match::MATCH_MODE_PVE_SOLO);
+    settlement.set_battle_difficulty(1);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(1000u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    EXPECT_EQ(4u, tlsEcs.actorRegistry.get<LevelComp>(player).level());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).battle_economy().battle_silver_this_week());
+}
+
+TEST_F(PlayerBattleProgressionTest, MixedVersionAndGmHighLevelNeverDowngradeOnExpGain) {
+    const auto rows = PlayerAttributeSystem::LoadLevelExpRows();
+
+    // 1. 混版本超上限携带档 (stored=90 > 85) 不降级
+    battleprogression::LevelProgressResult mixed;
+    ASSERT_TRUE(battleprogression::ResolveLevelForExp(90, 0, 1000, rows, mixed));
+    EXPECT_EQ(90u, mixed.storedLevelAfter);
+    EXPECT_EQ(85u, mixed.levelAfter);
+    EXPECT_FALSE(mixed.leveledUp);
+    EXPECT_EQ(1000u, mixed.totalExpAfter);
+
+    // 2. GM 调 60 级但 total_exp=0 的号，打赢一局得 1000 EXP 绝不回退到 Lv4
+    auto& lvl = tlsEcs.actorRegistry.get<LevelComp>(player);
+    lvl.set_level(60);
+    lvl.set_total_exp(0);
+    settlement.set_battle_id(8501);
+    settlement.set_match_mode(match::MATCH_MODE_PVE_SOLO);
+    settlement.set_battle_difficulty(1);
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(60u, lvl.level());
+    EXPECT_EQ(1000u, lvl.total_exp());
+    AttributePanelInfo panel;
+    ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+    EXPECT_EQ(0u, panel.current_level_exp()); // 防止无符号下溢
 }

@@ -368,6 +368,7 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
     default: resist += 100.0 * combat.resist_forget(); break;
     }
     if (kind == 4 || kind == 5) resist += 10000 * ConfiguredModifier(target, BattleModifier::ControlResist);
+    if (kind >= 1 && kind <= 6) resist += 10000 * ConfiguredModifier(target, BattleModifier::AllControlResist);
     if (ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WATER) {
         resist += 800.0;
     }

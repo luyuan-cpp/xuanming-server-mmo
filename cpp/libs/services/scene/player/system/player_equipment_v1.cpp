@@ -852,6 +852,38 @@ uint32_t PrepareChoice(entt::entity player, const EquipmentCraftChoice& choice, 
         return kSuccess;
     }
 
+    if (choice.operation() == EquipmentCraftChoice::UPGRADE_TIER) {
+        if (choice.config_id() == 0 || choice.item_id() == 0 || choice.source_item_id() != 0 ||
+            choice.affix_slot() != 0 || choice.affix_id() != 0 || choice.use_guarantee_charm() ||
+            choice.proxy_master_player_id() != 0 || choice.has_expected_polish_pity_count()) {
+            return kInvalidParameter;
+        }
+        if (!LocateEquipment(*bags, choice.item_id(), prepared.original, prepared.holder)) return kEquipItemNotFound;
+        const auto* sourceRow = ItemRow(prepared.original.config_id());
+        const auto* targetRow = ItemRow(choice.config_id());
+        if (sourceRow == nullptr || targetRow == nullptr ||
+            !ValidTemplate(*sourceRow) || !ValidTemplate(*targetRow) ||
+            !equipcraft::CanUpgradeTier(sourceRow->equip_profile(), sourceRow->equip_kind(),
+                                        sourceRow->equip_level(), sourceRow->equip_class(),
+                                        targetRow->equip_profile(), targetRow->equip_kind(),
+                                        targetRow->equip_level(), targetRow->equip_class()) ||
+            prepared.original.size() != 1 || !ValidSelections(prepared.original, sourceRow->equip_profile())) {
+            return kInvalidParameter;
+        }
+        if (UnknownFields(prepared.original) || UnknownFields(prepared.original.equip())) {
+            return kFeatureUnavailable;
+        }
+        prepared.result = prepared.original;
+        prepared.result.set_config_id(targetRow->id());
+        prepared.baseGoldCost = equipcraft::UpgradeTierGoldCost(
+            sourceRow->equip_profile(), sourceRow->equip_level(), targetRow->equip_level());
+        prepared.materialId = 0;
+        prepared.materialCount = 0;
+        prepared.tradableOnly = false;
+        prepared.willBindItem = false;
+        return kSuccess;
+    }
+
     return kInvalidParameter;
 }
 
@@ -935,8 +967,10 @@ uint32_t PlayerEquipmentV1System::Preview(entt::entity player, const PreviewEqui
         }
     }
     FillProduct(previewItem, *preview.mutable_result());
-    FillMaterialEntry(player, prepared.materialId, prepared.materialCount, prepared.tradableOnly,
-                      *preview.mutable_material());
+    if (prepared.materialId != 0 && prepared.materialCount != 0) {
+        FillMaterialEntry(player, prepared.materialId, prepared.materialCount, prepared.tradableOnly,
+                          *preview.mutable_material());
+    }
     if (prepared.extraMaterialId != 0 && prepared.extraMaterialCount != 0) {
         FillMaterialEntry(player, prepared.extraMaterialId, prepared.extraMaterialCount, prepared.tradableOnly,
                           *preview.mutable_extra_material());
@@ -1033,11 +1067,14 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
         InitItemParam param; param.itemPBComp = prepared.result; param.itemPBComp.set_item_id(kInvalidGuid);
         gained.push_back(std::move(param));
     } else {
-        replacements.push_back({prepared.holder, prepared.original, prepared.result});
+        replacements.push_back({prepared.holder, prepared.original, prepared.result,
+                                op == EquipmentCraftChoice::UPGRADE_TIER});
     }
 
     const uint64_t totalGold = prepared.baseGoldCost + prepared.proxyFeeGold;
-    const TransactionType goldTxType = (op == EquipmentCraftChoice::POLISH_AFFIX || op == EquipmentCraftChoice::REFORGE_AFFIX)
+    const TransactionType goldTxType = (op == EquipmentCraftChoice::POLISH_AFFIX ||
+                                        op == EquipmentCraftChoice::REFORGE_AFFIX ||
+                                        op == EquipmentCraftChoice::UPGRADE_TIER)
         ? TX_EQUIP_POLISH_REFORGE : TX_CRAFT_PROXY_FEE;
     const bool bindOnConsumedBound =
         op == EquipmentCraftChoice::CREATE_ITEM || op == EquipmentCraftChoice::INSTALL_AFFIX ||
@@ -1090,9 +1127,10 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                 (void)CurrencySystem::AddCurrency(proxyMaster, kCurrencyGold, static_cast<int64_t>(proxyNetGold),
                                                   TX_CRAFT_PROXY_FEE, request.client_request_id());
             }
-            // 本人打造/装条/打磨自然涨 1 点铸器熟练度（无体力、无日清、只增不减；重铸/解封/继承不涨熟练度）。
+            // 本人打造/装条/打磨自然涨 1 点铸器熟练度（无体力、无日清、只增不减；重铸/解封/继承/无损升档不涨熟练度）。
             if (prepared.proxyMasterPlayerId == 0 && op != EquipmentCraftChoice::REFORGE_AFFIX &&
-                op != EquipmentCraftChoice::UNSEAL_TO_TRADABLE && op != EquipmentCraftChoice::INHERIT_ENHANCE) {
+                op != EquipmentCraftChoice::UNSEAL_TO_TRADABLE && op != EquipmentCraftChoice::INHERIT_ENHANCE &&
+                op != EquipmentCraftChoice::UPGRADE_TIER) {
                 if (auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player);
                     craft != nullptr && craft->forge_mastery_exp() < std::numeric_limits<uint32_t>::max()) {
                     craft->set_forge_mastery_exp(craft->forge_mastery_exp() + 1);

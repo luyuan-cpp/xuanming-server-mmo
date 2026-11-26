@@ -306,6 +306,7 @@ private:
                                    const BuffTable& row, TurnResultS2C& result);
     void IncrementHitVulnerability(BattleActorState& target);
     double HitVulnerabilityBonus(const BattleActorState& target) const;
+    void ResetVolatileGrowingStacks(BattleActorState& actor);
     bool ExecutePreparedCastIfReady(BattleActorState& actor, TurnResultS2C& result);
     void SyncChargingSkillId(BattleActorState& actor) const;
     void ConsumeOneShotAttackModifiers(BattleActorState& source, uint32_t damageType, TurnResultS2C& result);

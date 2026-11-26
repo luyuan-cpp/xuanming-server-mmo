@@ -362,3 +362,15 @@
    - drawer_tab_normal.png / drawer_tab_active.png（横向三段拉伸）：抽屉「游历 / 览景」页签（未选中 / 选中）
    - hud_tide_dot.png（64×64，固定画布）：HUD 地图按钮右上角提示角标
 ```
+
+---
+
+## 8. 已落地闭环记录（M1 + M1.5 月汐湾开放 + M2-Lite 三图野外灵宠栖息地）
+
+- **M1（大地图总览 + 双层灵潮 + Fill-First 软上限选线 + 神秘商人跨图一键前往 + 15 张无字切图接入）**：已全端闭环并通过测试；主界面 HUD 补齐了首次入场自动拉总览与关闭大地图期间每 60s 轻量刷新，顶部灵潮横幅标题与当前标记文字安全区已与 `CONTROL-USAGE.md` 对齐。
+- **M1.5（月汐湾 Scene 3 纳入开放地图与双层灵潮）**：Go `scene_manager` 与 Java `game-scene-manager` 默认开放大世界地图更新为 `[1, 2, 3, 5]`、灵潮与今日旺地轮转池更新为 `[2, 3, 5]`；`MysteryMerchantSpot.xlsx` 追加月汐湾 3 处经导航网格连通域校验的商人刷新点（`id=13..15`）。
+- **M2-Lite（三图野外灵宠栖息地生态捕宠闭环，零新协议/零新表结构）**：
+  - 数据表扩展（`tools/scripts/world_map_habitat_xlsx_patch.py`）：`Monster.xlsx`（`201..209`）、`Dungeon.xlsx`（`202` 八景岛·云鹤10级/竹风狸/霞角鹿、`203` 月汐湾·金猊10级/灵狐/符小虎、`205` 碧渊水宫·玄潮龟/汐螺/露华灵，`allow_pet_capture=1, max_team_size=1, scene_id=2/3/5`）、`PlayMode.xlsx`（`402/403/405` `PVE_SOLO`）。
+  - 双端服务端场景权威防伪校验：C++ `PlayerBattleSystem::PrepareBattle` 与 Java `PlayerBattleService.prepare` 均在 `dungeon.allow_pet_capture == 1 && dungeon.scene_id > 1` 时强制核验玩家当前所在场景 `scene_config_id == dungeon.scene_id`（不符回 `kFeatureUnavailable` 且零写锁；主城捕宠演练 `Dungeon 4, scene_id=1` 不受限）。
+  - Unity 客户端接入：`WorldMapOverviewModels` 栖息地元数据与标题/摘要格式化、`BattleMatchEntryClient.StartWildPetHabitat`（组队态先于 `CanStart` 拦截并明确提示仅限单人出发）、`CityTravelWindow` 抽屉可捕灵宠生态说明、`CityTravelUiRoot` 野外底部居中「寻宠遇敌」HUD 浮条（`WildPetHabitatBar`，支持缺图回落至既有 `WorldMapV2` 切图，立即可玩）。
+  - 可选专属 HUD 浮条美化切图交接单见：[world-map-habitat-ui-handoff.md](ui-handoff/world-map-habitat-ui-handoff.md)（3 张无字透明 PNG + 1 张审图预览）。

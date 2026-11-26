@@ -22,6 +22,7 @@
 #include "player/system/player_save_metrics.h"
 #include "player/system/currency_metrics.h"
 #include "player/system/player_equip.h"
+#include "player/system/player_attribute.h"
 #include "player/system/player_inbox_system.h"
 #include "modules/bag/bag_service.h"
 #include "player/system/player_mail_outbox.h"
@@ -154,9 +155,19 @@ namespace
                     err = "scene EquipAffixQuality / SkillScrollCraft table validation failed";
                     return false;
                 }
+                if (!PlayerSpiritShopSystem::ValidateTables())
+                {
+                    err = "scene SpiritShopLimitGroup / SpiritShopGoods table validation failed";
+                    return false;
+                }
                 if (!rankedpreset::ValidateTables())
                 {
                     err = "scene RankedRule / RankedPreset table validation failed";
+                    return false;
+                }
+                if (!PlayerAttributeSystem::ValidateProgressionTables())
+                {
+                    err = "scene PlayerLevelExp / BattleProgressionReward / BattleProgressionRule table validation failed";
                     return false;
                 }
                 return true;
@@ -177,6 +188,7 @@ namespace
                 PlayerSpiritShopSystem::ValidateTables();
                 PlayerTravelPassSystem::ValidateTables();
                 rankedpreset::ValidateTables();
+                PlayerAttributeSystem::ValidateProgressionTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();
             }

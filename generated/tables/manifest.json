@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "schema_digest": "194fb8bba93c9b8d",
-  "version": 81,
-  "content_digest": "1d5d83b423d7386a978d39cffb3379e0adf8fdc5b73c3119da3eabd5e22be76c",
-  "generated_at": "2026-11-26T04:54:38Z",
+  "version": 83,
+  "content_digest": "8b87244dfee903bee9632f0b762fafef11e3b77fd52651d0252e399396f96856",
+  "generated_at": "2026-11-26T07:40:32Z",
   "source_rev": {
-    "commit": "a0ac537aded8848a84057199009b6256e8ba32ce",
+    "commit": "0ff72b1e49bdf4a5027a4866ef7b011918863624",
     "data_dirty": true
   },
   "table_count": 81,
@@ -414,24 +414,24 @@
       "name": "Buff",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 128,
+      "rows": 134,
       "source": {
         "file": "Buff.xlsx",
-        "size": 13449,
-        "sha256": "a622744785e336ecb2c0a1202729bd8b7b70b11969c02c00e4fd9b03ec9b2a29"
+        "size": 13990,
+        "sha256": "044d3eb2239ceb35ed25ee96d4f1a1290e7c465780e5eb6ac803daa242932454"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "buff.json",
-          "size": 33458,
-          "sha256": "345c974265002c203cf2d8150cf6a7344c5c4dd8a842362b62d81354e16f3e83"
+          "size": 35720,
+          "sha256": "2bd12a2293fa90432822009c9207e98fe17bc82af3dffca2a516cea9c72db355"
         },
         {
           "kind": "binary",
           "file": "buff.pb",
-          "size": 6226,
-          "sha256": "124d3399f96d1a718c2fd669297c9a22680c67e64de139fb7e1983a7de2a88d2"
+          "size": 6535,
+          "sha256": "6be4749038ee87a125cf7a774e43a25ab6c0677f66db0d77a67f086c5868ce24"
         }
       ]
     },
@@ -1614,24 +1614,24 @@
       "name": "Skill",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 143,
+      "rows": 149,
       "source": {
         "file": "Skill.xlsx",
-        "size": 30334,
-        "sha256": "f9ba53deac96702d3584d7a6557498de95407c805c7987afe0ceb1ee3b117599"
+        "size": 31301,
+        "sha256": "13195366195a4fec000dbddbf7b6caa9633c0ad34016dd084cf73db952dec69b"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skill.json",
-          "size": 141639,
-          "sha256": "62ed5bc14208b070401d42bee3f34602236d5746bfd4e6a27ee60f30359024be"
+          "size": 146387,
+          "sha256": "8ce3dbef65c53164b2093bce4d86a47ad4c25a9097bd4f18d0b43402b813b374"
         },
         {
           "kind": "binary",
           "file": "skill.pb",
-          "size": 28505,
-          "sha256": "4f7a7fdb9c1e7303be49c37ed9c1ede125b6e1839cd904f7b8395ecaec50bf38"
+          "size": 30685,
+          "sha256": "da62b4572743a5ad74c72ab9b663a18523b31ddc72132a7bbccb778c46a7d265"
         }
       ]
     },
@@ -1664,24 +1664,24 @@
       "name": "SkillScrollCraft",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 6,
+      "rows": 7,
       "source": {
         "file": "SkillScrollCraft.xlsx",
-        "size": 6157,
-        "sha256": "6a678dafe2cbe0c66f0701240497359a09299306e423ad799a1c6ac73590fa0c"
+        "size": 6340,
+        "sha256": "6a76cc90ea57508db1bab8fadec19124757d0dfe423c8da5a96731dc0d9f8cfe"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skillscrollcraft.json",
-          "size": 3369,
-          "sha256": "f0e0ee61b4999b520b258f9102cd05691f298963e56a5f941d0239f2140a3814"
+          "size": 4024,
+          "sha256": "defeec5e4e7d3199dcae0b326afad51b1b7dd323defd365996a59f0be1add3cf"
         },
         {
           "kind": "binary",
           "file": "skillscrollcraft.pb",
-          "size": 1039,
-          "sha256": "c837619ca49ce7ebb06dd15e590f504d863a87e21b9d17e679b6fb0231886074"
+          "size": 1308,
+          "sha256": "1b14be5c85fbb47ba38c886a2fafd02756dd80e913808f4a681c6437cc051686"
         }
       ]
     },

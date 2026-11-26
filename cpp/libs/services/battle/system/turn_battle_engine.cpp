@@ -3887,18 +3887,27 @@ double TurnBattleEngine::DamageBeforeCriticalRoll(const BattleActorState& caster
         resistBonus = target.combat().magic_resist();
     }
 
+    const double penetration = std::clamp(ConfiguredModifier(caster, BattleModifier::DefensePenetration), 0.0, 0.5);
+    const double defenseKeep = 1.0 - penetration;
+    const uint64_t effectiveArmor = penetration > 0.0
+        ? static_cast<uint64_t>(std::floor(static_cast<double>(target.attributes().armor()) * defenseKeep))
+        : target.attributes().armor();
+    const uint64_t effectiveDefense = penetration > 0.0
+        ? static_cast<uint64_t>(std::floor(static_cast<double>(EffectiveDefense(target)) * defenseKeep))
+        : EffectiveDefense(target);
+
     // 目标等级:玩家 / 宝宝取快照等级,怪物取参战玩家最高等级(InitMonsters)。
     // 抗性之和交给规则头夹取:它与护甲 / 防御共用 60% 常驻减伤封顶(规则头与实时技能共用,不在这里另夹)
     double damage = combatdamage::DamageBeforeCritical(
         baseDamage, caster.attributes().strength(), attack, attackMultiplier,
-        target.attributes().armor(), EffectiveDefense(target),
+        effectiveArmor, effectiveDefense,
         SaturatingAdd(target.attributes().resistance(), resistBonus), target.level());
     const uint32_t equipmentResist = damageType == combatdamage::kPhysicalDamage ? target.equipment_effects().physical_resist_bps() :
         damageType == combatdamage::kMagicDamage ? target.equipment_effects().magic_resist_bps() : 0;
     if (equipmentResist > 0) {
         const uint64_t legacyResist = SaturatingAdd(target.attributes().resistance(), resistBonus);
-        const double originalRatio = combatdamage::ReceivedRatio(target.attributes().armor(), EffectiveDefense(target), legacyResist, target.level());
-        damage *= equipbattle::ReceivedRatio(target.attributes().armor(), EffectiveDefense(target),
+        const double originalRatio = combatdamage::ReceivedRatio(effectiveArmor, effectiveDefense, legacyResist, target.level());
+        damage *= equipbattle::ReceivedRatio(effectiveArmor, effectiveDefense,
             static_cast<double>(legacyResist) * 100 + equipmentResist, target.level()) / originalRatio;
     }
     if (!IsPveMatch()) {
@@ -4096,6 +4105,7 @@ void TurnBattleEngine::HandleDeath(BattleActorState& target, uint64_t sourceActo
                 !IsConfiguredListenerBuff(entry) && !row->tag().contains("Passive"))) remove.push_back(entry.buff_id());
         }
         for (const auto id : remove) RemoveConfiguredBuff(target, id, result);
+        ResetVolatileGrowingStacks(target);
     }
     everDiedActors.insert(target.actor_id());
     AppendEvent(result, BATTLE_EVENT_DEATH, target.actor_id(), target.actor_id());

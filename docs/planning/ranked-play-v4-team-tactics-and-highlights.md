@@ -1,7 +1,7 @@
 # 《论剑 / 人宠会武》V4 扩展设计：队内一键战术标点、本局战术复盘徽记与连胜破势
 
-> 日期：2026-11-25  
-> 状态：**设计提案已落盘，待负责人拍板并在并行会话完成 `wuxing-gameplay-expansions-v1` 的 `proto/battle/*` 改动后立即实施代码；配套纯美术 UI 需求单可直接发给 Codex 先行出图**  
+> 日期：2026-11-26  
+> 状态：**C++/Go/Java/Unity 全链路代码、协议（532–533）与单测已落地并验证通过；Unity 已预绑定 `Assets/Resources/UI/Ugui/RankedPlayV4/` 资源键（缺图安全回退程序底色），待异机 Codex 按下方清单出图后拖入即可自动生效**  
 > 适用范围：`xuanming-server-mmo-cpp`（C++ `battle` / `scene` + Go `match`）、`xuanming-server-mmo`（Java 独立服同步）、`mmorpg-client`（Unity 客户端与 UGUI）、`D:/work/image/designs/ranked-play-v4-ui-20261125`（Codex 纯美术交付目录）  
 > 关联设计：[ranked-play-v2-overhaul.md](ranked-play-v2-overhaul.md) · [ranked-play-v3-tactical-prep.md](ranked-play-v3-tactical-prep.md) · [wuxing-gameplay-expansions-v1.md](wuxing-gameplay-expansions-v1.md)（严格零重叠、零冲突）
 

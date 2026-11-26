@@ -139,8 +139,8 @@ func TestWorldTideAndDailyHotspot_Deterministic(t *testing.T) {
 
 func TestPublishWorldChannelDirectoriesForZone_PublishesWorldMapOverview(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
-	// 准备 World 表：1(主城)、2(八仙岛)、3(未开放)、5(碧渊水宫)。
-	t.Cleanup(SetWorldConfIdsForTest([]uint64{1, 2, 3, 5}))
+	// 准备 World 表：1(主城)、2(八景岛)、3(月汐湾)、4(未开放)、5(碧渊水宫)。
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{1, 2, 3, 4, 5}))
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
 	seedMap := func(confID uint64, sceneID uint64, players int) {
@@ -152,27 +152,28 @@ func TestPublishWorldChannelDirectoriesForZone_PublishesWorldMapOverview(t *test
 	}
 	seedMap(1, 10001, 10) // >=8 -> CROWDED
 	seedMap(2, 20001, 3)  // 1..7 -> ACTIVE
-	seedMap(3, 30001, 20) // 不在 OpenWorldMapIds [1,2,5]，不应进入总览
+	seedMap(3, 30001, 2)  // 1..7 -> ACTIVE（默认开放野外图）
+	seedMap(4, 40001, 20) // 不在 OpenWorldMapIds [1,2,3,5]，不应进入总览
 	seedMap(5, 50001, 0)  // 0 -> QUIET
 
-	now := time.Unix(3600+600, 0).UTC() // roundIndex=1 -> candidates[1]=5 灵潮激活中
+	now := time.Unix(2*3600+600, 0).UTC() // roundIndex=2 -> candidates[2]=5 灵潮激活中
 	// 放一名在场的神秘商人到地图 5。
 	merchant := &scenepb.MysteryMerchantState{
 		ZoneId:        testZoneId,
-		RoundId:       3600,
+		RoundId:       7200,
 		Revision:      1,
 		SceneConfigId: 5,
 		SceneId:       50001,
 		ChannelNo:     1,
-		AppearAtMs:    3600_000,
-		ExpireAtMs:    5400_000,
+		AppearAtMs:    7200_000,
+		ExpireAtMs:    9000_000,
 	}
 	mBytes, err := proto.Marshal(merchant)
 	require.NoError(t, err)
 	mr.HSet(mysteryMerchantKey(testZoneId), MysteryMerchantStateField, string(mBytes))
 
 	published := PublishWorldChannelDirectoriesForZone(context.Background(), sc, testZoneId, now)
-	assert.Equal(t, 4, published)
+	assert.Equal(t, 5, published)
 
 	raw, err := mr.Get(worldMapOverviewKey(testZoneId))
 	require.NoError(t, err)
@@ -185,8 +186,8 @@ func TestPublishWorldChannelDirectoriesForZone_PublishesWorldMapOverview(t *test
 	assert.Equal(t, uint64(50001), overview.GetTide().GetRecommendedSceneId())
 	assert.Equal(t, uint32(1), overview.GetTide().GetRecommendedChannelNo())
 
-	// 仅包含开放图 [1, 2, 5]，不含未开放图 3。
-	require.Len(t, overview.GetMaps(), 3)
+	// 仅包含开放图 [1, 2, 3, 5]，不含未开放图 4。
+	require.Len(t, overview.GetMaps(), 4)
 	assert.Equal(t, uint32(1), overview.GetMaps()[0].GetSceneConfigId())
 	assert.Equal(t, scenepb.WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_CROWDED, overview.GetMaps()[0].GetHeatLevel())
 	assert.Equal(t, uint32(10), overview.GetMaps()[0].GetTotalPlayerCount())
@@ -196,11 +197,15 @@ func TestPublishWorldChannelDirectoriesForZone_PublishesWorldMapOverview(t *test
 	assert.Equal(t, scenepb.WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_ACTIVE, overview.GetMaps()[1].GetHeatLevel())
 	assert.False(t, overview.GetMaps()[1].GetHasMysteryMerchant())
 
-	assert.Equal(t, uint32(5), overview.GetMaps()[2].GetSceneConfigId())
-	assert.Equal(t, scenepb.WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_QUIET, overview.GetMaps()[2].GetHeatLevel())
-	assert.True(t, overview.GetMaps()[2].GetIsTideMap())
-	assert.True(t, overview.GetMaps()[2].GetHasMysteryMerchant())
-	assert.Equal(t, uint64(50001), overview.GetMaps()[2].GetRecommendedSceneId())
+	assert.Equal(t, uint32(3), overview.GetMaps()[2].GetSceneConfigId())
+	assert.Equal(t, scenepb.WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_ACTIVE, overview.GetMaps()[2].GetHeatLevel())
+	assert.False(t, overview.GetMaps()[2].GetIsTideMap())
+
+	assert.Equal(t, uint32(5), overview.GetMaps()[3].GetSceneConfigId())
+	assert.Equal(t, scenepb.WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_QUIET, overview.GetMaps()[3].GetHeatLevel())
+	assert.True(t, overview.GetMaps()[3].GetIsTideMap())
+	assert.True(t, overview.GetMaps()[3].GetHasMysteryMerchant())
+	assert.Equal(t, uint64(50001), overview.GetMaps()[3].GetRecommendedSceneId())
 }
 
 func TestPickMerchantChannelWithTideBias(t *testing.T) {

@@ -39,6 +39,8 @@ message AfkPassInfo
 	uint64 balance = 8;                     // 玩家此刻持有的 price_currency_type 余额,只供展示(买不买得起由服务器裁决)
 	bool auto_return_city_on_team_end = 9;  // 离线托管期间离队 / 解散时是否自动回默认主城安全区
 	HostedRecapSummary hosted_recap = 10;   // 最近一次待确认的离线托管收获简报(无记录时不填)
+	uint32 unlocked_loadout_slots = 11;     // 当前已解锁的方案槽位数（免费 3；仙途轻享卡生效 6，纯便利零数值）
+	bool stage2_tradable_enabled = 12;      // true = 阶段二每周 150 池胜局可交易资格生效中（不增加总额度）
 }
 
 message GetAfkPassRequest {}

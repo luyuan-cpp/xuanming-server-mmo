@@ -360,6 +360,7 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
         }
     }
     const int effectsBegin = result.events_size();
+    bool castSupportEffect = false;
     for (size_t i = 0; i < targets.size(); ++i) {
         auto* target = FindActor(targets[i]);
         if (target == nullptr || target->fled()) continue;
@@ -379,8 +380,17 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
             ApplyConfiguredEffect(actor, *target, effect, targetContext, result);
             const auto* definition = dataProvider->FindBuff(effect);
             if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::Damage)) ++targetContext.hitOrdinal;
-            if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::Heal)) ++targetContext.healOrdinal;
-            if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield)) ++targetContext.shieldOrdinal;
+            if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::Heal)) {
+                ++targetContext.healOrdinal;
+                castSupportEffect = true;
+            }
+            if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield)) {
+                ++targetContext.shieldOrdinal;
+                castSupportEffect = true;
+            }
+            if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::ReviveMark)) {
+                castSupportEffect = true;
+            }
         }
     }
     currentHitIndex = 0;
@@ -401,6 +411,9 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
         auto* primary = FindActor(targets.front());
         if (primary != nullptr) TriggerConfiguredBuffs(actor, *primary, BattleTrigger::AfterSkill,
             row.damage_type(), context, result);
+    }
+    if (normal && castSupportEffect && IsActorActive(actor)) {
+        TriggerConfiguredBuffs(actor, actor, BattleTrigger::AfterSupportCast, 0, context, result);
     }
 }
 
@@ -583,7 +596,11 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
             const bool success = chance >= 1 || (chance > 0 && Rand01() < chance);
             auto* event = AppendEvent(result, BATTLE_EVENT_PET_RETREAT, caster.actor_id(), receiver.actor_id());
             event->set_success(success); event->set_value(1);
-            if (success) { receiver.set_fled(true); receiver.set_withdraw_until_round(roundIndex + std::max(1u, row.duration_rounds()) + 1); }
+            if (success) {
+                receiver.set_fled(true);
+                receiver.set_withdraw_until_round(roundIndex + std::max(1u, row.duration_rounds()) + 1);
+                ResetVolatileGrowingStacks(receiver);
+            }
             break;
         }
         case BattleEffectOp::CopyTargetSkill: {
@@ -633,20 +650,32 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
         existingId = entry.buff_id(); break;
     }
     // 覆盖拒绝与免疫均不进入概率阶段，不生成回响、不消耗清心。
-    if (hostile && op == BattleEffectOp::Control && row.state_kind() >= 1 && row.state_kind() <= 6) {
+    const bool hostileActionControl = hostile && op == BattleEffectOp::Control && row.state_kind() >= 1 && row.state_kind() <= 6;
+    if (hostileActionControl) {
         if (IsControlBannedByCustomDuel()) {
             auto* resisted = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), receiver.actor_id());
             resisted->set_buff_table_id(buffId);
             return;
         }
-        if (TryConsumeControlImmunity(caster, receiver, row, result)) return;
+        if (TryConsumeControlImmunity(caster, receiver, row, result)) {
+            TriggerConfiguredBuffs(receiver, caster, BattleTrigger::AfterControlAttempt, 0, context, result);
+            return;
+        }
     }
     if (hostile && row.state_kind() >= 1 && row.state_kind() <= 7 &&
         (op == BattleEffectOp::Control || op == BattleEffectOp::PeriodicDamage)) {
-        if (!EquipmentControlRoll(caster, receiver, row, context, result)) return;
+        if (!EquipmentControlRoll(caster, receiver, row, context, result)) {
+            if (hostileActionControl) {
+                TriggerConfiguredBuffs(receiver, caster, BattleTrigger::AfterControlAttempt, 0, context, result);
+            }
+            return;
+        }
     } else if (hostile && row.application_chance() > 0 && row.application_chance() < 1 && Rand01() >= row.application_chance()) {
         auto* resisted = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), receiver.actor_id());
         resisted->set_buff_table_id(buffId); return;
+    }
+    if (hostileActionControl) {
+        TriggerConfiguredBuffs(receiver, caster, BattleTrigger::AfterControlAttempt, 0, context, result);
     }
     uint32_t extensions = 0;
     if (existingId != 0) {
@@ -736,11 +765,12 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
         const double typedOutgoing = damageType == combatdamage::kPhysicalDamage
             ? ConfiguredModifier(source, BattleModifier::OutgoingPhysicalDamage)
             : ConfiguredModifier(source, BattleModifier::OutgoingMagicDamage);
+        const double selfGrowingDirect = ConfiguredModifier(source, BattleModifier::SelfGrowingDirectDamage);
         const double oneShotOutgoing = context.origin == BattleDamageOrigin::Direct
             ? ConfiguredModifier(source, damageType == combatdamage::kPhysicalDamage
                 ? BattleModifier::NextPhysicalAttack : BattleModifier::NextMagicAttack)
             : 0.0;
-        damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage) + typedOutgoing + oneShotOutgoing);
+        damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage) + typedOutgoing + selfGrowingDirect + oneShotOutgoing);
         damage = supportrules::ApplyBonus(damage, petcultivation::DamageBonus(source, damageType, context.origin, hitKind));
         damage *= std::max(0.0, 1 + ConfiguredModifier(target, BattleModifier::IncomingDamage) + HitVulnerabilityBonus(target));
         if (damageType == combatdamage::kMagicDamage)
@@ -762,6 +792,8 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
             }
         }
         for (const auto id : consume) RemoveConfiguredBuff(source, id, result);
+    } else if (context.origin == BattleDamageOrigin::Periodic) {
+        damage *= std::max(0.0, 1.0 + ConfiguredModifier(source, BattleModifier::PeriodicDamageBonus));
     }
     // 护盾处理前不能按当前生命截断:残血不应把一记致死重击缩成可被小盾全吃的伤害。
     if (ActorHasBuffOfType(target, kBuffTypeInvincibility)) damage = 0;
@@ -880,7 +912,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     if (dealt > 0 && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER) {
         ApplyWuxingPostDirectHitEffects(source, target, dealt, context.critical, result);
     }
-    if (dealt > 0 && context.origin == BattleDamageOrigin::Direct && IsActorActive(target))
+    if (dealt > 0 && (context.origin == BattleDamageOrigin::Direct || context.origin == BattleDamageOrigin::Redirect) && IsActorActive(target))
         TriggerConfiguredBuffs(target, source, BattleTrigger::AfterTake, damageType, triggered, result);
     if (dealt > 0 && context.origin == BattleDamageOrigin::Periodic && IsActorActive(source))
         TriggerConfiguredBuffs(source, target, BattleTrigger::AfterPeriodic, damageType, triggered, result);
@@ -890,22 +922,35 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
 void TurnBattleEngine::TriggerConfiguredBuffs(BattleActorState& owner, BattleActorState& other,
                                                BattleTrigger trigger, uint32_t damageType,
                                                const EffectContext& context, TurnResultS2C& result) {
+    const bool redirectedTake = trigger == BattleTrigger::AfterTake && context.origin == BattleDamageOrigin::Redirect;
+    const bool controlAttempt = trigger == BattleTrigger::AfterControlAttempt;
     if (!IsActorActive(owner) || (context.origin != BattleDamageOrigin::Direct &&
-        trigger != BattleTrigger::AfterPeriodic)) return;
+        trigger != BattleTrigger::AfterPeriodic && !redirectedTake && !controlAttempt)) return;
     std::vector<uint64_t> ids;
     for (const auto& entry : owner.buffs()) ids.push_back(entry.buff_id());
     for (const auto id : ids) {
         int index = FindBuffIndex(owner, id); if (index < 0 || !IsActorActive(owner)) continue;
         const auto saved = owner.buffs(index);
         const auto* definition = dataProvider->FindBuff(saved.buff_table_id());
-        if (definition == nullptr || definition->battle_op() == 0 ||
-            definition->trigger_event() != static_cast<uint32_t>(trigger) || !MatchesDamage(*definition, damageType)) continue;
+        if (definition == nullptr || definition->battle_op() == 0) continue;
+        const bool triggerMatches = definition->trigger_event() == static_cast<uint32_t>(trigger) ||
+            (definition->trigger_event() == static_cast<uint32_t>(BattleTrigger::AfterDirectAttack) &&
+             (trigger == BattleTrigger::AfterBasic || trigger == BattleTrigger::AfterSkill));
+        if (!triggerMatches || !MatchesDamage(*definition, damageType)) continue;
+        // A36 援护分担转伤仅允许触发 GrowingAura 叠层，绝不递归触发反击、反伤或回蓝。
+        if (redirectedTake && definition->battle_op() != static_cast<uint32_t>(BattleEffectOp::GrowingAura)) continue;
         const BuffTable row = *definition;
         const bool periodicTag = trigger == BattleTrigger::AfterPeriodic && !row.required_tag().empty();
         if (periodicTag && !((row.required_tag() == "Poison" && context.periodicState == static_cast<uint32_t>(BattleStateKind::Poison)) ||
             (row.required_tag() == "Burn" && context.periodicState == static_cast<uint32_t>(BattleStateKind::Burn)))) continue;
+        if (trigger == BattleTrigger::AfterPeriodic && row.required_tag().empty() &&
+            context.periodicState != static_cast<uint32_t>(BattleStateKind::Poison) &&
+            context.periodicState != static_cast<uint32_t>(BattleStateKind::Burn)) continue;
         if (!periodicTag && !row.required_tag().empty() && !HasBuffTag(other, row.required_tag()) &&
             (row.second_required_tag().empty() || !HasBuffTag(other, row.second_required_tag()))) continue;
+        if (row.battle_op() == static_cast<uint32_t>(BattleEffectOp::GrowingAura) &&
+            trigger != BattleTrigger::AfterSupportCast &&
+            owner.team_index() == other.team_index()) continue;
         if (row.per_round_limit() > 0 && saved.last_trigger_round() == roundIndex && saved.trigger_count() >= row.per_round_limit()) continue;
         if (row.trigger_chance() > 0 && row.trigger_chance() < 1 && Rand01() >= row.trigger_chance()) continue;
         owner.mutable_buffs(index)->set_trigger_count(saved.last_trigger_round() == roundIndex ? saved.trigger_count() + 1 : 1);
@@ -983,6 +1028,13 @@ void TurnBattleEngine::TriggerConfiguredBuffs(BattleActorState& owner, BattleAct
             for (const auto child : row.sub_buff()) ApplyConfiguredEffect(owner, owner, child, triggered, result, 1);
             for (const auto child : row.target_sub_buff()) ApplyConfiguredEffect(owner, other, child, triggered, result, 1);
             break;
+        case BattleEffectOp::GrowingAura: {
+            const uint32_t cap = std::max(1u, row.stack_limit());
+            if (saved.stacks() < cap) {
+                owner.mutable_buffs(index)->set_stacks(saved.stacks() + 1);
+            }
+            break;
+        }
         default: break;
         }
         index = FindBuffIndex(owner, id);
@@ -1024,6 +1076,7 @@ void TurnBattleEngine::BeginConfiguredRound(TurnResultS2C& result) {
         for (int i = 0; i < actor.buffs_size(); ++i) {
             const auto saved = actor.buffs(i); const auto* row = dataProvider->FindBuff(saved.buff_table_id());
             if (row == nullptr || row->battle_op() != static_cast<uint32_t>(BattleEffectOp::GrowingAura) ||
+                row->trigger_event() != static_cast<uint32_t>(BattleTrigger::RoundStart) ||
                 roundIndex < std::max(1u, row->start_round())) continue;
             const auto* caster = FindActor(saved.caster_id());
             if (row->require_living_caster() && (caster == nullptr || !IsActorActive(*caster))) continue;
@@ -1261,6 +1314,16 @@ double TurnBattleEngine::HitVulnerabilityBonus(const BattleActorState& target) c
         }
     }
     return bonus;
+}
+
+void TurnBattleEngine::ResetVolatileGrowingStacks(BattleActorState& actor) {
+    for (int i = 0; i < actor.buffs_size(); ++i) {
+        const auto* row = dataProvider->FindBuff(actor.buffs(i).buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::GrowingAura) &&
+            row->keep_on_death() == 0 && actor.buffs(i).stacks() > 0) {
+            actor.mutable_buffs(i)->set_stacks(0);
+        }
+    }
 }
 
 void TurnBattleEngine::SyncChargingSkillId(BattleActorState& actor) const {

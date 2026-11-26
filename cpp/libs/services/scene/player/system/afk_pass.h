@@ -47,6 +47,10 @@ public:
 	// 本实体内存里的到期时刻(事实源的那一份,加载后只由本类改);缺 PlayerUint64Comp 或实体无效返回 0。只读。
 	static uint64_t ExpiresAt(entt::entity player);
 
+	// 仙途轻享卡在指定墙钟秒 / 当前墙钟秒是否生效中（单一事实源：expires_at > nowUnixSec）。只读。
+	static bool IsActive(entt::entity player, uint64_t nowUnixSec);
+	static bool IsActiveNow(entt::entity player);
+
 	// 只读:离线托管期间离队 / 解散时是否自动回默认主城安全区。缺 PlayerUint64Comp 或实体无效返回 false。
 	static bool AutoReturnCityOnTeamEnd(entt::entity player);
 

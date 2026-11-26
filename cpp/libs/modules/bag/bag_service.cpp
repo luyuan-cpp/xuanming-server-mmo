@@ -605,7 +605,9 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
         if ((edit.bagType != kInventory && edit.bagType != kEquipment) || edit.expected.item_id() == 0 ||
             !changed.insert(edit.expected.item_id()).second ||
             edit.expected.item_id() != edit.replacement.item_id() ||
-            edit.expected.config_id() != edit.replacement.config_id() ||
+            (!edit.allowConfigChange && edit.expected.config_id() != edit.replacement.config_id()) ||
+            (edit.allowConfigChange && (edit.expected.size() != 1 || edit.replacement.size() != 1 ||
+                ItemTableManager::Instance().FindByIdSilent(edit.replacement.config_id()).first == nullptr)) ||
             edit.expected.size() != edit.replacement.size() ||
             edit.expected.acquire_seq() != edit.replacement.acquire_seq()) return kInvalidParameter;
         auto& candidate = edit.bagType == kInventory ? nextInventory : nextEquipment;

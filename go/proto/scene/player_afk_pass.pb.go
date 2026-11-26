@@ -137,6 +137,8 @@ type AfkPassInfo struct {
 	Balance                 uint64                 `protobuf:"varint,8,opt,name=balance,proto3" json:"balance,omitempty"`                                                                        // 玩家此刻持有的 price_currency_type 余额,只供展示(买不买得起由服务器裁决)
 	AutoReturnCityOnTeamEnd bool                   `protobuf:"varint,9,opt,name=auto_return_city_on_team_end,json=autoReturnCityOnTeamEnd,proto3" json:"auto_return_city_on_team_end,omitempty"` // 离线托管期间离队 / 解散时是否自动回默认主城安全区
 	HostedRecap             *HostedRecapSummary    `protobuf:"bytes,10,opt,name=hosted_recap,json=hostedRecap,proto3" json:"hosted_recap,omitempty"`                                             // 最近一次待确认的离线托管收获简报(无记录时不填)
+	UnlockedLoadoutSlots    uint32                 `protobuf:"varint,11,opt,name=unlocked_loadout_slots,json=unlockedLoadoutSlots,proto3" json:"unlocked_loadout_slots,omitempty"`               // 当前已解锁的方案槽位数（免费 3；仙途轻享卡生效 6，纯便利零数值）
+	Stage2TradableEnabled   bool                   `protobuf:"varint,12,opt,name=stage2_tradable_enabled,json=stage2TradableEnabled,proto3" json:"stage2_tradable_enabled,omitempty"`            // true = 阶段二每周 150 池胜局可交易资格生效中（不增加总额度）
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -239,6 +241,20 @@ func (x *AfkPassInfo) GetHostedRecap() *HostedRecapSummary {
 		return x.HostedRecap
 	}
 	return nil
+}
+
+func (x *AfkPassInfo) GetUnlockedLoadoutSlots() uint32 {
+	if x != nil {
+		return x.UnlockedLoadoutSlots
+	}
+	return 0
+}
+
+func (x *AfkPassInfo) GetStage2TradableEnabled() bool {
+	if x != nil {
+		return x.Stage2TradableEnabled
+	}
+	return false
 }
 
 type GetAfkPassRequest struct {
@@ -766,7 +782,7 @@ const file_proto_scene_player_afk_pass_proto_rawDesc = "" +
 	"\n" +
 	"item_count\x18\a \x01(\rR\titemCount\x12\x1f\n" +
 	"\vpending_ack\x18\b \x01(\bR\n" +
-	"pendingAck\"\xa1\x03\n" +
+	"pendingAck\"\x8f\x04\n" +
 	"\vAfkPassInfo\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x01 \x01(\x04R\texpiresAt\x12\x1d\n" +
@@ -781,7 +797,9 @@ const file_proto_scene_player_afk_pass_proto_rawDesc = "" +
 	"\abalance\x18\b \x01(\x04R\abalance\x12=\n" +
 	"\x1cauto_return_city_on_team_end\x18\t \x01(\bR\x17autoReturnCityOnTeamEnd\x126\n" +
 	"\fhosted_recap\x18\n" +
-	" \x01(\v2\x13.HostedRecapSummaryR\vhostedRecap\"\x13\n" +
+	" \x01(\v2\x13.HostedRecapSummaryR\vhostedRecap\x124\n" +
+	"\x16unlocked_loadout_slots\x18\v \x01(\rR\x14unlockedLoadoutSlots\x126\n" +
+	"\x17stage2_tradable_enabled\x18\f \x01(\bR\x15stage2TradableEnabled\"\x13\n" +
 	"\x11GetAfkPassRequest\"l\n" +
 	"\x12GetAfkPassResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12 \n" +

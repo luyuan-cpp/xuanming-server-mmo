@@ -1573,6 +1573,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
     kRemindBeforeHoursFieldNumber = 7,
     kBalanceFieldNumber = 8,
     kAutoReturnCityOnTeamEndFieldNumber = 9,
+    kStage2TradableEnabledFieldNumber = 12,
+    kUnlockedLoadoutSlotsFieldNumber = 11,
   };
   // .HostedRecapSummary hosted_recap = 10;
   [[nodiscard]] bool has_hosted_recap()
@@ -1680,11 +1682,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
   void _internal_set_auto_return_city_on_team_end(bool value);
 
   public:
+  // bool stage2_tradable_enabled = 12;
+  void clear_stage2_tradable_enabled() ;
+  [[nodiscard]] bool stage2_tradable_enabled() const;
+  void set_stage2_tradable_enabled(bool value);
+
+  private:
+  bool _internal_stage2_tradable_enabled() const;
+  void _internal_set_stage2_tradable_enabled(bool value);
+
+  public:
+  // uint32 unlocked_loadout_slots = 11;
+  void clear_unlocked_loadout_slots() ;
+  [[nodiscard]] ::uint32_t unlocked_loadout_slots() const;
+  void set_unlocked_loadout_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unlocked_loadout_slots() const;
+  void _internal_set_unlocked_loadout_slots(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AfkPassInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1723,6 +1745,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassInfo final : public ::google
     ::uint32_t remind_before_hours_;
     ::uint64_t balance_;
     bool auto_return_city_on_team_end_;
+    bool stage2_tradable_enabled_;
+    ::uint32_t unlocked_loadout_slots_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3485,6 +3509,54 @@ inline void AfkPassInfo::set_allocated_hosted_recap(::HostedRecapSummary* PROTOB
 
   _impl_.hosted_recap_ = reinterpret_cast<::HostedRecapSummary*>(value);
   // @@protoc_insertion_point(field_set_allocated:AfkPassInfo.hosted_recap)
+}
+
+// uint32 unlocked_loadout_slots = 11;
+inline void AfkPassInfo::clear_unlocked_loadout_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_loadout_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t AfkPassInfo::unlocked_loadout_slots() const {
+  // @@protoc_insertion_point(field_get:AfkPassInfo.unlocked_loadout_slots)
+  return _internal_unlocked_loadout_slots();
+}
+inline void AfkPassInfo::set_unlocked_loadout_slots(::uint32_t value) {
+  _internal_set_unlocked_loadout_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:AfkPassInfo.unlocked_loadout_slots)
+}
+inline ::uint32_t AfkPassInfo::_internal_unlocked_loadout_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_loadout_slots_;
+}
+inline void AfkPassInfo::_internal_set_unlocked_loadout_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_loadout_slots_ = value;
+}
+
+// bool stage2_tradable_enabled = 12;
+inline void AfkPassInfo::clear_stage2_tradable_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage2_tradable_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline bool AfkPassInfo::stage2_tradable_enabled() const {
+  // @@protoc_insertion_point(field_get:AfkPassInfo.stage2_tradable_enabled)
+  return _internal_stage2_tradable_enabled();
+}
+inline void AfkPassInfo::set_stage2_tradable_enabled(bool value) {
+  _internal_set_stage2_tradable_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:AfkPassInfo.stage2_tradable_enabled)
+}
+inline bool AfkPassInfo::_internal_stage2_tradable_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.stage2_tradable_enabled_;
+}
+inline void AfkPassInfo::_internal_set_stage2_tradable_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage2_tradable_enabled_ = value;
 }
 
 // -------------------------------------------------------------------

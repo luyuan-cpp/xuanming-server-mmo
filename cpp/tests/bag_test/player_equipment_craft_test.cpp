@@ -16,6 +16,7 @@
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
+#include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
@@ -23,6 +24,7 @@
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/bag_marshal.h"
 #include "player/system/client_request_ledger.h"
+#include "player/system/player_attribute.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_equipment_v1.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
@@ -878,5 +880,100 @@ TEST_F(PlayerEquipmentCraftTest, CorruptedEquippedV1AffixMarksSupportSourcesInco
     EquipmentEffects effects;
     PlayerEquipmentV1System::CollectEffects(player, effects);
     EXPECT_FALSE(effects.support_sources_complete());
+}
+
+TEST_F(PlayerEquipmentCraftTest, UpgradeTierPreservesEnhancePityAffixesQualitySignatureAndTradabilityInPlace) {
+    ASSERT_NO_FATAL_FAILURE(Stock(100));
+    Guid weaponId{};
+    ASSERT_NO_FATAL_FAILURE(Create(3101, weaponId)); // 1级定制武器 (profile=1, kind=11, tradable)
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, weaponId, 3));
+
+    // 种满各项永久养成字段：+10 强化、+11 保底 7 次、已装词条品相 4 档 + 打磨保底 5 次、宗师署名，且保持纯可交易 (bound=false)
+    auto* worn = Equipment().GetItemCompByGuid(weaponId);
+    ASSERT_NE(nullptr, worn);
+    worn->set_bound(false);
+    worn->mutable_equip()->set_enhance_level(10);
+    worn->mutable_equip()->set_enhance_pity_count(7);
+    worn->mutable_equip()->set_crafter_player_id(42);
+    worn->mutable_equip()->set_crafter_name("天工宗师");
+    auto* affix = worn->mutable_equip()->add_fixed_affixes();
+    affix->set_slot(1);
+    affix->set_affix_id(101);
+    affix->set_quality_tier(4);
+    affix->set_polish_pity_count(5);
+
+    const auto makeUpgrade = [](Guid itemId, uint32_t targetConfigId) {
+        EquipmentCraftChoice choice;
+        choice.set_operation(EquipmentCraftChoice::UPGRADE_TIER);
+        choice.set_item_id(itemId);
+        choice.set_config_id(targetConfigId);
+        return choice;
+    };
+
+    // 1. 玩家等级不足（1级升30级）预览不可用并拒绝
+    tlsEcs.actorRegistry.get<LevelComp>(player).set_level(1);
+    PreviewEquipmentCraftResponse preview;
+    ASSERT_EQ(kSuccess, Preview(makeUpgrade(weaponId, 3131), preview));
+    EXPECT_FALSE(preview.preview().available());
+    EXPECT_EQ(kEquipLevelNotEnough, preview.preview().unavailable_tip());
+    EXPECT_EQ(300u, preview.preview().gold_cost()); // 3 档 × 100 银两
+    EXPECT_FALSE(preview.preview().has_material()); // 0 打造材料
+
+    // 2. 升至 30 级但银两不足（250 < 300）拒绝
+    tlsEcs.actorRegistry.get<LevelComp>(player).set_level(30);
+    PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
+    const auto atkBefore = tlsEcs.actorRegistry.get<DerivedAttributesComp>(player).physical_attack();
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 250));
+    ASSERT_EQ(kSuccess, Preview(makeUpgrade(weaponId, 3131), preview));
+    EXPECT_FALSE(preview.preview().available());
+    EXPECT_EQ(kEquipCraftGoldNotEnough, preview.preview().unavailable_tip());
+
+    // 3. 补足银两后原地无损升档至 30 级武器（3131），不扣打造材料且 100% 保留全部养成与可交易态
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100)); // 合计 350
+    const uint64_t matBefore = Inventory().GetTotalItemCount(3001);
+    CommitEquipmentCraftRequest req;
+    ASSERT_NO_FATAL_FAILURE(MakeRequest(makeUpgrade(weaponId, 3131), req));
+    const auto applied = Commit(req);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, applied.outcome());
+    EXPECT_EQ(weaponId, applied.item_id());
+    EXPECT_EQ(50, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(matBefore, Inventory().GetTotalItemCount(3001));
+
+    const auto* upgraded = Equipment().GetItemCompByGuid(weaponId);
+    ASSERT_NE(nullptr, upgraded);
+    EXPECT_EQ(3131u, upgraded->config_id());
+    EXPECT_FALSE(upgraded->bound());
+    EXPECT_EQ(10u, upgraded->equip().enhance_level());
+    EXPECT_EQ(7u, upgraded->equip().enhance_pity_count());
+    EXPECT_EQ(42u, upgraded->equip().crafter_player_id());
+    EXPECT_EQ("天工宗师", upgraded->equip().crafter_name());
+    ASSERT_EQ(1, upgraded->equip().fixed_affixes_size());
+    EXPECT_EQ(101u, upgraded->equip().fixed_affixes(0).affix_id());
+    EXPECT_EQ(4u, upgraded->equip().fixed_affixes(0).quality_tier());
+    EXPECT_EQ(5u, upgraded->equip().fixed_affixes(0).polish_pity_count());
+    EXPECT_GT(tlsEcs.actorRegistry.get<DerivedAttributesComp>(player).physical_attack(), atkBefore);
+
+    // 4. 幂等重放不重复扣银两
+    const auto replay = Commit(req);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, replay.outcome());
+    EXPECT_TRUE(replay.replayed());
+    EXPECT_EQ(50, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 5. 拒绝降级（3131->3101）与跨部位（3131->3132）
+    EXPECT_EQ(kInvalidParameter, Preview(makeUpgrade(weaponId, 3101), preview));
+    EXPECT_EQ(kInvalidParameter, Preview(makeUpgrade(weaponId, 3132), preview));
+
+    // 6. 首饰（profile=2, 3201->3221）2 档耗 120 银两
+    Guid accId{};
+    ASSERT_NO_FATAL_FAILURE(Create(3201, accId));
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100)); // 合计 150
+    CommitEquipmentCraftRequest accReq;
+    ASSERT_NO_FATAL_FAILURE(MakeRequest(makeUpgrade(accId, 3221), accReq));
+    const auto accApplied = Commit(accReq);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, accApplied.outcome());
+    EXPECT_EQ(30, CurrencySystem::GetBalance(player, kCurrencyGold));
+    const auto* upgradedAcc = Inventory().GetItemCompByGuid(accId);
+    ASSERT_NE(nullptr, upgradedAcc);
+    EXPECT_EQ(3221u, upgradedAcc->config_id());
 }
 } // namespace

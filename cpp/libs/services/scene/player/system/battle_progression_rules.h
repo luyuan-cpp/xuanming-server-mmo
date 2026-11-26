@@ -344,7 +344,7 @@ inline void PrepareEconomyLedger(const ::BattleEconomyLedger& current, uint64_t 
 	uint64_t usedAfter = candidateOut.battle_silver_this_week();
 	uint64_t softCap = 0;
 
-	if (rule != nullptr && ValidateWeeklySilverRule(*rule) && (tableSilver > 0 || rawSilver > 0)) {
+	if (rule != nullptr && ValidateWeeklySilverRule(*rule)) {
 		softCap = rule->softCap;
 		// 只有命中配置表银两路径时才纳入周软上限账本；若仅是未加载配置表的历史单测显式金币，原样保留不破坏旧断言。
 		if (tableSilver > 0) {

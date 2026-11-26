@@ -115,6 +115,7 @@
     <ClInclude Include="player\system\player_skill.h" />
     <ClInclude Include="player\system\player_support_effects.h" />
     <ClInclude Include="player\system\player_attribute.h" />
+    <ClInclude Include="player\system\battle_progression_rules.h" />
     <ClInclude Include="player\system\pet_rules.h" />
     <ClInclude Include="player\system\player_pet.h" />
     <ClInclude Include="player\system\attribute_allocation_rules.h" />

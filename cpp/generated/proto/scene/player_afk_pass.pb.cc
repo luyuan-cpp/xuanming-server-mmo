@@ -961,11 +961,11 @@ constexpr AfkPassInfo::ParseTableT_ AfkPassInfo::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      12,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1016,8 +1016,14 @@ constexpr AfkPassInfo::ParseTableT_ AfkPassInfo::InternalGenerateParseTable_(con
       {::_pbi::TcParser::FastMtS1,
        {82, 0, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 unlocked_loadout_slots = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.unlocked_loadout_slots_), 11>(),
+       {88, 11, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_)}},
+      // bool stage2_tradable_enabled = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AfkPassInfo, _impl_.stage2_tradable_enabled_), 10>(),
+       {96, 10, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stage2_tradable_enabled_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1044,6 +1050,10 @@ constexpr AfkPassInfo::ParseTableT_ AfkPassInfo::InternalGenerateParseTable_(con
       {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.auto_return_city_on_team_end_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .HostedRecapSummary hosted_recap = 10;
       {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 unlocked_loadout_slots = 11;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool stage2_tradable_enabled = 12;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stage2_tradable_enabled_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1071,7 +1081,9 @@ inline constexpr AfkPassInfo::Impl_::Impl_(
         max_remaining_days_{0u},
         remind_before_hours_{0u},
         balance_{::uint64_t{0u}},
-        auto_return_city_on_team_end_{false} {}
+        auto_return_city_on_team_end_{false},
+        stage2_tradable_enabled_{false},
+        unlocked_loadout_slots_{0u} {}
 
 template <typename>
 constexpr AfkPassInfo::AfkPassInfo(::_pbi::ConstantInitialized,
@@ -1996,7 +2008,7 @@ const ::uint32_t
         7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_._has_bits_),
-        13, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.expires_at_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.server_now_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.price_currency_type_),
@@ -2007,6 +2019,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.balance_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.auto_return_city_on_team_end_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.hosted_recap_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.unlocked_loadout_slots_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.stage2_tradable_enabled_),
         1,
         2,
         4,
@@ -2017,6 +2031,8 @@ const ::uint32_t
         8,
         9,
         0,
+        11,
+        10,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetAfkPassResponse, _impl_._has_bits_),
@@ -2085,16 +2101,16 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::HostedRecapSummary)},
         {19, sizeof(::AfkPassInfo)},
-        {42, sizeof(::GetAfkPassRequest)},
-        {43, sizeof(::GetAfkPassResponse)},
-        {50, sizeof(::BuyAfkPassRequest)},
-        {59, sizeof(::BuyAfkPassResponse)},
-        {68, sizeof(::GmSetAfkPassRequest)},
-        {73, sizeof(::GmSetAfkPassResponse)},
-        {80, sizeof(::SetAfkPassSettingsRequest)},
-        {85, sizeof(::SetAfkPassSettingsResponse)},
-        {92, sizeof(::AckHostedRecapRequest)},
-        {97, sizeof(::AckHostedRecapResponse)},
+        {46, sizeof(::GetAfkPassRequest)},
+        {47, sizeof(::GetAfkPassResponse)},
+        {54, sizeof(::BuyAfkPassRequest)},
+        {63, sizeof(::BuyAfkPassResponse)},
+        {72, sizeof(::GmSetAfkPassRequest)},
+        {77, sizeof(::GmSetAfkPassResponse)},
+        {84, sizeof(::SetAfkPassSettingsRequest)},
+        {89, sizeof(::SetAfkPassSettingsResponse)},
+        {96, sizeof(::AckHostedRecapRequest)},
+        {101, sizeof(::AckHostedRecapResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2120,42 +2136,44 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fafk_5fpass_2eproto
     "ttle_count\030\003 \001(\r\022\021\n\twin_count\030\004 \001(\r\022\022\n\ne"
     "xp_gained\030\005 \001(\004\022\025\n\rsilver_gained\030\006 \001(\004\022\022"
     "\n\nitem_count\030\007 \001(\r\022\023\n\013pending_ack\030\010 \001(\010\""
-    "\221\002\n\013AfkPassInfo\022\022\n\nexpires_at\030\001 \001(\004\022\022\n\ns"
+    "\322\002\n\013AfkPassInfo\022\022\n\nexpires_at\030\001 \001(\004\022\022\n\ns"
     "erver_now\030\002 \001(\004\022\033\n\023price_currency_type\030\003"
     " \001(\r\022\r\n\005price\030\004 \001(\004\022\023\n\013period_days\030\005 \001(\r"
     "\022\032\n\022max_remaining_days\030\006 \001(\r\022\033\n\023remind_b"
     "efore_hours\030\007 \001(\r\022\017\n\007balance\030\010 \001(\004\022$\n\034au"
     "to_return_city_on_team_end\030\t \001(\010\022)\n\014host"
-    "ed_recap\030\n \001(\0132\023.HostedRecapSummary\"\023\n\021G"
-    "etAfkPassRequest\"X\n\022GetAfkPassResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\032"
-    "\n\004info\030\002 \001(\0132\014.AfkPassInfo\"f\n\021BuyAfkPass"
-    "Request\022\031\n\021client_request_id\030\001 \001(\004\022\036\n\026ex"
-    "pected_currency_type\030\002 \001(\r\022\026\n\016expected_p"
-    "rice\030\003 \001(\004\"j\n\022BuyAfkPassResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004info"
-    "\030\002 \001(\0132\014.AfkPassInfo\022\020\n\010replayed\030\003 \001(\010\"0"
-    "\n\023GmSetAfkPassRequest\022\031\n\021remaining_secon"
-    "ds\030\001 \001(\r\"Z\n\024GmSetAfkPassResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004info"
-    "\030\002 \001(\0132\014.AfkPassInfo\"A\n\031SetAfkPassSettin"
-    "gsRequest\022$\n\034auto_return_city_on_team_en"
-    "d\030\001 \001(\010\"`\n\032SetAfkPassSettingsResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n"
-    "\004info\030\002 \001(\0132\014.AfkPassInfo\"+\n\025AckHostedRe"
-    "capRequest\022\022\n\nstarted_at\030\001 \001(\004\"\\\n\026AckHos"
-    "tedRecapResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPass"
-    "Info2\343\002\n\030SceneAfkPassClientPlayer\0225\n\nGet"
-    "AfkPass\022\022.GetAfkPassRequest\032\023.GetAfkPass"
-    "Response\0225\n\nBuyAfkPass\022\022.BuyAfkPassReque"
-    "st\032\023.BuyAfkPassResponse\022;\n\014GmSetAfkPass\022"
-    "\024.GmSetAfkPassRequest\032\025.GmSetAfkPassResp"
-    "onse\022M\n\022SetAfkPassSettings\022\032.SetAfkPassS"
-    "ettingsRequest\032\033.SetAfkPassSettingsRespo"
-    "nse\022A\n\016AckHostedRecap\022\026.AckHostedRecapRe"
-    "quest\032\027.AckHostedRecapResponse\032\n\200\250\303\001\001\210\250\303"
-    "\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "ed_recap\030\n \001(\0132\023.HostedRecapSummary\022\036\n\026u"
+    "nlocked_loadout_slots\030\013 \001(\r\022\037\n\027stage2_tr"
+    "adable_enabled\030\014 \001(\010\"\023\n\021GetAfkPassReques"
+    "t\"X\n\022GetAfkPassResponse\022&\n\rerror_message"
+    "\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014."
+    "AfkPassInfo\"f\n\021BuyAfkPassRequest\022\031\n\021clie"
+    "nt_request_id\030\001 \001(\004\022\036\n\026expected_currency"
+    "_type\030\002 \001(\r\022\026\n\016expected_price\030\003 \001(\004\"j\n\022B"
+    "uyAfkPassResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPas"
+    "sInfo\022\020\n\010replayed\030\003 \001(\010\"0\n\023GmSetAfkPassR"
+    "equest\022\031\n\021remaining_seconds\030\001 \001(\r\"Z\n\024GmS"
+    "etAfkPassResponse\022&\n\rerror_message\030\001 \001(\013"
+    "2\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPas"
+    "sInfo\"A\n\031SetAfkPassSettingsRequest\022$\n\034au"
+    "to_return_city_on_team_end\030\001 \001(\010\"`\n\032SetA"
+    "fkPassSettingsResponse\022&\n\rerror_message\030"
+    "\001 \001(\0132\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.A"
+    "fkPassInfo\"+\n\025AckHostedRecapRequest\022\022\n\ns"
+    "tarted_at\030\001 \001(\004\"\\\n\026AckHostedRecapRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\022\032\n\004info\030\002 \001(\0132\014.AfkPassInfo2\343\002\n\030SceneA"
+    "fkPassClientPlayer\0225\n\nGetAfkPass\022\022.GetAf"
+    "kPassRequest\032\023.GetAfkPassResponse\0225\n\nBuy"
+    "AfkPass\022\022.BuyAfkPassRequest\032\023.BuyAfkPass"
+    "Response\022;\n\014GmSetAfkPass\022\024.GmSetAfkPassR"
+    "equest\032\025.GmSetAfkPassResponse\022M\n\022SetAfkP"
+    "assSettings\022\032.SetAfkPassSettingsRequest\032"
+    "\033.SetAfkPassSettingsResponse\022A\n\016AckHoste"
+    "dRecap\022\026.AckHostedRecapRequest\032\027.AckHost"
+    "edRecapResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230"
+    "\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_deps[2] = {
@@ -2166,7 +2184,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2e
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto = {
     false,
     false,
-    1706,
+    1771,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
     "proto/scene/player_afk_pass.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_once,
@@ -2572,9 +2590,9 @@ AfkPassInfo::AfkPassInfo(
                offsetof(Impl_, expires_at_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, expires_at_),
-           offsetof(Impl_, auto_return_city_on_team_end_) -
+           offsetof(Impl_, unlocked_loadout_slots_) -
                offsetof(Impl_, expires_at_) +
-               sizeof(Impl_::auto_return_city_on_team_end_));
+               sizeof(Impl_::unlocked_loadout_slots_));
 
   // @@protoc_insertion_point(copy_constructor:AfkPassInfo)
 }
@@ -2588,9 +2606,9 @@ inline void AfkPassInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, hosted_recap_),
            0,
-           offsetof(Impl_, auto_return_city_on_team_end_) -
+           offsetof(Impl_, unlocked_loadout_slots_) -
                offsetof(Impl_, hosted_recap_) +
-               sizeof(Impl_::auto_return_city_on_team_end_));
+               sizeof(Impl_::unlocked_loadout_slots_));
 }
 AfkPassInfo::~AfkPassInfo() {
   // @@protoc_insertion_point(destructor:AfkPassInfo)
@@ -2650,10 +2668,10 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
         reinterpret_cast<char*>(&_impl_.remind_before_hours_) -
         reinterpret_cast<char*>(&_impl_.expires_at_)) + sizeof(_impl_.remind_before_hours_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     ::memset(&_impl_.balance_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.auto_return_city_on_team_end_) -
-        reinterpret_cast<char*>(&_impl_.balance_)) + sizeof(_impl_.auto_return_city_on_team_end_));
+        reinterpret_cast<char*>(&_impl_.unlocked_loadout_slots_) -
+        reinterpret_cast<char*>(&_impl_.balance_)) + sizeof(_impl_.unlocked_loadout_slots_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2766,6 +2784,24 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
         stream);
   }
 
+  // uint32 unlocked_loadout_slots = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_unlocked_loadout_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_unlocked_loadout_slots(), target);
+    }
+  }
+
+  // bool stage2_tradable_enabled = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_stage2_tradable_enabled() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          12, this_._internal_stage2_tradable_enabled(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2847,7 +2883,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint64 balance = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_balance() != 0) {
@@ -2859,6 +2895,19 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_auto_return_city_on_team_end() != 0) {
         total_size += 2;
+      }
+    }
+    // bool stage2_tradable_enabled = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_stage2_tradable_enabled() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 unlocked_loadout_slots = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_unlocked_loadout_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unlocked_loadout_slots());
       }
     }
   }
@@ -2925,7 +2974,7 @@ void AfkPassInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_balance() != 0) {
         _this->_impl_.balance_ = from._impl_.balance_;
@@ -2934,6 +2983,16 @@ void AfkPassInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_auto_return_city_on_team_end() != 0) {
         _this->_impl_.auto_return_city_on_team_end_ = from._impl_.auto_return_city_on_team_end_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_stage2_tradable_enabled() != 0) {
+        _this->_impl_.stage2_tradable_enabled_ = from._impl_.stage2_tradable_enabled_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_unlocked_loadout_slots() != 0) {
+        _this->_impl_.unlocked_loadout_slots_ = from._impl_.unlocked_loadout_slots_;
       }
     }
   }
@@ -2955,8 +3014,8 @@ void AfkPassInfo::InternalSwap(AfkPassInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.auto_return_city_on_team_end_)
-      + sizeof(AfkPassInfo::_impl_.auto_return_city_on_team_end_)
+      PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_)
+      + sizeof(AfkPassInfo::_impl_.unlocked_loadout_slots_)
       - PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_)>(
           reinterpret_cast<char*>(&_impl_.hosted_recap_),
           reinterpret_cast<char*>(&other->_impl_.hosted_recap_));

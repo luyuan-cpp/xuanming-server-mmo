@@ -107,6 +107,24 @@
    "rarity_tier": 1,
    "targeted_fragment_count": 0,
    "targeted_gold_cost": 0
+  },
+  {
+   "description": "率土式全交互事件触发 5 层封顶成长战法卷宗（承锋蓄势 / 循隙破甲 / 蚀骨愈深 / 磐石道心 / 厚泽蓄灵 / 兽威渐盛），零站桩白嫖、不稀释旧池，支持随机拓印与定向保底。",
+   "dismantle_fragment_count": 16,
+   "enabled": 1,
+   "fragment_item_id": 3406,
+   "id": 7,
+   "name": "兵法叠势卷",
+   "random_fragment_count": 20,
+   "random_gold_cost": 50,
+   "rare_gold_cost": 0,
+   "rare_ink_count": 0,
+   "rare_ink_item_id": 0,
+   "rare_scroll_count": 0,
+   "rare_scroll_item_id": 0,
+   "rarity_tier": 0,
+   "targeted_fragment_count": 40,
+   "targeted_gold_cost": 100
   }
  ]
 }

@@ -172,12 +172,12 @@ cd tools/data_table_exporter && py -m pytest -q
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
 | **BattleProgressionReward** | `BattleProgressionReward.xlsx` | `battleprogressionreward_table.proto` | 6 | 6 | 20 | — | — | — | — | — | — | — |
 | **BattleProgressionRule** | `BattleProgressionRule.xlsx` | `battleprogressionrule_table.proto` | 4 | 4 | 1 | — | — | — | — | — | — | — |
-| **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 128 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
+| **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 134 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
 | **CharacterAppearance** | `CharacterAppearance.xlsx` | `characterappearance_table.proto` | 14 | 14 | 9 | — | — | `series_id` | `series_id→AppearanceSeries.id` | `id` | — | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |
-| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 11 | 9 | 17 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
+| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 11 | 9 | 20 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
 | **EquipAffixPool** | `EquipAffixPool.xlsx` | `equipaffixpool_table.proto` | 4 | 4 | 29 | — | — | `pool_id` `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
 | **EquipAffixQuality** | `EquipAffixQuality.xlsx` | `equipaffixquality_table.proto` | 6 | 6 | 5 | — | — | — | — | — | — | — |
 | **EquipAffixRule** | `EquipAffixRule.xlsx` | `equipaffixrule_table.proto` | 5 | 5 | 1 | — | — | — | — | — | — | — |
@@ -203,16 +203,16 @@ cd tools/data_table_exporter && py -m pytest -q
 | **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 115 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
-| **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 26 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
+| **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 35 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
 | **MysteryMerchantGoods** | `MysteryMerchantGoods.xlsx` | `mysterymerchantgoods_table.proto` | 8 | 8 | 12 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **MysteryMerchantRule** | `MysteryMerchantRule.xlsx` | `mysterymerchantrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
-| **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 12 | — | — | `scene_config_id` | — | — | — | — |
+| **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 15 | — | — | `scene_config_id` | — | — | — | — |
 | **Pet** | `Pet.xlsx` | `pet_table.proto` | 28 | 19 | 23 | — | — | — | — | — | — | — |
 | **PetCosmetic** | `PetCosmetic.xlsx` | `petcosmetic_table.proto` | 11 | 11 | 3 | — | — | — | — | `id` | — | — |
 | **PetEntry** | `PetEntry.xlsx` | `petentry_table.proto` | 10 | 10 | 21 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 9 | 9 | 5 | — | — | — | — | — | — | — |
-| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 28 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
+| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 31 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **PlayerLevelExp** | `PlayerLevelExp.xlsx` | `playerlevelexp_table.proto` | 2 | 2 | 85 | — | — | — | — | — | — | — |
 | **RankedPreset** | `RankedPreset.xlsx` | `rankedpreset_table.proto` | 20 | 15 | 6 | — | — | `pet_table_id` | `pet_table_id→Pet.id` `skill_ids→Skill.id` `pet_entry_ids→PetEntry.id` | — | — | — |
 | **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 23 | 23 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
@@ -220,9 +220,9 @@ cd tools/data_table_exporter && py -m pytest -q
 | **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 11 | 11 | 1 | — | — | — | — | — | — | — |
 | **SeasonRule** | `SeasonRule.xlsx` | `seasonrule_table.proto` | 17 | 17 | 2 | — | — | — | — | — | — | — |
 | **SeasonSeal** | `SeasonSeal.xlsx` | `seasonseal_table.proto` | 12 | 12 | 8 | — | — | `season_id` | `season_id→SeasonRule.id` | — | — | — |
-| **Skill** | `Skill.xlsx` | `skill_table.proto` | 87 | 62 | 143 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
+| **Skill** | `Skill.xlsx` | `skill_table.proto` | 87 | 62 | 149 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
-| **SkillScrollCraft** | `SkillScrollCraft.xlsx` | `skillscrollcraft_table.proto` | 16 | 16 | 6 | — | — | `fragment_item_id` | `fragment_item_id→Item.id` | — | — | — |
+| **SkillScrollCraft** | `SkillScrollCraft.xlsx` | `skillscrollcraft_table.proto` | 16 | 16 | 7 | — | — | `fragment_item_id` | `fragment_item_id→Item.id` | — | — | — |
 | **SkillVfxCosmetic** | `SkillVfxCosmetic.xlsx` | `skillvfxcosmetic_table.proto` | 13 | 13 | 3 | — | — | `skill_table_id` | `skill_table_id→Skill.id` | `id` | — | — |
 | **SpiritShopGoods** | `SpiritShopGoods.xlsx` | `spiritshopgoods_table.proto` | 21 | 21 | 7 | — | — | `item_id_1` | `item_id_1→Item.id` | — | — | — |
 | **SpiritShopLimitGroup** | `SpiritShopLimitGroup.xlsx` | `spiritshoplimitgroup_table.proto` | 4 | 4 | 1 | — | — | — | — | — | — | — |

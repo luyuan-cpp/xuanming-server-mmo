@@ -2847,11 +2847,11 @@ constexpr SkillLoadoutSnapshot::ParseTableT_ SkillLoadoutSnapshot::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      10,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2861,10 +2861,7 @@ constexpr SkillLoadoutSnapshot::ParseTableT_ SkillLoadoutSnapshot::InternalGener
       ::_pbi::TcParser::GetTable<::SkillLoadoutSnapshot>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string last_request_id = 8;
-      {::_pbi::TcParser::FastUS1,
-       {66, 1, 0,
-        PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.last_request_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // bool custom_enabled = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillLoadoutSnapshot, _impl_.custom_enabled_), 2>(),
        {8, 2, 0,
@@ -2893,6 +2890,23 @@ constexpr SkillLoadoutSnapshot::ParseTableT_ SkillLoadoutSnapshot::InternalGener
       {::_pbi::TcParser::FastMtR1,
        {58, 0, 0,
         PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.schemes_)}},
+      // string last_request_id = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.last_request_id_)}},
+      // uint32 unlocked_schemes = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillLoadoutSnapshot, _impl_.unlocked_schemes_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.unlocked_schemes_)}},
+      // uint32 max_schemes = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillLoadoutSnapshot, _impl_.max_schemes_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.max_schemes_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2912,6 +2926,10 @@ constexpr SkillLoadoutSnapshot::ParseTableT_ SkillLoadoutSnapshot::InternalGener
       {PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.schemes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // string last_request_id = 8;
       {PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.last_request_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 unlocked_schemes = 9;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.unlocked_schemes_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_schemes = 10;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.max_schemes_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2946,7 +2964,9 @@ inline constexpr SkillLoadoutSnapshot::Impl_::Impl_(
         state_version_{::uint64_t{0u}},
         max_passive_slots_{0u},
         max_pursuit_slots_{0u},
-        max_opening_slots_{0u} {}
+        max_opening_slots_{0u},
+        unlocked_schemes_{0u},
+        max_schemes_{0u} {}
 
 template <typename>
 constexpr SkillLoadoutSnapshot::SkillLoadoutSnapshot(::_pbi::ConstantInitialized,
@@ -5938,7 +5958,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_._has_bits_),
-        11, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.custom_enabled_),
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.active_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.state_version_),
@@ -5947,6 +5967,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.max_opening_slots_),
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.schemes_),
         PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.last_request_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.unlocked_schemes_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutSnapshot, _impl_.max_schemes_),
         2,
         3,
         4,
@@ -5955,6 +5977,8 @@ const ::uint32_t
         7,
         0,
         1,
+        8,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SaveSkillLoadoutRequest, _impl_._has_bits_),
         10, // hasbit index offset
@@ -6244,28 +6268,28 @@ static const ::_pbi::MigrationSchema
         {66, sizeof(::SkillCatalogEntry)},
         {131, sizeof(::SkillLoadoutSchemeInfo)},
         {144, sizeof(::SkillLoadoutSnapshot)},
-        {163, sizeof(::SaveSkillLoadoutRequest)},
-        {180, sizeof(::SaveSkillLoadoutResponse)},
-        {191, sizeof(::SwitchSkillLoadoutRequest)},
-        {200, sizeof(::SwitchSkillLoadoutResponse)},
-        {211, sizeof(::SkillCraftMasterySnapshot)},
-        {224, sizeof(::SkillScrollCatalogInfo)},
-        {259, sizeof(::SkillCraftingStateSnapshot)},
-        {290, sizeof(::GetSkillCraftingStateRequest)},
-        {291, sizeof(::GetSkillCraftingStateResponse)},
-        {298, sizeof(::CraftSkillBookRequest)},
-        {313, sizeof(::CraftSkillBookResponse)},
-        {328, sizeof(::LearnSkillBookRequest)},
-        {339, sizeof(::LearnSkillBookResponse)},
-        {352, sizeof(::DismantleSkillBookRequest)},
-        {361, sizeof(::DismantleSkillBookResponse)},
-        {374, sizeof(::SetCraftProxyStallRequest)},
-        {383, sizeof(::SetCraftProxyStallResponse)},
-        {390, sizeof(::CraftProxyStallInfo)},
-        {409, sizeof(::ListCraftProxyStallsRequest)},
-        {410, sizeof(::ListCraftProxyStallsResponse)},
-        {417, sizeof(::UpgradeSkillRequest)},
-        {428, sizeof(::UpgradeSkillResponse)},
+        {167, sizeof(::SaveSkillLoadoutRequest)},
+        {184, sizeof(::SaveSkillLoadoutResponse)},
+        {195, sizeof(::SwitchSkillLoadoutRequest)},
+        {204, sizeof(::SwitchSkillLoadoutResponse)},
+        {215, sizeof(::SkillCraftMasterySnapshot)},
+        {228, sizeof(::SkillScrollCatalogInfo)},
+        {263, sizeof(::SkillCraftingStateSnapshot)},
+        {294, sizeof(::GetSkillCraftingStateRequest)},
+        {295, sizeof(::GetSkillCraftingStateResponse)},
+        {302, sizeof(::CraftSkillBookRequest)},
+        {317, sizeof(::CraftSkillBookResponse)},
+        {332, sizeof(::LearnSkillBookRequest)},
+        {343, sizeof(::LearnSkillBookResponse)},
+        {356, sizeof(::DismantleSkillBookRequest)},
+        {365, sizeof(::DismantleSkillBookResponse)},
+        {378, sizeof(::SetCraftProxyStallRequest)},
+        {387, sizeof(::SetCraftProxyStallResponse)},
+        {394, sizeof(::CraftProxyStallInfo)},
+        {413, sizeof(::ListCraftProxyStallsRequest)},
+        {414, sizeof(::ListCraftProxyStallsResponse)},
+        {421, sizeof(::UpgradeSkillRequest)},
+        {432, sizeof(::UpgradeSkillResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6351,132 +6375,133 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "ed\030\037 \001(\010\"\216\001\n\026SkillLoadoutSchemeInfo\022\021\n\ts"
     "cheme_id\030\001 \001(\r\022\020\n\010role_tag\030\002 \001(\r\022\031\n\021pass"
     "ive_skill_ids\030\003 \003(\r\022\031\n\021pursuit_skill_ids"
-    "\030\004 \003(\r\022\031\n\021opening_skill_ids\030\005 \003(\r\"\363\001\n\024Sk"
+    "\030\004 \003(\r\022\031\n\021opening_skill_ids\030\005 \003(\r\"\242\002\n\024Sk"
     "illLoadoutSnapshot\022\026\n\016custom_enabled\030\001 \001"
     "(\010\022\030\n\020active_scheme_id\030\002 \001(\r\022\025\n\rstate_ve"
     "rsion\030\003 \001(\004\022\031\n\021max_passive_slots\030\004 \001(\r\022\031"
     "\n\021max_pursuit_slots\030\005 \001(\r\022\031\n\021max_opening"
     "_slots\030\006 \001(\r\022(\n\007schemes\030\007 \003(\0132\027.SkillLoa"
-    "doutSchemeInfo\022\027\n\017last_request_id\030\010 \001(\t\""
-    "\272\001\n\027SaveSkillLoadoutRequest\022\021\n\tscheme_id"
-    "\030\001 \001(\r\022\020\n\010role_tag\030\002 \001(\r\022\031\n\021passive_skil"
-    "l_ids\030\003 \003(\r\022\031\n\021pursuit_skill_ids\030\004 \003(\r\022\031"
-    "\n\021opening_skill_ids\030\005 \003(\r\022\025\n\rstate_versi"
-    "on\030\006 \001(\004\022\022\n\nrequest_id\030\007 \001(\t\"\214\001\n\030SaveSki"
-    "llLoadoutResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.ListS"
-    "killsResponse\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010rep"
-    "layed\030\004 \001(\010\"Y\n\031SwitchSkillLoadoutRequest"
-    "\022\021\n\tscheme_id\030\001 \001(\r\022\025\n\rstate_version\030\002 \001"
-    "(\004\022\022\n\nrequest_id\030\003 \001(\t\"\216\001\n\032SwitchSkillLo"
-    "adoutResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.ListSkill"
-    "sResponse\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replaye"
-    "d\030\004 \001(\010\"x\n\031SkillCraftMasterySnapshot\022\014\n\004"
-    "tier\030\001 \001(\r\022\021\n\ttier_name\030\002 \001(\t\022\013\n\003exp\030\003 \001"
-    "(\r\022\025\n\rnext_tier_exp\030\004 \001(\r\022\026\n\016bonus_rate_"
-    "bps\030\005 \001(\r\"\260\003\n\026SkillScrollCatalogInfo\022\021\n\t"
-    "scroll_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013descrip"
-    "tion\030\003 \001(\t\022\023\n\013rarity_tier\030\004 \001(\r\022\030\n\020fragm"
-    "ent_item_id\030\005 \001(\r\022\035\n\025random_fragment_cou"
-    "nt\030\006 \001(\r\022\030\n\020random_gold_cost\030\007 \001(\004\022\037\n\027ta"
-    "rgeted_fragment_count\030\010 \001(\r\022\032\n\022targeted_"
-    "gold_cost\030\t \001(\004\022 \n\030dismantle_fragment_co"
-    "unt\030\n \001(\r\022\033\n\023rare_scroll_item_id\030\013 \001(\r\022\031"
-    "\n\021rare_scroll_count\030\014 \001(\r\022\030\n\020rare_ink_it"
-    "em_id\030\r \001(\r\022\026\n\016rare_ink_count\030\016 \001(\r\022\026\n\016r"
-    "are_gold_cost\030\017 \001(\004\022\027\n\017skill_table_ids\030\020"
-    " \003(\r\"\365\003\n\032SkillCraftingStateSnapshot\022\035\n\025s"
-    "croll_craft_revision\030\001 \001(\004\0221\n\rforge_mast"
-    "ery\030\002 \001(\0132\032.SkillCraftMasterySnapshot\0222\n"
-    "\016scroll_mastery\030\003 \001(\0132\032.SkillCraftMaster"
-    "ySnapshot\022(\n\007scrolls\030\004 \003(\0132\027.SkillScroll"
-    "CatalogInfo\022+\n\013skill_books\030\005 \003(\0132\026.Craft"
-    "edSkillBookEntry\022\037\n\027book_unlocked_skill_"
-    "ids\030\006 \003(\r\022\024\n\014gold_balance\030\007 \001(\004\022\026\n\016fragm"
-    "ent_owned\030\010 \001(\004\022\031\n\021rare_scroll_owned\030\t \001"
-    "(\004\022\026\n\016rare_ink_owned\030\n \001(\004\022\030\n\020proxy_stal"
-    "l_open\030\013 \001(\010\022\034\n\024proxy_forge_fee_gold\030\014 \001"
-    "(\004\022\035\n\025proxy_scroll_fee_gold\030\r \001(\004\022!\n\031cra"
-    "ft_unlock_gate_enabled\030\016 \001(\010\"\036\n\034GetSkill"
-    "CraftingStateRequest\"s\n\035GetSkillCrafting"
-    "StateResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022*\n\005state\030\002 \001(\0132\033.SkillCraf"
-    "tingStateSnapshot\"\265\002\n\025CraftSkillBookRequ"
-    "est\022.\n\004mode\030\001 \001(\0162 .CraftSkillBookReques"
-    "t.CraftMode\022\021\n\tscroll_id\030\002 \001(\r\022\035\n\025target"
-    "_skill_table_id\030\003 \001(\r\022\031\n\021expected_revisi"
-    "on\030\004 \001(\004\022\031\n\021client_request_id\030\005 \001(\004\022\036\n\026p"
-    "roxy_master_player_id\030\006 \001(\004\"d\n\tCraftMode"
-    "\022\032\n\026CRAFT_MODE_UNSPECIFIED\020\000\022\022\n\016RANDOM_R"
-    "EGULAR\020\001\022\024\n\020TARGETED_REGULAR\020\002\022\021\n\rTARGET"
-    "ED_RARE\020\003\"\350\001\n\026CraftSkillBookResponse\022&\n\r"
-    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021"
-    "client_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001("
-    "\010\022,\n\014crafted_book\030\004 \001(\0132\026.CraftedSkillBo"
-    "okEntry\022\037\n\027bonus_fragments_granted\030\005 \001(\r"
-    "\022*\n\005state\030\006 \001(\0132\033.SkillCraftingStateSnap"
-    "shot\"n\n\025LearnSkillBookRequest\022\017\n\007book_id"
-    "\030\001 \001(\004\022\016\n\006pet_id\030\002 \001(\004\022\031\n\021expected_revis"
-    "ion\030\003 \001(\004\022\031\n\021client_request_id\030\004 \001(\004\"\271\001\n"
-    "\026LearnSkillBookResponse\022&\n\rerror_message"
-    "\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021client_reques"
-    "t_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\036\n\026learned_"
-    "skill_table_id\030\004 \001(\r\022*\n\005state\030\005 \001(\0132\033.Sk"
-    "illCraftingStateSnapshot\"b\n\031DismantleSki"
-    "llBookRequest\022\017\n\007book_id\030\001 \001(\004\022\031\n\021expect"
-    "ed_revision\030\002 \001(\004\022\031\n\021client_request_id\030\003"
-    " \001(\004\"\271\001\n\032DismantleSkillBookResponse\022&\n\re"
-    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021c"
-    "lient_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010"
-    "\022\032\n\022refunded_fragments\030\004 \001(\r\022*\n\005state\030\005 "
-    "\001(\0132\033.SkillCraftingStateSnapshot\"f\n\031SetC"
-    "raftProxyStallRequest\022\014\n\004open\030\001 \001(\010\022\034\n\024p"
-    "roxy_forge_fee_gold\030\002 \001(\004\022\035\n\025proxy_scrol"
-    "l_fee_gold\030\003 \001(\004\"p\n\032SetCraftProxyStallRe"
-    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
-    "essage\022*\n\005state\030\002 \001(\0132\033.SkillCraftingSta"
-    "teSnapshot\"\367\001\n\023CraftProxyStallInfo\022\030\n\020ma"
-    "ster_player_id\030\001 \001(\004\022\023\n\013master_name\030\002 \001("
-    "\t\022\032\n\022forge_mastery_tier\030\003 \001(\r\022\033\n\023scroll_"
-    "mastery_tier\030\004 \001(\r\022\034\n\024top_quality_rate_b"
-    "ps\030\005 \001(\r\022\035\n\025scroll_bonus_rate_bps\030\006 \001(\r\022"
-    "\034\n\024proxy_forge_fee_gold\030\007 \001(\004\022\035\n\025proxy_s"
-    "croll_fee_gold\030\010 \001(\004\"\035\n\033ListCraftProxySt"
-    "allsRequest\"l\n\034ListCraftProxyStallsRespo"
+    "doutSchemeInfo\022\027\n\017last_request_id\030\010 \001(\t\022"
+    "\030\n\020unlocked_schemes\030\t \001(\r\022\023\n\013max_schemes"
+    "\030\n \001(\r\"\272\001\n\027SaveSkillLoadoutRequest\022\021\n\tsc"
+    "heme_id\030\001 \001(\r\022\020\n\010role_tag\030\002 \001(\r\022\031\n\021passi"
+    "ve_skill_ids\030\003 \003(\r\022\031\n\021pursuit_skill_ids\030"
+    "\004 \003(\r\022\031\n\021opening_skill_ids\030\005 \003(\r\022\025\n\rstat"
+    "e_version\030\006 \001(\004\022\022\n\nrequest_id\030\007 \001(\t\"\214\001\n\030"
+    "SaveSkillLoadoutResponse\022&\n\rerror_messag"
+    "e\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005state\030\002 \001(\0132"
+    "\023.ListSkillsResponse\022\022\n\nrequest_id\030\003 \001(\t"
+    "\022\020\n\010replayed\030\004 \001(\010\"Y\n\031SwitchSkillLoadout"
+    "Request\022\021\n\tscheme_id\030\001 \001(\r\022\025\n\rstate_vers"
+    "ion\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001(\t\"\216\001\n\032Switch"
+    "SkillLoadoutResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.Li"
+    "stSkillsResponse\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010"
+    "replayed\030\004 \001(\010\"x\n\031SkillCraftMasterySnaps"
+    "hot\022\014\n\004tier\030\001 \001(\r\022\021\n\ttier_name\030\002 \001(\t\022\013\n\003"
+    "exp\030\003 \001(\r\022\025\n\rnext_tier_exp\030\004 \001(\r\022\026\n\016bonu"
+    "s_rate_bps\030\005 \001(\r\"\260\003\n\026SkillScrollCatalogI"
+    "nfo\022\021\n\tscroll_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013"
+    "description\030\003 \001(\t\022\023\n\013rarity_tier\030\004 \001(\r\022\030"
+    "\n\020fragment_item_id\030\005 \001(\r\022\035\n\025random_fragm"
+    "ent_count\030\006 \001(\r\022\030\n\020random_gold_cost\030\007 \001("
+    "\004\022\037\n\027targeted_fragment_count\030\010 \001(\r\022\032\n\022ta"
+    "rgeted_gold_cost\030\t \001(\004\022 \n\030dismantle_frag"
+    "ment_count\030\n \001(\r\022\033\n\023rare_scroll_item_id\030"
+    "\013 \001(\r\022\031\n\021rare_scroll_count\030\014 \001(\r\022\030\n\020rare"
+    "_ink_item_id\030\r \001(\r\022\026\n\016rare_ink_count\030\016 \001"
+    "(\r\022\026\n\016rare_gold_cost\030\017 \001(\004\022\027\n\017skill_tabl"
+    "e_ids\030\020 \003(\r\"\365\003\n\032SkillCraftingStateSnapsh"
+    "ot\022\035\n\025scroll_craft_revision\030\001 \001(\004\0221\n\rfor"
+    "ge_mastery\030\002 \001(\0132\032.SkillCraftMasterySnap"
+    "shot\0222\n\016scroll_mastery\030\003 \001(\0132\032.SkillCraf"
+    "tMasterySnapshot\022(\n\007scrolls\030\004 \003(\0132\027.Skil"
+    "lScrollCatalogInfo\022+\n\013skill_books\030\005 \003(\0132"
+    "\026.CraftedSkillBookEntry\022\037\n\027book_unlocked"
+    "_skill_ids\030\006 \003(\r\022\024\n\014gold_balance\030\007 \001(\004\022\026"
+    "\n\016fragment_owned\030\010 \001(\004\022\031\n\021rare_scroll_ow"
+    "ned\030\t \001(\004\022\026\n\016rare_ink_owned\030\n \001(\004\022\030\n\020pro"
+    "xy_stall_open\030\013 \001(\010\022\034\n\024proxy_forge_fee_g"
+    "old\030\014 \001(\004\022\035\n\025proxy_scroll_fee_gold\030\r \001(\004"
+    "\022!\n\031craft_unlock_gate_enabled\030\016 \001(\010\"\036\n\034G"
+    "etSkillCraftingStateRequest\"s\n\035GetSkillC"
+    "raftingStateResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\022*\n\005state\030\002 \001(\0132\033.Sk"
+    "illCraftingStateSnapshot\"\265\002\n\025CraftSkillB"
+    "ookRequest\022.\n\004mode\030\001 \001(\0162 .CraftSkillBoo"
+    "kRequest.CraftMode\022\021\n\tscroll_id\030\002 \001(\r\022\035\n"
+    "\025target_skill_table_id\030\003 \001(\r\022\031\n\021expected"
+    "_revision\030\004 \001(\004\022\031\n\021client_request_id\030\005 \001"
+    "(\004\022\036\n\026proxy_master_player_id\030\006 \001(\004\"d\n\tCr"
+    "aftMode\022\032\n\026CRAFT_MODE_UNSPECIFIED\020\000\022\022\n\016R"
+    "ANDOM_REGULAR\020\001\022\024\n\020TARGETED_REGULAR\020\002\022\021\n"
+    "\rTARGETED_RARE\020\003\"\350\001\n\026CraftSkillBookRespo"
     "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022$\n\006stalls\030\002 \003(\0132\024.CraftProxyStallInf"
-    "o\"c\n\023UpgradeSkillRequest\022\026\n\016skill_table_"
-    "id\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r\n\005count"
-    "\030\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024UpgradeSkillR"
-    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\022\"\n\005state\030\002 \001(\0132\023.ListSkillsRespo"
-    "nse\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013stop_tip_"
-    "id\030\004 \001(\r2\256\007\n\026SceneSkillClientPlayer\022;\n\014R"
-    "eleaseSkill\022\024.ReleaseSkillRequest\032\025.Rele"
-    "aseSkillResponse\022/\n\017NotifySkillUsed\022\r.Sk"
-    "illUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026NotifySkill"
-    "Interrupted\022\024.SkillInterruptedS2C\032\006.Empt"
-    "y\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkillsReque"
-    "st\032\023.ListSkillsResponse\022;\n\014UpgradeSkill\022"
-    "\024.UpgradeSkillRequest\032\025.UpgradeSkillResp"
-    "onse\022V\n\025GetSkillCraftingState\022\035.GetSkill"
-    "CraftingStateRequest\032\036.GetSkillCraftingS"
-    "tateResponse\022A\n\016CraftSkillBook\022\026.CraftSk"
-    "illBookRequest\032\027.CraftSkillBookResponse\022"
-    "A\n\016LearnSkillBook\022\026.LearnSkillBookReques"
-    "t\032\027.LearnSkillBookResponse\022M\n\022DismantleS"
-    "killBook\022\032.DismantleSkillBookRequest\032\033.D"
-    "ismantleSkillBookResponse\022M\n\022SetCraftPro"
-    "xyStall\022\032.SetCraftProxyStallRequest\032\033.Se"
-    "tCraftProxyStallResponse\022S\n\024ListCraftPro"
-    "xyStalls\022\034.ListCraftProxyStallsRequest\032\035"
-    ".ListCraftProxyStallsResponse\022G\n\020SaveSki"
-    "llLoadout\022\030.SaveSkillLoadoutRequest\032\031.Sa"
-    "veSkillLoadoutResponse\022M\n\022SwitchSkillLoa"
-    "dout\022\032.SwitchSkillLoadoutRequest\032\033.Switc"
-    "hSkillLoadoutResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005sce"
-    "ne\200\001\001\230\324a\003b\006proto3"
+    "age\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replay"
+    "ed\030\003 \001(\010\022,\n\014crafted_book\030\004 \001(\0132\026.Crafted"
+    "SkillBookEntry\022\037\n\027bonus_fragments_grante"
+    "d\030\005 \001(\r\022*\n\005state\030\006 \001(\0132\033.SkillCraftingSt"
+    "ateSnapshot\"n\n\025LearnSkillBookRequest\022\017\n\007"
+    "book_id\030\001 \001(\004\022\016\n\006pet_id\030\002 \001(\004\022\031\n\021expecte"
+    "d_revision\030\003 \001(\004\022\031\n\021client_request_id\030\004 "
+    "\001(\004\"\271\001\n\026LearnSkillBookResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021client"
+    "_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\036\n\026l"
+    "earned_skill_table_id\030\004 \001(\r\022*\n\005state\030\005 \001"
+    "(\0132\033.SkillCraftingStateSnapshot\"b\n\031Disma"
+    "ntleSkillBookRequest\022\017\n\007book_id\030\001 \001(\004\022\031\n"
+    "\021expected_revision\030\002 \001(\004\022\031\n\021client_reque"
+    "st_id\030\003 \001(\004\"\271\001\n\032DismantleSkillBookRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replaye"
+    "d\030\003 \001(\010\022\032\n\022refunded_fragments\030\004 \001(\r\022*\n\005s"
+    "tate\030\005 \001(\0132\033.SkillCraftingStateSnapshot\""
+    "f\n\031SetCraftProxyStallRequest\022\014\n\004open\030\001 \001"
+    "(\010\022\034\n\024proxy_forge_fee_gold\030\002 \001(\004\022\035\n\025prox"
+    "y_scroll_fee_gold\030\003 \001(\004\"p\n\032SetCraftProxy"
+    "StallResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
+    "ipInfoMessage\022*\n\005state\030\002 \001(\0132\033.SkillCraf"
+    "tingStateSnapshot\"\367\001\n\023CraftProxyStallInf"
+    "o\022\030\n\020master_player_id\030\001 \001(\004\022\023\n\013master_na"
+    "me\030\002 \001(\t\022\032\n\022forge_mastery_tier\030\003 \001(\r\022\033\n\023"
+    "scroll_mastery_tier\030\004 \001(\r\022\034\n\024top_quality"
+    "_rate_bps\030\005 \001(\r\022\035\n\025scroll_bonus_rate_bps"
+    "\030\006 \001(\r\022\034\n\024proxy_forge_fee_gold\030\007 \001(\004\022\035\n\025"
+    "proxy_scroll_fee_gold\030\010 \001(\004\"\035\n\033ListCraft"
+    "ProxyStallsRequest\"l\n\034ListCraftProxyStal"
+    "lsResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
+    "nfoMessage\022$\n\006stalls\030\002 \003(\0132\024.CraftProxyS"
+    "tallInfo\"c\n\023UpgradeSkillRequest\022\026\n\016skill"
+    "_table_id\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r"
+    "\n\005count\030\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024Upgrad"
+    "eSkillResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.ListSkil"
+    "lsResponse\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013st"
+    "op_tip_id\030\004 \001(\r2\256\007\n\026SceneSkillClientPlay"
+    "er\022;\n\014ReleaseSkill\022\024.ReleaseSkillRequest"
+    "\032\025.ReleaseSkillResponse\022/\n\017NotifySkillUs"
+    "ed\022\r.SkillUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026Noti"
+    "fySkillInterrupted\022\024.SkillInterruptedS2C"
+    "\032\006.Empty\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkil"
+    "lsRequest\032\023.ListSkillsResponse\022;\n\014Upgrad"
+    "eSkill\022\024.UpgradeSkillRequest\032\025.UpgradeSk"
+    "illResponse\022V\n\025GetSkillCraftingState\022\035.G"
+    "etSkillCraftingStateRequest\032\036.GetSkillCr"
+    "aftingStateResponse\022A\n\016CraftSkillBook\022\026."
+    "CraftSkillBookRequest\032\027.CraftSkillBookRe"
+    "sponse\022A\n\016LearnSkillBook\022\026.LearnSkillBoo"
+    "kRequest\032\027.LearnSkillBookResponse\022M\n\022Dis"
+    "mantleSkillBook\022\032.DismantleSkillBookRequ"
+    "est\032\033.DismantleSkillBookResponse\022M\n\022SetC"
+    "raftProxyStall\022\032.SetCraftProxyStallReque"
+    "st\032\033.SetCraftProxyStallResponse\022S\n\024ListC"
+    "raftProxyStalls\022\034.ListCraftProxyStallsRe"
+    "quest\032\035.ListCraftProxyStallsResponse\022G\n\020"
+    "SaveSkillLoadout\022\030.SaveSkillLoadoutReque"
+    "st\032\031.SaveSkillLoadoutResponse\022M\n\022SwitchS"
+    "killLoadout\022\032.SwitchSkillLoadoutRequest\032"
+    "\033.SwitchSkillLoadoutResponse\032\n\200\250\303\001\001\210\250\303\001\001"
+    "B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps[8] = {
@@ -6493,7 +6518,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto = {
     false,
     false,
-    6937,
+    6984,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto,
     "proto/scene/player_skill.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_once,
@@ -9656,9 +9681,9 @@ SkillLoadoutSnapshot::SkillLoadoutSnapshot(
                offsetof(Impl_, custom_enabled_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, custom_enabled_),
-           offsetof(Impl_, max_opening_slots_) -
+           offsetof(Impl_, max_schemes_) -
                offsetof(Impl_, custom_enabled_) +
-               sizeof(Impl_::max_opening_slots_));
+               sizeof(Impl_::max_schemes_));
 
   // @@protoc_insertion_point(copy_constructor:SkillLoadoutSnapshot)
 }
@@ -9678,9 +9703,9 @@ inline void SkillLoadoutSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, custom_enabled_),
            0,
-           offsetof(Impl_, max_opening_slots_) -
+           offsetof(Impl_, max_schemes_) -
                offsetof(Impl_, custom_enabled_) +
-               sizeof(Impl_::max_opening_slots_));
+               sizeof(Impl_::max_schemes_));
 }
 SkillLoadoutSnapshot::~SkillLoadoutSnapshot() {
   // @@protoc_insertion_point(destructor:SkillLoadoutSnapshot)
@@ -9743,6 +9768,11 @@ PROTOBUF_NOINLINE void SkillLoadoutSnapshot::Clear() {
     ::memset(&_impl_.custom_enabled_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.max_opening_slots_) -
         reinterpret_cast<char*>(&_impl_.custom_enabled_)) + sizeof(_impl_.max_opening_slots_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.unlocked_schemes_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.max_schemes_) -
+        reinterpret_cast<char*>(&_impl_.unlocked_schemes_)) + sizeof(_impl_.max_schemes_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -9844,6 +9874,24 @@ PROTOBUF_NOINLINE void SkillLoadoutSnapshot::Clear() {
     }
   }
 
+  // uint32 unlocked_schemes = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_unlocked_schemes() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_unlocked_schemes(), target);
+    }
+  }
+
+  // uint32 max_schemes = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_max_schemes() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_max_schemes(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -9926,6 +9974,22 @@ PROTOBUF_NOINLINE void SkillLoadoutSnapshot::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint32 unlocked_schemes = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_unlocked_schemes() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unlocked_schemes());
+      }
+    }
+    // uint32 max_schemes = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_max_schemes() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_schemes());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -9990,6 +10054,18 @@ void SkillLoadoutSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_unlocked_schemes() != 0) {
+        _this->_impl_.unlocked_schemes_ = from._impl_.unlocked_schemes_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_max_schemes() != 0) {
+        _this->_impl_.max_schemes_ = from._impl_.max_schemes_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -10012,8 +10088,8 @@ void SkillLoadoutSnapshot::InternalSwap(SkillLoadoutSnapshot* PROTOBUF_RESTRICT 
   _impl_.schemes_.InternalSwap(&other->_impl_.schemes_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.last_request_id_, &other->_impl_.last_request_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.max_opening_slots_)
-      + sizeof(SkillLoadoutSnapshot::_impl_.max_opening_slots_)
+      PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.max_schemes_)
+      + sizeof(SkillLoadoutSnapshot::_impl_.max_schemes_)
       - PROTOBUF_FIELD_OFFSET(SkillLoadoutSnapshot, _impl_.custom_enabled_)>(
           reinterpret_cast<char*>(&_impl_.custom_enabled_),
           reinterpret_cast<char*>(&other->_impl_.custom_enabled_));

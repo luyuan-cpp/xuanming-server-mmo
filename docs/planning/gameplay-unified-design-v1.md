@@ -59,9 +59,9 @@
 
 | 缺口项 | 当前现状 | 潜在玩法风险 | 收口建议与防线 |
 |---|---|---|---|
-| **G1. 角色平滑升级曲线未接通** | [player-attribute-allocation.md](../design/player-attribute-allocation.md) 与 [player-pet.md](../design/player-pet.md) 明确经验已累计入账但升级曲线未接，角色升级仍依赖 `GmSetPlayerLevel` | 新号无法通过首场试炼自然升级加点，卡住技能重数、宠物携带等级与高档装备 | 已落盘完整六节工程与 UI 设计：[player-leveling-and-battle-economy-v1.md](player-leveling-and-battle-economy-v1.md)（1→85 级曲线、全玩法经验与周平滑银两软上限、双服同构与客户端 UI），待并行会话提交后分 3 批落地 |
+| **G1. 角色平滑升级曲线与全玩法经验/银两循环** | **已三仓落码并编测闭环**（C++/Go + Java 独立服 + Unity 逻辑与 UGUI）：完整实现 [player-leveling-and-battle-economy-v1.md](player-leveling-and-battle-economy-v1.md)（1→85 级曲线、全玩法经验/周软顶 30,000/衰减 20%/硬顶 45,000 银两、`AttributePanelInfo` / `BattleEndS2C` / `PlayerBattleResult` 扩展及主城/人物页/结算 UGUI 复用接入） | 新号首场试炼即可自然升级并一键前往加点，自动同步属性点、技能/宠物携带解锁与任务进度 | 后续仅需按真机实玩数据微调 `PlayerLevelExp.xlsx` 与 `BattleProgressionReward.xlsx` 数值 |
 | **G2. 低级 V1 基础装无损升档/继承未落码** | `+11` 保底与品相重铸文档已约定“未来装备升档 100% 继承强化、保底与品相”，但具体升档接口与消费规则尚未落地 | 1 级新手用首套 660 额度打造 1 级武器后，升到 30/60 级若无法无损升档会直接浪费永久材料 | 优先落地「四件 V1 基础装花轻量银两原地升档（或随 `min(生效等级, 开放档)` 无损重算）」，100% 保留 `enhance_level`、`enhance_pity_count`、已装词条及 5 档品相/打磨进度 |
-| **G3. 银两（`kCurrencyGold`）产出/回收平衡待实测** | 重铸换词条、打磨品相、买普通宠、摆摊税、帮战追杀令均耗银两，但瑞兽迎春等部分活动关闭银两掉落 | 免费玩家可能出现“有材料有重铸砂却缺 20 银两改词条”的卡手，或脚本刷爆银两 | 在首领试炼、会武、帮战 V2 与明雷首领保持稳定温和银两产出（带防刷递减与日/周软顶），首测采集单角色 7 日银两净流校验 |
+| **G3. 银两（`kCurrencyGold`）产出/回收平衡待实测** | **常规战斗银两产出与周软顶 30,000（超顶 20% 衰减）/硬顶 45,000 防刷规则已随 G1 落码**（瑞兽迎春等特殊活动仍隔离不掉银两）；尚缺真机 7 日实测净流校准 | 重铸换词条、打磨品相、买普通宠、摆摊税、帮战追杀令的消耗与 G1 产出比例仍需首测实测校准 | 首测采集单角色 7 日银两净流后微调 `BattleProgressionReward.xlsx` / `BattleProgressionRule.xlsx` |
 | **G4. 「挂机月卡」→「仙途轻享卡」权益升级待落地** | [afk-monthly-card.md](../design/afk-monthly-card.md) 当前仅实装断线跟队托管（`afk_pass_expires_at`），尚未接入 3→6 配装方案槽、搬砖可交易资格门票等总纲规划 | 30 元月卡在单人轻量局为主的体验下购买动机偏弱，且缺少搬砖防多开门票闸 | 复用既有 `afk_pass_expires_at` 单一事实源，在 P1 挂载配装方案槽扩展、离线摆摊时长延长与经济总纲定义的可交易产出资格（严禁月卡掉落翻倍或每日领灵石） |
 | **G5. Java 独立服对账（`AGENTS.md §12`）与并行草稿尾数** | C++/Go 已领跑多项 V2/V3 玩法，部分新模块在 Java 仓 `xuanming-server-mmo/PARITY.md` 仍处于待同步状态；另有并行会话未提交文档 `spirit-shop-and-starter-packs-v1.md`（§6 第 404 行）与 `wuxing-gameplay-expansions-v1.md`（第 12/20/101 行）仍残留旧 `周 100` / `660/100` 字样 | 双服运行语义漂移；并行文档合入后可能重新引入 `周 100` 旧数 | 持续按 `PARITY.md` 逐项核销并跑通 `ContractSync --check`；并行会话收尾上述两份未提交文件时同步改为 `周 150` / `660/150` |
 

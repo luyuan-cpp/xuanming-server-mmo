@@ -688,13 +688,13 @@ func (c *Config) ValidateWorldChannelRouting() error {
 	return nil
 }
 
-// WorldMapPlayConfig 控制世界地图总览读模型与双层潮汐(docs/design/world-map-play-v2.md §2.3–§2.5)。
-// 字段全部 optional,零值即默认开服控图 [1, 2, 5] 与野外潮汐池 [2, 5]。
+// WorldMapPlayConfig 控制世界地图总览读模型与双层潮汐(docs/planning/world-map-play-v2.md §2.3–§2.5)。
+// 字段全部 optional,零值即默认开服控图 [1, 2, 3, 5] 与野外潮汐池 [2, 3, 5]。
 type WorldMapPlayConfig struct {
-	// OpenWorldMapIds: 总览中对外展示的开放大世界地图顺序。空 = 默认 [1, 2, 5]。
+	// OpenWorldMapIds: 总览中对外展示的开放大世界地图顺序。空 = 默认 [1, 2, 3, 5]。
 	OpenWorldMapIds []uint32 `json:",optional"`
 
-	// TideCandidateMapIds: 灵潮与今日旺地轮转的野外地图池。空 = 默认 [2, 5]。
+	// TideCandidateMapIds: 灵潮与今日旺地轮转的野外地图池。空 = 默认 [2, 3, 5]。
 	TideCandidateMapIds []uint32 `json:",optional"`
 
 	// TideIntervalSeconds: 灵潮轮转周期(秒)。0 = 默认 3600; 钳到 [60, 86400]。
@@ -721,8 +721,8 @@ const (
 )
 
 var (
-	defaultOpenWorldMapIds     = []uint32{1, 2, 5}
-	defaultTideCandidateMapIds = []uint32{2, 5}
+	defaultOpenWorldMapIds     = []uint32{1, 2, 3, 5}
+	defaultTideCandidateMapIds = []uint32{2, 3, 5}
 )
 
 // EffectiveOpenWorldMapIds 返回开放大世界地图列表(去重、过滤 0)。

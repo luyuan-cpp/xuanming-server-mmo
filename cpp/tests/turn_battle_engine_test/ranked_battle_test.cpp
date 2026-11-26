@@ -1039,14 +1039,18 @@ TEST(RankedBattleTest, CombatHighlightsAndStreakBreakerSettlement) {
     req.set_match_mode(7);
     (*req.mutable_ranked_context()->mutable_member_win_streaks())[101] = 2; // <3 不展示
     (*req.mutable_ranked_context()->mutable_member_win_streaks())[201] = 5; // >=3 展示连胜势并触发破势终结
-    // 让 101 在 1 回合内压低血后反杀 201，验证绝境翻盘 + 破势终结 + 承伤统计
+    // 让 101 在 1 回合内压低血(<25%)后反杀 201（PVP 系数 0.3：B 2800 攻打 ~843 留 ~157/1000，A 2000 攻打 ~603 击杀 500 血 B）
+    req.mutable_players(0)->clear_pets();
+    req.mutable_players(0)->set_defense(0);
     req.mutable_players(0)->set_max_health(1000);
     req.mutable_players(0)->mutable_base_attributes()->set_health(1000);
-    req.mutable_players(0)->set_physical_attack(600);
+    req.mutable_players(0)->set_physical_attack(2000);
     req.mutable_players(0)->mutable_base_attributes()->set_speed(50);
+    req.mutable_players(1)->clear_pets();
+    req.mutable_players(1)->set_defense(0);
     req.mutable_players(1)->set_max_health(500);
     req.mutable_players(1)->mutable_base_attributes()->set_health(500);
-    req.mutable_players(1)->set_physical_attack(850);
+    req.mutable_players(1)->set_physical_attack(2800);
     req.mutable_players(1)->mutable_base_attributes()->set_speed(150);
 
     TurnBattleEngine engine(data);

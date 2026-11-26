@@ -22,6 +22,8 @@
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/afk_pass.h"
+#include "player/system/afk_pass_rules.h"
 #include "player/system/attribute_allocation_rules.h"
 #include "player/system/equip_attribute_rules.h"
 #include "player/system/player_equip.h"
@@ -41,7 +43,10 @@
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/attributerule_table.h"
+#include "table/code/battleprogressionreward_table.h"
+#include "table/code/battleprogressionrule_table.h"
 #include "table/code/class_table.h"
+#include "table/code/playerlevelexp_table.h"
 #include "table/proto/tip/attribute_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 
@@ -126,6 +131,11 @@ const AttributeRuleTable* RuleRow() {
 uint32_t MaxSchemes() {
 	const auto* rule = RuleRow();
 	return (rule != nullptr && rule->max_schemes() > 0) ? rule->max_schemes() : 1;
+}
+
+uint32_t MaxSchemesFor(entt::entity player) {
+	const uint32_t base = MaxSchemes();
+	return AfkPassSystem::IsActiveNow(player) ? base + afk_pass::kLightCardBonusLoadoutSlots : base;
 }
 
 uint32_t BonusPoints(const PlayerAttributeComp& comp, uint32_t poolId) {
@@ -921,8 +931,16 @@ uint32_t PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelIn
 	const auto* scheme = ActiveScheme(comp);
 	const auto level = PlayerLevel(player);
 	panel.set_level(level);
+	if (const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player); levelComp != nullptr) {
+		const auto expRows = LoadLevelExpRows();
+		const auto display = battleprogression::ComputeLevelExpDisplay(level, levelComp->total_exp(), expRows);
+		panel.set_total_exp(display.totalExp);
+		panel.set_current_level_exp(display.currentLevelExp);
+		panel.set_next_level_exp(display.nextLevelExp);
+		panel.set_is_max_level(display.isMaxLevel);
+	}
 	panel.set_active_scheme_id(comp.active_scheme_id());
-	panel.set_max_schemes(MaxSchemes());
+	panel.set_max_schemes(MaxSchemesFor(player));
 	panel.set_create_scheme_cost_gold(CreateSchemeCostFor(comp));
 	if (const auto* rule = RuleRow(); rule != nullptr && rule->switch_cooldown_seconds() > 0) {
 		panel.set_switch_cooldown_until(comp.last_switch_time() + rule->switch_cooldown_seconds());
@@ -1173,7 +1191,7 @@ uint32_t PlayerAttributeSystem::CreateScheme(entt::entity player, const std::str
 		return kServiceUnavailable;  // 缺必需组件 = 服务端故障,FindComp 已记错误
 	}
 	auto& comp = *attributeComp;
-	if (static_cast<uint32_t>(comp.schemes_size()) >= MaxSchemes()) {
+	if (static_cast<uint32_t>(comp.schemes_size()) >= MaxSchemesFor(player)) {
 		return kAttributeSchemeLimitReached;
 	}
 	std::string finalName = name.empty() ? DefaultSchemeName(static_cast<uint32_t>(comp.schemes_size()) + 1) : name;
@@ -1285,6 +1303,106 @@ uint32_t PlayerAttributeSystem::GmSetLevel(entt::entity player, uint32_t level) 
 	PlayerMissionSystem::OnCondition(player, progress);
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "level_changed");
 	return kSuccess;
+}
+
+std::vector<battleprogression::LevelExpRow> PlayerAttributeSystem::LoadLevelExpRows() {
+	std::vector<battleprogression::LevelExpRow> rows;
+	const auto& data = PlayerLevelExpTableManager::Instance().FindAll().data();
+	rows.reserve(static_cast<size_t>(data.size()));
+	for (const auto& entry : data) {
+		rows.push_back({entry.id(), entry.required_total_exp()});
+	}
+	std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.level < b.level; });
+	return rows;
+}
+
+std::vector<battleprogression::ModeRewardRow> PlayerAttributeSystem::LoadBattleProgressionRewards() {
+	std::vector<battleprogression::ModeRewardRow> rows;
+	const auto& data = BattleProgressionRewardTableManager::Instance().FindAll().data();
+	rows.reserve(static_cast<size_t>(data.size()));
+	for (const auto& entry : data) {
+		rows.push_back({entry.match_mode(), entry.difficulty(), entry.outcome_tier(),
+						entry.exp_gain(), entry.silver_gain()});
+	}
+	return rows;
+}
+
+bool PlayerAttributeSystem::LoadWeeklySilverRule(battleprogression::WeeklySilverRule& out) {
+	const auto [row, err] = BattleProgressionRuleTableManager::Instance().FindByIdSilent(1);
+	if (row == nullptr) {
+		return false;
+	}
+	out.softCap = row->weekly_silver_soft_cap();
+	out.diminishedRatePermyriad = row->diminished_rate_permyriad();
+	out.hardCap = row->weekly_silver_hard_cap();
+	return true;
+}
+
+bool PlayerAttributeSystem::ValidateProgressionTables() {
+	const auto expRows = LoadLevelExpRows();
+	if (!battleprogression::ValidateLevelExpRows(expRows)) {
+		LOG_ERROR << "[PlayerProgression] PlayerLevelExp table validation failed: rows=" << expRows.size()
+				  << " expected=" << playerlevel::kMaxLevel;
+		return false;
+	}
+	const auto rewards = LoadBattleProgressionRewards();
+	if (rewards.empty()) {
+		LOG_ERROR << "[PlayerProgression] BattleProgressionReward table is empty";
+		return false;
+	}
+	for (const auto& row : rewards) {
+		if (row.outcomeTier != battleprogression::kOutcomeTierWin &&
+			row.outcomeTier != battleprogression::kOutcomeTierQualifiedNonWin) {
+			LOG_ERROR << "[PlayerProgression] BattleProgressionReward invalid outcome_tier=" << row.outcomeTier
+					  << " match_mode=" << row.matchMode;
+			return false;
+		}
+		if (battleprogression::IsGuildWarMode(row.matchMode) && row.silverGain != 0) {
+			LOG_ERROR << "[PlayerProgression] BattleProgressionReward guild war mode must have silver_gain=0: match_mode="
+					  << row.matchMode << " silver_gain=" << row.silverGain;
+			return false;
+		}
+	}
+	battleprogression::WeeklySilverRule rule;
+	if (!LoadWeeklySilverRule(rule) || !battleprogression::ValidateWeeklySilverRule(rule)) {
+		LOG_ERROR << "[PlayerProgression] BattleProgressionRule table (id=1) missing or invalid";
+		return false;
+	}
+	return true;
+}
+
+bool PlayerAttributeSystem::ApplyBattleExpAndLevelUp(entt::entity player, uint64_t expGain,
+													 battleprogression::LevelProgressResult& out) {
+	out = battleprogression::LevelProgressResult{};
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		return false;
+	}
+	auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
+	if (levelComp == nullptr) {
+		return false;
+	}
+	const uint32_t storedLevel = levelComp->level();  // 直读存储等级:经验升级
+	const auto expRows = LoadLevelExpRows();
+	if (!battleprogression::ResolveLevelForExp(storedLevel, levelComp->total_exp(), expGain, expRows, out)) {
+		return false;
+	}
+	if (expGain > 0) {
+		levelComp->set_total_exp(out.totalExpAfter);
+	}
+	if (out.leveledUp) {
+		levelComp->set_level(out.storedLevelAfter);
+		LOG_INFO << "[PlayerAttribute] Player leveled up via battle exp: player_id=" << tlsEcs.GetPlayerId(player)
+				 << " " << out.levelBefore << " -> " << out.levelAfter
+				 << " total_exp=" << out.totalExpAfter;
+		Recalculate(player, RecalcReason::kLevelChanged);
+		PetSystem::RecalculateAll(player, PetSystem::RecalcReason::kLevelChanged);
+		for (uint32_t reached = out.levelBefore + 1; reached <= out.levelAfter; ++reached) {
+			const ConditionEvent progress{player,
+				static_cast<uint32_t>(eConditionType::kConditionLevelUp), {reached}, reached};
+			PlayerMissionSystem::OnCondition(player, progress);
+		}
+	}
+	return true;
 }
 
 void PlayerAttributeSystem::PushPanel(entt::entity player) {

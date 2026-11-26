@@ -724,5 +724,20 @@
     <ClInclude Include="code\travelpasstier_table_fk.h" />
     <ClCompile Include="proto\travelpasstier_table.pb.cc" />
     <ClInclude Include="proto\travelpasstier_table.pb.h" />
+    <ClCompile Include="code\playerlevelexp_table.cpp" />
+    <ClInclude Include="code\playerlevelexp_table.h" />
+    <ClInclude Include="code\playerlevelexp_table_comp.h" />
+    <ClCompile Include="proto\playerlevelexp_table.pb.cc" />
+    <ClInclude Include="proto\playerlevelexp_table.pb.h" />
+    <ClCompile Include="code\battleprogressionreward_table.cpp" />
+    <ClInclude Include="code\battleprogressionreward_table.h" />
+    <ClInclude Include="code\battleprogressionreward_table_comp.h" />
+    <ClCompile Include="proto\battleprogressionreward_table.pb.cc" />
+    <ClInclude Include="proto\battleprogressionreward_table.pb.h" />
+    <ClCompile Include="code\battleprogressionrule_table.cpp" />
+    <ClInclude Include="code\battleprogressionrule_table.h" />
+    <ClInclude Include="code\battleprogressionrule_table_comp.h" />
+    <ClCompile Include="proto\battleprogressionrule_table.pb.cc" />
+    <ClInclude Include="proto\battleprogressionrule_table.pb.h" />
   </ItemGroup>
 </Project>
