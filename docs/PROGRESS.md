@@ -5489,7 +5489,7 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
     - 热身约战弹窗对齐 `warmup-badge`（原生 `140×36`）与 `warmup-btn`（原生 `196×48`）及灵脉单选键 `44px` 高度；
     - MVP 高光战报卡无有效公开回放时保留禁用态按钮（「暂无公开战报」）；《本季名局录》每行补齐双方战旗徽标（`EmbA` + `EmbB`）；
     - 移除《神机问道榜》加载文案中触发合规词红线的字样（「绝无付费押注」→「全程免费参与」）。
-- **验证与提交状态**：`client_compile_check.ps1` **exit=0（792 文件 0 错误）**；EditMode `TournamentClientTests`（5/5）+ `TournamentUiModelTests`（6/6）= **11/11 PASS**；全仓 `.meta` GUID 扫描 **12,408/12,408 零重复**；8 个 Tournament 脚本 WebGL2/IL2CPP 禁用 API **0 命中**、合规红线词 **0 命中**；未在 Unity Editor 真机双分辨率下截图验收；各仓库均未执行 `git commit` / `git push`。
+- **验证与提交状态**：C++ `rpc.lib`/`core.lib`/`gate.exe` 串行重链 **0 错误**、Go `match` `go build ./...` **exit=0**；Unity `client_compile_check.ps1` **exit=0（792 文件 0 错误）**；EditMode `TournamentClientTests`（5/5）+ `TournamentUiModelTests`（6/6）= **11/11 PASS**；全仓 `.meta` GUID 扫描 **12,408/12,408 零重复**；`TournamentArtCatalog` 全部 **74/74** 资源键实图零缺失、`TournamentWindow` **23/23** 事件零漏接、`RpcGuard` **20/20** RPC 全覆盖；8 个 Tournament 脚本 WebGL2/IL2CPP 禁用 API **0 命中**、合规红线词 **0 命中**；未在 Unity Editor 真机双分辨率下截图验收；各仓库均未执行 `git commit` / `git push`。
 
 
 ## 2026-11-26 Antigravity：卷 7《兵法叠势卷》7 张 Codex 透明图标导入客户端并完成 SHA-256 / Sprite `.meta` 核验
