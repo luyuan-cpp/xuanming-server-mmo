@@ -87,6 +87,10 @@ message PetCosmeticEntry
 	uint64 mall_sku_id = 9;          // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
 	string acquire_hint = 10;        // 未拥有且未上架时展示的取得条件
 	string desc = 11;                // 外观简述
+	uint32 card_item_id = 12;        // 解锁券道具 ID(0 = 仅专属获取;非 0 = 允许耗券永久解锁)
+	uint32 card_item_count = 13;     // 每次解锁消耗券张数
+	uint32 owned_card_count = 14;    // 玩家背包当前可用解锁券张数(已扣预留)
+	uint32 spirit_shop_goods_id = 15; // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁售卖)
 }
 
 // 单只灵宠实例当前的权威幻化穿戴状态。
@@ -112,14 +116,19 @@ message SkillVfxCosmeticEntry
 	uint64 mall_sku_id = 11;         // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
 	string acquire_hint = 12;        // 未拥有且未上架时展示的取得条件
 	string desc = 13;                // 特效简述
+	uint32 card_item_id = 14;        // 解锁券道具 ID(0 = 仅专属获取;非 0 = 允许耗券永久解锁)
+	uint32 card_item_count = 15;     // 每次解锁消耗券张数
+	uint32 owned_card_count = 16;    // 玩家背包当前可用解锁券张数(已扣预留)
+	uint32 spirit_shop_goods_id = 17; // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁售卖)
 }
 
-// 为指定灵宠实例穿戴或清除幻化外观（cosmetic_id = 0 表示恢复原形；纯幂等收敛）。
+// 为指定灵宠实例穿戴或清除幻化外观（cosmetic_id = 0 表示恢复原形；未拥有且 expect_free_equip=false 且配表开放券解锁时原子耗券解锁并穿戴）。
 message EquipPetCosmeticRequest
 {
 	uint64 client_request_id = 1;    // 必须非 0
 	uint64 pet_id = 2;               // 目标灵宠实例永久 ID
 	uint32 cosmetic_id = 3;          // 目标 PetCosmetic.id；0 = 恢复原形
+	bool expect_free_equip = 4;      // true = 仅限已拥有免费穿戴(未拥有拒回,绝不误扣券); false = 允许耗券解锁并穿戴
 }
 
 message EquipPetCosmeticResponse
@@ -131,12 +140,13 @@ message EquipPetCosmeticResponse
 	bool replayed = 5;
 }
 
-// 为指定技能启用或恢复默认特效（cosmetic_id = 0 表示恢复默认；纯幂等收敛）。
+// 为指定技能启用或恢复默认特效（cosmetic_id = 0 表示恢复默认；未拥有且 expect_free_equip=false 且配表开放券解锁时原子耗券解锁并穿戴）。
 message EquipSkillVfxRequest
 {
 	uint64 client_request_id = 1;    // 必须非 0
 	uint32 skill_table_id = 2;       // 目标技能 ID(Skill.id)
 	uint32 cosmetic_id = 3;          // 目标 SkillVfxCosmetic.id；0 = 恢复默认
+	bool expect_free_equip = 4;      // true = 仅限已拥有免费启用(未拥有拒回,绝不误扣券); false = 允许耗券解锁并启用
 }
 
 message EquipSkillVfxResponse

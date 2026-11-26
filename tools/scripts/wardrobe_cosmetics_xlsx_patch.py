@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""衣柜灵宠幻化与技能特效 V1(docs/design/wardrobe-pet-morph-and-skill-vfx-v1.md)的 xlsx 幂等补丁脚本。
+"""衣柜灵宠幻化与技能特效 V1(docs/planning/wardrobe-pet-morph-and-skill-vfx-v1.md)的 xlsx 幂等补丁脚本。
 
 用法(仓库根目录执行):
-    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py new-tables       # ① 建 PetCosmetic.xlsx 与 SkillVfxCosmetic.xlsx
-    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py message-limiter  # ② 跑完 proto-gen 后为 2 条新 RPC 追加 MessageLimiter 行
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py new-tables       # ① 生成/更新 PetCosmetic.xlsx 与 SkillVfxCosmetic.xlsx
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py voucher-closure  # ② 追加 3411/3412 外观券至 Item.xlsx 与 303/304 至 SpiritShopGoods.xlsx
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py message-limiter  # ③ 跑完 proto-gen 后为 2 条新 RPC 追加 MessageLimiter 行
 """
 
 from __future__ import annotations
@@ -48,8 +49,11 @@ PET_COSMETIC_ROWS = [
         enabled=1,
         sort_order=10,
         mall_sku_id=0,
-        acquire_hint="官方永久衣柜直售（敬请期待上架）",
+        acquire_hint="百宝阁购「灵宠幻化符」解锁（120灵石）",
         desc="幻化仅改变外观，将当前灵宠化作苍嶂麟仪态，不影响资质、技能与任何战斗数值。",
+        card_item_id=3411,
+        card_item_count=1,
+        spirit_shop_goods_id=303,
     ),
     dict(
         id=2,
@@ -61,8 +65,11 @@ PET_COSMETIC_ROWS = [
         enabled=1,
         sort_order=20,
         mall_sku_id=0,
-        acquire_hint="官方永久衣柜直售（敬请期待上架）",
+        acquire_hint="百宝阁购「灵宠幻化符」解锁（120灵石）",
         desc="幻化仅改变外观，将当前灵宠化作绯耳灵仪态，不影响资质、技能与任何战斗数值。",
+        card_item_id=3411,
+        card_item_count=1,
+        spirit_shop_goods_id=303,
     ),
     dict(
         id=3,
@@ -74,8 +81,11 @@ PET_COSMETIC_ROWS = [
         enabled=1,
         sort_order=30,
         mall_sku_id=0,
-        acquire_hint="赛季荣誉或官方永久衣柜获取",
+        acquire_hint="赛季荣誉或活动专属解锁",
         desc="幻化仅改变外观，将当前灵宠化作月弦师仪态，不影响资质、技能与任何战斗数值。",
+        card_item_id=0,
+        card_item_count=0,
+        spirit_shop_goods_id=0,
     ),
 ]
 
@@ -93,8 +103,11 @@ SKILL_VFX_ROWS = [
         enabled=1,
         sort_order=10,
         mall_sku_id=0,
-        acquire_hint="官方永久衣柜直售（敬请期待上架）",
+        acquire_hint="百宝阁购「技能特效卷」解锁（180灵石）",
         desc="特效仅改变战斗画面，为玄符落曜赋予鎏金符纹光效，不改变伤害、范围与目标规则。",
+        card_item_id=3412,
+        card_item_count=1,
+        spirit_shop_goods_id=304,
     ),
     dict(
         id=2,
@@ -108,8 +121,11 @@ SKILL_VFX_ROWS = [
         enabled=1,
         sort_order=20,
         mall_sku_id=0,
-        acquire_hint="官方永久衣柜直售（敬请期待上架）",
+        acquire_hint="百宝阁购「技能特效卷」解锁（180灵石）",
         desc="特效仅改变战斗画面，为紫霄雷阵赋予紫霄惊雷光效，不改变伤害、范围与目标规则。",
+        card_item_id=3412,
+        card_item_count=1,
+        spirit_shop_goods_id=304,
     ),
     dict(
         id=3,
@@ -123,8 +139,101 @@ SKILL_VFX_ROWS = [
         enabled=1,
         sort_order=30,
         mall_sku_id=0,
-        acquire_hint="赛季荣誉或官方永久衣柜获取",
+        acquire_hint="赛季荣誉或活动专属解锁",
         desc="特效仅改变战斗画面，为寒星凝魄赋予寒星流华光效，不改变伤害、范围与目标规则。",
+        card_item_id=0,
+        card_item_count=0,
+        spirit_shop_goods_id=0,
+    ),
+]
+
+VOUCHER_ITEM_ROWS = [
+    dict(
+        id=3411,
+        max_stack_size=99,
+        equip_kind=0,
+        battle_usable=0,
+        battle_heal_hp=0,
+        battle_heal_mp=0,
+        name="灵宠幻化符",
+        description="仅自用绑定幻化符：可在衣柜「灵宠」页永久解锁一款支持兑换的灵宠幻化，已拥有幻化随时免费穿脱（纯外观零数值）。",
+        icon_key="UI/Ugui/WardrobeCosmetics/item_pet_morph_charm",
+        equip_level=0,
+        equip_class=0,
+        affix_pool=0,
+        affix_rule=0,
+        equip_profile=0,
+        forge_material_id=0,
+        forge_material_count=0,
+        artifact_id=0,
+    ),
+    dict(
+        id=3412,
+        max_stack_size=99,
+        equip_kind=0,
+        battle_usable=0,
+        battle_heal_hp=0,
+        battle_heal_mp=0,
+        name="技能特效卷",
+        description="仅自用绑定特效卷：可在衣柜「特效」页永久解锁一款支持兑换的技能特效，已拥有特效随时免费切换（纯画面零数值）。",
+        icon_key="UI/Ugui/WardrobeCosmetics/item_skill_vfx_scroll",
+        equip_level=0,
+        equip_class=0,
+        affix_pool=0,
+        affix_rule=0,
+        equip_profile=0,
+        forge_material_id=0,
+        forge_material_count=0,
+        artifact_id=0,
+    ),
+]
+
+SPIRIT_SHOP_VOUCHER_ROWS = [
+    dict(
+        id=303,
+        tab_id=3,
+        sort_order=30,
+        enabled=1,
+        name="灵宠幻化符",
+        description="仅自用绑定幻化符：可在衣柜永久解锁一款支持兑换的灵宠幻化，已拥有随时免费穿脱（纯外观零数值）。",
+        icon_key="UI/Ugui/WardrobeCosmetics/item_pet_morph_charm",
+        currency_type=1,
+        price=120,
+        max_buy_per_request=10,
+        item_id_1=3411,
+        item_count_1=1,
+        item_bound_1=1,
+        item_id_2=0,
+        item_count_2=0,
+        item_bound_2=0,
+        limit_reset_kind=0,
+        limit_count=0,
+        limit_group_id=0,
+        limit_group_weight=0,
+        badge_text="永久衣柜",
+    ),
+    dict(
+        id=304,
+        tab_id=3,
+        sort_order=40,
+        enabled=1,
+        name="技能特效卷",
+        description="仅自用绑定特效卷：可在衣柜永久解锁一款支持兑换的技能特效，已拥有随时免费切换（纯画面零数值）。",
+        icon_key="UI/Ugui/WardrobeCosmetics/item_skill_vfx_scroll",
+        currency_type=1,
+        price=180,
+        max_buy_per_request=10,
+        item_id_1=3412,
+        item_count_1=1,
+        item_bound_1=1,
+        item_id_2=0,
+        item_count_2=0,
+        item_bound_2=0,
+        limit_reset_kind=0,
+        limit_count=0,
+        limit_group_id=0,
+        limit_group_weight=0,
+        badge_text="永久衣柜",
     ),
 ]
 
@@ -159,9 +268,10 @@ def _write_table(sheet: str, rows: list[dict], dry_run: bool) -> None:
             bind(sheet, xlsx_path)
             print(f"[ALREADY CURRENT] {rel(xlsx_path)}")
             return
-        fail(f"{rel(xlsx_path)} already exists with unexpected contents: {first_difference(current, wanted)}")
-
-    if dry_run:
+        if dry_run:
+            print(f"[dry-run] Would rewrite {rel(xlsx_path)} ({len(rows)} rows).")
+            return
+    elif dry_run:
         print(f"[dry-run] Would create {rel(xlsx_path)} ({len(rows)} rows).")
         return
 
@@ -180,6 +290,59 @@ def _write_table(sheet: str, rows: list[dict], dry_run: bool) -> None:
         fail(f"after saving, {xlsx_path.name} read back differs ({diff})")
     bind(sheet, xlsx_path)
     print(f"[DONE] {rel(xlsx_path)}")
+
+
+def _append_rows_by_header(xlsx_path: Path, sheet: str, rows_to_ensure: list[dict], dry_run: bool) -> None:
+    wb = openpyxl.load_workbook(xlsx_path)
+    ws = only_sheet(wb, xlsx_path, sheet)
+    before = sheet_matrix(ws)
+    header = [str(v).strip() if v is not None else "" for v in before[HEADER_ROW - 1]]
+    col_by_name = {name: idx + 1 for idx, name in enumerate(header) if name}
+    existing_ids: dict[int, int] = {}
+    last_row = DATA_BEGIN_ROW - 1
+    for r_idx, row in enumerate(before[DATA_BEGIN_ROW - 1:], start=DATA_BEGIN_ROW):
+        if any(v is not None for v in row):
+            last_row = r_idx
+            if row[0] is not None:
+                existing_ids[int(row[0])] = r_idx
+
+    patches: list[Patch] = []
+    next_row = last_row + 1
+    for item in rows_to_ensure:
+        rid = int(item["id"])
+        if rid in existing_ids:
+            row_idx = existing_ids[rid]
+            cur_row = before[row_idx - 1]
+            mismatch = []
+            for k, v in item.items():
+                c = col_by_name[k]
+                cur_val = cur_row[c - 1] if c - 1 < len(cur_row) else None
+                want_val = None if v == "" else v
+                if cur_val != want_val:
+                    mismatch.append((k, cur_val, want_val))
+            if not mismatch:
+                print(f"[ALREADY CURRENT] {xlsx_path.name} id={rid}")
+                continue
+            fail(f"{xlsx_path.name} id={rid} already exists with different values: {mismatch}")
+        for k, v in item.items():
+            if k not in col_by_name:
+                fail(f"{xlsx_path.name} missing header column {k!r}")
+            patches.append((next_row, col_by_name[k], None if v == "" else v))
+        next_row += 1
+
+    if not patches:
+        return
+    if dry_run:
+        print(f"[dry-run] Would append {len(rows_to_ensure)} rows to {rel(xlsx_path)}.")
+        return
+    apply_patches_and_verify(xlsx_path, sheet, wb, ws, before, patches, bind_schema=True)
+    print(f"[DONE] Updated {rel(xlsx_path)}")
+
+
+def cmd_voucher_closure(dry_run: bool) -> None:
+    _append_rows_by_header(DATA_DIR / "Item.xlsx", "Item", VOUCHER_ITEM_ROWS, dry_run)
+    _append_rows_by_header(DATA_DIR / "SpiritShopGoods.xlsx", "SpiritShopGoods", SPIRIT_SHOP_VOUCHER_ROWS, dry_run)
+    cmd_new_tables(dry_run)
 
 
 def cmd_new_tables(dry_run: bool) -> None:
@@ -254,11 +417,13 @@ def cmd_message_limiter(dry_run: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("new-tables", "message-limiter"))
+    parser.add_argument("command", choices=("new-tables", "voucher-closure", "message-limiter"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.command == "new-tables":
         cmd_new_tables(args.dry_run)
+    elif args.command == "voucher-closure":
+        cmd_voucher_closure(args.dry_run)
     else:
         cmd_message_limiter(args.dry_run)
 
