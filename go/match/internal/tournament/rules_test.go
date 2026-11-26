@@ -97,7 +97,9 @@ func TestCatalogRewardsAndLineupCodec(t *testing.T) {
 	require.NotEmpty(t, raw)
 	require.Len(t, att.Currencies, 1)
 	require.Equal(t, uint64(120000), att.Currencies[0].Amount)
-	require.Len(t, att.Items, 3)
+	require.Len(t, att.Items, 4)
+	require.Equal(t, uint32(3407), att.Items[3].ConfigId)
+	require.Equal(t, uint32(3), att.Items[3].Count)
 
 	part := cat.RewardForPlacement(25, 2)
 	require.NotNil(t, part)

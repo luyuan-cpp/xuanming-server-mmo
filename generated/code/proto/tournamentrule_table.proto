@@ -43,4 +43,5 @@ message TournamentRuleTable {
 }
 
 message TournamentRuleTableData {
-	repeated
+	repeated TournamentRuleTable data = 1;
+}

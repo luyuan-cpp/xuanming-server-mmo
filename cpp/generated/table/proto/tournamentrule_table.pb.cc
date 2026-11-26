@@ -1770,4 +1770,36 @@ void TournamentRuleTableData::MergeImpl(::google::protobuf::MessageLite& to_msg,
         from._internal_data());
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::Unknow
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TournamentRuleTableData::CopyFrom(const TournamentRuleTableData& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:TournamentRuleTableData)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TournamentRuleTableData::InternalSwap(TournamentRuleTableData* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.data_.InternalSwap(&other->_impl_.data_);
+}
+
+::google::protobuf::Metadata TournamentRuleTableData::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// @@protoc_insertion_point(namespace_scope)
+namespace google {
+namespace protobuf {
+}  // namespace protobuf
+}  // namespace google
+// @@protoc_insertion_point(global_scope)
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 static ::std::false_type
+    _static_init2_ [[maybe_unused]] =
+        (::_pbi::AddDescriptors(&descriptor_table_tournamentrule_5ftable_2eproto),
+         ::std::false_type{});
+#include "google/protobuf/port_undef.inc"

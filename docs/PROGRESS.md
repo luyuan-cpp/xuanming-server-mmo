@@ -5231,6 +5231,25 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - UGUI 层（`TournamentArtCatalog.cs`、`TournamentWindow.cs`、`TournamentSpectateCheerOverlay.cs`、`TournamentChampionStageController.cs`、`TournamentUiRoot.cs`）：预留全部 20 枚 `TournamentV3` 资源键（缺图自动优雅降级为道家样式，导图后原生题字与印章严禁叠字），完整接入战旗择选、热身约战弹层、对阵树猜胜与中/惜章、《神机问道榜》弹窗、MVP 高光战报卡、季军战标识及观战顶条零积分演练徽标。
 - **验证边界（按负责人分工要求）**：本轮仅执行轻量只读静态门禁（C++ 裸指针/线程源守卫、英文日志检查、文档索引生成与校验、Unity WebGL2/IL2CPP 禁 API 扫描）；导表、协议生成、`ContractSync`、C++/Go/Java/Unity 编译与单测全部移交 Gemini 执行；20 枚 V3 PNG 美术切片移交 Codex 制作；未执行 `git commit` / `git push`。
 
+## 2026-11-25 Gemini：组队跟随与离线托管玩法扩展（A+B+C 全栈落地、协议生成、Go/C++/Unity 编译与定向单测全绿）
+
+- **新增玩法与协议契约（全量在 `main` 落盘，消息号 `522..525`，`PlayerUint64Comp#3..#11`）**：
+  - **A.1 离线托管收获简报（`HostedRecap`）**：`proto/common/component/player_comp.proto` 追加 `#3..#11`（与战斗结算原子同落 `PROFILE` 行，跨节点/排空/宕机不丢；严格汇总实际结算收益，零额外免费产出）；`proto/scene/player_afk_pass.proto` 新增 `HostedRecapSummary`、`AfkPassInfo.hosted_recap`、`AckHostedRecap(523)`；C++ `afk_pass.{h,cpp}` / `afk_hosting.cpp` / `player_battle.cpp` / `player_lifecycle.cpp` / `player_afk_pass_handler.cpp` 闭环记录、重连/过期封账与幂等确认；Unity `AfkPassClient.cs` + `AfkPassUiRoot.cs` 重登单次弹窗（`<60s` 且 0 场静默确认）。
+  - **A.2 队伍「托管中」徽章（`TeamMemberView.is_hosted`）**：`go/match/internal/team/{presence,view}.go` 批量读取 `player:hosted_presence:{id}`，离线且存在托管心跳标 `is_hosted=true`；Unity `TeamHudPanel.cs` 与 `TeamWindow.cs` 渲染玉绿「托管中」。
+  - **A.3 队长「一键召集」（`RecallTeamMembers=525`）**：`TeamRecord.last_recall_at_ms` 落库保证多副本一致的 15s 团队冷却，`go/match/internal/team/{rules,notify,service,sql_action,server}.go` 向在线非队长队员推 `TEAM_EVENT_TYPE_LEADER_RECALL`；Unity `TeamHudPanel.cs` 启用队长「召集」按钮与倒计时，`TeamFollowUiRoot.cs` 对暂离队员弹出 12s 归队提示条并支持一键归队。
+  - **B 跑图五行三阵型（`SetTeamFormation=524`）**：`TeamFollowFormationStyle`（`0 长蛇纵队 / 1 雁行两翼 / 2 五行聚阵`）落 `TeamRecord.follow_formation` 并推 `TEAM_CHANGE_REASON_FORMATION_CHANGED` + `PlayerTeamRefreshEvent`；C++ `team_follow_formation.{h,cpp}` / `team_follow_comp.h` / `team_follow_system.{h,cpp}` / `player_team.{h,cpp}` 实现按 `WalkableCheck` `1.0x→0.5x→0.0x` 横向安全展开与 `step.trailPosition` 贴墙回折；Unity `TeamHudPanel.cs` 接入队长一键轮换阵型按钮。
+  - **C.1 挂机月卡 × 战斗剧本直连**：`AfkPassUiRoot.cs` 读取当前组队 PVE 托管剧本并提供一键跳转 `BattleScriptUiRoot`。
+  - **C.2 托管离队/解散自动回主城安全区（`SetAfkPassSettings=522`）**：`PlayerUint64Comp#3` 持久化偏好，C++ `player_team.cpp` 在托管角色 `oldTeamId!=0→0` 时自动发 `EnterSceneRequest(hosted_placement=true)` 回 `WorldTable` 默认主城地图（战中经 `AfkReturnCityPendingComp` 延迟至离战生效）。
+- **协议生成与静态门禁**：
+  - `pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`（exit 0，追加 `522..525` 与 `PlayerUint64Comp#3..#11`，零跳号）；客户端 `tools/gen_proto.ps1` + `tools/gen_messageids.ps1`（exit 0）。
+  - C++ 只读守卫：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**、`test_log_text_english.py` **20/20 OK**、`check_log_text_english.py` **0 违规**。
+- **编译与单测实测结果（日志存 `build/verification/team-follow-afk-hosting-abc-20261125/`）**：
+  - **Go**：`go/shared/redisslot` `vet+test` PASS；`go/match/internal/team` `gofmt+vet+go test -count=1 ./internal/team/...` 全绿（含 `formation_recall_hosted_test.go` 与 `TestNoHandWrittenTipCodes`）；`go/player_locator` `vet+test` 全绿；`go/scene_manager` `vet` + `go test ./internal/logic/... -run 'Hosted|EnterScene'` PASS；`go/client_rpc_router`、`go/db` `vet` 0 错误（`go/login` 单测与 `robot` vendor 存在并行会话既有缺口，与本线无关）。
+  - **C++（Windows Debug|x64 串行 `/m:1`）**：`cpp/nodes/scene/scene.vcxproj`（`scene.exe`）**0 错误编过链接**；`aoi_test` **90/90 PASS**（含 `EchelonAndWuxingSpreadLaterallyAndFoldBackInNarrowCorridor`）；`buff_test` **46/46 PASS**；`skill_test` **102/102 PASS**；`bag_test`（`AfkPass*:PlayerBattleSettlement*`）**146/146 PASS**（含 `AfkPassSystemTest` 13/13 与新 `SettingsAndHostedRecapLifecycleSurviveCrossNodeAndAckIdempotently`）；`cross_zone_test` 本线 8 个套件 **64/64 PASS**（`PlayerTeamFollowTest` 23/23 含新 `HostedPlayerAutoReturnsToMainCityWhenRemovedFromTeam`、`PlayerTeamFollowDiscoveryTest` 1/1、`TeamFollowDriveTest` 16/16、`ConnectionLostHold*` 24/24，以及 `PlayerHandoffGate.PlayerStateRequestsMayBeRetriedOnAnotherNode` PASS；同套其余 128 条既有失败系并行会话新增 `PlayerSpiritShopComp`/`PlayerTravelPassComp` 未更新 `cross_zone_test.cpp` 夹具及 `SkillServiceIsListedPerMethod` 所致）。
+  - **Unity（`mmorpg-client`）**：`tools/client_compile_check.ps1` **exit=0（762 文件 0 错误）**；Unity `6000.6.0f1` EditMode：`AfkPassClientTests` **15/15**、`TeamViewMapperTests` **11/11**、`TeamFollowDeclarationTests` **17/17**、`TeamHudFreshnessTests` **12/12**、`ActorWorldFoundationTests` **20/20**、`RpcGuardTests` **4/4** 全绿；`TeamClientTests` 新增 `SetFormationAndRecallMembers_RespectLeaderCooldownAndEmitRecallEvent` PASS（其余 3 条既有失败为 `ad81fc23` `_now += 0.4f` float32 精度）；`TeamWindowTests` 37/48（11 条既有失败为 `528d5fc9` 缺 1 号职业 `24_lu_dongbin` 头像资源）。
+- **Java 版（AGENTS §12）**：已同步登记在 `../xuanming-server-mmo/PARITY.md` 顶部 TODO，未改 Java 代码。
+- **未执行范围**：本机 Docker Desktop 守护进程未启动，未跑 Linux GCC Docker 编译与多进程实时 robot 冒烟；新 UI 美术切片待 Codex 作图后替换占位切图；未执行 `git commit` / `git push`。
+
 
 ## 2026-11-26 大世界地图玩法 V2（M1 全端闭环核查 + HUD 灵潮角标登录首拉修复 + 文档去风格词清理）
 
@@ -5241,3 +5260,44 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **修复一处真机时序漏口（`CityTravelUiRoot.cs`）**：原先仅在手动打开地图（`Toggle()`）时请求 `WorldMapOverview`，导致 HUD「地图」按钮右上角 `WorldMapEntryTideBadge` 在玩家未手动开图前不会自动亮起；现补充登录拿到分线目录后自动首拉一次总览，并在地图关闭期间每 60 秒轻刷新一次（复用既有 `SceneChannelClient` 节流，断线/切连接复位）。
 - **文档清理**：清空 [world-map-play-v2.md §7](planning/world-map-play-v2.md) 中全部画风/色号/纹样设定（按新规只描述做什么 UI，不替 Codex 定风格）。
 - **验证与发现**：Go `scene_manager` M1 定向测 PASS；Java `WorldMapOverviewTest` PASS；核对 Azure `image/main@e26ece7`（`D:\work\image\designs\world-map-play-v2-ui\ui`）全部 15 件无字 RGBA 切图与 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/` 逐字节 SHA-256 15/15 一致、`.meta` `spriteBorder` 15/15 对齐 `CONTROL-USAGE.md`，并微调 `CityTravelWindow.WorldMapV2.cs` 两处文字安全区（`WorldMapTideHeadline` 宽 `440→385` 防与倒计时重叠、`WorldMapPinCurrent` 宽 `92→108` 对齐「当前所在」108px 规格）；重跑 Unity `client_compile_check.ps1` **exit=0（773 files, 0 errors）**。另查实场景 3（`月汐湾`）现已双端 `clientOnly: false`，但 Go/Java `WorldMapPlay` 默认开放/灵潮池仍为 `[1,2,5]`/`[2,5]` 且缺场景 3 神秘商人站位，已记录待负责人确认是否纳入；未执行 `git commit` / `git push`。
+
+## 2026-11-26 《群仙问道赛》V4 深化扩展落码（模块 H BO3 灵脉禁选 + 模块 I 本季名局录 Top 10 + 模块 J 战队 6 枚赛季荣耀铭牌；统一 V3+V4 29 枚 UI 切片移交 Codex，全量生成编译单测移交 Gemini）
+
+- **设计与交接文档**：
+  - 新增 `docs/planning/season-team-tournament-v4.md`：完整定义模块 H/I/J 的规则、协议、确定性算法与合规边界（零新表、零新 Tip、零 C++ 引擎改动、零 P2W/押注/自由文本 UGC）。
+  - 统一修订 `docs/planning/ui-handoff/season-team-tournament-v3-ui-handoff.md` 为 V3+V4 合并清单（7 个功能界面 + 29 枚透明 PNG 切片），彻底移除画风/色号/字体/纹样描述（美术风格完全由 `D:\work\image` 既有规范决定）。
+- **权威配置表与协议契约（`xuanming-server-mmo-cpp`）**：
+  - `data/schema/tournamentrule_table.proto` & `data/TournamentRule.xlsx`（`rule_version=4`）：新增 `bool leyline_ban_enabled = 31`（默认值 `TRUE`）。
+  - `proto/match/match_service.proto`：新增 2 条 `MatchService` RPC（`BanTournamentLeyline`、`GetTournamentHighlights`）、`TournamentHighlightTag`、`TournamentHighlightEntry`；在 `TournamentSeasonView`（`champion_honor_bits=33`）、`TournamentSquadView`（`honor_bits=18`）与 `TournamentMatchView`（`banned_leyline_a=44`、`banned_leyline_b=45`）补充增量字段。
+  - `proto/match/match_authority.proto` & `xuanming-server-mmo/game-match/src/main/proto/game/match/match_feature_tables.proto`：在既有 3 张表补齐对应持久化列（`champion_honor_bits=28`、`honor_bits=19`、`banned_leyline_a=36`、`banned_leyline_b=37`），零新增 SQL 表。
+- **Go 权威服务端（`xuanming-server-mmo-cpp/go/match`）**：
+  - `internal/tournament/{catalog,rules,rules_test}.go`：新增 `HonorBitDebut..HonorBitChampion`、`IsValidLeylineElement`、`DrawLeylinesWithBans`（SplitMix64 剔除禁选后确定性抽签）、`ComputeQualifierHonorBits`、`ComputeKnockoutSeriesHonorBits`、`ClassifyHighlightTag` 与全套单测。
+  - `internal/authority/tournament.go`、`internal/logic/tournamentlogic.go`、`internal/server/matchserviceserver.go`：打通海选/淘汰赛/夺冠单调荣耀铭牌落账、`BanTournamentLeyline`（首局前双方队长各禁 1 条并即时重算 3 局灵脉序列）与 `LoadTournamentHighlights`（零新表确定性策展公开淘汰赛 Top 10）。
+- **Java 独立服务端对账（`xuanming-server-mmo`）**：
+  - `game-match`（`MatchMethods` 增至 42 条、`MatchMethodsTest`、`MatchClientMessageServiceTest`、`TournamentRules`、`TournamentStore`、`TournamentService`、`MatchFeatureConfiguration`、`TournamentParityTest`）与 `game-gate`（`MessageRoutesTest` 补齐 V3+V4 6 条 `MatchService` 路由断言）与 Go 逐条同构落码。
+- **Unity 客户端与 UGUI（`mmorpg-client`）**：
+  - 纯 C# 层（`TournamentModels.cs`、`TournamentClient.cs`、`TournamentUiModel.cs`、`TournamentClientTests.cs`、`TournamentUiModelTests.cs`）：新增 6 枚荣耀铭牌目录、`TournamentHighlightsSnapshot`、`BanLeyline`/`RequestHighlights` RPC、`CanBanLeyline` 守卫与 V4 弹窗态及 EditMode 单测。
+  - UGUI 层（`TournamentArtCatalog.cs`、`TournamentWindow.cs`、`TournamentUiRoot.cs`）：追加 9 个 V4 资源键（V3+V4 合计 29 枚，缺图自动优雅降级），接入战队页 6 枚可点击荣耀铭牌展条、对阵树 BO3 队长「灵脉禁选」入口与禁选弹窗、榜单栏「本季名局录」入口与 Top 10 回放墙弹窗，以及冠军殿堂铭牌展示。
+- **验证边界（按负责人分工要求）**：本轮仅执行轻量只读静态门禁；V3+V4 统一导表/生成、`ContractSync`、C++/Go/Java/Unity 编译与单测已整理为完整命令块移交 Gemini；V3+V4 合并 29 枚 PNG 美术切片移交 Codex；未执行 `git commit` / `git push`。
+
+
+## 2026-11-25 官方灵石百宝阁与绑定/终身限购首套提速包 V1 全链路落码与三仓验收（C++/Go 权威服 + Java 独立服 + Unity 客户端及 uGUI）
+
+- **设计定案与文档索引**：
+  - 落盘 `docs/design/spirit-shop-and-starter-packs-v1.md`（§7 定案：首套提速共享组 `group_id=1` 终身封顶 **300 份 / ¥30**，支持 `101` 60 / `102` 180 / `103` 300 自由拼单；精进与外观单价 `定星保底符 60`、`天工秘墨 180`、`角色形象卡 100`、`角色改名卡 100`；红线明确不做宝宝头像框、人物头像框不进商城单卖；§8 对齐 `SpiritShopWindow.cs` 与 `WorldHudNavigation.cs` 给出 Codex 专属道家 Q 版换肤任务书）。
+  - 更新 `tools/scripts/gen_docs_index.py` 并生成 `docs/README.md`。
+- **配表、协议与 C++/Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - 新增 `data/schema/{spiritshoplimitgroup_table,spiritshopgoods_table}.proto`、`tools/scripts/spirit_shop_xlsx_patch.py`、`data/{SpiritShopLimitGroup,SpiritShopGoods}.xlsx`（1 共享组 + 7 在售 SKU），追加 `Tip.xlsx` `//spirit_shop_error`（`37000..37010`）与 `MessageLimiter.xlsx`（`509=10/1s`、`510=5/1s`）；新增 `proto/common/component/player_spirit_shop_comp.proto`、`proto/scene/player_spirit_shop.proto`（`509=GetSpiritShopInfo`、`510=BuySpiritShopGoods`），追加 `mysql_database_table.proto` `spirit_shop = 34 (WALLET)`、`transaction_log.proto` `TX_SPIRIT_SHOP_BUY = 44`、`client_request_ledger.h` `kBuySpiritShopGoods = 15`。非交互导表（`Deploy: 14 OK, 0 failed`）与 `proto-gen-run` 全通过。
+  - 实现 `spirit_shop_rules.h`、`player_spirit_shop.{h,cpp}`（`BagService::ExchangeInventoryExact` + `beforeCommit` 同步扣灵石 `CurrencySystem::DeductCurrency` 实现零 `[UNPAID_GRANT]` 窗口 + `PlayerLifecycleSystem::RequestKeyProgressSave`，严格区分灵石/绑定灵石、报价与嵌套 `expected_items` 未知字段防呆、强制 `bound=true` 独立分堆、周限购抗时钟回拨、满包/冻结/战斗/封禁/坏表/坏档 fail-closed）、`player_spirit_shop_handler.cpp`、`player_database_loader.cpp`、`player_handoff_gate.h`、`nodes/scene/main.cpp` 启动表校验，以及 `player_spirit_shop_test.cpp` 与 `persist_round_trip_test.cpp` 夹具；顺带修复阻塞 `scene.vcxproj` 的既有错误 `player_season.cpp:24`（`player_profile_comp.pb.h` → `player_comp.pb.h`）与并行文件 `player_travel_pass.cpp:1371`（`appearanceInfo.entries()` → `appearanceInfo.appearances()`）。
+- **Java 独立服务端（`xuanming-server-mmo`）**：
+  - 已于提交 `3f7dbc1f` 完整对齐并验证通过（`ContractSync`、`0014.schema` 第 14 代台账、`TX_SPIRIT_SHOP_BUY=44`、`SpiritShopTables`/`SpiritShopService`/`SpiritShopFeature` 及 `SpiritShopFeatureAndServiceTest`，`game-scene` 2,184/2,184 PASS）；本轮已更新 `PARITY.md` 状态为双端已对齐。
+- **Unity 客户端与可交互 uGUI（`mmorpg-client`）**：
+  - `sync_tables.ps1`（74 表与 `.meta` 全过）、`MessageIds(509/510)`、`RpcGuard`、`GameClient.SpiritShop`（`SpiritShopModels` + `SpiritShopClient`）、可交互 uGUI（`SpiritShopUiRoot` + `SpiritShopWindow`：3 分页、灵石/绑定灵石双余额、300 份共享进度条、月卡聚合入口卡、二次确认弹窗与充值短链、`Screen.safeArea` 与 `UI/Ugui/SpiritShopV1/` 自动换肤回退）、主城 HUD「百宝阁」入口（`WorldHudNavigation`）及 4 大缺料直达（易容 `301`、打造 `101`、打磨 `201`、制书 `202`）全部接线完毕；7 份 `.meta` 核验完整。
+- **实跑验证结果（全部由 Gemini `flash` 子代理执行）**：
+  - 静态守卫：`test_cpp_no_raw_pointer_member.py` 13/13 OK、`test_cpp_thread_sources.py` 5/5 OK、`check_log_text_english.py` exit 0、`gen_docs_index.py --check` exit 0、`gen_schema_index.py --check` exit 0。
+  - Go 服务端：`go/db` `go test -count=1 ./internal/playerstore/...` PASS（2.347s）；`go/shared` `go build ./generated/table/...` exit 0。
+  - C++ 编译与单测：串行 MSBuild `proto.lib` / `table.lib` / `scene.lib` 全绿，`player_spirit_shop_handler.cpp` / `player_spirit_shop_test.cpp` / `persist_round_trip_test.cpp` 均 0 错误编译；独立 GTest 沙箱实跑 `SpiritShopRealTablesTest`（真实导表 `valid_groups=1 sellable_goods=7 ok=true`）+ `SpiritShopRulesTest` + `PlayerSpiritShopTest` **10/10 PASS**。
+  - Unity 客户端：全量 762 个 `Assets/Scripts/**/*.cs` Roslyn 编译 0 错误 + `SpiritShopClientTests` **5/5 PASS**。
+- **未执行范围与已知并行阻塞**：
+  - `cpp/nodes/scene/scene.vcxproj` 整包链接与 `cpp/tests/bag_test/bag_test.vcxproj` 整包编译当前分别受同工作区并行会话未收尾的 `player_appearance_handler` / `core.lib` / `rpc.lib` 与 `afk_pass_test.cpp:455` 阻断，整包 `scene.exe --validate-tables` 与全量 `bag_test.exe` 待并行线收口后复跑（百宝阁真实导表 `ValidateTables()` 与 10 条 C++ 单测已在独立沙箱实跑通过）；
+  - 未做真库多进程实网联调与 Unity Editor 真机分辨率逐像素验收；`Assets/Resources/UI/Ugui/SpiritShopV1/` 专属道家 Q 版切图待 Codex 按 §8 制作；三个代码仓均未执行 `git commit` / `git push`。

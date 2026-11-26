@@ -175,6 +175,17 @@
    "limit_period": 2,
    "name": "角色形象卡",
    "required_guild_level": 6
+  },
+  {
+   "category": 3,
+   "cost_contribution": 1500,
+   "id": 306,
+   "item_count": 1,
+   "item_id": 3408,
+   "limit_count": 1,
+   "limit_period": 2,
+   "name": "天工秘墨",
+   "required_guild_level": 5
   }
  ]
 }

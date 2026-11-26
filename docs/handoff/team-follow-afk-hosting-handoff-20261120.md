@@ -1,6 +1,12 @@
 # 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Gemini)
 
-> **2026-11-22 状态更新（先勿删本交接单，待 Gemini 跑完编译、单测与两条 robot 冒烟后再清理）**：
+> **2026-11-25 状态更新（Gemini 已完成全部 A+B+C 玩法扩展、协议生成、Go/C++/Unity 编译与定向单测验证；待实网多节点冒烟与 Codex 补齐美术资源后再删除本文）**：
+> - **2026-11-25 A+B+C 扩展与验证全部落地（详见 `docs/PROGRESS.md` 文末 2026-11-25 Gemini 条目，日志存 `build/verification/team-follow-afk-hosting-abc-20261125/`）**：
+>   - 新增离线托管收获简报（`HostedRecap` + `523 AckHostedRecap`）、队伍「托管中」徽章（`is_hosted`）、队长一键召集（`525 RecallTeamMembers` + 15s 团队冷却 + 暂离归队提示条）、跑图五行三阵型切换（`524 SetTeamFormation` + 贴墙安全回折）、挂机月卡直连战斗剧本、托管离队/解散自动回主城安全区（`522 SetAfkPassSettings`）；
+>   - 协议生成（`proto-gen-run` + 客户端 `gen_proto`/`gen_messageids`）、Go 测试（`redisslot` / `match/internal/team` / `player_locator` / `scene_manager`）、C++ 静态预检、`scene.exe` 编译链接、C++ 定向 GTest（`aoi_test` 90/90、`buff_test` 46/46、`skill_test` 102/102、`bag_test` 146/146、`cross_zone_test` 本线 64/64）与 Unity 编译（762 文件 0 错误）+ EditMode（本线新增及受影响用例全绿）全部验证通过；Java 版已登记在 `../xuanming-server-mmo/PARITY.md` TODO。
+>   - **剩余项**：仅余（1）本机起 Docker 后补跑 Linux GCC 编译与第 11 步两条多节点实网 robot 冒烟；（2）Codex 产出新 UI 美术切片后替换当前功能版切图。
+>
+> **2026-11-22 历史记录**：
 > - 第 1–4 步（xlsx / 导表 / proto 生成）与 2026-11-21 的编译/测试修复（6 处）已落盘在 `main`（Go / Linux GCC / Unity 105/105 与 C++ 9 个定向套件曾于 11-21 全部通过）。
 > - **2026-11-22 深度标准审计并完成全部服务端 + 客户端代码收口（`main` 工作区，未编译、未运行单测/冒烟，详见 `docs/PROGRESS.md` 文末 2026-11-22 条目）**：
 >   - 修复跨节点托管落点 `OnOfflineHostingStarted` 早于 `ReadMembership` 导致丢跟随意图、托管队长 15s 周期刷读、`AfkPassSystem::GmSet` 缺可写围栏、`AfkPassCommittedComp` Redis SET/DEL 写失败自愈与托管启动立即补投影、`AfkPassRule` 缺热更校验、空队形 20Hz 空转、50m AOI 离线托管广播刷屏/无效序列化、`RestoreCooldowns` 改 `emplace_or_replace`；

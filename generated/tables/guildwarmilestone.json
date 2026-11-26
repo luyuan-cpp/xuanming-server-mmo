@@ -37,11 +37,11 @@
    "id": 4,
    "required_guild_merit": 6000,
    "reward_contribution": 300,
-   "reward_item1_count": 5,
-   "reward_item1_id": 3403,
+   "reward_item1_count": 1,
+   "reward_item1_id": 3407,
    "reward_item2_count": 8,
    "reward_item2_id": 3406,
-   "reward_preview": "重铸砂×5 + 悟道残页×8 + 帮贡×300",
+   "reward_preview": "绝学残卷×1 + 悟道残页×8 + 帮贡×300",
    "reward_silver": 20000
   }
  ]

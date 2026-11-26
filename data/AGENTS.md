@@ -226,7 +226,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **TournamentReward** | `TournamentReward.xlsx` | `tournamentreward_table.proto` | 18 | 12 | 9 | — | — | `tier_kind` | `item_ids→Item.id` | — | — | — |
-| **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 30 | 30 | 1 | — | — | `battle_config_id` `salute_item_id` | `battle_config_id→Dungeon.id` `salute_item_id→Item.id` | — | — | — |
+| **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` `salute_item_id` | `battle_config_id→Dungeon.id` `salute_item_id→Item.id` | — | — | — |
 | **TravelPassSeason** | `TravelPassSeason.xlsx` | `travelpassseason_table.proto` | 15 | 15 | 1 | — | — | — | — | — | — | — |
 | **TravelPassTier** | `TravelPassTier.xlsx` | `travelpasstier_table.proto` | 14 | 14 | 10 | — | — | `pass_id` | `pass_id→TravelPassSeason.id` | — | — | — |
 | **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 12 | — | — | `chapter_id` | — | — | — | — |
@@ -235,6 +235,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **78** 张表、**1006** 个物理列、**853** 个进产物的字段。
+合计 **78** 张表、**1007** 个物理列、**854** 个进产物的字段。
 
 <!-- END GENERATED -->

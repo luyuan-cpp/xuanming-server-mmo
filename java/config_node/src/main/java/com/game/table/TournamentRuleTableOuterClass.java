@@ -88,4 +88,8 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_TournamentRuleTableData_descriptor,
         new java.lang.String[] { "Data", });
-    descriptor.resolveAllFeatu
+    descriptor.resolveAllFeaturesImmutable();
+  }
+
+  // @@protoc_insertion_point(outer_class_scope)
+}

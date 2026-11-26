@@ -31,4 +31,7 @@
    "salute_item_id": 20,
    "settle_display_days": 5,
    "third_place_match_enabled": true,
-   "war
+   "warmup_spar_enabled": true
+  }
+ ]
+}

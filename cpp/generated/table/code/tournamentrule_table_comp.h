@@ -230,4 +230,9 @@ inline TournamentRulePrediction_enabledComp MakeTournamentRulePrediction_enabled
 inline TournamentRulePrediction_reward_min_hitsComp MakeTournamentRulePrediction_reward_min_hitsComp(const TournamentRuleTable& row) {
     return { row.prediction_reward_min_hits() };
 }
-inline TournamentRuleThird_place_match_enabledComp MakeTournamentRuleThird_place_match_enabledComp(const TournamentR
+inline TournamentRuleThird_place_match_enabledComp MakeTournamentRuleThird_place_match_enabledComp(const TournamentRuleTable& row) {
+    return { row.third_place_match_enabled() };
+}
+inline TournamentRuleLeyline_ban_enabledComp MakeTournamentRuleLeyline_ban_enabledComp(const TournamentRuleTable& row) {
+    return { row.leyline_ban_enabled() };
+}

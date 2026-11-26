@@ -138,6 +138,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v2-ui-handoff.md](planning/ui-handoff/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
+- [latest-expansions-ui-handoff.md](planning/ui-handoff/latest-expansions-ui-handoff.md) — 近期新玩法增量 UI 切片需求清单（五行扩展 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉）
 - [official-passport-ui-handoff.md](planning/ui-handoff/official-passport-ui-handoff.md) — 官方通行证与账号注册 · Unity UI 异机交接
 - [ranked-play-v2-ui-handoff.md](planning/ui-handoff/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
 - [season-team-tournament-v1-ui-handoff.md](planning/ui-handoff/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）

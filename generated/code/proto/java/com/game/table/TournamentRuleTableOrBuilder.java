@@ -196,4 +196,9 @@ public interface TournamentRuleTableOrBuilder extends
    */
   boolean getThirdPlaceMatchEnabled();
 
- 
+  /**
+   * <code>bool leyline_ban_enabled = 31;</code>
+   * @return The leylineBanEnabled.
+   */
+  boolean getLeylineBanEnabled();
+}

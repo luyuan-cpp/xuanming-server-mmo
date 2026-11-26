@@ -197,4 +197,10 @@ public final class TournamentRuleTableComp {
         }
     }
 
- 
+    public record Leyline_ban_enabled(boolean value) {
+        public static Leyline_ban_enabled from(TournamentRuleTable row) {
+            return new Leyline_ban_enabled(row.getLeylineBanEnabled());
+        }
+    }
+
+}

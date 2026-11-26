@@ -259,4 +259,10 @@ func MakeTournamentRulePrediction_reward_min_hitsComp(row *pb.TournamentRuleTabl
 }
 
 func MakeTournamentRuleThird_place_match_enabledComp(row *pb.TournamentRuleTable) TournamentRuleThird_place_match_enabledComp {
-    return TournamentRu
+    return TournamentRuleThird_place_match_enabledComp{Value: row.ThirdPlaceMatchEnabled}
+}
+
+func MakeTournamentRuleLeyline_ban_enabledComp(row *pb.TournamentRuleTable) TournamentRuleLeyline_ban_enabledComp {
+    return TournamentRuleLeyline_ban_enabledComp{Value: row.LeylineBanEnabled}
+}
+

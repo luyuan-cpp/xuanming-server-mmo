@@ -27,6 +27,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/asset_op_ledger.h"
+#include "player/system/equip_craft_quality_rules.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h" // HasFencedOwnership / IsPlayerMutable(与玩家收件箱共用,D12)
@@ -1368,13 +1369,30 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 	uint32_t failedError = kSuccess;
 	std::string failedWhat;
 
-	// (c) 物品
+	// (c) 物品（永久绑定道具强制 bound=true，避免经帮会商店/邮件/系统入账通道洗成可交易）
 	if (!itemsToAdd.empty())
 	{
 		auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+		std::vector<std::pair<uint32_t, uint32_t>> orderedItems(itemsToAdd.begin(), itemsToAdd.end());
+		std::sort(orderedItems.begin(), orderedItems.end(),
+				  [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+		std::vector<InitItemParam> creditItems;
+		creditItems.reserve(orderedItems.size());
+		for (const auto& [configId, count] : orderedItems)
+		{
+			InitItemParam param;
+			param.itemPBComp.set_item_id(kInvalidGuid);
+			param.itemPBComp.set_config_id(configId);
+			param.itemPBComp.set_size(count);
+			if (equipcraft::IsAlwaysBoundItem(configId))
+			{
+				param.itemPBComp.set_bound(true);
+			}
+			creditItems.push_back(std::move(param));
+		}
 		// BagService 候选提交的任何拒绝都保持物品批次零改动。
 		const uint32_t error = BagService::AddItems(
-			player, bags.bags[kInventory], itemsToAdd, txType, request.correlation_id());
+			player, bags.bags[kInventory], creditItems, txType, request.correlation_id());
 		if (error != kSuccess)
 		{
 			if (error == kBagItemNotStacked)

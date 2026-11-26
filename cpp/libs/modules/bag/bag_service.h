@@ -254,7 +254,9 @@ public:
 		entt::entity playerEntity,
 		Bag &bag,
 		const std::vector<InitItemParam> &itemsToAdd,
-		TransactionType txType = TX_SYSTEM_GRANT);
+		TransactionType txType = TX_SYSTEM_GRANT,
+		uint64_t correlationId = 0,
+		const std::string &extra = {});
 
 	// Orchestrated RemoveItem:
 	//   capture item info → 预留检查 → Bag::RemoveItem → transaction log

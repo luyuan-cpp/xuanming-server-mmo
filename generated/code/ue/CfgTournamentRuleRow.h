@@ -175,4 +175,7 @@ struct FCfgTournamentRuleRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
 	bool third_place_match_enabled = false;
 
-	/
+	/** BO3 淘汰赛首局开战前是否开启双方队长五行灵脉禁选(V4,默认 true) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TournamentRule")
+	bool leyline_ban_enabled = false;
+};

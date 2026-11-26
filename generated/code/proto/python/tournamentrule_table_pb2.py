@@ -35,4 +35,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_TOURNAMENTRULETABLE']._serialized_start=31
   _globals['_TOURNAMENTRULETABLE']._serialized_end=894
   _globals['_TOURNAMENTRULETABLEDATA']._serialized_start=896
-  _globals['_TOURNAMENTRULETABLEDATA']._serialize
+  _globals['_TOURNAMENTRULETABLEDATA']._serialized_end=957
+# @@protoc_insertion_point(module_scope)

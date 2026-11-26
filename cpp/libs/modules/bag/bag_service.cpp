@@ -693,7 +693,9 @@ uint32_t BagService::AddItems(
 	entt::entity playerEntity,
 	Bag &bag,
 	const std::vector<InitItemParam> &itemsToAdd,
-	TransactionType txType)
+	TransactionType txType,
+	uint64_t correlationId,
+	const std::string &extra)
 {
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
@@ -723,7 +725,7 @@ uint32_t BagService::AddItems(
     for (std::size_t i = 0; i < itemsToAdd.size(); ++i)
     {
         const auto &item = itemsToAdd[i].itemPBComp;
-        LogItemsCreated(playerEntity, written[i], item.config_id(), item.size(), txType);
+        LogItemsCreated(playerEntity, written[i], item.config_id(), item.size(), txType, correlationId, extra);
         AnomalyDetector::RecordItemGain(playerEntity, item.config_id(), item.size());
     }
 

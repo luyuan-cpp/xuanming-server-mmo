@@ -1690,4 +1690,42 @@ inline ::TournamentRuleTable* PROTOBUF_NONNULL TournamentRuleTableData::add_data
       _internal_mutable_data()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_in
+  // @@protoc_insertion_point(field_add:TournamentRuleTableData.data)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>& TournamentRuleTableData::data() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:TournamentRuleTableData.data)
+  return _internal_data();
+}
+inline ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>* PROTOBUF_NONNULL
+TournamentRuleTableData::mutable_data() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:TournamentRuleTableData.data)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_data();
+}
+inline const ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>&
+TournamentRuleTableData::_internal_data() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.data_;
+}
+inline ::google::protobuf::RepeatedPtrField<::TournamentRuleTable>* PROTOBUF_NONNULL
+TournamentRuleTableData::_internal_mutable_data() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.data_;
+}
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif  // __GNUC__
+
+// @@protoc_insertion_point(namespace_scope)
+
+
+// @@protoc_insertion_point(global_scope)
+
+#include "google/protobuf/port_undef.inc"
+// clang-format on
+
+#endif  // tournamentrule_5ftable_2eproto_2epb_2eh

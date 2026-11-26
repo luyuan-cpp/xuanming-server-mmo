@@ -20,6 +20,16 @@ inline constexpr uint32_t kRareScrollPageConfigId = 3407;
 inline constexpr uint32_t kRareScrollInkConfigId = 3408;
 inline constexpr uint32_t kUnsealTalismanConfigId = 3409;   // 解封剥离符：清空绑定养成，仅恢复纯 T 原胚。
 inline constexpr uint32_t kInheritTalismanConfigId = 3410;  // 流派副套继承符：无损继承强化等级至同部位副套（目标转绑定）。
+inline constexpr uint32_t kBoundArtifactVoucherConfigId = 3404;
+
+// 策划口径永久仅自用绑定道具（商店 / 邮件 / 系统入包均强制 bound = true，禁止经任何发奖通道洗成可交易）。
+inline constexpr bool IsAlwaysBoundItem(uint32_t configId) {
+    return configId == kBoundArtifactVoucherConfigId ||
+           configId == kGuaranteeCharmConfigId ||
+           configId == kRareScrollInkConfigId ||
+           configId == kUnsealTalismanConfigId ||
+           configId == kInheritTalismanConfigId;
+}
 
 inline constexpr uint32_t kMinQualityTier = 1;
 inline constexpr uint32_t kMaxQualityTier = 5;

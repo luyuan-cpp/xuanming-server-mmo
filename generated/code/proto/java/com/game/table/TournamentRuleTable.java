@@ -2433,3 +2433,66 @@ private static final long serialVersionUID = 0L;
       bitField0_ |= 0x40000000;
       onChanged();
       return this;
+    }
+    /**
+     * <code>bool leyline_ban_enabled = 31;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLeylineBanEnabled() {
+      bitField0_ = (bitField0_ & ~0x40000000);
+      leylineBanEnabled_ = false;
+      onChanged();
+      return this;
+    }
+
+    // @@protoc_insertion_point(builder_scope:TournamentRuleTable)
+  }
+
+  // @@protoc_insertion_point(class_scope:TournamentRuleTable)
+  private static final com.game.table.TournamentRuleTable DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new com.game.table.TournamentRuleTable();
+  }
+
+  public static com.game.table.TournamentRuleTable getDefaultInstance() {
+    return DEFAULT_INSTANCE;
+  }
+
+  private static final com.google.protobuf.Parser<TournamentRuleTable>
+      PARSER = new com.google.protobuf.AbstractParser<TournamentRuleTable>() {
+    @java.lang.Override
+    public TournamentRuleTable parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      Builder builder = newBuilder();
+      try {
+        builder.mergeFrom(input, extensionRegistry);
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(builder.buildPartial());
+      } catch (com.google.protobuf.UninitializedMessageException e) {
+        throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(e)
+            .setUnfinishedMessage(builder.buildPartial());
+      }
+      return builder.buildPartial();
+    }
+  };
+
+  public static com.google.protobuf.Parser<TournamentRuleTable> parser() {
+    return PARSER;
+  }
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<TournamentRuleTable> getParserForType() {
+    return PARSER;
+  }
+
+  @java.lang.Override
+  public com.game.table.TournamentRuleTable getDefaultInstanceForType() {
+    return DEFAULT_INSTANCE;
+  }
+
+}
+

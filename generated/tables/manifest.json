@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
   "schema_digest": "55d900397a301fa1",
-  "version": 78,
-  "content_digest": "856baeece70a18affa10a7f8f48c03a65d1872afedb5cf5bd3f732aabbba6891",
-  "generated_at": "2026-11-26T04:37:42Z",
+  "version": 79,
+  "content_digest": "a6c57f8561a21b643762570d3f03f4aa8cec8018529fc1716b202b3b064ab81b",
+  "generated_at": "2026-11-26T04:45:44Z",
   "source_rev": {
-    "commit": "0f9bc81d68f0af285497d6ffc5cea8a87c5c5fc9",
-    "data_dirty": true
+    "commit": "ef8355f3d297a1d4816d49c8f9c98bfff2527d5f",
+    "data_dirty": false
   },
   "table_count": 78,
   "tables": [
@@ -964,24 +964,24 @@
       "name": "GuildShop",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 16,
+      "rows": 17,
       "source": {
         "file": "GuildShop.xlsx",
-        "size": 6245,
-        "sha256": "dbeff1e19e15df06f10cae20040e1658307fc95fb8103edb0533eb427fbf1274"
+        "size": 6298,
+        "sha256": "ee6ba92226c3c510356daff52471d43088eecd52af673d3b413d4244e6c272f5"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildshop.json",
-          "size": 3342,
-          "sha256": "f036db0a0c15a9fea047cf67f9a38e615f1571a1341f2a735ab700de4fcb9293"
+          "size": 3552,
+          "sha256": "94d5f0dde2d83638d8cbb42cf5540ce27045f71a72c50b4f035300182a8effcc"
         },
         {
           "kind": "binary",
           "file": "guildshop.pb",
-          "size": 532,
-          "sha256": "5b796cdd4ef9f6cc01e0d81954578c88aa0b464a5a4073ba48b3ac754dc97e6a"
+          "size": 567,
+          "sha256": "f2217aeb74b0a5cdd5e46c125b5bfaab70689444d4f08be674ea9e4ad225cd5c"
         }
       ]
     },
@@ -992,21 +992,21 @@
       "rows": 4,
       "source": {
         "file": "GuildWarMilestone.xlsx",
-        "size": 5374,
-        "sha256": "8f5e3cee96fef7649df60ef8f949459dd05050657c250faf5968ad1a23d1eba1"
+        "size": 5390,
+        "sha256": "866cdb1bafd07589baae5a5c164f7f47b0f7bd1ec6d9b527013481a88a838142"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildwarmilestone.json",
-          "size": 1179,
-          "sha256": "505df67d644a73332e0b4615fb1224d49e375146602bb11d3c9b73b419be485d"
+          "size": 1182,
+          "sha256": "ad22132f2616322e13329e74ef850858b78f5bbfefc8adf4a8f7f0360ed2b06c"
         },
         {
           "kind": "binary",
           "file": "guildwarmilestone.pb",
-          "size": 272,
-          "sha256": "3a466c7881758e2b1271673102ee2675c7bd086840b392cacf61a20335b87bc1"
+          "size": 275,
+          "sha256": "31e72b5f9e6a43ab148b843fa90a0ce9c34ac8320ef66092113dbc446bd93169"
         }
       ]
     },
@@ -1742,21 +1742,21 @@
       "rows": 9,
       "source": {
         "file": "TournamentReward.xlsx",
-        "size": 6472,
-        "sha256": "cdec96dc0accb2ef6bdccaeeae74dca2ca6a1e225d76ac31a1e75e7e9bfea8af"
+        "size": 6525,
+        "sha256": "5d044352bab0b4f8d4374bc88664d3c448ac947bd265bf4cd4f514e1fc3d3a19"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "tournamentreward.json",
-          "size": 4382,
-          "sha256": "364be86292f7f320fb22473437999545a5c4288d5e1e877a2d7b635a0df79b1d"
+          "size": 4484,
+          "sha256": "512ddb8b040db2f4a3d0c1d0c0ed20323abeaf865fcd4c60bca0eec5fde46d4e"
         },
         {
           "kind": "binary",
           "file": "tournamentreward.pb",
-          "size": 2123,
-          "sha256": "eddb30aa52358b54dd7d034bd4dc506a42e72be8886a9029b140c23aea300c3c"
+          "size": 2141,
+          "sha256": "bb09936beca5925f08cd1ed75d9e451a0fdc7765e5c02735c90f5a50f6f1c2f7"
         }
       ]
     },

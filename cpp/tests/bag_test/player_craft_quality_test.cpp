@@ -693,4 +693,38 @@ TEST_F(PlayerCraftQualityTest, EnhanceAndCraftBindStrictlyOnActualBoundConsumpti
     EXPECT_TRUE(InventoryOf(buyer).GetItemCompByGuid(weaponId)->bound());
 }
 
+TEST_F(PlayerCraftQualityTest, AlwaysBoundRuleAndBatchInitCreditPreserveBoundIsolation) {
+    EXPECT_TRUE(equipcraft::IsAlwaysBoundItem(equipcraft::kBoundArtifactVoucherConfigId));
+    EXPECT_TRUE(equipcraft::IsAlwaysBoundItem(equipcraft::kGuaranteeCharmConfigId));
+    EXPECT_TRUE(equipcraft::IsAlwaysBoundItem(equipcraft::kRareScrollInkConfigId));
+    EXPECT_TRUE(equipcraft::IsAlwaysBoundItem(equipcraft::kUnsealTalismanConfigId));
+    EXPECT_TRUE(equipcraft::IsAlwaysBoundItem(equipcraft::kInheritTalismanConfigId));
+    EXPECT_FALSE(equipcraft::IsAlwaysBoundItem(equipcraft::kPolishSandConfigId));
+    EXPECT_FALSE(equipcraft::IsAlwaysBoundItem(equipcraft::kScrollFragmentConfigId));
+    EXPECT_FALSE(equipcraft::IsAlwaysBoundItem(equipcraft::kRareScrollPageConfigId));
+
+    // 模拟 AssetOpSystem::Credit 的批次入包路径：3408 天工秘墨强制绑定，3407 绝学残卷保持可交易。
+    std::vector<InitItemParam> creditItems;
+    {
+        InitItemParam page;
+        page.itemPBComp.set_item_id(kInvalidGuid);
+        page.itemPBComp.set_config_id(equipcraft::kRareScrollPageConfigId);
+        page.itemPBComp.set_size(2);
+        page.itemPBComp.set_bound(equipcraft::IsAlwaysBoundItem(equipcraft::kRareScrollPageConfigId));
+        creditItems.push_back(std::move(page));
+    }
+    {
+        InitItemParam ink;
+        ink.itemPBComp.set_item_id(kInvalidGuid);
+        ink.itemPBComp.set_config_id(equipcraft::kRareScrollInkConfigId);
+        ink.itemPBComp.set_size(1);
+        ink.itemPBComp.set_bound(equipcraft::IsAlwaysBoundItem(equipcraft::kRareScrollInkConfigId));
+        creditItems.push_back(std::move(ink));
+    }
+    ASSERT_EQ(kSuccess, BagService::AddItems(buyer, InventoryOf(buyer), creditItems, TX_GUILD_SHOP, 99001u));
+    EXPECT_EQ(2u, InventoryOf(buyer).GetTotalTradableItemCount(equipcraft::kRareScrollPageConfigId));
+    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kRareScrollInkConfigId));
+    EXPECT_EQ(0u, InventoryOf(buyer).GetTotalTradableItemCount(equipcraft::kRareScrollInkConfigId));
+}
+
 } // namespace

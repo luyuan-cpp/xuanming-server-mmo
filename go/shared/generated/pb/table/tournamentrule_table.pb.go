@@ -430,4 +430,14 @@ func file_tournamentrule_table_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tournamentrule_table_proto_rawDesc), len(file_tournamentrule_table_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
-			NumExtensions
+			NumExtensions: 0,
+			NumServices:   0,
+		},
+		GoTypes:           file_tournamentrule_table_proto_goTypes,
+		DependencyIndexes: file_tournamentrule_table_proto_depIdxs,
+		MessageInfos:      file_tournamentrule_table_proto_msgTypes,
+	}.Build()
+	File_tournamentrule_table_proto = out.File
+	file_tournamentrule_table_proto_goTypes = nil
+	file_tournamentrule_table_proto_depIdxs = nil
+}
