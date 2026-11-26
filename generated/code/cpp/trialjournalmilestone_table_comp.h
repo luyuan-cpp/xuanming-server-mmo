@@ -74,6 +74,14 @@ struct TrialJournalMilestoneDescComp {
     std::string_view value;
 };
 
+struct TrialJournalMilestoneGrant_pet_cosmetic_idComp {
+    uint32_t value;
+};
+
+struct TrialJournalMilestoneGrant_skill_vfx_idComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -123,4 +131,10 @@ inline TrialJournalMilestoneTitleComp MakeTrialJournalMilestoneTitleComp(const T
 }
 inline TrialJournalMilestoneDescComp MakeTrialJournalMilestoneDescComp(const TrialJournalMilestoneTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline TrialJournalMilestoneGrant_pet_cosmetic_idComp MakeTrialJournalMilestoneGrant_pet_cosmetic_idComp(const TrialJournalMilestoneTable& row) {
+    return { row.grant_pet_cosmetic_id() };
+}
+inline TrialJournalMilestoneGrant_skill_vfx_idComp MakeTrialJournalMilestoneGrant_skill_vfx_idComp(const TrialJournalMilestoneTable& row) {
+    return { row.grant_skill_vfx_id() };
 }

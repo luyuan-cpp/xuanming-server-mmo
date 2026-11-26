@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 
 	"match/internal/metrics"
 	"match/internal/ranked"
@@ -38,8 +40,10 @@ const (
 )
 
 const (
-	seasonColumns       = "season_id,season_key,season_name,rank_generation,source_epoch,rule_version,state,rollover_stage,start_ms,end_ms,rank_board_id,expected_rank_cursor,champion_player_id,champion_name,champion_rating_centi,updated_ms"
-	playerSeasonColumns = "season_id,player_id,qualified,qualified_at_ms,rating_centi,peak_rating_centi,peak_tier,valid_matches,wins,losses,draws,milestone_bits,honor_bits,final_rank,updated_ms,current_win_streak,best_win_streak"
+	seasonColumns        = "season_id,season_key,season_name,rank_generation,source_epoch,rule_version,state,rollover_stage,start_ms,end_ms,rank_board_id,expected_rank_cursor,champion_player_id,champion_name,champion_rating_centi,updated_ms"
+	playerSeasonColumns  = "season_id,player_id,qualified,qualified_at_ms,rating_centi,peak_rating_centi,peak_tier,valid_matches,wins,losses,draws,milestone_bits,honor_bits,final_rank,updated_ms,current_win_streak,best_win_streak"
+	rivalryColumns       = "season_id,player_id,opponent_id,opponent_name,wins,losses,draws,last_outcome,last_battle_id,updated_ms"
+	featuredBuildColumns = "season_id,build_key,season_seal_id,starter_pet_table_id,core_skill_ids,appearances,wins,high_tier_wins,featured_battle_id,featured_player_id,featured_player_name,featured_rating_centi,featured_team_size,featured_total_rounds,updated_ms"
 )
 
 var (
@@ -220,6 +224,10 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 	if ruleBanSlots := cat.Rule().GetSkillBanSlotsPerTeam(); ruleBanSlots > 0 && hasMemberRating && minRatingCenti >= int64(cat.Rule().GetSkillBanMinRatingCenti()) {
 		skillBanSlots = ruleBanSlots
 	}
+	rivalryEncounters, err := loadRivalryEncountersForFormationTx(ctx, tx, cur.SeasonId, f.GetMembers())
+	if err != nil {
+		return err
+	}
 	frozen := &battlepb.RankedMatchContext{
 		SeasonId:             cur.SeasonId,
 		SeasonKey:            cur.SeasonKey,
@@ -230,6 +238,7 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 		UseFreePreset:        false,
 		MemberWinStreaks:     memberStreaks,
 		SkillBanSlotsPerTeam: skillBanSlots,
+		RivalryEncounters:    rivalryEncounters,
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(frozen)
 	if err != nil {
@@ -674,6 +683,14 @@ func (s *Store) LoadRankedProfile(ctx context.Context, playerID uint64, includeH
 			return nil, err
 		}
 	}
+	featuredBuilds, err := loadTopFeaturedBuildsTx(ctx, tx, cur.SeasonId, 5)
+	if err != nil {
+		return nil, err
+	}
+	topRivals, err := loadTopRivalsTx(ctx, tx, cur.SeasonId, playerID, 8)
+	if err != nil {
+		return nil, err
+	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -693,6 +710,8 @@ func (s *Store) LoadRankedProfile(ctx context.Context, playerID uint64, includeH
 		CosmeticLoadout: effectiveCosmeticLoadout(prefs, owned),
 		Presets:         cat.PresetViews(),
 		ServerTimeMs:    stamp,
+		FeaturedBuilds:  featuredBuilds,
+		TopRivals:       topRivals,
 	}
 	for _, r := range owned {
 		resp.Entitlements = append(resp.Entitlements, toRewardEntitlement(r))
@@ -1052,6 +1071,34 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 		teamSize = uint32(len(teamA))
 	}
 
+	// 论剑 V6：按确定性 (player_id, opponent_id) 顺序预读历史宿敌行，供本局雪耻复仇判定与同事务原子更新。
+	type rivalryKey struct{ playerID, opponentID uint64 }
+	priorRivalries := make(map[rivalryKey]*pb.MatchRankedRivalryRecord)
+	if !zeroRound {
+		pairs := make([]rivalryKey, 0, len(teamA)*len(teamB)*2)
+		for _, a := range teamA {
+			for _, b := range teamB {
+				pairs = append(pairs, rivalryKey{a, b}, rivalryKey{b, a})
+			}
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].playerID != pairs[j].playerID {
+				return pairs[i].playerID < pairs[j].playerID
+			}
+			return pairs[i].opponentID < pairs[j].opponentID
+		})
+		for _, pair := range pairs {
+			rec, rErr := scanRivalryRecord(tx.QueryRowContext(ctx,
+				"SELECT "+rivalryColumns+" FROM match_ranked_rivalry WHERE season_id=? AND player_id=? AND opponent_id=? FOR UPDATE",
+				season.SeasonId, pair.playerID, pair.opponentID))
+			if rErr == nil {
+				priorRivalries[pair] = rec
+			} else if !errors.Is(rErr, sql.ErrNoRows) {
+				return false, rErr
+			}
+		}
+	}
+
 	for _, pid := range members {
 		ps := playerSeasons[pid]
 		st := settlementByPlayer[pid]
@@ -1075,6 +1122,10 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 		wins, losses, draws := ps.Wins, ps.Losses, ps.Draws
 		curStreak, bestStreak := ps.CurrentWinStreak, ps.BestWinStreak
 		endedOpponentStreak := uint32(0)
+		revengedRival := false
+		revengedOpponentName := ""
+		revengedWinsAfter := uint32(0)
+		revengedLossesAfter := uint32(0)
 		peakRating := ps.PeakRatingCenti
 		peakTier := pb.RankedTier(ps.PeakTier)
 		bits := ps.MilestoneBits
@@ -1196,12 +1247,60 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 				if newlyQualified {
 					rankAchieved = qualifiedAt
 				}
-				batch.Entries = append(batch.Entries, &rankpb.RankScoreInput{
+					batch.Entries = append(batch.Entries, &rankpb.RankScoreInput{
 					EntityId:     pid,
 					Score:        afterRating,
 					AchievedMs:   rankAchieved,
 					ScoreVersion: nextGames,
 				})
+			}
+
+			// 论剑 V6：更新宿敌交手账本并判定本局雪耻复仇，同时汇总正式自养局的高段热门流派。
+			opponents := teamB
+			if sides[pid] == 1 {
+				opponents = teamA
+			}
+			var bestRevengeOpp uint64
+			var bestRevengePrior *pb.MatchRankedRivalryRecord
+			for _, oppID := range opponents {
+				prior := priorRivalries[rivalryKey{pid, oppID}]
+				oppName := ""
+				if oppSt := settlementByPlayer[oppID]; oppSt != nil && oppSt.GetPlayerDisplayName() != "" {
+					oppName = oppSt.GetPlayerDisplayName()
+				} else if prior != nil && prior.OpponentName != "" {
+					oppName = prior.OpponentName
+				}
+				if playerWon && isRivalryRevengeTarget(prior) {
+					if bestRevengePrior == nil ||
+						prior.Losses > bestRevengePrior.Losses ||
+						(prior.Losses == bestRevengePrior.Losses && prior.Wins > bestRevengePrior.Wins) ||
+						(prior.Losses == bestRevengePrior.Losses && prior.Wins == bestRevengePrior.Wins && oppID < bestRevengeOpp) {
+						bestRevengeOpp = oppID
+						bestRevengePrior = prior
+						revengedOpponentName = oppName
+					}
+				}
+				nextRec := nextRivalryRecord(season.SeasonId, pid, oppID, oppName, prior, scoreA == 0.5, playerWon, event.BattleId, stamp)
+				if err = upsertRivalryRecordTx(ctx, tx, nextRec); err != nil {
+					return false, err
+				}
+			}
+			if bestRevengePrior != nil {
+				revengedRival = true
+				revengedWinsAfter = bestRevengePrior.Wins + 1
+				revengedLossesAfter = bestRevengePrior.Losses
+			} else if playerWon && st != nil && st.GetRevengedRival() {
+				revengedRival = true
+				revengedOpponentName = st.GetRevengedOpponentName()
+				revengedWinsAfter = st.GetRevengedWinsAfter()
+				revengedLossesAfter = st.GetRevengedLossesAfter()
+			}
+
+			if !rctx.GetUseFreePreset() && participated && st != nil {
+				if err = upsertFeaturedBuildTx(ctx, tx, season.SeasonId, cat.Rule().GetTierQingfengCenti(),
+					event.BattleId, pid, st, afterRating, teamSize, event.GetTotalRounds(), playerWon, stamp); err != nil {
+					return false, err
+				}
 			}
 		}
 
@@ -1228,6 +1327,10 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 			PetPresetId:             loadout.GetPresets().GetPetPresetId(),
 			WinStreakAfter:          curStreak,
 			EndedOpponentStreak:     endedOpponentStreak,
+			RevengedRival:           revengedRival,
+			RevengedOpponentName:    revengedOpponentName,
+			RevengedWinsAfter:       revengedWinsAfter,
+			RevengedLossesAfter:     revengedLossesAfter,
 		}
 		if err = writeRankedBattleRowTx(ctx, tx, view, pid); err != nil {
 			return false, err
@@ -1351,4 +1454,277 @@ func writeVoidRankedBattlesTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormat
 		}
 	}
 	return nil
+}
+
+// ---- 论剑 V6：宿敌恩怨账本与问道名局热门流派辅助函数 ----
+
+func scanRivalryRecord(row scanner) (*pb.MatchRankedRivalryRecord, error) {
+	r := &pb.MatchRankedRivalryRecord{}
+	err := row.Scan(&r.SeasonId, &r.PlayerId, &r.OpponentId, &r.OpponentName, &r.Wins, &r.Losses, &r.Draws, &r.LastOutcome, &r.LastBattleId, &r.UpdatedMs)
+	return r, err
+}
+
+func scanFeaturedBuildRecord(row scanner) (*pb.MatchRankedFeaturedBuildRecord, error) {
+	r := &pb.MatchRankedFeaturedBuildRecord{}
+	err := row.Scan(&r.SeasonId, &r.BuildKey, &r.SeasonSealId, &r.StarterPetTableId, &r.CoreSkillIds, &r.Appearances, &r.Wins, &r.HighTierWins, &r.FeaturedBattleId, &r.FeaturedPlayerId, &r.FeaturedPlayerName, &r.FeaturedRatingCenti, &r.FeaturedTeamSize, &r.FeaturedTotalRounds, &r.UpdatedMs)
+	return r, err
+}
+
+func isRivalryRevengeTarget(rec *pb.MatchRankedRivalryRecord) bool {
+	if rec == nil || rec.Wins+rec.Losses == 0 {
+		return false
+	}
+	return rec.LastOutcome == 2 || rec.Losses > rec.Wins
+}
+
+func nextRivalryRecord(seasonID uint32, playerID, opponentID uint64, opponentName string, prior *pb.MatchRankedRivalryRecord, isDraw, playerWon bool, battleID, stamp uint64) *pb.MatchRankedRivalryRecord {
+	rec := &pb.MatchRankedRivalryRecord{
+		SeasonId:     seasonID,
+		PlayerId:     playerID,
+		OpponentId:   opponentID,
+		OpponentName: opponentName,
+		LastBattleId: battleID,
+		UpdatedMs:    stamp,
+	}
+	if prior != nil {
+		rec.Wins = prior.Wins
+		rec.Losses = prior.Losses
+		rec.Draws = prior.Draws
+		if rec.OpponentName == "" {
+			rec.OpponentName = prior.OpponentName
+		}
+	}
+	switch {
+	case isDraw:
+		rec.Draws++
+		rec.LastOutcome = 3
+	case playerWon:
+		rec.Wins++
+		rec.LastOutcome = 1
+	default:
+		rec.Losses++
+		rec.LastOutcome = 2
+	}
+	return rec
+}
+
+func upsertRivalryRecordTx(ctx context.Context, tx *sql.Tx, rec *pb.MatchRankedRivalryRecord) error {
+	_, err := tx.ExecContext(ctx,
+		"INSERT INTO match_ranked_rivalry("+rivalryColumns+") VALUES(?,?,?,?,?,?,?,?,?,?) "+
+			"ON DUPLICATE KEY UPDATE opponent_name=IF(VALUES(opponent_name)<>'',VALUES(opponent_name),opponent_name),wins=VALUES(wins),losses=VALUES(losses),draws=VALUES(draws),last_outcome=VALUES(last_outcome),last_battle_id=VALUES(last_battle_id),updated_ms=VALUES(updated_ms)",
+		rec.SeasonId, rec.PlayerId, rec.OpponentId, rec.OpponentName, rec.Wins, rec.Losses, rec.Draws, rec.LastOutcome, rec.LastBattleId, rec.UpdatedMs)
+	return err
+}
+
+func loadRivalryEncountersForFormationTx(ctx context.Context, tx *sql.Tx, seasonID uint32, members []*pb.MatchFormationMember) ([]*battlepb.RankedRivalryEncounter, error) {
+	if seasonID == 0 || len(members) < 2 {
+		return nil, nil
+	}
+	var out []*battlepb.RankedRivalryEncounter
+	for _, a := range members {
+		for _, b := range members {
+			if a.GetPlayerId() == 0 || b.GetPlayerId() == 0 || a.GetTeamIndex() == b.GetTeamIndex() {
+				continue
+			}
+			rec, err := scanRivalryRecord(tx.QueryRowContext(ctx,
+				"SELECT "+rivalryColumns+" FROM match_ranked_rivalry WHERE season_id=? AND player_id=? AND opponent_id=?",
+				seasonID, a.GetPlayerId(), b.GetPlayerId()))
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if rec.Wins+rec.Losses == 0 {
+				continue
+			}
+			out = append(out, &battlepb.RankedRivalryEncounter{
+				PlayerId:      rec.PlayerId,
+				OpponentId:    rec.OpponentId,
+				OpponentName:  rec.OpponentName,
+				Wins:          rec.Wins,
+				Losses:        rec.Losses,
+				RevengeTarget: isRivalryRevengeTarget(rec),
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].PlayerId != out[j].PlayerId {
+			return out[i].PlayerId < out[j].PlayerId
+		}
+		return out[i].OpponentId < out[j].OpponentId
+	})
+	return out, nil
+}
+
+func loadTopRivalsTx(ctx context.Context, tx *sql.Tx, seasonID uint32, playerID uint64, limit int) ([]*pb.RankedRivalrySummary, error) {
+	rows, err := tx.QueryContext(ctx,
+		"SELECT "+rivalryColumns+" FROM match_ranked_rivalry WHERE season_id=? AND player_id=? ORDER BY (wins+losses) DESC,updated_ms DESC LIMIT ?",
+		seasonID, playerID, limit)
+	if err != nil {
+		return nil, err
+	}
+	var out []*pb.RankedRivalrySummary
+	for rows.Next() {
+		rec, scanErr := scanRivalryRecord(rows)
+		if scanErr != nil {
+			rows.Close()
+			return nil, scanErr
+		}
+		if rec.Wins+rec.Losses+rec.Draws == 0 {
+			continue
+		}
+		out = append(out, &pb.RankedRivalrySummary{
+			OpponentId:   rec.OpponentId,
+			OpponentName: rec.OpponentName,
+			Wins:         rec.Wins,
+			Losses:       rec.Losses,
+			Draws:        rec.Draws,
+			LastOutcome:  rec.LastOutcome,
+			LastBattleId: rec.LastBattleId,
+			UpdatedMs:    rec.UpdatedMs,
+		})
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func canonicalBuildKey(sealID, petTableID uint32, skillIDs []uint32) (string, string, []uint32) {
+	seen := make(map[uint32]struct{}, len(skillIDs))
+	norm := make([]uint32, 0, 4)
+	for _, sid := range skillIDs {
+		if sid == 0 {
+			continue
+		}
+		if _, dup := seen[sid]; dup {
+			continue
+		}
+		seen[sid] = struct{}{}
+		norm = append(norm, sid)
+	}
+	sort.Slice(norm, func(i, j int) bool { return norm[i] < norm[j] })
+	if len(norm) > 4 {
+		norm = norm[:4]
+	}
+	if sealID == 0 && petTableID == 0 && len(norm) == 0 {
+		return "", "", nil
+	}
+	parts := make([]string, len(norm))
+	for i, sid := range norm {
+		parts[i] = strconv.FormatUint(uint64(sid), 10)
+	}
+	csv := strings.Join(parts, ",")
+	return fmt.Sprintf("%d:%d:%s", sealID, petTableID, csv), csv, norm
+}
+
+func parseCoreSkillIDs(csv string) []uint32 {
+	if strings.TrimSpace(csv) == "" {
+		return nil
+	}
+	raw := strings.Split(csv, ",")
+	out := make([]uint32, 0, len(raw))
+	for _, token := range raw {
+		v, err := strconv.ParseUint(strings.TrimSpace(token), 10, 32)
+		if err == nil && v > 0 {
+			out = append(out, uint32(v))
+		}
+	}
+	return out
+}
+
+func upsertFeaturedBuildTx(ctx context.Context, tx *sql.Tx, seasonID, tierQingfengCenti uint32, battleID, playerID uint64, st *battlepb.BattleSettlementData, afterRating int64, teamSize, totalRounds uint32, playerWon bool, stamp uint64) error {
+	buildKey, csv, _ := canonicalBuildKey(st.GetFinalSeasonSealId(), st.GetStarterPetTableId(), st.GetCoreSkillIds())
+	if buildKey == "" {
+		return nil
+	}
+	highTierMin := int64(tierQingfengCenti)
+	if highTierMin <= 0 {
+		highTierMin = 152000
+	}
+	highTierWin := playerWon && afterRating >= highTierMin
+	rec, err := scanFeaturedBuildRecord(tx.QueryRowContext(ctx,
+		"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND build_key=? FOR UPDATE",
+		seasonID, buildKey))
+	if errors.Is(err, sql.ErrNoRows) {
+		rec = &pb.MatchRankedFeaturedBuildRecord{
+			SeasonId:          seasonID,
+			BuildKey:          buildKey,
+			SeasonSealId:      st.GetFinalSeasonSealId(),
+			StarterPetTableId: st.GetStarterPetTableId(),
+			CoreSkillIds:      csv,
+		}
+	} else if err != nil {
+		return err
+	}
+	rec.Appearances++
+	if playerWon {
+		rec.Wins++
+		if highTierWin {
+			rec.HighTierWins++
+		}
+		if rec.FeaturedBattleId == 0 || afterRating >= rec.FeaturedRatingCenti {
+			rec.FeaturedBattleId = battleID
+			rec.FeaturedPlayerId = playerID
+			rec.FeaturedPlayerName = st.GetPlayerDisplayName()
+			rec.FeaturedRatingCenti = afterRating
+			rec.FeaturedTeamSize = teamSize
+			rec.FeaturedTotalRounds = totalRounds
+		}
+	}
+	rec.UpdatedMs = stamp
+	_, err = tx.ExecContext(ctx,
+		"INSERT INTO match_ranked_featured_build("+featuredBuildColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+			"ON DUPLICATE KEY UPDATE appearances=VALUES(appearances),wins=VALUES(wins),high_tier_wins=VALUES(high_tier_wins),featured_battle_id=VALUES(featured_battle_id),featured_player_id=VALUES(featured_player_id),featured_player_name=VALUES(featured_player_name),featured_rating_centi=VALUES(featured_rating_centi),featured_team_size=VALUES(featured_team_size),featured_total_rounds=VALUES(featured_total_rounds),updated_ms=VALUES(updated_ms)",
+		rec.SeasonId, rec.BuildKey, rec.SeasonSealId, rec.StarterPetTableId, rec.CoreSkillIds,
+		rec.Appearances, rec.Wins, rec.HighTierWins, rec.FeaturedBattleId, rec.FeaturedPlayerId,
+		rec.FeaturedPlayerName, rec.FeaturedRatingCenti, rec.FeaturedTeamSize, rec.FeaturedTotalRounds, rec.UpdatedMs)
+	return err
+}
+
+func loadTopFeaturedBuildsTx(ctx context.Context, tx *sql.Tx, seasonID uint32, limit int) ([]*pb.RankedFeaturedBuildView, error) {
+	rows, err := tx.QueryContext(ctx,
+		"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND wins>0 ORDER BY high_tier_wins DESC,wins DESC,featured_rating_centi DESC,updated_ms DESC LIMIT ?",
+		seasonID, limit)
+	if err != nil {
+		return nil, err
+	}
+	var out []*pb.RankedFeaturedBuildView
+	for rows.Next() {
+		rec, scanErr := scanFeaturedBuildRecord(rows)
+		if scanErr != nil {
+			rows.Close()
+			return nil, scanErr
+		}
+		out = append(out, &pb.RankedFeaturedBuildView{
+			BuildKey:            rec.BuildKey,
+			SeasonSealId:        rec.SeasonSealId,
+			StarterPetTableId:   rec.StarterPetTableId,
+			CoreSkillIds:        parseCoreSkillIDs(rec.CoreSkillIds),
+			Appearances:         rec.Appearances,
+			Wins:                rec.Wins,
+			HighTierWins:        rec.HighTierWins,
+			FeaturedBattleId:    rec.FeaturedBattleId,
+			FeaturedPlayerId:    rec.FeaturedPlayerId,
+			FeaturedPlayerName:  rec.FeaturedPlayerName,
+			FeaturedRatingCenti: rec.FeaturedRatingCenti,
+			FeaturedTeamSize:    rec.FeaturedTeamSize,
+			FeaturedTotalRounds: rec.FeaturedTotalRounds,
+			UpdatedMs:           rec.UpdatedMs,
+		})
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// isFeaturedRankedReplayAllowed 允许全服玩家观摩「问道名局」高段热门流派代表战报（fail-closed：仅查 featured_battle_id 索引）。
+func (s *Store) isFeaturedRankedReplayAllowed(ctx context.Context, battleID uint64) bool {
+	if s == nil || s.DB == nil || battleID == 0 {
+		return false
+	}
+	var one int
+	return s.DB.QueryRowContext(ctx, "SELECT 1 FROM match_ranked_featured_build WHERE featured_battle_id=? LIMIT 1", battleID).Scan(&one) == nil
 }

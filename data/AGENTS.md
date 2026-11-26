@@ -234,11 +234,11 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TravelPassSeason** | `TravelPassSeason.xlsx` | `travelpassseason_table.proto` | 15 | 15 | 1 | — | — | — | — | — | — | — |
 | **TravelPassTier** | `TravelPassTier.xlsx` | `travelpasstier_table.proto` | 14 | 14 | 10 | — | — | `pass_id` | `pass_id→TravelPassSeason.id` | — | — | — |
 | **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 12 | — | — | `chapter_id` | — | — | — | — |
-| **TrialJournalMilestone** | `TrialJournalMilestone.xlsx` | `trialjournalmilestone_table.proto` | 15 | 15 | 11 | — | — | `scope_chapter_id` | — | `id` | — | — |
+| **TrialJournalMilestone** | `TrialJournalMilestone.xlsx` | `trialjournalmilestone_table.proto` | 17 | 17 | 11 | — | — | `scope_chapter_id` | — | `id` | — | — |
 | **TrialJournalSeal** | `TrialJournalSeal.xlsx` | `trialjournalseal_table.proto` | 8 | 8 | 33 | — | — | `entry_id` | `entry_id→TrialJournalEntry.id` | `id` | — | — |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **82** 张表、**1052** 个物理列、**899** 个进产物的字段。
+合计 **82** 张表、**1054** 个物理列、**901** 个进产物的字段。
 
 <!-- END GENERATED -->

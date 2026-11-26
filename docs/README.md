@@ -78,6 +78,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [equipment-eight-slot-planning.md](planning/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
 - [equipment-loadout-presets-v1.md](planning/equipment-loadout-presets-v1.md) — 装备流派方案预设（一键多套换装 + 付费扩展套位）完整设计方案 V1
 - [equipment-quality-and-skill-crafting-v1.md](planning/equipment-quality-and-skill-crafting-v1.md) — 《五行奇谈》V1 装备窄区间品相、率土式永久保值制书与轻量化手艺设计
+- [equipment-quality-and-skill-crafting-v2-v5.md](planning/equipment-quality-and-skill-crafting-v2-v5.md) — 《五行奇谈》装备品相 · 技能制书 · 名匠手艺 V2–V5 演进策划与工程设计
 - [equipment-recycling-trade-economy-candidate.md](planning/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
 - [equipment-recycling-trade-economy-v1.md](planning/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
 - [equipment-v1-affixes-artifacts.md](planning/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
@@ -149,6 +150,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-prep-skill-ban-ui-handoff.md](planning/ui-handoff/battle-prep-skill-ban-ui-handoff.md) — 战前技能禁选（每方 3 Ban · 方案 A）UI 纯功能作图交接清单
 - [battle-season-one-ui-handoff.md](planning/ui-handoff/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
+- [equipment-craft-v2-v5-ui-handoff.md](planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md) — 《五行奇谈》装备品相与典籍制书 V2–V5 增量图标纯功能交接单
 - [equipment-loadout-presets-ui-handoff.md](planning/ui-handoff/equipment-loadout-presets-ui-handoff.md) — 装备流派方案预设（一键多套换装）UI 纯功能需求清单
 - [growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md) — 率土式叠加成长战法 V2（《兵法叠势卷》）纯功能图标交接单
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
@@ -157,6 +159,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [latest-expansions-ui-handoff.md](planning/ui-handoff/latest-expansions-ui-handoff.md) — 近期新玩法剩余增量 UI 切片需求清单（论剑 V4 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉 / 野外栖息地）
 - [official-passport-ui-handoff.md](planning/ui-handoff/official-passport-ui-handoff.md) — 官方通行证与账号注册 · Unity UI 异机交接
 - [ranked-play-v2-ui-handoff.md](planning/ui-handoff/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
+- [remaining-5-icons-ui-handoff.md](planning/ui-handoff/remaining-5-icons-ui-handoff.md) — 剩余 5 枚增量图标纯功能作图交接清单（典籍制书卷 1–3 + 百宝阁 V2 节庆礼盒）
 - [season-team-tournament-v1-ui-handoff.md](planning/ui-handoff/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
 - [season-team-tournament-v2-ui-handoff.md](planning/ui-handoff/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
 - [season-team-tournament-v3-ui-handoff.md](planning/ui-handoff/season-team-tournament-v3-ui-handoff.md) — 《群仙问道赛》V3+V4 增量 UI 需求清单（模块 D / E / F / G / H / I / J）
@@ -491,6 +494,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### 其他
 
 - [deferred-clawback-bypass-audit-2026-05.md](ops/deferred-clawback-bypass-audit-2026-05.md) — 补缴系统(Deferred Clawback)旁路审计报告
+- [external-support-revenue-guide.md](ops/external-support-revenue-guide.md) — 《五行奇谈》游戏外独立开发者支持收入配置与零拒审运营手册
 - [godb-pipeline-launch-todo.md](ops/godb-pipeline-launch-todo.md) — 存盘管线（go/db）上线待做
 - [ponytail-setup.md](ops/ponytail-setup.md) — ponytail 安装：Claude Code、Codex、Gemini（新电脑照做）
 - [pr-templates.md](ops/pr-templates.md) — PR Templates — HTTP /api/login Migration

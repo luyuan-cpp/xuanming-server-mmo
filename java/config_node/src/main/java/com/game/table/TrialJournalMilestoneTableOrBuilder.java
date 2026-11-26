@@ -147,4 +147,16 @@ public interface TrialJournalMilestoneTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 grant_pet_cosmetic_id = 16;</code>
+   * @return The grantPetCosmeticId.
+   */
+  int getGrantPetCosmeticId();
+
+  /**
+   * <code>uint32 grant_skill_vfx_id = 17;</code>
+   * @return The grantSkillVfxId.
+   */
+  int getGrantSkillVfxId();
 }

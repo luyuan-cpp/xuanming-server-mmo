@@ -38,6 +38,8 @@ type TrialJournalMilestoneTable struct {
 	Enabled                   bool                   `protobuf:"varint,13,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Title                     string                 `protobuf:"bytes,14,opt,name=title,proto3" json:"title,omitempty"`
 	Desc                      string                 `protobuf:"bytes,15,opt,name=desc,proto3" json:"desc,omitempty"`
+	GrantPetCosmeticId        uint32                 `protobuf:"varint,16,opt,name=grant_pet_cosmetic_id,json=grantPetCosmeticId,proto3" json:"grant_pet_cosmetic_id,omitempty"`
+	GrantSkillVfxId           uint32                 `protobuf:"varint,17,opt,name=grant_skill_vfx_id,json=grantSkillVfxId,proto3" json:"grant_skill_vfx_id,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -177,6 +179,20 @@ func (x *TrialJournalMilestoneTable) GetDesc() string {
 	return ""
 }
 
+func (x *TrialJournalMilestoneTable) GetGrantPetCosmeticId() uint32 {
+	if x != nil {
+		return x.GrantPetCosmeticId
+	}
+	return 0
+}
+
+func (x *TrialJournalMilestoneTable) GetGrantSkillVfxId() uint32 {
+	if x != nil {
+		return x.GrantSkillVfxId
+	}
+	return 0
+}
+
 type TrialJournalMilestoneTableData struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Data          []*TrialJournalMilestoneTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -225,7 +241,7 @@ var File_trialjournalmilestone_table_proto protoreflect.FileDescriptor
 
 const file_trialjournalmilestone_table_proto_rawDesc = "" +
 	"\n" +
-	"!trialjournalmilestone_table.proto\"\xb0\x04\n" +
+	"!trialjournalmilestone_table.proto\"\x90\x05\n" +
 	"\x1aTrialJournalMilestoneTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12(\n" +
 	"\x10scope_chapter_id\x18\x02 \x01(\rR\x0escopeChapterId\x12\x1b\n" +
@@ -243,7 +259,9 @@ const file_trialjournalmilestone_table_proto_rawDesc = "" +
 	"\x13grant_appearance_id\x18\f \x01(\tR\x11grantAppearanceId\x12\x18\n" +
 	"\aenabled\x18\r \x01(\bR\aenabled\x12\x14\n" +
 	"\x05title\x18\x0e \x01(\tR\x05title\x12\x12\n" +
-	"\x04desc\x18\x0f \x01(\tR\x04desc\"Q\n" +
+	"\x04desc\x18\x0f \x01(\tR\x04desc\x121\n" +
+	"\x15grant_pet_cosmetic_id\x18\x10 \x01(\rR\x12grantPetCosmeticId\x12+\n" +
+	"\x12grant_skill_vfx_id\x18\x11 \x01(\rR\x0fgrantSkillVfxId\"Q\n" +
 	"\x1eTrialJournalMilestoneTableData\x12/\n" +
 	"\x04data\x18\x01 \x03(\v2\x1b.TrialJournalMilestoneTableR\x04dataBL\n" +
 	"\x0ecom.game.tableB$TrialJournalMilestoneTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

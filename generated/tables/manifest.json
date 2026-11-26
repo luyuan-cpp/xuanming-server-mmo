@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "schema_digest": "27e35dca107a0fae",
-  "version": 93,
-  "content_digest": "ac77c21f5bb971d4a021a1d4cabaf2d21f7f2df580797552bc8159fa577d9bf5",
-  "generated_at": "2026-11-26T10:15:52Z",
+  "schema_digest": "8f1aa7cb914ec44f",
+  "version": 94,
+  "content_digest": "6be99d9f4bd7720a70472ca6438e1a476a55b7641b13d4828419395200e89494",
+  "generated_at": "2026-11-26T10:26:17Z",
   "source_rev": {
-    "commit": "0dd674d20ef239d05adcd50d15ef10dc425d3ad0",
+    "commit": "1212e017ed1db628af1e3d2a335c0c884f5bf06a",
     "data_dirty": true
   },
   "table_count": 82,
@@ -1317,21 +1317,21 @@
       "rows": 3,
       "source": {
         "file": "PetCosmetic.xlsx",
-        "size": 6172,
-        "sha256": "c14172734999b4f3861ed2c30661f8a68ecc9b8f99e0e6719ca4b18903a6af88"
+        "size": 6191,
+        "sha256": "dc09df0015ecad3fd6767aea11e7d79f39f67337806ba980326e64595a456790"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "petcosmetic.json",
-          "size": 1576,
-          "sha256": "34cdf72dcb6f8d51b0046d2c1a573e5857ffe41da4273d4db146a63424f31485"
+          "size": 1588,
+          "sha256": "8c511e62dca89141b13bb469da87c5effdec06ba029f368fdc19bd6f2418c03c"
         },
         {
           "kind": "binary",
           "file": "petcosmetic.pb",
-          "size": 681,
-          "sha256": "59bb1338f97807ac3e6a2d8569c98ab00e76e688f4aae6a79fc2d29f445eae25"
+          "size": 693,
+          "sha256": "a3e295796dcb0ded9b611b5d1c3c93eb2b619f444ef50b116b0782eea149aaaf"
         }
       ]
     },
@@ -1717,21 +1717,21 @@
       "rows": 3,
       "source": {
         "file": "SkillVfxCosmetic.xlsx",
-        "size": 6288,
-        "sha256": "49c6fbdc51d26c3ae133ffa7d79f0dc8ce2ac974be29c013d69b62dca3d2494b"
+        "size": 6306,
+        "sha256": "c56b82520746bc10498c1ec88a0f1fa4d07a5935a4005621e7e9f51a0a900470"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skillvfxcosmetic.json",
-          "size": 1646,
-          "sha256": "30c491520f66c8921dc15bdb05857620230e7477696d8ac51f8e53f77d87c878"
+          "size": 1659,
+          "sha256": "22583eb0618bcfa06022e40a49f3bb3908bf12958a8a370d1d0b598568c637dc"
         },
         {
           "kind": "binary",
           "file": "skillvfxcosmetic.pb",
-          "size": 820,
-          "sha256": "d01561ef7859e824702b2e519fbce2664172e9015e6f21cc8605222b3db3ae89"
+          "size": 833,
+          "sha256": "803e4b961266eae4caf70277b7457a49a06baee7b7040c94540c1b58e601ea2a"
         }
       ]
     },
@@ -1967,21 +1967,21 @@
       "rows": 11,
       "source": {
         "file": "TrialJournalMilestone.xlsx",
-        "size": 7441,
-        "sha256": "441228dcd267d7c48574bb401b6555c006c1bd3473d1db5e57fbfdcdb0675387"
+        "size": 7635,
+        "sha256": "b739802a6d98d5a84a3a3d253d068add9163674cf807a7f984b11d0124ded498"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalmilestone.json",
-          "size": 6010,
-          "sha256": "d6cb798bb2846091e91fda39e85db08cad7d3a495246582870dd688bca6de619"
+          "size": 6761,
+          "sha256": "07811d4639fe1943dc9aa97dc0a7713635dddeca07c806cf50db2edc96232570"
         },
         {
           "kind": "binary",
           "file": "trialjournalmilestone.pb",
-          "size": 3386,
-          "sha256": "da6c82901de7d1ff32775028b4c1610625f47b91619a08e71f1f22e7042da512"
+          "size": 3495,
+          "sha256": "b2e18b4eac445ad0c8833d9a5401e8c1d884f6814d7eb5e451f6106dd82dbc26"
         }
       ]
     },

@@ -114,4 +114,12 @@ struct FCfgTrialJournalMilestoneRow : public FTableRowBase
 	/** 里程碑说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TrialJournalMilestone")
 	FString desc;
+
+	/** 专属灵宠幻化永久 ID（0=无；非 0 须为 PetCosmetic 中启用且 card_item_id=0、mall_sku_id=0、spirit_shop_goods_id=0 的玩法专属幻化） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TrialJournalMilestone")
+	int32 grant_pet_cosmetic_id = 0;
+
+	/** 专属技能特效永久 ID（0=无；非 0 须为 SkillVfxCosmetic 中启用且 card_item_id=0、mall_sku_id=0、spirit_shop_goods_id=0 的玩法专属特效） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TrialJournalMilestone")
+	int32 grant_skill_vfx_id = 0;
 };

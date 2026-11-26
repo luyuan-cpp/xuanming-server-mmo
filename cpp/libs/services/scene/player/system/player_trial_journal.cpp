@@ -1068,4 +1068,49 @@ void PlayerTrialJournalSystem::RedeemArtifactVoucher(entt::entity player,
 
     const std::string ledgerBefore = ledger->SerializeAsString();
     ClientRequestResult applied;
-    applied.redeemedAr
+    applied.redeemedArtifactConfigId = itemRow->id();
+
+    std::vector<GuidVector> written;
+    const uint32_t exchangeErr = BagService::ExchangeInventoryExact(
+        player, consumed, gainedParams, {}, clientRequestId,
+        "{\"operation\":\"trial_artifact_redeem\"}", written,
+        [&](const std::vector<GuidVector>& created) -> uint32_t {
+            if (ledger->SerializeAsString() != ledgerBefore || CheckWritable(player) != kSuccess) {
+                return kTrialJournalUnavailable;
+            }
+            if (created.size() != 1 || created.front().size() != 1 || created.front().front() == 0 ||
+                created.front().front() == kInvalidGuid) {
+                return kTrialJournalUnavailable;
+            }
+            applied.redeemedArtifactItemId = created.front().front();
+            ClientRequestLedgerComp nextLedger = *ledger;
+            if (!client_request_ledger::Remember(nextLedger, clientRequestId,
+                                                 ClientRequestKind::kRedeemBoundArtifactVoucher,
+                                                 fingerprint, applied) ||
+                !client_request_ledger::Validate(nextLedger).empty()) {
+                return kTrialJournalUnavailable;
+            }
+            BumpRevision(*journal);
+            ledger->Swap(&nextLedger);
+            return kSuccess;
+        });
+
+    if (exchangeErr != kSuccess) {
+        finish(exchangeErr == kTrialJournalUnavailable ? exchangeErr : kTrialJournalBagFull);
+        return;
+    }
+
+    const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
+    LOG_INFO << "[PlayerTrialJournal] Bound artifact redeemed: player_id=" << (guid != nullptr ? guid->value : 0)
+             << " config_id=" << itemRow->id() << " artifact_id=" << itemRow->artifact_id()
+             << " item_id=" << applied.redeemedArtifactItemId;
+
+    (void)gTrialJournalPersistFn(player);
+    response.set_created_item_id(applied.redeemedArtifactItemId);
+    response.set_artifact_item_config_id(applied.redeemedArtifactConfigId);
+    finish(kSuccess);
+}
+
+void PlayerTrialJournalSystem::SetPersistForTest(PersistFn fn) {
+    gTrialJournalPersistFn = fn == nullptr ? &PlayerLifecycleSystem::SavePlayerForAssetCommit : fn;
+}

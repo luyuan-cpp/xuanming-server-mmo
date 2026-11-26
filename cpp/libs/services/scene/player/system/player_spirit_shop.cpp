@@ -16,9 +16,11 @@
 #include "modules/gain_block/gain_block_service.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_feature_snapshot.h"
+#include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "player/system/spirit_shop_rules.h"
+#include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/player_spirit_shop_comp.pb.h"
 #include "proto/common/rollback/transaction_log.pb.h"
@@ -71,6 +73,17 @@ namespace
 		return true;
 	}
 
+	bool TryEffectivePlayerLevel(entt::entity player, uint32_t &outLevel)
+	{
+		const auto *levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
+		if (levelComp == nullptr)
+		{
+			return false;
+		}
+		outLevel = playerlevel::CappedLevel(levelComp->level());
+		return true;
+	}
+
 	bool ResolveGoodsRow(const SpiritShopGoodsTable &row, spirit_shop_rules::ResolvedGoods &out, const char *&reason)
 	{
 		if (row.id() == 0)
@@ -83,6 +96,11 @@ namespace
 			reason = "goods disabled";
 			return false;
 		}
+		if (row.tab_id() == 0)
+		{
+			reason = "tab_id is 0";
+			return false;
+		}
 		if (!IsKnownCurrencyType(row.currency_type()))
 		{
 			reason = "unknown currency_type";
@@ -91,6 +109,27 @@ namespace
 		if (row.price() == 0 || row.price() > spirit_shop_rules::kMaxUnitPrice)
 		{
 			reason = "price not in 1..1000000000";
+			return false;
+		}
+		if (row.original_price() > 0 &&
+			(row.original_price() <= row.price() || row.original_price() > spirit_shop_rules::kMaxUnitPrice))
+		{
+			reason = "original_price must be 0 or strictly greater than price and <= 1000000000";
+			return false;
+		}
+		if (row.start_time_ms() > 0 && row.end_time_ms() > 0 && row.end_time_ms() <= row.start_time_ms())
+		{
+			reason = "end_time_ms must be greater than start_time_ms";
+			return false;
+		}
+		if (row.min_level() > 0 && row.max_level() > 0 && row.max_level() < row.min_level())
+		{
+			reason = "max_level must be >= min_level";
+			return false;
+		}
+		if (!spirit_shop_rules::IsValidGrantMode(row.grant_mode()))
+		{
+			reason = "grant_mode must be 0 (ALL) or 1 (CHOOSE_ONE)";
 			return false;
 		}
 		if (row.max_buy_per_request() == 0 || row.max_buy_per_request() > spirit_shop_rules::kMaxBuyCountPerRequest)
@@ -103,60 +142,115 @@ namespace
 			reason = "limit_reset_kind is invalid";
 			return false;
 		}
-		if (row.item_bound_1() > 1 || row.item_bound_2() > 1)
+
+		struct RawSlot
 		{
-			reason = "item_bound must be 0 or 1";
-			return false;
+			uint32_t itemId;
+			uint32_t itemCount;
+			uint32_t itemBound;
+		};
+		const RawSlot slots[spirit_shop_rules::kMaxGoodsItems] = {
+			{row.item_id_1(), row.item_count_1(), row.item_bound_1()},
+			{row.item_id_2(), row.item_count_2(), row.item_bound_2()},
+			{row.item_id_3(), row.item_count_3(), row.item_bound_3()},
+			{row.item_id_4(), row.item_count_4(), row.item_bound_4()},
+		};
+
+		out = spirit_shop_rules::ResolvedGoods{};
+		const ItemTable *firstItem = nullptr;
+		bool seenEmpty = false;
+		for (std::size_t i = 0; i < spirit_shop_rules::kMaxGoodsItems; ++i)
+		{
+			const auto &slot = slots[i];
+			if (slot.itemBound > 1)
+			{
+				reason = "item_bound must be 0 or 1";
+				return false;
+			}
+			if (slot.itemId == 0)
+			{
+				if (slot.itemCount != 0 || slot.itemBound != 0)
+				{
+					reason = "empty item slot has non-zero count or bound";
+					return false;
+				}
+				seenEmpty = true;
+				continue;
+			}
+			if (seenEmpty)
+			{
+				reason = "item slots must not contain gaps";
+				return false;
+			}
+			const auto [itemRow, itemErr] = ItemTableManager::Instance().FindByIdSilent(slot.itemId);
+			if (itemRow == nullptr || slot.itemCount == 0)
+			{
+				reason = "item_id missing or item_count is 0";
+				return false;
+			}
+			if (itemRow->max_stack_size() == 0 ||
+				static_cast<uint64_t>(slot.itemCount) * row.max_buy_per_request() > std::numeric_limits<uint32_t>::max())
+			{
+				reason = "item stack size invalid or count overflows";
+				return false;
+			}
+			const bool bound = slot.itemBound != 0;
+			for (const auto &existing : out.items)
+			{
+				if (row.grant_mode() == spirit_shop_rules::kGrantModeAll)
+				{
+					if (existing.itemConfigId == slot.itemId && existing.bound == bound)
+					{
+						reason = "ALL bundle has duplicate (item_id, bound)";
+						return false;
+					}
+				}
+				else
+				{
+					if (existing.itemConfigId == slot.itemId && existing.itemCount == slot.itemCount &&
+						existing.bound == bound)
+					{
+						reason = "CHOOSE_ONE bundle has duplicate (item_id, count, bound)";
+						return false;
+					}
+				}
+			}
+			if (firstItem == nullptr)
+			{
+				firstItem = itemRow;
+			}
+			out.items.push_back(spirit_shop_rules::ResolvedItem{slot.itemId, slot.itemCount, bound});
 		}
-		const auto [item1, item1Err] = ItemTableManager::Instance().FindByIdSilent(row.item_id_1());
-		if (item1 == nullptr || row.item_count_1() == 0)
+
+		if (firstItem == nullptr || out.items.empty())
 		{
 			reason = "item_id_1 missing or item_count_1 is 0";
 			return false;
 		}
-		if (item1->max_stack_size() == 0 ||
-			static_cast<uint64_t>(row.item_count_1()) * row.max_buy_per_request() > std::numeric_limits<uint32_t>::max())
+		if (row.grant_mode() == spirit_shop_rules::kGrantModeChooseOne && out.items.size() < 2)
 		{
-			reason = "item_1 stack size invalid or count overflows";
+			reason = "CHOOSE_ONE goods requires at least 2 items";
 			return false;
 		}
 
-		out = spirit_shop_rules::ResolvedGoods{};
 		out.goodsId = row.id();
 		out.tabId = row.tab_id();
 		out.sortOrder = row.sort_order();
-		out.name = row.name().empty() ? item1->name() : row.name();
-		out.description = row.description().empty() ? item1->description() : row.description();
-		out.iconKey = row.icon_key().empty() ? item1->icon_key() : row.icon_key();
+		out.name = row.name().empty() ? firstItem->name() : row.name();
+		out.description = row.description().empty() ? firstItem->description() : row.description();
+		out.iconKey = row.icon_key().empty() ? firstItem->icon_key() : row.icon_key();
 		out.badgeText = row.badge_text();
 		out.currencyType = row.currency_type();
 		out.unitPrice = row.price();
 		out.maxBuyPerRequest = row.max_buy_per_request();
 		out.limitResetKind = row.limit_reset_kind();
 		out.limitCount = row.limit_count();
-		out.items.push_back(spirit_shop_rules::ResolvedItem{row.item_id_1(), row.item_count_1(), row.item_bound_1() != 0});
-
-		if (row.item_id_2() != 0)
-		{
-			const auto [item2, item2Err] = ItemTableManager::Instance().FindByIdSilent(row.item_id_2());
-			if (item2 == nullptr || row.item_count_2() == 0)
-			{
-				reason = "item_id_2 missing or item_count_2 is 0";
-				return false;
-			}
-			if (row.item_id_2() == row.item_id_1() && (row.item_bound_2() != 0) == (row.item_bound_1() != 0))
-			{
-				reason = "item_2 duplicates (item_id_1, item_bound_1)";
-				return false;
-			}
-			if (item2->max_stack_size() == 0 ||
-				static_cast<uint64_t>(row.item_count_2()) * row.max_buy_per_request() > std::numeric_limits<uint32_t>::max())
-			{
-				reason = "item_2 stack size invalid or count overflows";
-				return false;
-			}
-			out.items.push_back(spirit_shop_rules::ResolvedItem{row.item_id_2(), row.item_count_2(), row.item_bound_2() != 0});
-		}
+		out.startTimeMs = row.start_time_ms();
+		out.endTimeMs = row.end_time_ms();
+		out.grantMode = row.grant_mode();
+		out.originalPrice = row.original_price();
+		out.minLevel = row.min_level();
+		out.maxLevel = row.max_level();
 
 		if (row.limit_group_id() != 0)
 		{
@@ -173,15 +267,23 @@ namespace
 			out.limitGroupId = row.limit_group_id();
 			out.limitGroupWeight = row.limit_group_weight();
 		}
+		else if (row.limit_group_weight() != 0)
+		{
+			reason = "non-zero limit_group_weight without limit_group_id";
+			return false;
+		}
 		return true;
 	}
 
-	std::string PurchaseExtraJson(const spirit_shop_rules::ResolvedGoods &goods, uint32_t count)
+	std::string PurchaseExtraJson(const spirit_shop_rules::ResolvedGoods &goods, uint32_t count,
+								  uint32_t chosenItemIndex)
 	{
 		return std::string("{\"source\":\"spirit_shop\",\"goods_id\":") + std::to_string(goods.goodsId) +
 			   ",\"count\":" + std::to_string(count) +
 			   ",\"unit_price\":" + std::to_string(goods.unitPrice) +
-			   ",\"currency_type\":" + std::to_string(goods.currencyType) + "}";
+			   ",\"currency_type\":" + std::to_string(goods.currencyType) +
+			   ",\"grant_mode\":" + std::to_string(goods.grantMode) +
+			   ",\"chosen_item_index\":" + std::to_string(chosenItemIndex) + "}";
 	}
 
 	void FillSuccessReply(entt::entity player, uint64_t nowMs, ::BuySpiritShopGoodsResponse &response)
@@ -313,6 +415,10 @@ void PlayerSpiritShopSystem::FillInfo(entt::entity player, uint64_t nowMs, ::Spi
 		view->set_next_reset_ms(group.resetKind == spirit_shop_rules::kResetWeekly && weekOk ? weekNextMs : 0);
 	}
 
+	bool levelChecked = false;
+	bool hasLevel = false;
+	uint32_t effectiveLevel = 0;
+
 	std::vector<spirit_shop_rules::ResolvedGoods> goodsList;
 	for (const auto &row : SpiritShopGoodsTableManager::Instance().FindAll().data())
 	{
@@ -322,10 +428,33 @@ void PlayerSpiritShopSystem::FillInfo(entt::entity player, uint64_t nowMs, ::Spi
 		}
 		spirit_shop_rules::ResolvedGoods resolved;
 		const char *reason = "";
-		if (ResolveGoodsRow(row, resolved, reason))
+		if (!ResolveGoodsRow(row, resolved, reason))
 		{
-			goodsList.push_back(std::move(resolved));
+			continue;
 		}
+		if (!spirit_shop_rules::IsInSaleWindow(resolved.startTimeMs, resolved.endTimeMs, nowMs))
+		{
+			continue;
+		}
+		if (resolved.minLevel > 0 || resolved.maxLevel > 0)
+		{
+			if (!levelChecked)
+			{
+				levelChecked = true;
+				hasLevel = TryEffectivePlayerLevel(player, effectiveLevel);
+				if (!hasLevel)
+				{
+					LOG_ERROR << "[SpiritShop] LevelComp missing while filtering level-gated goods (fail-closed): "
+							  << PlayerLogId(player);
+				}
+			}
+			if (!hasLevel ||
+				!spirit_shop_rules::IsLevelEligible(effectiveLevel, resolved.minLevel, resolved.maxLevel))
+			{
+				continue;
+			}
+		}
+		goodsList.push_back(std::move(resolved));
 	}
 	std::sort(goodsList.begin(), goodsList.end(), [](const auto &a, const auto &b) {
 		if (a.tabId != b.tabId)
@@ -370,6 +499,12 @@ void PlayerSpiritShopSystem::FillInfo(entt::entity player, uint64_t nowMs, ::Spi
 		view->set_limit_group_weight(goods.limitGroupWeight);
 		view->set_next_reset_ms(
 			goods.limitCount > 0 && goods.limitResetKind == spirit_shop_rules::kResetWeekly && weekOk ? weekNextMs : 0);
+		view->set_start_time_ms(goods.startTimeMs);
+		view->set_end_time_ms(goods.endTimeMs);
+		view->set_grant_mode(goods.grantMode);
+		view->set_original_price(goods.originalPrice);
+		view->set_min_level(goods.minLevel);
+		view->set_max_level(goods.maxLevel);
 	}
 }
 
@@ -444,13 +579,36 @@ uint32_t PlayerSpiritShopSystem::Buy(entt::entity player, const ::BuySpiritShopG
 				  << " goods_id=" << request.goods_id() << " reason=" << reason;
 		return kSpiritShopUnavailable;
 	}
+	if (!spirit_shop_rules::IsInSaleWindow(goods.startTimeMs, goods.endTimeMs, nowMs))
+	{
+		return kSpiritShopNotInSaleWindow;
+	}
+	if (goods.minLevel > 0 || goods.maxLevel > 0)
+	{
+		uint32_t effectiveLevel = 0;
+		if (!TryEffectivePlayerLevel(player, effectiveLevel))
+		{
+			LOG_ERROR << "[SpiritShop] Purchase rejected: LevelComp missing (load invariant broken) "
+					  << PlayerLogId(player) << " goods_id=" << goods.goodsId;
+			return kSpiritShopUnavailable;
+		}
+		if (!spirit_shop_rules::IsLevelEligible(effectiveLevel, goods.minLevel, goods.maxLevel))
+		{
+			return kSpiritShopLevelNotMet;
+		}
+	}
 	if (request.count() == 0 || request.count() > goods.maxBuyPerRequest)
 	{
 		return kSpiritShopInvalidCount;
 	}
+	std::vector<spirit_shop_rules::ResolvedItem> selectedItems;
+	if (!spirit_shop_rules::ResolveSelectedItems(goods, request.chosen_item_index(), selectedItems))
+	{
+		return kSpiritShopInvalidChoice;
+	}
 	if (request.expected_currency_type() != goods.currencyType ||
 		request.expected_unit_price() != goods.unitPrice ||
-		!spirit_shop_rules::ExpectedItemsMatch(request, goods.items))
+		!spirit_shop_rules::ExpectedItemsMatch(request, selectedItems))
 	{
 		return kSpiritShopPriceChanged;
 	}
@@ -508,13 +666,13 @@ uint32_t PlayerSpiritShopSystem::Buy(entt::entity player, const ::BuySpiritShopG
 		}
 	}
 
-	// 5. 总价、物品封禁、余额预检与绑定发物清单构造。
+	// 5. 总价、物品封禁、余额预检与绑定发物清单构造(仅针对本次实际发放的 selectedItems)。
 	int64_t totalCost = 0;
 	if (!spirit_shop_rules::TotalCost(goods.unitPrice, request.count(), totalCost))
 	{
 		return kSpiritShopInvalidCount;
 	}
-	for (const auto &item : goods.items)
+	for (const auto &item : selectedItems)
 	{
 		if (GainBlockService::IsItemGainBlocked(player, item.itemConfigId))
 		{
@@ -551,8 +709,8 @@ uint32_t PlayerSpiritShopSystem::Buy(entt::entity player, const ::BuySpiritShopG
 	}
 
 	std::vector<InitItemParam> gained;
-	gained.reserve(goods.items.size());
-	for (const auto &item : goods.items)
+	gained.reserve(selectedItems.size());
+	for (const auto &item : selectedItems)
 	{
 		const uint64_t totalItemCount = static_cast<uint64_t>(item.itemCount) * request.count();
 		if (totalItemCount == 0 || totalItemCount > std::numeric_limits<uint32_t>::max())
@@ -574,7 +732,8 @@ uint32_t PlayerSpiritShopSystem::Buy(entt::entity player, const ::BuySpiritShopG
 	// 6. 原子交换:ExchangeInventoryExact 先在候选背包完成完整分堆空间规划、禁发复核与发号;
 	//    beforeCommit 内先扣灵石再 Swap 限购与幂等账本,任一失败则整批放弃(零扣钱、零发物、零占名额)。
 	const uint32_t exchangeErr = BagService::ExchangeInventoryExact(
-		player, {}, gained, {}, clientRequestId, PurchaseExtraJson(goods, request.count()), written,
+		player, {}, gained, {}, clientRequestId,
+		PurchaseExtraJson(goods, request.count(), request.chosen_item_index()), written,
 		[&](const std::vector<GuidVector> &) -> uint32_t {
 			if (!player_mutability::IsPlayerMutable(player))
 			{
@@ -621,6 +780,7 @@ uint32_t PlayerSpiritShopSystem::Buy(entt::entity player, const ::BuySpiritShopG
 
 	LOG_INFO << "[SpiritShop] metric=spirit_shop_bought " << PlayerLogId(player)
 			 << " goods_id=" << goods.goodsId << " count=" << request.count()
+			 << " grant_mode=" << goods.grantMode << " chosen_item_index=" << request.chosen_item_index()
 			 << " cost=" << totalCost << " currency_type=" << goods.currencyType
 			 << " group_id=" << goods.limitGroupId << " group_weight_added=" << addGroupWeight
 			 << " client_request_id=" << clientRequestId;

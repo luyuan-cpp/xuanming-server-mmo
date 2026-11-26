@@ -22,7 +22,7 @@ public static partial class TrialjournalmilestoneTableReflection {
   static TrialjournalmilestoneTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "CiF0cmlhbGpvdXJuYWxtaWxlc3RvbmVfdGFibGUucHJvdG8i6gIKGlRyaWFs",
+          "CiF0cmlhbGpvdXJuYWxtaWxlc3RvbmVfdGFibGUucHJvdG8ipQMKGlRyaWFs",
           "Sm91cm5hbE1pbGVzdG9uZVRhYmxlEgoKAmlkGAEgASgNEhgKEHNjb3BlX2No",
           "YXB0ZXJfaWQYAiABKA0SEQoJc2Vhc29uX2lkGAMgASgNEhYKDnJlcXVpcmVk",
           "X3NlYWxzGAQgASgNEhgKEGJvdW5kX3NhbmRfY291bnQYBSABKA0SJAocYm91",
@@ -30,15 +30,16 @@ public static partial class TrialjournalmilestoneTableReflection {
           "ByABKAkSEgoKYmFkZ2VfbmFtZRgIIAEoCRIWCg5jb21tZW50YXJ5X2tleRgJ",
           "IAEoCRIYChBjb21tZW50YXJ5X3RpdGxlGAogASgJEhcKD2NvbW1lbnRhcnlf",
           "Ym9keRgLIAEoCRIbChNncmFudF9hcHBlYXJhbmNlX2lkGAwgASgJEg8KB2Vu",
-          "YWJsZWQYDSABKAgSDQoFdGl0bGUYDiABKAkSDAoEZGVzYxgPIAEoCSJLCh5U",
-          "cmlhbEpvdXJuYWxNaWxlc3RvbmVUYWJsZURhdGESKQoEZGF0YRgBIAMoCzIb",
-          "LlRyaWFsSm91cm5hbE1pbGVzdG9uZVRhYmxlQkwKDmNvbS5nYW1lLnRhYmxl",
-          "QiRUcmlhbEpvdXJuYWxNaWxlc3RvbmVUYWJsZU91dGVyQ2xhc3NQAVoSZ2Vu",
-          "ZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "YWJsZWQYDSABKAgSDQoFdGl0bGUYDiABKAkSDAoEZGVzYxgPIAEoCRIdChVn",
+          "cmFudF9wZXRfY29zbWV0aWNfaWQYECABKA0SGgoSZ3JhbnRfc2tpbGxfdmZ4",
+          "X2lkGBEgASgNIksKHlRyaWFsSm91cm5hbE1pbGVzdG9uZVRhYmxlRGF0YRIp",
+          "CgRkYXRhGAEgAygLMhsuVHJpYWxKb3VybmFsTWlsZXN0b25lVGFibGVCTAoO",
+          "Y29tLmdhbWUudGFibGVCJFRyaWFsSm91cm5hbE1pbGVzdG9uZVRhYmxlT3V0",
+          "ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::TrialJournalMilestoneTable), global::TrialJournalMilestoneTable.Parser, new[]{ "Id", "ScopeChapterId", "SeasonId", "RequiredSeals", "BoundSandCount", "BoundArtifactVoucherCount", "BadgeKey", "BadgeName", "CommentaryKey", "CommentaryTitle", "CommentaryBody", "GrantAppearanceId", "Enabled", "Title", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::TrialJournalMilestoneTable), global::TrialJournalMilestoneTable.Parser, new[]{ "Id", "ScopeChapterId", "SeasonId", "RequiredSeals", "BoundSandCount", "BoundArtifactVoucherCount", "BadgeKey", "BadgeName", "CommentaryKey", "CommentaryTitle", "CommentaryBody", "GrantAppearanceId", "Enabled", "Title", "Desc", "GrantPetCosmeticId", "GrantSkillVfxId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::TrialJournalMilestoneTableData), global::TrialJournalMilestoneTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -96,6 +97,8 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
     enabled_ = other.enabled_;
     title_ = other.title_;
     desc_ = other.desc_;
+    grantPetCosmeticId_ = other.grantPetCosmeticId_;
+    grantSkillVfxId_ = other.grantSkillVfxId_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -285,6 +288,30 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
     }
   }
 
+  /// <summary>Field number for the "grant_pet_cosmetic_id" field.</summary>
+  public const int GrantPetCosmeticIdFieldNumber = 16;
+  private uint grantPetCosmeticId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint GrantPetCosmeticId {
+    get { return grantPetCosmeticId_; }
+    set {
+      grantPetCosmeticId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "grant_skill_vfx_id" field.</summary>
+  public const int GrantSkillVfxIdFieldNumber = 17;
+  private uint grantSkillVfxId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint GrantSkillVfxId {
+    get { return grantSkillVfxId_; }
+    set {
+      grantSkillVfxId_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -315,6 +342,8 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
     if (Enabled != other.Enabled) return false;
     if (Title != other.Title) return false;
     if (Desc != other.Desc) return false;
+    if (GrantPetCosmeticId != other.GrantPetCosmeticId) return false;
+    if (GrantSkillVfxId != other.GrantSkillVfxId) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -337,6 +366,8 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
     if (Enabled != false) hash ^= Enabled.GetHashCode();
     if (Title.Length != 0) hash ^= Title.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (GrantPetCosmeticId != 0) hash ^= GrantPetCosmeticId.GetHashCode();
+    if (GrantSkillVfxId != 0) hash ^= GrantSkillVfxId.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -415,6 +446,14 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
       output.WriteRawTag(122);
       output.WriteString(Desc);
     }
+    if (GrantPetCosmeticId != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(GrantPetCosmeticId);
+    }
+    if (GrantSkillVfxId != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(GrantSkillVfxId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -485,6 +524,14 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
       output.WriteRawTag(122);
       output.WriteString(Desc);
     }
+    if (GrantPetCosmeticId != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(GrantPetCosmeticId);
+    }
+    if (GrantSkillVfxId != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(GrantSkillVfxId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -539,6 +586,12 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (GrantPetCosmeticId != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(GrantPetCosmeticId);
+    }
+    if (GrantSkillVfxId != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(GrantSkillVfxId);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -596,6 +649,12 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.GrantPetCosmeticId != 0) {
+      GrantPetCosmeticId = other.GrantPetCosmeticId;
+    }
+    if (other.GrantSkillVfxId != 0) {
+      GrantSkillVfxId = other.GrantSkillVfxId;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -676,6 +735,14 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
           Desc = input.ReadString();
           break;
         }
+        case 128: {
+          GrantPetCosmeticId = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          GrantSkillVfxId = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -753,6 +820,14 @@ public sealed partial class TrialJournalMilestoneTable : pb::IMessage<TrialJourn
         }
         case 122: {
           Desc = input.ReadString();
+          break;
+        }
+        case 128: {
+          GrantPetCosmeticId = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          GrantSkillVfxId = input.ReadUInt32();
           break;
         }
       }

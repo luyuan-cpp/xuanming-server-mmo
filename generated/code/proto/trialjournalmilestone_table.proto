@@ -24,6 +24,8 @@ message TrialJournalMilestoneTable {
 	bool enabled = 13;
 	string title = 14;
 	string desc = 15;
+	uint32 grant_pet_cosmetic_id = 16;
+	uint32 grant_skill_vfx_id = 17;
 }
 
 message TrialJournalMilestoneTableData {

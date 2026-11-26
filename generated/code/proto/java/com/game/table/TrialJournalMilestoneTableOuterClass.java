@@ -45,7 +45,7 @@ public final class TrialJournalMilestoneTableOuterClass extends com.google.proto
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n!trialjournalmilestone_table.proto\"\352\002\n\032" +
+      "\n!trialjournalmilestone_table.proto\"\245\003\n\032" +
       "TrialJournalMilestoneTable\022\n\n\002id\030\001 \001(\r\022\030" +
       "\n\020scope_chapter_id\030\002 \001(\r\022\021\n\tseason_id\030\003 " +
       "\001(\r\022\026\n\016required_seals\030\004 \001(\r\022\030\n\020bound_san" +
@@ -55,11 +55,12 @@ public final class TrialJournalMilestoneTableOuterClass extends com.google.proto
       "mmentary_title\030\n \001(\t\022\027\n\017commentary_body\030" +
       "\013 \001(\t\022\033\n\023grant_appearance_id\030\014 \001(\t\022\017\n\007en" +
       "abled\030\r \001(\010\022\r\n\005title\030\016 \001(\t\022\014\n\004desc\030\017 \001(\t" +
-      "\"K\n\036TrialJournalMilestoneTableData\022)\n\004da" +
-      "ta\030\001 \003(\0132\033.TrialJournalMilestoneTableBL\n" +
-      "\016com.game.tableB$TrialJournalMilestoneTa" +
-      "bleOuterClassP\001Z\022generated/pb/tableb\006pro" +
-      "to3"
+      "\022\035\n\025grant_pet_cosmetic_id\030\020 \001(\r\022\032\n\022grant" +
+      "_skill_vfx_id\030\021 \001(\r\"K\n\036TrialJournalMiles" +
+      "toneTableData\022)\n\004data\030\001 \003(\0132\033.TrialJourn" +
+      "alMilestoneTableBL\n\016com.game.tableB$Tria" +
+      "lJournalMilestoneTableOuterClassP\001Z\022gene" +
+      "rated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -70,7 +71,7 @@ public final class TrialJournalMilestoneTableOuterClass extends com.google.proto
     internal_static_TrialJournalMilestoneTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_TrialJournalMilestoneTable_descriptor,
-        new java.lang.String[] { "Id", "ScopeChapterId", "SeasonId", "RequiredSeals", "BoundSandCount", "BoundArtifactVoucherCount", "BadgeKey", "BadgeName", "CommentaryKey", "CommentaryTitle", "CommentaryBody", "GrantAppearanceId", "Enabled", "Title", "Desc", });
+        new java.lang.String[] { "Id", "ScopeChapterId", "SeasonId", "RequiredSeals", "BoundSandCount", "BoundArtifactVoucherCount", "BadgeKey", "BadgeName", "CommentaryKey", "CommentaryTitle", "CommentaryBody", "GrantAppearanceId", "Enabled", "Title", "Desc", "GrantPetCosmeticId", "GrantSkillVfxId", });
     internal_static_TrialJournalMilestoneTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_TrialJournalMilestoneTableData_fieldAccessorTable = new

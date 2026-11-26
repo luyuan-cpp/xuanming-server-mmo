@@ -881,6 +881,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneView final : p
     kCommentaryBodyFieldNumber = 14,
     kGrantAppearanceIdFieldNumber = 15,
     kGrantAppearanceNameFieldNumber = 16,
+    kGrantPetCosmeticNameFieldNumber = 21,
+    kGrantSkillVfxNameFieldNumber = 23,
     kMilestoneIdFieldNumber = 1,
     kScopeChapterIdFieldNumber = 2,
     kSeasonIdFieldNumber = 3,
@@ -891,6 +893,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneView final : p
     kReachedFieldNumber = 17,
     kClaimedFieldNumber = 18,
     kClaimableFieldNumber = 19,
+    kGrantPetCosmeticIdFieldNumber = 20,
+    kGrantSkillVfxIdFieldNumber = 22,
   };
   // string title = 6;
   void clear_title() ;
@@ -1027,6 +1031,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneView final : p
   ::std::string* PROTOBUF_NONNULL _internal_mutable_grant_appearance_name();
 
   public:
+  // string grant_pet_cosmetic_name = 21;
+  void clear_grant_pet_cosmetic_name() ;
+  [[nodiscard]] const ::std::string& grant_pet_cosmetic_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_grant_pet_cosmetic_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_grant_pet_cosmetic_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_grant_pet_cosmetic_name();
+  void set_allocated_grant_pet_cosmetic_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_grant_pet_cosmetic_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_grant_pet_cosmetic_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_grant_pet_cosmetic_name();
+
+  public:
+  // string grant_skill_vfx_name = 23;
+  void clear_grant_skill_vfx_name() ;
+  [[nodiscard]] const ::std::string& grant_skill_vfx_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_grant_skill_vfx_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_grant_skill_vfx_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_grant_skill_vfx_name();
+  void set_allocated_grant_skill_vfx_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_grant_skill_vfx_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_grant_skill_vfx_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_grant_skill_vfx_name();
+
+  public:
   // uint32 milestone_id = 1;
   void clear_milestone_id() ;
   [[nodiscard]] ::uint32_t milestone_id() const;
@@ -1127,12 +1161,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneView final : p
   void _internal_set_claimable(bool value);
 
   public:
+  // uint32 grant_pet_cosmetic_id = 20;
+  void clear_grant_pet_cosmetic_id() ;
+  [[nodiscard]] ::uint32_t grant_pet_cosmetic_id() const;
+  void set_grant_pet_cosmetic_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_grant_pet_cosmetic_id() const;
+  void _internal_set_grant_pet_cosmetic_id(::uint32_t value);
+
+  public:
+  // uint32 grant_skill_vfx_id = 22;
+  void clear_grant_skill_vfx_id() ;
+  [[nodiscard]] ::uint32_t grant_skill_vfx_id() const;
+  void set_grant_skill_vfx_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_grant_skill_vfx_id() const;
+  void _internal_set_grant_skill_vfx_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TrialJournalMilestoneView)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
-                          0, 163,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          0, 206,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1169,6 +1223,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneView final : p
     ::google::protobuf::internal::ArenaStringPtr commentary_body_;
     ::google::protobuf::internal::ArenaStringPtr grant_appearance_id_;
     ::google::protobuf::internal::ArenaStringPtr grant_appearance_name_;
+    ::google::protobuf::internal::ArenaStringPtr grant_pet_cosmetic_name_;
+    ::google::protobuf::internal::ArenaStringPtr grant_skill_vfx_name_;
     ::uint32_t milestone_id_;
     ::uint32_t scope_chapter_id_;
     ::uint32_t season_id_;
@@ -1179,6 +1235,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneView final : p
     bool reached_;
     bool claimed_;
     bool claimable_;
+    ::uint32_t grant_pet_cosmetic_id_;
+    ::uint32_t grant_skill_vfx_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3590,6 +3648,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTrialJournalMilestoneResponse 
     kReplayedFieldNumber = 3,
     kGrantedSandCountFieldNumber = 4,
     kGrantedVoucherCountFieldNumber = 5,
+    kGrantedPetCosmeticIdFieldNumber = 7,
+    kGrantedSkillVfxIdFieldNumber = 8,
   };
   // string granted_appearance_id = 6;
   void clear_granted_appearance_id() ;
@@ -3668,12 +3728,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTrialJournalMilestoneResponse 
   void _internal_set_granted_voucher_count(::uint32_t value);
 
   public:
+  // uint32 granted_pet_cosmetic_id = 7;
+  void clear_granted_pet_cosmetic_id() ;
+  [[nodiscard]] ::uint32_t granted_pet_cosmetic_id() const;
+  void set_granted_pet_cosmetic_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_granted_pet_cosmetic_id() const;
+  void _internal_set_granted_pet_cosmetic_id(::uint32_t value);
+
+  public:
+  // uint32 granted_skill_vfx_id = 8;
+  void clear_granted_skill_vfx_id() ;
+  [[nodiscard]] ::uint32_t granted_skill_vfx_id() const;
+  void set_granted_skill_vfx_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_granted_skill_vfx_id() const;
+  void _internal_set_granted_skill_vfx_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClaimTrialJournalMilestoneResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          2, 64,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          2, 72,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3707,6 +3787,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTrialJournalMilestoneResponse 
     bool replayed_;
     ::uint32_t granted_sand_count_;
     ::uint32_t granted_voucher_count_;
+    ::uint32_t granted_pet_cosmetic_id_;
+    ::uint32_t granted_skill_vfx_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5288,7 +5370,7 @@ TrialJournalChapterView::_internal_mutable_entries() {
 inline void TrialJournalMilestoneView::clear_milestone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.milestone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t TrialJournalMilestoneView::milestone_id() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.milestone_id)
@@ -5296,7 +5378,7 @@ inline ::uint32_t TrialJournalMilestoneView::milestone_id() const {
 }
 inline void TrialJournalMilestoneView::set_milestone_id(::uint32_t value) {
   _internal_set_milestone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.milestone_id)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_milestone_id() const {
@@ -5312,7 +5394,7 @@ inline void TrialJournalMilestoneView::_internal_set_milestone_id(::uint32_t val
 inline void TrialJournalMilestoneView::clear_scope_chapter_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scope_chapter_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t TrialJournalMilestoneView::scope_chapter_id() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.scope_chapter_id)
@@ -5320,7 +5402,7 @@ inline ::uint32_t TrialJournalMilestoneView::scope_chapter_id() const {
 }
 inline void TrialJournalMilestoneView::set_scope_chapter_id(::uint32_t value) {
   _internal_set_scope_chapter_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.scope_chapter_id)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_scope_chapter_id() const {
@@ -5336,7 +5418,7 @@ inline void TrialJournalMilestoneView::_internal_set_scope_chapter_id(::uint32_t
 inline void TrialJournalMilestoneView::clear_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t TrialJournalMilestoneView::season_id() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.season_id)
@@ -5344,7 +5426,7 @@ inline ::uint32_t TrialJournalMilestoneView::season_id() const {
 }
 inline void TrialJournalMilestoneView::set_season_id(::uint32_t value) {
   _internal_set_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.season_id)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_season_id() const {
@@ -5360,7 +5442,7 @@ inline void TrialJournalMilestoneView::_internal_set_season_id(::uint32_t value)
 inline void TrialJournalMilestoneView::clear_required_seals() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.required_seals_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t TrialJournalMilestoneView::required_seals() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.required_seals)
@@ -5368,7 +5450,7 @@ inline ::uint32_t TrialJournalMilestoneView::required_seals() const {
 }
 inline void TrialJournalMilestoneView::set_required_seals(::uint32_t value) {
   _internal_set_required_seals(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.required_seals)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_required_seals() const {
@@ -5384,7 +5466,7 @@ inline void TrialJournalMilestoneView::_internal_set_required_seals(::uint32_t v
 inline void TrialJournalMilestoneView::clear_current_seals() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_seals_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t TrialJournalMilestoneView::current_seals() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.current_seals)
@@ -5392,7 +5474,7 @@ inline ::uint32_t TrialJournalMilestoneView::current_seals() const {
 }
 inline void TrialJournalMilestoneView::set_current_seals(::uint32_t value) {
   _internal_set_current_seals(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.current_seals)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_current_seals() const {
@@ -5536,7 +5618,7 @@ inline void TrialJournalMilestoneView::set_allocated_desc(::std::string* PROTOBU
 inline void TrialJournalMilestoneView::clear_bound_sand_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_sand_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t TrialJournalMilestoneView::bound_sand_count() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.bound_sand_count)
@@ -5544,7 +5626,7 @@ inline ::uint32_t TrialJournalMilestoneView::bound_sand_count() const {
 }
 inline void TrialJournalMilestoneView::set_bound_sand_count(::uint32_t value) {
   _internal_set_bound_sand_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.bound_sand_count)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_bound_sand_count() const {
@@ -5560,7 +5642,7 @@ inline void TrialJournalMilestoneView::_internal_set_bound_sand_count(::uint32_t
 inline void TrialJournalMilestoneView::clear_bound_artifact_voucher_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_artifact_voucher_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t TrialJournalMilestoneView::bound_artifact_voucher_count() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.bound_artifact_voucher_count)
@@ -5568,7 +5650,7 @@ inline ::uint32_t TrialJournalMilestoneView::bound_artifact_voucher_count() cons
 }
 inline void TrialJournalMilestoneView::set_bound_artifact_voucher_count(::uint32_t value) {
   _internal_set_bound_artifact_voucher_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.bound_artifact_voucher_count)
 }
 inline ::uint32_t TrialJournalMilestoneView::_internal_bound_artifact_voucher_count() const {
@@ -6032,7 +6114,7 @@ inline void TrialJournalMilestoneView::set_allocated_grant_appearance_name(::std
 inline void TrialJournalMilestoneView::clear_reached() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reached_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline bool TrialJournalMilestoneView::reached() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.reached)
@@ -6040,7 +6122,7 @@ inline bool TrialJournalMilestoneView::reached() const {
 }
 inline void TrialJournalMilestoneView::set_reached(bool value) {
   _internal_set_reached(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.reached)
 }
 inline bool TrialJournalMilestoneView::_internal_reached() const {
@@ -6056,7 +6138,7 @@ inline void TrialJournalMilestoneView::_internal_set_reached(bool value) {
 inline void TrialJournalMilestoneView::clear_claimed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline bool TrialJournalMilestoneView::claimed() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.claimed)
@@ -6064,7 +6146,7 @@ inline bool TrialJournalMilestoneView::claimed() const {
 }
 inline void TrialJournalMilestoneView::set_claimed(bool value) {
   _internal_set_claimed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.claimed)
 }
 inline bool TrialJournalMilestoneView::_internal_claimed() const {
@@ -6080,7 +6162,7 @@ inline void TrialJournalMilestoneView::_internal_set_claimed(bool value) {
 inline void TrialJournalMilestoneView::clear_claimable() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimable_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline bool TrialJournalMilestoneView::claimable() const {
   // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.claimable)
@@ -6088,7 +6170,7 @@ inline bool TrialJournalMilestoneView::claimable() const {
 }
 inline void TrialJournalMilestoneView::set_claimable(bool value) {
   _internal_set_claimable(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.claimable)
 }
 inline bool TrialJournalMilestoneView::_internal_claimable() const {
@@ -6098,6 +6180,182 @@ inline bool TrialJournalMilestoneView::_internal_claimable() const {
 inline void TrialJournalMilestoneView::_internal_set_claimable(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimable_ = value;
+}
+
+// uint32 grant_pet_cosmetic_id = 20;
+inline void TrialJournalMilestoneView::clear_grant_pet_cosmetic_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_pet_cosmetic_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t TrialJournalMilestoneView::grant_pet_cosmetic_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.grant_pet_cosmetic_id)
+  return _internal_grant_pet_cosmetic_id();
+}
+inline void TrialJournalMilestoneView::set_grant_pet_cosmetic_id(::uint32_t value) {
+  _internal_set_grant_pet_cosmetic_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.grant_pet_cosmetic_id)
+}
+inline ::uint32_t TrialJournalMilestoneView::_internal_grant_pet_cosmetic_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_pet_cosmetic_id_;
+}
+inline void TrialJournalMilestoneView::_internal_set_grant_pet_cosmetic_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_pet_cosmetic_id_ = value;
+}
+
+// string grant_pet_cosmetic_name = 21;
+inline void TrialJournalMilestoneView::clear_grant_pet_cosmetic_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_pet_cosmetic_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline const ::std::string& TrialJournalMilestoneView::grant_pet_cosmetic_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.grant_pet_cosmetic_name)
+  return _internal_grant_pet_cosmetic_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TrialJournalMilestoneView::set_grant_pet_cosmetic_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  _impl_.grant_pet_cosmetic_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.grant_pet_cosmetic_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TrialJournalMilestoneView::mutable_grant_pet_cosmetic_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::std::string* _s = _internal_mutable_grant_pet_cosmetic_name();
+  // @@protoc_insertion_point(field_mutable:TrialJournalMilestoneView.grant_pet_cosmetic_name)
+  return _s;
+}
+inline const ::std::string& TrialJournalMilestoneView::_internal_grant_pet_cosmetic_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_pet_cosmetic_name_.Get();
+}
+inline void TrialJournalMilestoneView::_internal_set_grant_pet_cosmetic_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_pet_cosmetic_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TrialJournalMilestoneView::_internal_mutable_grant_pet_cosmetic_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.grant_pet_cosmetic_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TrialJournalMilestoneView::release_grant_pet_cosmetic_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:TrialJournalMilestoneView.grant_pet_cosmetic_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000200U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  auto* released = _impl_.grant_pet_cosmetic_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.grant_pet_cosmetic_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TrialJournalMilestoneView::set_allocated_grant_pet_cosmetic_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  }
+  _impl_.grant_pet_cosmetic_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.grant_pet_cosmetic_name_.IsDefault()) {
+    _impl_.grant_pet_cosmetic_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:TrialJournalMilestoneView.grant_pet_cosmetic_name)
+}
+
+// uint32 grant_skill_vfx_id = 22;
+inline void TrialJournalMilestoneView::clear_grant_skill_vfx_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_skill_vfx_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t TrialJournalMilestoneView::grant_skill_vfx_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.grant_skill_vfx_id)
+  return _internal_grant_skill_vfx_id();
+}
+inline void TrialJournalMilestoneView::set_grant_skill_vfx_id(::uint32_t value) {
+  _internal_set_grant_skill_vfx_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.grant_skill_vfx_id)
+}
+inline ::uint32_t TrialJournalMilestoneView::_internal_grant_skill_vfx_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_skill_vfx_id_;
+}
+inline void TrialJournalMilestoneView::_internal_set_grant_skill_vfx_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_skill_vfx_id_ = value;
+}
+
+// string grant_skill_vfx_name = 23;
+inline void TrialJournalMilestoneView::clear_grant_skill_vfx_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_skill_vfx_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline const ::std::string& TrialJournalMilestoneView::grant_skill_vfx_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:TrialJournalMilestoneView.grant_skill_vfx_name)
+  return _internal_grant_skill_vfx_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TrialJournalMilestoneView::set_grant_skill_vfx_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  _impl_.grant_skill_vfx_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:TrialJournalMilestoneView.grant_skill_vfx_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TrialJournalMilestoneView::mutable_grant_skill_vfx_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::std::string* _s = _internal_mutable_grant_skill_vfx_name();
+  // @@protoc_insertion_point(field_mutable:TrialJournalMilestoneView.grant_skill_vfx_name)
+  return _s;
+}
+inline const ::std::string& TrialJournalMilestoneView::_internal_grant_skill_vfx_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_skill_vfx_name_.Get();
+}
+inline void TrialJournalMilestoneView::_internal_set_grant_skill_vfx_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_skill_vfx_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TrialJournalMilestoneView::_internal_mutable_grant_skill_vfx_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.grant_skill_vfx_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TrialJournalMilestoneView::release_grant_skill_vfx_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:TrialJournalMilestoneView.grant_skill_vfx_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000400U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  auto* released = _impl_.grant_skill_vfx_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.grant_skill_vfx_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TrialJournalMilestoneView::set_allocated_grant_skill_vfx_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+  _impl_.grant_skill_vfx_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.grant_skill_vfx_name_.IsDefault()) {
+    _impl_.grant_skill_vfx_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:TrialJournalMilestoneView.grant_skill_vfx_name)
 }
 
 // -------------------------------------------------------------------
@@ -7461,6 +7719,54 @@ inline void ClaimTrialJournalMilestoneResponse::set_allocated_granted_appearance
     _impl_.granted_appearance_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:ClaimTrialJournalMilestoneResponse.granted_appearance_id)
+}
+
+// uint32 granted_pet_cosmetic_id = 7;
+inline void ClaimTrialJournalMilestoneResponse::clear_granted_pet_cosmetic_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_pet_cosmetic_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t ClaimTrialJournalMilestoneResponse::granted_pet_cosmetic_id() const {
+  // @@protoc_insertion_point(field_get:ClaimTrialJournalMilestoneResponse.granted_pet_cosmetic_id)
+  return _internal_granted_pet_cosmetic_id();
+}
+inline void ClaimTrialJournalMilestoneResponse::set_granted_pet_cosmetic_id(::uint32_t value) {
+  _internal_set_granted_pet_cosmetic_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ClaimTrialJournalMilestoneResponse.granted_pet_cosmetic_id)
+}
+inline ::uint32_t ClaimTrialJournalMilestoneResponse::_internal_granted_pet_cosmetic_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.granted_pet_cosmetic_id_;
+}
+inline void ClaimTrialJournalMilestoneResponse::_internal_set_granted_pet_cosmetic_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_pet_cosmetic_id_ = value;
+}
+
+// uint32 granted_skill_vfx_id = 8;
+inline void ClaimTrialJournalMilestoneResponse::clear_granted_skill_vfx_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_skill_vfx_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t ClaimTrialJournalMilestoneResponse::granted_skill_vfx_id() const {
+  // @@protoc_insertion_point(field_get:ClaimTrialJournalMilestoneResponse.granted_skill_vfx_id)
+  return _internal_granted_skill_vfx_id();
+}
+inline void ClaimTrialJournalMilestoneResponse::set_granted_skill_vfx_id(::uint32_t value) {
+  _internal_set_granted_skill_vfx_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ClaimTrialJournalMilestoneResponse.granted_skill_vfx_id)
+}
+inline ::uint32_t ClaimTrialJournalMilestoneResponse::_internal_granted_skill_vfx_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.granted_skill_vfx_id_;
+}
+inline void ClaimTrialJournalMilestoneResponse::_internal_set_granted_skill_vfx_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_skill_vfx_id_ = value;
 }
 
 // -------------------------------------------------------------------

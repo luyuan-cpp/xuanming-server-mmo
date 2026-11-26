@@ -21,6 +21,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
+#include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
@@ -45,6 +46,9 @@ constexpr uint64_t kSegmentLo = 2400000;
 constexpr uint64_t kSegmentHi = 2500000;
 // 2026-11-25 12:00:00 UTC (已进入某 UTC+8 周一 05:00 之后的正常周内)
 constexpr uint64_t kNowMs = 1795521600000ULL;
+// 2027 春节礼盒定时窗:2027-02-05 00:00:00 +08:00 ~ 2027-02-20 23:59:59 +08:00
+constexpr uint64_t kSpringStartMs = 1801756800000ULL;
+constexpr uint64_t kSpringEndMs = 1803139199000ULL;
 
 bool ArmItemSegment(uint64_t lo, uint64_t hi)
 {
@@ -118,6 +122,46 @@ TEST(SpiritShopRulesTest, OverflowAndValidationGuards)
 	EXPECT_FALSE(spirit_shop_rules::ValidateComp(bad).empty());
 }
 
+TEST(SpiritShopRulesTest, V2SaleWindowLevelAndChoiceRules)
+{
+	// 定时上下架:左闭右开 [start, end),0 表示该侧不限
+	EXPECT_TRUE(spirit_shop_rules::IsInSaleWindow(0, 0, kNowMs));
+	EXPECT_FALSE(spirit_shop_rules::IsInSaleWindow(kSpringStartMs, kSpringEndMs, kSpringStartMs - 1));
+	EXPECT_TRUE(spirit_shop_rules::IsInSaleWindow(kSpringStartMs, kSpringEndMs, kSpringStartMs));
+	EXPECT_TRUE(spirit_shop_rules::IsInSaleWindow(kSpringStartMs, kSpringEndMs, kSpringEndMs - 1));
+	EXPECT_FALSE(spirit_shop_rules::IsInSaleWindow(kSpringStartMs, kSpringEndMs, kSpringEndMs));
+	EXPECT_TRUE(spirit_shop_rules::IsInSaleWindow(kSpringStartMs, 0, kSpringEndMs + 1000));
+	EXPECT_FALSE(spirit_shop_rules::IsInSaleWindow(0, kSpringEndMs, kSpringEndMs));
+
+	// 角色有效等级门槛:闭区间 [min, max],0 表示该侧不限
+	EXPECT_TRUE(spirit_shop_rules::IsLevelEligible(1, 0, 0));
+	EXPECT_FALSE(spirit_shop_rules::IsLevelEligible(9, 10, 0));
+	EXPECT_TRUE(spirit_shop_rules::IsLevelEligible(10, 10, 0));
+	EXPECT_TRUE(spirit_shop_rules::IsLevelEligible(30, 10, 30));
+	EXPECT_FALSE(spirit_shop_rules::IsLevelEligible(31, 10, 30));
+
+	// ALL vs CHOOSE_ONE 解析
+	spirit_shop_rules::ResolvedGoods bundle;
+	bundle.grantMode = spirit_shop_rules::kGrantModeAll;
+	bundle.items = {{3001, 60, true}, {3002, 60, true}, {3405, 2, true}, {3402, 1, true}};
+	std::vector<spirit_shop_rules::ResolvedItem> selected;
+	ASSERT_TRUE(spirit_shop_rules::ResolveSelectedItems(bundle, 0, selected));
+	EXPECT_EQ(4u, selected.size());
+	EXPECT_FALSE(spirit_shop_rules::ResolveSelectedItems(bundle, 1, selected));
+
+	bundle.grantMode = spirit_shop_rules::kGrantModeChooseOne;
+	ASSERT_TRUE(spirit_shop_rules::ResolveSelectedItems(bundle, 2, selected));
+	ASSERT_EQ(1u, selected.size());
+	EXPECT_EQ(3405u, selected[0].itemConfigId);
+	EXPECT_EQ(2u, selected[0].itemCount);
+	EXPECT_FALSE(spirit_shop_rules::ResolveSelectedItems(bundle, 4, selected));
+
+	spirit_shop_rules::ResolvedGoods oneItemChoice;
+	oneItemChoice.grantMode = spirit_shop_rules::kGrantModeChooseOne;
+	oneItemChoice.items = {{3408, 1, true}};
+	EXPECT_FALSE(spirit_shop_rules::ResolveSelectedItems(oneItemChoice, 0, selected));
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // 编排与实表单测
 // ════════════════════════════════════════════════════════════════════════════
@@ -177,33 +221,58 @@ protected:
 		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(entity);
 		tlsEcs.actorRegistry.emplace<PlayerSpiritShopComp>(entity);
 		tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(entity);
+		auto &lvl = tlsEcs.actorRegistry.emplace<LevelComp>(entity);
+		lvl.set_level(1);
 		return entity;
+	}
+
+	void SetPlayerLevel(entt::entity who, uint32_t level)
+	{
+		auto &lvl = tlsEcs.actorRegistry.get_or_emplace<LevelComp>(who);
+		lvl.set_level(level);
 	}
 
 	Bag &Inventory(entt::entity who) { return tlsEcs.actorRegistry.get<PlayerBagsComp>(who).bags[kInventory]; }
 
-	::BuySpiritShopGoodsRequest BuildBuyRequestFromShelf(uint32_t goodsId, uint32_t count, uint64_t reqId)
+	::BuySpiritShopGoodsRequest BuildBuyRequestFromShelfAt(entt::entity who, uint32_t goodsId, uint32_t count,
+														   uint64_t reqId, uint64_t nowMs, uint32_t chosenIndex = 0)
 	{
 		::SpiritShopInfo info;
-		PlayerSpiritShopSystem::FillInfo(player, kNowMs, info);
+		PlayerSpiritShopSystem::FillInfo(who, nowMs, info);
 		::BuySpiritShopGoodsRequest req;
 		req.set_client_request_id(reqId);
 		req.set_goods_id(goodsId);
 		req.set_count(count);
+		req.set_chosen_item_index(chosenIndex);
 		for (const auto &g : info.goods())
 		{
 			if (g.goods_id() == goodsId)
 			{
 				req.set_expected_currency_type(g.currency_type());
 				req.set_expected_unit_price(g.unit_price());
-				for (const auto &item : g.items())
+				if (g.grant_mode() == spirit_shop_rules::kGrantModeChooseOne)
 				{
-					*req.add_expected_items() = item;
+					if (chosenIndex < static_cast<uint32_t>(g.items_size()))
+					{
+						*req.add_expected_items() = g.items(static_cast<int>(chosenIndex));
+					}
+				}
+				else
+				{
+					for (const auto &item : g.items())
+					{
+						*req.add_expected_items() = item;
+					}
 				}
 				break;
 			}
 		}
 		return req;
+	}
+
+	::BuySpiritShopGoodsRequest BuildBuyRequestFromShelf(uint32_t goodsId, uint32_t count, uint64_t reqId)
+	{
+		return BuildBuyRequestFromShelfAt(player, goodsId, count, reqId, kNowMs, 0);
 	}
 
 	entt::entity player{entt::null};
@@ -380,6 +449,169 @@ TEST_F(PlayerSpiritShopTest, GainBlockBattleFrozenAndMissingCompAreFailClosed)
 	EXPECT_EQ(kSpiritShopUnavailable,
 			  PlayerSpiritShopSystem::Buy(player, BuildBuyRequestFromShelf(201, 1, 6004), kNowMs, resp));
 	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+}
+
+TEST_F(PlayerSpiritShopTest, V2FestivalWindowAutoOpensAndClosesAndLevelGates)
+{
+	SetPlayerLevel(player, 20);
+	::SpiritShopInfo info;
+	::BuySpiritShopGoodsResponse resp;
+
+	// 1. 开售前 1ms:货架自动隐藏 401/402,直接发包回 kSpiritShopNotInSaleWindow(37011)
+	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs - 1, info);
+	EXPECT_EQ(9, info.goods_size());
+
+	// 预构造一份在售期报价单用于测窗口外与等级不足
+	auto req401 = BuildBuyRequestFromShelfAt(player, 401, 1, 7001, kSpringStartMs, 0);
+	ASSERT_EQ(4, req401.expected_items_size());
+	ASSERT_EQ(180u, req401.expected_unit_price());
+	EXPECT_EQ(kSpiritShopNotInSaleWindow,
+			  PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs - 1, resp));
+
+	// 2. 开售后但等级 < 10:货架自动过滤 401/402,直接发包回 kSpiritShopLevelNotMet(37012)
+	SetPlayerLevel(player, 9);
+	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs, info);
+	EXPECT_EQ(9, info.goods_size());
+	EXPECT_EQ(kSpiritShopLevelNotMet,
+			  PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs, resp));
+
+	// 缺 LevelComp 严格 fail-closed(隐藏 + 回 kSpiritShopUnavailable,绝不按 1 级放行)
+	tlsEcs.actorRegistry.remove<LevelComp>(player);
+	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs, info);
+	EXPECT_EQ(9, info.goods_size());
+	EXPECT_EQ(kSpiritShopUnavailable,
+			  PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs, resp));
+
+	// 3. 升至 10 级且进入活动期:401/402 自动出现在分页 4(共 11 项),并携带原价划线与时间窗
+	SetPlayerLevel(player, 10);
+	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs, info);
+	ASSERT_EQ(11, info.goods_size());
+	bool saw401 = false;
+	bool saw402 = false;
+	for (const auto &g : info.goods())
+	{
+		if (g.goods_id() == 401)
+		{
+			saw401 = true;
+			EXPECT_EQ(4u, g.tab_id());
+			EXPECT_EQ(180u, g.unit_price());
+			EXPECT_EQ(300u, g.original_price());
+			EXPECT_EQ(spirit_shop_rules::kGrantModeAll, g.grant_mode());
+			EXPECT_EQ(10u, g.min_level());
+			EXPECT_EQ(kSpringStartMs, g.start_time_ms());
+			EXPECT_EQ(kSpringEndMs, g.end_time_ms());
+			EXPECT_EQ(4, g.items_size());
+		}
+		else if (g.goods_id() == 402)
+		{
+			saw402 = true;
+			EXPECT_EQ(4u, g.tab_id());
+			EXPECT_EQ(120u, g.unit_price());
+			EXPECT_EQ(180u, g.original_price());
+			EXPECT_EQ(spirit_shop_rules::kGrantModeChooseOne, g.grant_mode());
+			EXPECT_EQ(4, g.items_size());
+		}
+	}
+	EXPECT_TRUE(saw401);
+	EXPECT_TRUE(saw402);
+
+	// 4. 4 件大礼包背包仅剩 3 格:整批原子拒回 kSpiritShopBagFull,零扣费、零发物
+	auto &inv = Inventory(player);
+	const uint32_t origCap = inv.Capacity();
+	inv.SetCapacityForRestore(inv.OccupiedGridCount() + 3);
+	EXPECT_EQ(kSpiritShopBagFull, PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs, resp));
+	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+	EXPECT_EQ(0u, inv.GetTotalItemCount(3001));
+	EXPECT_EQ(0u, inv.GetTotalItemCount(3002));
+	EXPECT_EQ(0u, inv.GetTotalItemCount(3405));
+	EXPECT_EQ(0u, inv.GetTotalItemCount(3402));
+	inv.SetCapacityForRestore(origCap);
+
+	// 5. ALL 礼包传非 0 chosen_item_index 拒回 kSpiritShopInvalidChoice(37013)
+	auto badChoice = req401;
+	badChoice.set_client_request_id(7002);
+	badChoice.set_chosen_item_index(1);
+	EXPECT_EQ(kSpiritShopInvalidChoice, PlayerSpiritShopSystem::Buy(player, badChoice, kSpringStartMs, resp));
+
+	// 6. 正常购入 401:按折后价 180(绝非划线原价 300)扣费,4 件绑定物全部入包;再买触发终身限购 1
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs, resp));
+	EXPECT_FALSE(resp.replayed());
+	EXPECT_EQ(820u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+	EXPECT_EQ(60u, inv.GetTotalItemCount(3001));
+	EXPECT_EQ(60u, inv.GetTotalItemCount(3002));
+	EXPECT_EQ(2u, inv.GetTotalItemCount(3405));
+	EXPECT_EQ(1u, inv.GetTotalItemCount(3402));
+	EXPECT_EQ(0u, BagService::RemovableTradableCount(player, inv, 3001));
+	EXPECT_EQ(0u, BagService::RemovableTradableCount(player, inv, 3402));
+
+	auto second401 = req401;
+	second401.set_client_request_id(7003);
+	EXPECT_EQ(kSpiritShopLimitReached, PlayerSpiritShopSystem::Buy(player, second401, kSpringStartMs, resp));
+
+	// 7. 活动到期(nowMs == kSpringEndMs):货架自动下架回 9 项,新单拒回 37011;
+	//    但旧已成交 client_request_id(7001) 幂等重放仍返回成功且不重复发物!
+	PlayerSpiritShopSystem::FillInfo(player, kSpringEndMs, info);
+	EXPECT_EQ(9, info.goods_size());
+	auto afterClose = req401;
+	afterClose.set_client_request_id(7004);
+	EXPECT_EQ(kSpiritShopNotInSaleWindow, PlayerSpiritShopSystem::Buy(player, afterClose, kSpringEndMs, resp));
+
+	::BuySpiritShopGoodsResponse replayResp;
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, req401, kSpringEndMs, replayResp));
+	EXPECT_TRUE(replayResp.replayed());
+	EXPECT_EQ(60u, inv.GetTotalItemCount(3001));
+	EXPECT_EQ(820u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+}
+
+TEST_F(PlayerSpiritShopTest, V2ChooseOneBundleValidatesChoiceAndQuoteAndIdempotency)
+{
+	SetPlayerLevel(player, 20);
+	::BuySpiritShopGoodsResponse resp;
+
+	// 1. 越界下标(4)拒回 kSpiritShopInvalidChoice(37013)
+	auto outOfRange = BuildBuyRequestFromShelfAt(player, 402, 1, 8001, kSpringStartMs, 0);
+	outOfRange.set_chosen_item_index(4);
+	EXPECT_EQ(kSpiritShopInvalidChoice, PlayerSpiritShopSystem::Buy(player, outOfRange, kSpringStartMs, resp));
+
+	// 2. 下标 1(3412 技能特效卷)但报价单填了下标 0(3408 天工秘墨):报价防呆拒回 kSpiritShopPriceChanged(37002)
+	auto mismatchQuote = BuildBuyRequestFromShelfAt(player, 402, 1, 8002, kSpringStartMs, 0);
+	mismatchQuote.set_chosen_item_index(1);
+	EXPECT_EQ(kSpiritShopPriceChanged, PlayerSpiritShopSystem::Buy(player, mismatchQuote, kSpringStartMs, resp));
+
+	// 3. 封禁未选中的候选项 3405(下标 3):选择下标 1(3412)应正常买成,选择下标 3 则拒回 kSpiritShopItemBlocked
+	GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, 3405);
+	auto buyChoice1 = BuildBuyRequestFromShelfAt(player, 402, 1, 8003, kSpringStartMs, 1);
+	ASSERT_EQ(1, buyChoice1.expected_items_size());
+	ASSERT_EQ(3412u, buyChoice1.expected_items(0).item_config_id());
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, buyChoice1, kSpringStartMs, resp));
+	EXPECT_EQ(880u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+	EXPECT_EQ(1u, Inventory(player).GetTotalItemCount(3412));
+	EXPECT_EQ(0u, Inventory(player).GetTotalItemCount(3408));
+	EXPECT_EQ(0u, Inventory(player).GetTotalItemCount(3411));
+	EXPECT_EQ(0u, Inventory(player).GetTotalItemCount(3405));
+
+	auto buyChoice3 = BuildBuyRequestFromShelfAt(player, 402, 1, 8004, kSpringStartMs, 3);
+	EXPECT_EQ(kSpiritShopItemBlocked, PlayerSpiritShopSystem::Buy(player, buyChoice3, kSpringStartMs, resp));
+	GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, 3405);
+
+	// 4. 解除封禁后买下标 3(3405 x3)成功,达终身限购 2/2,第 3 次买拒回 kSpiritShopLimitReached
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, buyChoice3, kSpringStartMs, resp));
+	EXPECT_EQ(760u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+	EXPECT_EQ(3u, Inventory(player).GetTotalItemCount(3405));
+
+	auto thirdBuy = BuildBuyRequestFromShelfAt(player, 402, 1, 8005, kSpringStartMs, 0);
+	EXPECT_EQ(kSpiritShopLimitReached, PlayerSpiritShopSystem::Buy(player, thirdBuy, kSpringStartMs, resp));
+
+	// 5. 同 client_request_id(8003) 换成下标 2(3411):指纹不匹配拒回 kInvalidParameter;
+	//    原样重放即使已过活动期仍返回 kSuccess + replayed=true 且绝不重复发 3412
+	auto swapChoiceReplay = BuildBuyRequestFromShelfAt(player, 402, 1, 8003, kSpringStartMs, 2);
+	EXPECT_EQ(kInvalidParameter, PlayerSpiritShopSystem::Buy(player, swapChoiceReplay, kSpringStartMs, resp));
+
+	::BuySpiritShopGoodsResponse replayResp;
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, buyChoice1, kSpringEndMs + 1000, replayResp));
+	EXPECT_TRUE(replayResp.replayed());
+	EXPECT_EQ(1u, Inventory(player).GetTotalItemCount(3412));
+	EXPECT_EQ(760u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
 }
 
 } // namespace

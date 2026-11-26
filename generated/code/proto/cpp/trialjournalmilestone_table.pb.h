@@ -243,6 +243,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneTable final : 
     kBoundSandCountFieldNumber = 5,
     kBoundArtifactVoucherCountFieldNumber = 6,
     kEnabledFieldNumber = 13,
+    kGrantPetCosmeticIdFieldNumber = 16,
+    kGrantSkillVfxIdFieldNumber = 17,
   };
   // string badge_key = 7;
   void clear_badge_key() ;
@@ -434,12 +436,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneTable final : 
   void _internal_set_enabled(bool value);
 
   public:
+  // uint32 grant_pet_cosmetic_id = 16;
+  void clear_grant_pet_cosmetic_id() ;
+  [[nodiscard]] ::uint32_t grant_pet_cosmetic_id() const;
+  void set_grant_pet_cosmetic_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_grant_pet_cosmetic_id() const;
+  void _internal_set_grant_pet_cosmetic_id(::uint32_t value);
+
+  public:
+  // uint32 grant_skill_vfx_id = 17;
+  void clear_grant_skill_vfx_id() ;
+  [[nodiscard]] ::uint32_t grant_skill_vfx_id() const;
+  void set_grant_skill_vfx_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_grant_skill_vfx_id() const;
+  void _internal_set_grant_skill_vfx_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TrialJournalMilestoneTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 135,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 143,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -482,6 +504,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalMilestoneTable final : 
     ::uint32_t bound_sand_count_;
     ::uint32_t bound_artifact_voucher_count_;
     bool enabled_;
+    ::uint32_t grant_pet_cosmetic_id_;
+    ::uint32_t grant_skill_vfx_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1394,6 +1418,54 @@ inline void TrialJournalMilestoneTable::set_allocated_desc(::std::string* PROTOB
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:TrialJournalMilestoneTable.desc)
+}
+
+// uint32 grant_pet_cosmetic_id = 16;
+inline void TrialJournalMilestoneTable::clear_grant_pet_cosmetic_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_pet_cosmetic_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t TrialJournalMilestoneTable::grant_pet_cosmetic_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalMilestoneTable.grant_pet_cosmetic_id)
+  return _internal_grant_pet_cosmetic_id();
+}
+inline void TrialJournalMilestoneTable::set_grant_pet_cosmetic_id(::uint32_t value) {
+  _internal_set_grant_pet_cosmetic_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:TrialJournalMilestoneTable.grant_pet_cosmetic_id)
+}
+inline ::uint32_t TrialJournalMilestoneTable::_internal_grant_pet_cosmetic_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_pet_cosmetic_id_;
+}
+inline void TrialJournalMilestoneTable::_internal_set_grant_pet_cosmetic_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_pet_cosmetic_id_ = value;
+}
+
+// uint32 grant_skill_vfx_id = 17;
+inline void TrialJournalMilestoneTable::clear_grant_skill_vfx_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_skill_vfx_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t TrialJournalMilestoneTable::grant_skill_vfx_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalMilestoneTable.grant_skill_vfx_id)
+  return _internal_grant_skill_vfx_id();
+}
+inline void TrialJournalMilestoneTable::set_grant_skill_vfx_id(::uint32_t value) {
+  _internal_set_grant_skill_vfx_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:TrialJournalMilestoneTable.grant_skill_vfx_id)
+}
+inline ::uint32_t TrialJournalMilestoneTable::_internal_grant_skill_vfx_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_skill_vfx_id_;
+}
+inline void TrialJournalMilestoneTable::_internal_set_grant_skill_vfx_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_skill_vfx_id_ = value;
 }
 
 // -------------------------------------------------------------------

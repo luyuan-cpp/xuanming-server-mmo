@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow">
+  <title>五行奇谈 · 独立开发者支持页</title>
+  <style>
+    :root {
+      --bg: #f6f3ec;
+      --surface: #fffdf8;
+      --surface-muted: #efeae0;
+      --ink: #1e2320;
+      --ink-muted: #58615b;
+      --border: #ddd5c7;
+      --accent: #245c4e;
+      --accent-hover: #1b483d;
+      --accent-soft: #e6f0ed;
+      --warn-bg: #fcf4ea;
+      --warn-border: #e5c39c;
+      --warn-ink: #6e3d10;
+      --radius: 14px;
+      --shadow: 0 6px 24px rgba(30, 35, 32, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(36, 92, 78, 0.06), transparent 36%),
+        radial-gradient(circle at 88% 18%, rgba(180, 75, 50, 0.05), transparent 34%),
+        var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+
+    header.hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+
+    .kicker {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(26px, 4vw, 36px);
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--ink-muted);
+      font-size: 16px;
+      max-width: 680px;
+    }
+
+    .notice {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      color: var(--warn-ink);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 28px;
+      font-size: 14px;
+    }
+
+    .notice strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    section {
+      margin-bottom: 32px;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin: 0 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .card.highlight {
+      border-color: var(--accent);
+      box-shadow: 0 8px 28px rgba(36, 92, 78, 0.12);
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--ink-muted);
+    }
+
+    .badge {
+      background: var(--surface-muted);
+      color: var(--ink);
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .card.highlight .badge {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .card h3 {
+      margin: 6px 0 6px;
+      font-size: 19px;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--ink-muted);
+    }
+
+    .btn {
+      display: inline-block;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 11px 16px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #ffffff;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--surface-muted);
+      color: var(--ink);
+    }
+
+    .btn-secondary:hover {
+      background: #e4ddd0;
+    }
+
+    .empty-tip {
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      color: var(--ink-muted);
+      font-size: 14px;
+    }
+
+    .tier-price {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1.2;
+    }
+
+    .tier-perk {
+      margin-top: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .faq {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+    }
+
+    .faq dt {
+      font-weight: 600;
+      margin-top: 14px;
+      font-size: 15px;
+    }
+
+    .faq dt:first-child { margin-top: 0; }
+
+    .faq dd {
+      margin: 4px 0 0;
+      color: var(--ink-muted);
+      font-size: 14px;
+    }
+
+    .community-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    footer {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--ink-muted);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    @media (max-width: 600px) {
+      header.hero { padding: 24px 20px; }
+      .container { padding: 24px 14px 48px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <div class="kicker" id="subtitle">独立开发者社区支持页</div>
+      <h1 id="game-title">五行奇谈</h1>
+      <p id="tagline"></p>
+    </header>
+
+    <div class="notice" role="note">
+      <strong>自愿赞助与合规隔离声明</strong>
+      本页面仅用于游戏之外的社区自愿赞助与开源研发鼓励，由第三方正规创作者平台处理结算，本站不收集、不经手任何支付信息。
+      <b>赞助完全自愿，不对应、不兑换任何游戏内货币、道具、装备、VIP 或账号特权</b>；免费玩家与赞助玩家在游戏内享有 100% 一致的公平体验。
+    </div>
+
+    <section aria-labelledby="channels-heading">
+      <h2 id="channels-heading">正规外部赞助渠道</h2>
+      <div id="channels-grid" class="grid"></div>
+    </section>
+
+    <section aria-labelledby="tiers-heading">
+      <h2 id="tiers-heading">赞助档位参考（纯心意支持）</h2>
+      <div id="tiers-grid" class="grid"></div>
+    </section>
+
+    <section aria-labelledby="faq-heading">
+      <h2 id="faq-heading">常见问题</h2>
+      <dl class="faq">
+        <dt>1. 赞助后会获得游戏内道具、银两或战力加成吗？</dt>
+        <dd>不会。为了保证全服公平竞技并严格遵守各应用商店与小游戏平台规范，游戏外社区赞助与游戏内账号体系完全物理隔离，不发放任何游戏内虚拟物品或特权。</dd>
+        <dt>2. 未成年人可以赞助吗？</dt>
+        <dd>请勿在未经监护人同意的情况下进行任何消费或赞助。如不赞助也完全不影响正常体验全部游戏内容与公开开发日志。</dd>
+        <dt>3. 赞助资金会用在哪些地方？</dt>
+        <dd>主要用于日常测试/演示服务器租赁、域名与带宽开销、原创美术/音效制作以及持续迭代的研发投入。</dd>
+      </dl>
+    </section>
+
+    <section id="community-section" aria-labelledby="community-heading" hidden>
+      <h2 id="community-heading">开发日志与交流社区</h2>
+      <div id="community-list" class="community-list"></div>
+    </section>
+
+    <footer>
+      <span id="footer-brand"></span>
+      <span id="footer-updated"></span>
+    </footer>
+  </main>
+
+  <script src="./support-config.js"></script>
+  <script>
+    (function () {
+      var cfg = window.EXTERNAL_SUPPORT_CONFIG || {};
+      var brand = cfg.brand || {};
+
+      function setText(id, value) {
+        var el = document.getElementById(id);
+        if (el && value) el.textContent = value;
+      }
+
+      function isSafeHref(url) {
+        if (typeof url !== 'string') return false;
+        var trimmed = url.trim();
+        return /^https:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed);
+      }
+
+      if (brand.gameTitle) {
+        document.title = brand.gameTitle + ' · 独立开发者支持页';
+        setText('game-title', brand.gameTitle + ' · 独立开发者支持页');
+      }
+      setText('subtitle', brand.subtitle || '独立开发者社区支持页');
+      setText('tagline', brand.tagline || '');
+      setText('footer-brand', (brand.gameTitle || '五行奇谈') + ' · ' + (brand.developerName || '独立开发者'));
+      setText('footer-updated', brand.updatedAt ? ('更新于 ' + brand.updatedAt) : '');
+
+      var channelsGrid = document.getElementById('channels-grid');
+      var activeChannels = (cfg.channels || []).filter(function (c) { return c && isSafeHref(c.url); });
+      if (activeChannels.length === 0) {
+        var tip = document.createElement('div');
+        tip.className = 'empty-tip';
+        tip.textContent = '尚未填写外部赞助链接：请编辑同目录下的 support-config.js，填入你的爱发电（https://afdian.com/...）或 Ko-fi / GitHub Sponsors 真实主页地址，保存后刷新即可生效。';
+        channelsGrid.appendChild(tip);
+      } else {
+        activeChannels.forEach(function (ch) {
+          var card = document.createElement('article');
+          card.className = ch.highlight ? 'card highlight' : 'card';
+
+          var body = document.createElement('div');
+          var meta = document.createElement('div');
+          meta.className = 'meta-row';
+          var reg = document.createElement('span');
+          reg.textContent = ch.region || '';
+          meta.appendChild(reg);
+          if (ch.badge) {
+            var badge = document.createElement('span');
+            badge.className = 'badge';
+            badge.textContent = ch.badge;
+            meta.appendChild(badge);
+          }
+          body.appendChild(meta);
+
+          var h3 = document.createElement('h3');
+          h3.textContent = ch.name || '';
+          body.appendChild(h3);
+
+          var desc = document.createElement('p');
+          desc.textContent = ch.description || '';
+          body.appendChild(desc);
+
+          var link = document.createElement('a');
+          link.className = ch.highlight ? 'btn' : 'btn btn-secondary';
+          link.href = ch.url.trim();
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = ch.buttonText || '前往支持';
+
+          card.appendChild(body);
+          card.appendChild(link);
+          channelsGrid.appendChild(card);
+        });
+      }
+
+      var tiersGrid = document.getElementById('tiers-grid');
+      (cfg.tiers || []).forEach(function (t) {
+        var card = document.createElement('article');
+        card.className = 'card';
+        var price = document.createElement('div');
+        price.className = 'tier-price';
+        price.textContent = t.price || '';
+        var h3 = document.createElement('h3');
+        h3.textContent = t.title || '';
+        var p = document.createElement('p');
+        p.textContent = t.purpose || '';
+        var perk = document.createElement('div');
+        perk.className = 'tier-perk';
+        perk.textContent = '回馈：' + (t.perk || '纯心意鼓励');
+
+        var top = document.createElement('div');
+        top.appendChild(price);
+        top.appendChild(h3);
+        top.appendChild(p);
+        card.appendChild(top);
+        card.appendChild(perk);
+        tiersGrid.appendChild(card);
+      });
+
+      var activeLinks = (cfg.communityLinks || []).filter(function (l) { return l && isSafeHref(l.url); });
+      if (activeLinks.length > 0) {
+        var section = document.getElementById('community-section');
+        var list = document.getElementById('community-list');
+        section.hidden = false;
+        activeLinks.forEach(function (item) {
+          var a = document.createElement('a');
+          a.className = 'btn btn-secondary';
+          a.href = item.url.trim();
+          if (!/^mailto:/i.test(a.href)) {
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+          }
+          a.textContent = item.name || item.url;
+          list.appendChild(a);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

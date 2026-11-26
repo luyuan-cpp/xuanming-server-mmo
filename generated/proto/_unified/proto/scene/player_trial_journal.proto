@@ -79,6 +79,10 @@ message TrialJournalMilestoneView {
   bool reached = 17;
   bool claimed = 18;
   bool claimable = 19; // reached && !claimed && 当前角色可操作
+  uint32 grant_pet_cosmetic_id = 20;
+  string grant_pet_cosmetic_name = 21;
+  uint32 grant_skill_vfx_id = 22;
+  string grant_skill_vfx_name = 23;
 }
 
 message TrialRedeemableArtifactOption {
@@ -131,6 +135,8 @@ message ClaimTrialJournalMilestoneResponse {
   uint32 granted_sand_count = 4;
   uint32 granted_voucher_count = 5;
   string granted_appearance_id = 6;
+  uint32 granted_pet_cosmetic_id = 7;
+  uint32 granted_skill_vfx_id = 8;
 }
 
 // 消耗 1 张「自用法宝拓印」(Item 3404)，指定兑换 8 件 V1 法宝中的任意 1 件（产出仅自用实例，允许同名第二件）。

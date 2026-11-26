@@ -73,6 +73,14 @@ type TrialJournalMilestoneDescComp struct {
     Value string
 }
 
+type TrialJournalMilestoneGrant_pet_cosmetic_idComp struct {
+    Value uint32
+}
+
+type TrialJournalMilestoneGrant_skill_vfx_idComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -136,5 +144,13 @@ func MakeTrialJournalMilestoneTitleComp(row *pb.TrialJournalMilestoneTable) Tria
 
 func MakeTrialJournalMilestoneDescComp(row *pb.TrialJournalMilestoneTable) TrialJournalMilestoneDescComp {
     return TrialJournalMilestoneDescComp{Value: row.Desc}
+}
+
+func MakeTrialJournalMilestoneGrant_pet_cosmetic_idComp(row *pb.TrialJournalMilestoneTable) TrialJournalMilestoneGrant_pet_cosmetic_idComp {
+    return TrialJournalMilestoneGrant_pet_cosmetic_idComp{Value: row.GrantPetCosmeticId}
+}
+
+func MakeTrialJournalMilestoneGrant_skill_vfx_idComp(row *pb.TrialJournalMilestoneTable) TrialJournalMilestoneGrant_skill_vfx_idComp {
+    return TrialJournalMilestoneGrant_skill_vfx_idComp{Value: row.GrantSkillVfxId}
 }
 

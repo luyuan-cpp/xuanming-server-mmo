@@ -1,8 +1,9 @@
 #pragma once
 
 // 官方灵石百宝阁的纯业务规则(不依赖 ECS / 表单例 / 时钟源,供 C++ scene 与单测共用)。
-// 设计文档:docs/design/spirit-shop-and-starter-packs-v1.md。
+// 设计文档:docs/design/spirit-shop-and-starter-packs-v1.md、docs/planning/spirit-shop-v2-festival-and-bundles.md。
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -15,6 +16,10 @@ namespace spirit_shop_rules
 {
 	inline constexpr uint32_t kResetLifetime = 0;
 	inline constexpr uint32_t kResetWeekly = 1;
+
+	inline constexpr uint32_t kGrantModeAll = 0;
+	inline constexpr uint32_t kGrantModeChooseOne = 1;
+	inline constexpr std::size_t kMaxGoodsItems = 4;
 
 	inline constexpr uint64_t kMaxUnitPrice = 1'000'000'000ULL;
 	inline constexpr uint32_t kMaxBuyCountPerRequest = 99;
@@ -59,11 +64,82 @@ namespace spirit_shop_rules
 		uint32_t limitCount{0};
 		uint32_t limitGroupId{0};
 		uint32_t limitGroupWeight{0};
+		uint64_t startTimeMs{0};
+		uint64_t endTimeMs{0};
+		uint32_t grantMode{kGrantModeAll};
+		uint64_t originalPrice{0};
+		uint32_t minLevel{0};
+		uint32_t maxLevel{0};
 	};
 
 	inline bool IsValidResetKind(uint32_t resetKind)
 	{
 		return resetKind == kResetLifetime || resetKind == kResetWeekly;
+	}
+
+	inline bool IsValidGrantMode(uint32_t grantMode)
+	{
+		return grantMode == kGrantModeAll || grantMode == kGrantModeChooseOne;
+	}
+
+	// 定时上下架判定:左闭右开 [startTimeMs, endTimeMs);任一端为 0 表示该侧不限。
+	inline bool IsInSaleWindow(uint64_t startTimeMs, uint64_t endTimeMs, uint64_t nowMs)
+	{
+		if (startTimeMs > 0 && nowMs < startTimeMs)
+		{
+			return false;
+		}
+		if (endTimeMs > 0 && nowMs >= endTimeMs)
+		{
+			return false;
+		}
+		return true;
+	}
+
+	// 角色有效等级阶段解锁判定:任一端为 0 表示该侧不限。
+	inline bool IsLevelEligible(uint32_t effectiveLevel, uint32_t minLevel, uint32_t maxLevel)
+	{
+		if (minLevel > 0 && effectiveLevel < minLevel)
+		{
+			return false;
+		}
+		if (maxLevel > 0 && effectiveLevel > maxLevel)
+		{
+			return false;
+		}
+		return true;
+	}
+
+	// 根据发放模式解析本次实际发入背包的物品列表:
+	// - ALL(0):chosenItemIndex 须为 0,发放 goods.items 全部 1..4 项;
+	// - CHOOSE_ONE(1):chosenItemIndex 须在 [0, goods.items.size()),仅发放所选 1 项。
+	inline bool ResolveSelectedItems(const ResolvedGoods &goods, uint32_t chosenItemIndex,
+									 std::vector<ResolvedItem> &outSelected)
+	{
+		outSelected.clear();
+		if (goods.items.empty())
+		{
+			return false;
+		}
+		if (goods.grantMode == kGrantModeAll)
+		{
+			if (chosenItemIndex != 0)
+			{
+				return false;
+			}
+			outSelected = goods.items;
+			return true;
+		}
+		if (goods.grantMode == kGrantModeChooseOne)
+		{
+			if (goods.items.size() < 2 || chosenItemIndex >= goods.items.size())
+			{
+				return false;
+			}
+			outSelected.push_back(goods.items[chosenItemIndex]);
+			return true;
+		}
+		return false;
 	}
 
 	inline bool ResolveWeek(uint64_t nowMs, uint64_t &startMs, uint64_t &nextMs)

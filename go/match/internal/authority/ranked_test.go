@@ -133,3 +133,40 @@ func TestRankedTierCrossingAndEffectiveDefaultTalisman(t *testing.T) {
 	require.Equal(t, uint32(4), summary.GetCurrentWinStreak())
 	require.Equal(t, uint32(6), summary.GetBestWinStreak())
 }
+
+func TestRankedV6RivalryAndFeaturedBuildHelpers(t *testing.T) {
+	// 宿敌复仇判定：无历史交手不触发；上次告负或净负触发；连胜压制不触发。
+	require.False(t, isRivalryRevengeTarget(nil))
+	require.False(t, isRivalryRevengeTarget(&pb.MatchRankedRivalryRecord{Wins: 0, Losses: 0}))
+	require.True(t, isRivalryRevengeTarget(&pb.MatchRankedRivalryRecord{Wins: 2, Losses: 1, LastOutcome: 2}))
+	require.True(t, isRivalryRevengeTarget(&pb.MatchRankedRivalryRecord{Wins: 1, Losses: 2, LastOutcome: 1}))
+	require.False(t, isRivalryRevengeTarget(&pb.MatchRankedRivalryRecord{Wins: 2, Losses: 1, LastOutcome: 1}))
+
+	// 宿敌战绩递增与对手名保留
+	r1 := nextRivalryRecord(1, 101, 201, "玄烈", nil, false, false, 8801, 1000)
+	require.Equal(t, uint32(0), r1.Wins)
+	require.Equal(t, uint32(1), r1.Losses)
+	require.Equal(t, uint32(2), r1.LastOutcome)
+	require.True(t, isRivalryRevengeTarget(r1))
+
+	r2 := nextRivalryRecord(1, 101, 201, "", r1, false, true, 8802, 2000)
+	require.Equal(t, "玄烈", r2.OpponentName)
+	require.Equal(t, uint32(1), r2.Wins)
+	require.Equal(t, uint32(1), r2.Losses)
+	require.Equal(t, uint32(1), r2.LastOutcome)
+	require.False(t, isRivalryRevengeTarget(r2))
+
+	// 流派归一键规范化：乱序、重复、超 4 招与零值归一化，保证同套配招聚合到同一行。
+	keyA, csvA, normA := canonicalBuildKey(101, 3, []uint32{10018, 10002, 10018, 0, 10041, 10021, 10035})
+	keyB, csvB, normB := canonicalBuildKey(101, 3, []uint32{10002, 10041, 10021, 10018})
+	require.Equal(t, "101:3:10002,10018,10021,10041", keyA)
+	require.Equal(t, keyA, keyB)
+	require.Equal(t, "10002,10018,10021,10041", csvA)
+	require.Equal(t, csvA, csvB)
+	require.Equal(t, []uint32{10002, 10018, 10021, 10041}, normA)
+	require.Equal(t, normA, normB)
+	require.Equal(t, normA, parseCoreSkillIDs(csvA))
+
+	emptyKey, _, _ := canonicalBuildKey(0, 0, nil)
+	require.Empty(t, emptyKey)
+}

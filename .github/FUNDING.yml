@@ -1,0 +1,8 @@
+# GitHub 仓库顶部「Sponsor」官方按钮配置（100% 游戏外，零商店拒审风险）
+# 使用方法：将下方对应平台账号替换为你自己的真实账号并去掉行首 `#`，推送到 GitHub main 分支后仓库页自动展示 Sponsor 入口。
+# 严禁将下方任何链接写进游戏客户端（mmorpg-client）！
+
+# github: [你的GitHub用户名]
+# ko_fi: 你的Ko-fi账号
+# patreon: 你的Patreon账号
+# custom: ["https://afdian.com/a/你的爱发电ID", "https://你的外部支持页域名/"]

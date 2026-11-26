@@ -107,4 +107,16 @@ public final class TrialJournalMilestoneTableComp {
         }
     }
 
+    public record Grant_pet_cosmetic_id(int value) {
+        public static Grant_pet_cosmetic_id from(TrialJournalMilestoneTable row) {
+            return new Grant_pet_cosmetic_id(row.getGrantPetCosmeticId());
+        }
+    }
+
+    public record Grant_skill_vfx_id(int value) {
+        public static Grant_skill_vfx_id from(TrialJournalMilestoneTable row) {
+            return new Grant_skill_vfx_id(row.getGrantSkillVfxId());
+        }
+    }
+
 }

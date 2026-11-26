@@ -43,8 +43,10 @@
 #include "table/code/characterappearance_table.h"
 #include "table/code/equipartifact_table.h"
 #include "table/code/item_table.h"
+#include "table/code/petcosmetic_table.h"
 #include "table/code/seasonrule_table.h"
 #include "table/code/seasonseal_table.h"
+#include "table/code/skillvfxcosmetic_table.h"
 #include "table/code/trialjournalentry_table.h"
 #include "table/code/trialjournalmilestone_table.h"
 #include "table/code/trialjournalseal_table.h"
@@ -126,12 +128,16 @@ protected:
         prevSealSnap = TrialJournalSealTableManager::Instance().CurrentSnapshot();
         prevMilestoneSnap = TrialJournalMilestoneTableManager::Instance().CurrentSnapshot();
         prevCharAppearanceSnap = CharacterAppearanceTableManager::Instance().CurrentSnapshot();
+        prevPetCosmeticSnap = PetCosmeticTableManager::Instance().CurrentSnapshot();
+        prevSkillVfxSnap = SkillVfxCosmeticTableManager::Instance().CurrentSnapshot();
 
         ItemTableManager::Instance().Load();
         EquipArtifactTableManager::Instance().Load();
         AppearanceSeriesTableManager::Instance().Load();
         CharacterAppearanceTableManager::Instance().Load();
         AppearanceRuleTableManager::Instance().Load();
+        PetCosmeticTableManager::Instance().Load();
+        SkillVfxCosmeticTableManager::Instance().Load();
         SeasonRuleTableManager::Instance().Load();
         SeasonSealTableManager::Instance().Load();
         TrialJournalEntryTableManager::Instance().Load();
@@ -169,6 +175,8 @@ protected:
         TrialJournalSealTableManager::Instance().InstallSnapshot(prevSealSnap);
         TrialJournalMilestoneTableManager::Instance().InstallSnapshot(prevMilestoneSnap);
         CharacterAppearanceTableManager::Instance().InstallSnapshot(prevCharAppearanceSnap);
+        PetCosmeticTableManager::Instance().InstallSnapshot(prevPetCosmeticSnap);
+        SkillVfxCosmeticTableManager::Instance().InstallSnapshot(prevSkillVfxSnap);
     }
 
     static bool CountPersist(entt::entity) {
@@ -192,6 +200,8 @@ protected:
     std::shared_ptr<const TrialJournalSealTableSnapshot> prevSealSnap;
     std::shared_ptr<const TrialJournalMilestoneTableSnapshot> prevMilestoneSnap;
     std::shared_ptr<const CharacterAppearanceTableSnapshot> prevCharAppearanceSnap;
+    std::shared_ptr<const PetCosmeticTableSnapshot> prevPetCosmeticSnap;
+    std::shared_ptr<const SkillVfxCosmeticTableSnapshot> prevSkillVfxSnap;
 };
 
 } // namespace
@@ -225,6 +235,16 @@ TEST_F(PlayerTrialJournalSystemTest, RealExportedTablesValidateAndPopulateInitia
     EXPECT_EQ(m901->required_seals(), 18u);
     EXPECT_EQ(m901->grant_appearance_id(), "20_star_formation_master_girl");
     EXPECT_EQ(m901->grant_appearance_name(), "星阵宗师");
+
+    const auto* m105 = FindMilestoneView(snap, 105);
+    ASSERT_NE(m105, nullptr);
+    EXPECT_EQ(m105->grant_skill_vfx_id(), 3u);
+    EXPECT_EQ(m105->grant_skill_vfx_name(), "寒星流华");
+
+    const auto* m302 = FindMilestoneView(snap, 302);
+    ASSERT_NE(m302, nullptr);
+    EXPECT_EQ(m302->grant_pet_cosmetic_id(), 3u);
+    EXPECT_EQ(m302->grant_pet_cosmetic_name(), "月弦师");
 }
 
 TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingCardUnlockableAppearance) {
@@ -240,6 +260,36 @@ TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingCardUnlockableAppea
     }
     TrialJournalMilestoneTableManager::Instance().InstallSnapshot(snap);
     EXPECT_FALSE(PlayerTrialJournalSystem::ValidateTables());
+}
+
+TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingPurchasablePetOrSkillCosmetic) {
+    {
+        auto snap = std::make_shared<TrialJournalMilestoneTableSnapshot>(
+            *TrialJournalMilestoneTableManager::Instance().CurrentSnapshot());
+        // PetCosmetic #1（苍嶂麟）支持百宝阁幻化符解锁，严禁配进免费试炼志里程碑。
+        snap->data.mutable_data(0)->set_grant_pet_cosmetic_id(1);
+        snap->idMap.clear();
+        for (int i = 0; i < snap->data.data_size(); ++i) {
+            const auto& row = snap->data.data(i);
+            snap->idMap[row.id()] = &row;
+        }
+        TrialJournalMilestoneTableManager::Instance().InstallSnapshot(snap);
+        EXPECT_FALSE(PlayerTrialJournalSystem::ValidateTables());
+    }
+    TrialJournalMilestoneTableManager::Instance().InstallSnapshot(prevMilestoneSnap);
+    {
+        auto snap = std::make_shared<TrialJournalMilestoneTableSnapshot>(
+            *TrialJournalMilestoneTableManager::Instance().CurrentSnapshot());
+        // SkillVfxCosmetic #1（鎏金符纹）支持百宝阁特效卷解锁，严禁配进免费试炼志里程碑。
+        snap->data.mutable_data(0)->set_grant_skill_vfx_id(1);
+        snap->idMap.clear();
+        for (int i = 0; i < snap->data.data_size(); ++i) {
+            const auto& row = snap->data.data(i);
+            snap->idMap[row.id()] = &row;
+        }
+        TrialJournalMilestoneTableManager::Instance().InstallSnapshot(snap);
+        EXPECT_FALSE(PlayerTrialJournalSystem::ValidateTables());
+    }
 }
 
 TEST_F(PlayerTrialJournalSystemTest, SoloClearLightsSealsUpdatesBestRoundsAndSnapshotsLoadout) {
@@ -767,7 +817,7 @@ TEST_F(PlayerTrialJournalSystemTest, FullThreeChaptersGrandmasterM901AndSeasonal
     }
     EXPECT_TRUE(ownedStarMaster);
 
-    // 4) 领取卷三 S1 里程碑 302（4 印）落进 season_records，不写永久 claimed_milestone_bits
+    // 4) 领取卷三 S1 里程碑 302（4 印）落进 season_records，不写永久 claimed_milestone_bits，并永久解锁专属灵宠幻化 #3 月弦师
     ClaimTrialJournalMilestoneRequest claim302;
     claim302.set_client_request_id(9402);
     claim302.set_milestone_id(302);
@@ -775,12 +825,58 @@ TEST_F(PlayerTrialJournalSystemTest, FullThreeChaptersGrandmasterM901AndSeasonal
     PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, claim302, resp302);
     EXPECT_EQ(resp302.error_message().id(), 0u);
     EXPECT_EQ(resp302.granted_sand_count(), 1u);
+    EXPECT_EQ(resp302.granted_pet_cosmetic_id(), 3u);
+
+    ClaimTrialJournalMilestoneResponse resp302Replay;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, claim302, resp302Replay);
+    EXPECT_EQ(resp302Replay.error_message().id(), 0u);
+    EXPECT_TRUE(resp302Replay.replayed());
+    EXPECT_EQ(resp302Replay.granted_pet_cosmetic_id(), 3u);
+
     const auto& comp = tlsEcs.actorRegistry.get<PlayerTrialJournalComp>(player);
     ASSERT_EQ(comp.season_records_size(), 1);
     EXPECT_EQ(comp.season_records(0).season_id(), 1u);
     EXPECT_EQ(comp.season_records(0).lit_seal_ids_size(), 6);
     ASSERT_EQ(comp.season_records(0).claimed_milestone_ids_size(), 1);
     EXPECT_EQ(comp.season_records(0).claimed_milestone_ids(0), 302u);
+
+    // 5) 点亮卷一困难·双卫同阵（105）3 印达到卷一 15 印，领取 M105 永久解锁专属技能特效 #3 寒星流华（不自动穿戴）
+    auto s105 = MakeTrialSettlement(6105, 105, 1, 6);
+    s105.mutable_trial_facts()->set_guard_stance_dispelled(true);
+    ApplyBattleCredit(s105, d);
+    EXPECT_EQ(d.newlyLitSealIds.size(), 3u);
+
+    ClaimTrialJournalMilestoneRequest claim105;
+    claim105.set_client_request_id(9403);
+    claim105.set_milestone_id(105);
+    ClaimTrialJournalMilestoneResponse resp105;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, claim105, resp105);
+    EXPECT_EQ(resp105.error_message().id(), 0u);
+    EXPECT_EQ(resp105.granted_skill_vfx_id(), 3u);
+
+    ClaimTrialJournalMilestoneResponse resp105Replay;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, claim105, resp105Replay);
+    EXPECT_EQ(resp105Replay.error_message().id(), 0u);
+    EXPECT_TRUE(resp105Replay.replayed());
+    EXPECT_EQ(resp105Replay.granted_skill_vfx_id(), 3u);
+
+    PlayerAppearanceInfo cosmeticInfo;
+    PlayerAppearanceSystem::FillInfo(player, kNowMs / 1000u, cosmeticInfo);
+    bool ownedPet3 = false;
+    for (const auto& petCos : cosmeticInfo.pet_cosmetics()) {
+        if (petCos.config_id() == 3u) {
+            ownedPet3 = petCos.owned();
+        }
+    }
+    EXPECT_TRUE(ownedPet3);
+    bool ownedVfx3 = false;
+    for (const auto& vfxCos : cosmeticInfo.skill_vfx_cosmetics()) {
+        if (vfxCos.config_id() == 3u) {
+            ownedVfx3 = vfxCos.owned();
+        }
+    }
+    EXPECT_TRUE(ownedVfx3);
+    EXPECT_TRUE(cosmeticInfo.equipped_skill_vfx().empty()) << "里程碑授形只置永久拥有位图，不自动替玩家穿戴";
 }
 
 TEST_F(PlayerTrialJournalSystemTest, NormalBossTrialClearUnlocksHardWithoutJournalEntry) {

@@ -113,6 +113,8 @@ static void TrialJournalMilestoneTableCheckNarrowedRow(const TSharedPtr<FJsonObj
 	TrialJournalMilestoneTableCheckNarrowedField(RowObject, TEXT("required_seals"), TEXT("required_seals"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TrialJournalMilestoneTableCheckNarrowedField(RowObject, TEXT("bound_sand_count"), TEXT("bound_sand_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TrialJournalMilestoneTableCheckNarrowedField(RowObject, TEXT("bound_artifact_voucher_count"), TEXT("bound_artifact_voucher_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	TrialJournalMilestoneTableCheckNarrowedField(RowObject, TEXT("grant_pet_cosmetic_id"), TEXT("grant_pet_cosmetic_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	TrialJournalMilestoneTableCheckNarrowedField(RowObject, TEXT("grant_skill_vfx_id"), TEXT("grant_skill_vfx_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UTrialJournalMilestoneTable::LoadFromJson(const FString& JsonText, FString& OutError)

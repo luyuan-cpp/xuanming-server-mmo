@@ -495,7 +495,16 @@ def cmd_trial_milestone_grants(dry_run: bool) -> None:
     if dry_run:
         print(f"[dry-run] Would patch {len(patches)} cells in {rel(TRIAL_MILESTONE_XLSX)}.")
         return
-    apply_patches_and_verify(TRIAL_MILESTONE_XLSX, TRIAL_MILESTONE_SHEET, wb, ws, before, patches, bind_schema=True)
+    for r_idx, c_idx, val in patches:
+        ws.cell(row=r_idx, column=c_idx, value=val)
+    wb.save(TRIAL_MILESTONE_XLSX)
+    check_ws = only_sheet(openpyxl.load_workbook(TRIAL_MILESTONE_XLSX), TRIAL_MILESTONE_XLSX, TRIAL_MILESTONE_SHEET)
+    after = sheet_matrix(check_ws)
+    for r_idx, c_idx, val in patches:
+        actual = after[r_idx - 1][c_idx - 1]
+        if actual != val:
+            fail(f"after saving, {TRIAL_MILESTONE_XLSX.name} R{r_idx}C{c_idx} expected {val!r} got {actual!r}")
+    bind(TRIAL_MILESTONE_SHEET, TRIAL_MILESTONE_XLSX)
     print(f"[DONE] Updated {rel(TRIAL_MILESTONE_XLSX)}")
 
 

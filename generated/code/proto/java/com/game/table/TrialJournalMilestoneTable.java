@@ -445,6 +445,28 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int GRANT_PET_COSMETIC_ID_FIELD_NUMBER = 16;
+  private int grantPetCosmeticId_ = 0;
+  /**
+   * <code>uint32 grant_pet_cosmetic_id = 16;</code>
+   * @return The grantPetCosmeticId.
+   */
+  @java.lang.Override
+  public int getGrantPetCosmeticId() {
+    return grantPetCosmeticId_;
+  }
+
+  public static final int GRANT_SKILL_VFX_ID_FIELD_NUMBER = 17;
+  private int grantSkillVfxId_ = 0;
+  /**
+   * <code>uint32 grant_skill_vfx_id = 17;</code>
+   * @return The grantSkillVfxId.
+   */
+  @java.lang.Override
+  public int getGrantSkillVfxId() {
+    return grantSkillVfxId_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -504,6 +526,12 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 15, desc_);
     }
+    if (grantPetCosmeticId_ != 0) {
+      output.writeUInt32(16, grantPetCosmeticId_);
+    }
+    if (grantSkillVfxId_ != 0) {
+      output.writeUInt32(17, grantSkillVfxId_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -560,6 +588,14 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(15, desc_);
     }
+    if (grantPetCosmeticId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(16, grantPetCosmeticId_);
+    }
+    if (grantSkillVfxId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(17, grantSkillVfxId_);
+    }
     return size;
   }
   @java.lang.Override
@@ -614,6 +650,10 @@ private static final long serialVersionUID = 0L;
         .equals(other.getTitle())) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getGrantPetCosmeticId()
+        != other.getGrantPetCosmeticId()) return false;
+    if (getGrantSkillVfxId()
+        != other.getGrantSkillVfxId()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -656,6 +696,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getTitle().hashCode();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + GRANT_PET_COSMETIC_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getGrantPetCosmeticId();
+    hash = (37 * hash) + GRANT_SKILL_VFX_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getGrantSkillVfxId();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -802,6 +846,8 @@ private static final long serialVersionUID = 0L;
       enabled_ = false;
       title_ = "";
       desc_ = "";
+      grantPetCosmeticId_ = 0;
+      grantSkillVfxId_ = 0;
       return this;
     }
 
@@ -880,6 +926,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00004000) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.grantPetCosmeticId_ = grantPetCosmeticId_;
+      }
+      if (((from_bitField0_ & 0x00010000) != 0)) {
+        result.grantSkillVfxId_ = grantSkillVfxId_;
+      }
     }
 
     @java.lang.Override
@@ -954,6 +1006,12 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00004000;
         onChanged();
+      }
+      if (other.getGrantPetCosmeticId() != 0) {
+        setGrantPetCosmeticId(other.getGrantPetCosmeticId());
+      }
+      if (other.getGrantSkillVfxId() != 0) {
+        setGrantSkillVfxId(other.getGrantSkillVfxId());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1056,6 +1114,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00004000;
               break;
             } // case 122
+            case 128: {
+              grantPetCosmeticId_ = input.readUInt32();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 128
+            case 136: {
+              grantSkillVfxId_ = input.readUInt32();
+              bitField0_ |= 0x00010000;
+              break;
+            } // case 136
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1869,6 +1937,70 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+
+    private int grantPetCosmeticId_ ;
+    /**
+     * <code>uint32 grant_pet_cosmetic_id = 16;</code>
+     * @return The grantPetCosmeticId.
+     */
+    @java.lang.Override
+    public int getGrantPetCosmeticId() {
+      return grantPetCosmeticId_;
+    }
+    /**
+     * <code>uint32 grant_pet_cosmetic_id = 16;</code>
+     * @param value The grantPetCosmeticId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGrantPetCosmeticId(int value) {
+
+      grantPetCosmeticId_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 grant_pet_cosmetic_id = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGrantPetCosmeticId() {
+      bitField0_ = (bitField0_ & ~0x00008000);
+      grantPetCosmeticId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int grantSkillVfxId_ ;
+    /**
+     * <code>uint32 grant_skill_vfx_id = 17;</code>
+     * @return The grantSkillVfxId.
+     */
+    @java.lang.Override
+    public int getGrantSkillVfxId() {
+      return grantSkillVfxId_;
+    }
+    /**
+     * <code>uint32 grant_skill_vfx_id = 17;</code>
+     * @param value The grantSkillVfxId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGrantSkillVfxId(int value) {
+
+      grantSkillVfxId_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 grant_skill_vfx_id = 17;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGrantSkillVfxId() {
+      bitField0_ = (bitField0_ & ~0x00010000);
+      grantSkillVfxId_ = 0;
       onChanged();
       return this;
     }

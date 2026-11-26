@@ -126,3 +126,41 @@
      - `attack/E/01.png`～`12.png`、`attack/W/01.png`～`12.png`：`1024×1024`（朝右 E 与朝左 W 普攻各 12 帧）
      - `cast/E/01.png`～`16.png`、`cast/W/01.png`～`16.png`：`1024×1024`（朝右 E 与朝左 W 施法各 16 帧）
      - `hit/E/01.png`～`06.png`、`hit/W/01.png`～`06.png`：`1024×1024`（朝右 E 与朝左 W 受击各 6 帧）
+
+
+---
+
+## 7. 2026-11-26 专属限定外观（#3 月弦师 / #3 寒星流华）接入五行试炼志里程碑闭环
+
+### 7.1 需求分析
+- `PetCosmetic` #3「月弦师」（`pet_morph_yuexianshi`）与 `SkillVfxCosmetic` #3「寒星流华」（`vfx_hanxing_aurora`）在衣柜与配表中标记为玩法专属解锁（`card_item_id = 0`、`mall_sku_id = 0`、`spirit_shop_goods_id = 0`），此前尚未挂载实际发奖里程碑，导致玩家衣柜可见却无法在局内取得。
+- 本次不新增独立玩法、窗口或 UI 美术资产，直接沿用五行试炼志 V2 已有的 `TrialJournalMilestone` 一次性里程碑直授机制（与 M901「五行宗师」直授 `grant_appearance_id` 同构），使衣柜三页签各对应 1 件零战力荣誉限定外观：
+  - **人物形象**（既有）：M901「五行宗师」（永久卷一+卷二 18 印）→ `grant_appearance_id = "20_star_formation_master_girl"`（星阵宗师）；
+  - **技能特效**（新增）：M105「破阵双绝」（卷一 15 印，含困难·双卫同阵）→ `grant_skill_vfx_id = 3`（寒星凝魄 · 「寒星流华」）；
+  - **灵宠幻化**（新增）：M302「破阵奇谈」（破阵之季卷三 4 枚赛季印）→ `grant_pet_cosmetic_id = 3`（灵宠幻化 · 「月弦师」）。
+- 同步细化 `PetCosmetic` #3 与 `SkillVfxCosmetic` #3 的 `acquire_hint` 文本，在衣柜中清晰告知对应试炼志解锁条件。
+
+### 7.2 设计分析
+- **配置表扩展（只增不改）**：`data/schema/trialjournalmilestone_table.proto` 末尾追加 `uint32 grant_pet_cosmetic_id = 16;` 与 `uint32 grant_skill_vfx_id = 17;`，不动既有字段号与 `cfg_bit_index` 位序。
+- **协议扩展（只增不改，零新 RPC）**：`proto/scene/player_trial_journal.proto` 中：
+  - `TrialJournalMilestoneView` 末尾追加 `grant_pet_cosmetic_id = 20`、`grant_pet_cosmetic_name = 21`、`grant_skill_vfx_id = 22`、`grant_skill_vfx_name = 23`；
+  - `ClaimTrialJournalMilestoneResponse` 末尾追加 `granted_pet_cosmetic_id = 7`、`granted_skill_vfx_id = 8`。
+- **客户端表现**：复用试炼志里程碑卡 `rewardParts` 展示与 `HandleMilestoneClaimed` 提示，零新窗口、零新切图。
+
+### 7.3 思想分析
+- **同构复用，最小闭环**：完全复用 `TrialJournalMilestone` 既有位图防重、赛季隔离、背包预检、幂等重放与 `PlayerAppearanceSystem::GrantPetCosmetic` / `GrantSkillVfx` 权威授形通道，不另造第二套发奖系统。
+- **只授永久权益、不替玩家穿戴**：领奖仅置位永久拥有位图并推 `AppearanceStateNotify`，保留玩家在衣柜内自主穿脱的掌控权。
+
+### 7.4 漏洞分析与防线
+| 潜在漏洞 / 边界 | 防护措施 |
+|---|---|
+| 误将百宝阁/商城可买外观配进免费试炼志里程碑 | `ValidateTables()` 与 `ClaimMilestone()` 双重校验 `enabled != 0 && card_item_id == 0 && mall_sku_id == 0 && spirit_shop_goods_id == 0`，违规表项 fail-closed 拒载/拒领 |
+| 满包失败或任一外显授形失败导致里程碑先置位或道具半提交 | 背包空间预检排在一切状态变更之前；`GrantPetCosmetic` / `GrantSkillVfx` 置于原子提交回调内，失败即中止且不置位里程碑 |
+| 客户端超时重发同 `client_request_id` 导致误报已领或丢展示字段 | 幂等重放分支查表回填 `granted_pet_cosmetic_id` / `granted_skill_vfx_id`；`GrantPetCosmetic` / `GrantSkillVfx` 对已拥有状态幂等成功 |
+| 赛季里程碑 M302 跨季污染永久位图 | M302 归属 `season_id = 1` 记入 `season_records`，不写永久 `claimed_milestone_bits`；外观永久拥有位图跨季保留 |
+
+### 7.5 步骤分析与执行步骤
+1. 更新 `data/schema/trialjournalmilestone_table.proto`、`proto/scene/player_trial_journal.proto` 与 `tools/scripts/wardrobe_cosmetics_xlsx_patch.py`，补齐 `TrialJournalMilestone.xlsx`、`PetCosmetic.xlsx`、`SkillVfxCosmetic.xlsx`，运行导表、schema 索引刷新与 `proto-gen-run`。
+2. 在 C++ `player_trial_journal.cpp` 实现专属灵宠幻化与技能特效校验、快照填充、领奖直授与幂等重放回填，在 `player_trial_journal_test.cpp` 补齐单测，执行预检、编译与 `bag_test`。
+3. 在 Java 独立服与 Python 独立服同步契约/配表并实现同等校验、快照、直授与单测。
+4. 在 Unity 客户端同步表与 proto，更新 `TrialJournalClient` / `TrialJournalWindow` / `TrialJournalUiRoot` 与 `TrialJournalClientTests`，执行编译与单测验收。
