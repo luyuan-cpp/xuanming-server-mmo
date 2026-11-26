@@ -5379,5 +5379,23 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - C++：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`check_log_text_english.py` **exit 0**；串行 MSBuild `/m:1` `scene.lib` / `battle.lib` / `turn_battle_engine_test.exe` **0 错误**；`turn_battle_engine_test.exe --gtest_filter="TableBattleDataProviderTest.*"` **9/9 PASS**（注：`bag_test.exe` / `scene.exe` 链接暂受同工作区并行会话 `player_battle_settlement_test.cpp:4283` 与 `main.cpp:162` 阻断，我方修改 0 错误）。
   - Java（`xuanming-server-mmo`）：精准同步 4 张 `.pb` 与 `manifest.json` 对应条目；`game-scene-manager` `WorldMapOverviewTest` **PASS**、`game-table` 全套 **PASS**、`game-battle-engine` `TableBattleDataTest` **PASS**、`game-scene` `PrepareBattleTest#野外灵宠栖息地必须在对应野外图备战_主城演练不受限` **1/1 PASS**（全类 48/49 PASS，唯一 1 错为并行会话未 install 的 `game-proto` `SupportEffectSummaryOrBuilder`）；已更新 `PARITY.md`。
   - Unity：`client_compile_check.ps1` **exit 0（780 文件 0 错误）**；`MmorpgClient.Tests.EditMode.Tianyong` **66 个测试文件 0 错误编译**；.NET 实跑 `WorldMapOverviewTests` 4 组纯 C# 用例 **4/4 PASS**。
-- **Codex 纯功能 UI 交接与提交状态**：
-  - 产出纯功能无画风交接单 [docs/planning/ui-handoff/world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md)（3 张可选专属透明 PNG + 1 张审图预览），并在回复中内联自包含作图清单供直接转发异机 Codex；三仓均未执行 `git commit` / `git push`。
+- **Codex 专属切图接入与提交状态**：
+  - Codex 交付的 3 张野外栖息地 HUD 专属无字透明切图（Azure `image/main@a9c6026d`，`D:\work\image\designs\world-map-habitat-ui\`）已逐字节 SHA-256 核验落盘至 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}.png`，生成无冲突 Unity `.meta` 并写入 `CONTROL-USAGE.md` 对应 `spriteBorder`（`32/18/32/18`、`24/12/24/12`、`0/0/0/0`）；`CityTravelUiRoot.cs` 按钮文字安全区同步校准为 `(31, 10, 128, 30)`，`WorldMapOverviewTests.cs` 补充三张专属切图名断言；三仓均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：率土式交互叠层成长战法 V2（卷 7《兵法叠势卷》`12023..12028` 6 项被动三端全链路闭环，零新协议 / 零 Schema 变更）
+
+- **设计与配表（`xuanming-server-mmo-cpp`）**：
+  - 设计文档：[docs/planning/growing-passive-skills-v2.md](planning/growing-passive-skills-v2.md)；纯功能图标交接单：[docs/planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md)（7 张透明 PNG-32，零画风词），均已登记 `docs/README.md`。
+  - 冻结卷 1–6，新开常规卷 7《兵法叠势卷》（`SkillScrollCraft.xlsx` `id=7`），在 `Skill.xlsx`（`12023..12028`, `G04..G09`）与 `Buff.xlsx`（`120230..120280`）落盘 6 项 100% 行为/交互触发叠层至战斗结束被动（硬封顶 5 层、每回合限叠 1 层、不可普通驱散、全常规 `rarity_tier=0`，全永久池稀世占比 `8/95 = 8.42% <= 10%`）：`12023 承锋蓄势`（受敌方直伤/A36 援护叠直伤 `+6%/层`）、`12024 循隙破甲`（主动攻命中叠穿防 `+4%/层`）、`12025 蚀骨愈深`（中毒/灼烧跳伤叠持续伤害 `+6%/层`）、`12026 磐石道心`（受敌方行动控制针对叠全行动控制抵抗 `+5%/层`）、`12027 厚泽蓄灵`（主动施放疗/盾/回生印叠施盾容量 `+5%/层`）、`12028 兽威渐盛`（灵宠专属，主动攻命中叠直伤 `+6%/层`，阵亡或被 `B09` 劝退清零层数并保留被动本体）。
+  - 使用仓内 `libprotoc 35.1` 执行 `python tools/data_table_exporter/run.py`（**exit 0，81 表，Deploy 14 OK / 0 failed**）并刷新 `data/AGENTS.md`。
+- **C++ 战斗引擎与验收（`xuanming-server-mmo-cpp`）**：
+  - `battle_effect_constants.h` 新增 `BattleModifier::{SelfGrowingDirectDamage=25, DefensePenetration=26, PeriodicDamageBonus=27, AllControlResist=28}` 与 `BattleTrigger::{AfterDirectAttack=7, AfterControlAttempt=8, AfterSupportCast=9}`；统一在 `configured_battle_effects.cpp`、`equipment_battle_effects.cpp`、`turn_battle_engine.{h,cpp}` 落地事件触发 `GrowingAura`、同队过滤、`A36` 仅放行 `GrowingAura`、穿防缩减护甲/防御（钳制 `<=50%`）、全行动控制抵抗隔离 `P16`、`HandleDeath`/`RetreatPet` 清零 `keep_on_death==0` 易失层数。
+  - 更新 `modern_skill_test.cpp`（永久目录 `89 -> 95`）与 `growing_passive_skill_test.cpp`（新增 5 项全覆盖单测）。
+  - 验证：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`check_log_text_english.py` **PASSED**、串行 MSBuild `/m:1`（`battle.lib`/`turn_battle_engine_test.exe`/`battle.exe`）**0 错误**、`turn_battle_engine_test.exe` **521/521 PASS（45 套件）**。
+- **Java 独立服务端（`xuanming-server-mmo`）**：
+  - 精准同步 `skill.pb` / `buff.pb` / `skillscrollcraft.pb`（SHA-256 三端逐字节一致）与 `manifest.json`；在 `game-battle-engine`（`BattleEffect`/`ConfiguredBattle`/`ConfiguredEffects`/`ConfiguredImpact`/`BattleEquipment`/`BattleContext`）1:1 同构实现，扩展 `GrowingPassiveSkillTest.java`（9 项）并更新 `ConfiguredBattleCatalogTest.java` 基线（103/108/78）。
+  - 验证：`game-battle-engine` `ConfiguredBattleCatalogTest + GrowingPassiveSkillTest + TableBattleDataTest` **37/37 PASS**、`RankedBattleEngineTest` **11/11 PASS**；`game-scene` `EquipQualityAndSkillCraftTest`（实表校验卷 7 与 `<=10%` 稀世占比）**5/5 PASS**；已登记 `PARITY.md`。
+- **Unity 客户端（`mmorpg-client`）**：
+  - 同步客户端配置表（`sync_tables.ps1` **81/81 一致**，SHA-256 逐字节对齐）；复用既有全数据驱动 `UI/Skills/12023..12028` 与 `UI/Ugui/Skills/Scrolls/scroll_7` 图标加载与缺图安全回退（零 C# 硬编码改动）；`client_compile_check.ps1` **exit 0（781 文件 0 错误）**。
+- **提交状态**：三仓均未执行 `git commit` / `git push`，待负责人确认。

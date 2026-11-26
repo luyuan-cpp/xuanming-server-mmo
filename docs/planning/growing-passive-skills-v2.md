@@ -102,4 +102,5 @@
 - [x] **步骤 3**：实现 C++ 战斗引擎（`battle_effect_constants.h`、`configured_battle_effects.cpp`、`equipment_battle_effects.cpp`、`turn_battle_engine.{h,cpp}`），更新 `modern_skill_test.cpp` 目录基线至 95 项并扩展 `growing_passive_skill_test.cpp` 覆盖全部 6 项及边界条件。
 - [x] **步骤 4**：执行 C++ 静态守卫（`test_cpp_no_raw_pointer_member.py`、`check_log_text_english.py`）、串行 MSBuild `/m:1` 与 `turn_battle_engine_test.exe`（521/521 PASS）回归验收。
 - [x] **步骤 5**：同步 Java 独立服 `xuanming-server-mmo` 的 `skill.pb` / `buff.pb` / `skillscrollcraft.pb` 与 `manifest.json`，在 `game-battle-engine` 镜像实现同等机制并扩展 `GrowingPassiveSkillTest.java` 与 `ConfiguredBattleCatalogTest.java`，运行 Maven 单测（`game-battle-engine` 37/37 + `RankedBattleEngineTest` 11/11 + `game-scene` `EquipQualityAndSkillCraftTest` 5/5）全绿验收。
-- [x] **步骤 6**：同步 Unity 客户端 `mmorpg-client` 配置表（`sync_tables.ps1` 81/81 一致），复用既有全数据驱动 `UI/Skills/{skillId}` 与 `UI/Ugui/Skills/Scrolls/scroll_{scrollId}` 路径（缺图安全回退，零硬�
+- [x] **步骤 6**：同步 Unity 客户端 `mmorpg-client` 配置表（`sync_tables.ps1` 81/81 一致），复用既有全数据驱动 `UI/Skills/{skillId}` 与 `UI/Ugui/Skills/Scrolls/scroll_{scrollId}` 路径（缺图安全回退，零硬编码 C# 改动），执行 `client_compile_check.ps1`（781/781 0 错误）。
+- [x] **步骤 7**：更新 `docs/PROGRESS.md` 与 `xuanming-server-mmo/PARITY.md` 对账台账，并在交付回复中提供可直接复制给异机 Codex 的纯功能图标制作清单。
