@@ -46,3 +46,7 @@ constexpr uint32_t ClientPlayerFriendRecommendFriendsIndex = 9;
 constexpr uint32_t ClientPlayerFriendNotifyFriendEventMessageId = 235;
 constexpr uint32_t ClientPlayerFriendNotifyFriendEventIndex = 10;
 #define ClientPlayerFriendNotifyFriendEventMethod  ::ClientPlayerFriend_Stub::descriptor()->method(10)
+
+constexpr uint32_t ClientPlayerFriendBatchCheckSocialRelationsMessageId = 546;
+constexpr uint32_t ClientPlayerFriendBatchCheckSocialRelationsIndex = 11;
+#define ClientPlayerFriendBatchCheckSocialRelationsMethod  ::ClientPlayerFriend_Stub::descriptor()->method(11)

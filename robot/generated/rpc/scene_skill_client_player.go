@@ -330,3 +330,141 @@ func (sceneSkillClientPlayerRpc) decodeUnsealSkillBook(reply *base.MessageConten
 	}
 	return resp, nil
 }
+
+// ClaimScrollCollectionMilestone 异步调用 SceneSkillClientPlayer.ClaimScrollCollectionMilestone(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) ClaimScrollCollectionMilestone(c *pkg.GameClient, req *scene.ClaimScrollCollectionMilestoneRequest, timeout time.Duration, done func(*scene.ClaimScrollCollectionMilestoneResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerClaimScrollCollectionMilestoneMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeClaimScrollCollectionMilestone(reply, err))
+	})
+}
+
+// ClaimScrollCollectionMilestoneSync 同步调用 SceneSkillClientPlayer.ClaimScrollCollectionMilestone(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) ClaimScrollCollectionMilestoneSync(ctx context.Context, c *pkg.GameClient, req *scene.ClaimScrollCollectionMilestoneRequest, timeout time.Duration) (*scene.ClaimScrollCollectionMilestoneResponse, error) {
+	return r.decodeClaimScrollCollectionMilestone(c.CallSync(ctx, game.SceneSkillClientPlayerClaimScrollCollectionMilestoneMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeClaimScrollCollectionMilestone(reply *base.MessageContent, err error) (*scene.ClaimScrollCollectionMilestoneResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ClaimScrollCollectionMilestoneResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.ClaimScrollCollectionMilestone reply: %w", err)
+	}
+	return resp, nil
+}
+
+// BatchDismantleSkillBooks 异步调用 SceneSkillClientPlayer.BatchDismantleSkillBooks(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) BatchDismantleSkillBooks(c *pkg.GameClient, req *scene.BatchDismantleSkillBooksRequest, timeout time.Duration, done func(*scene.BatchDismantleSkillBooksResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerBatchDismantleSkillBooksMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeBatchDismantleSkillBooks(reply, err))
+	})
+}
+
+// BatchDismantleSkillBooksSync 同步调用 SceneSkillClientPlayer.BatchDismantleSkillBooks(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) BatchDismantleSkillBooksSync(ctx context.Context, c *pkg.GameClient, req *scene.BatchDismantleSkillBooksRequest, timeout time.Duration) (*scene.BatchDismantleSkillBooksResponse, error) {
+	return r.decodeBatchDismantleSkillBooks(c.CallSync(ctx, game.SceneSkillClientPlayerBatchDismantleSkillBooksMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeBatchDismantleSkillBooks(reply *base.MessageContent, err error) (*scene.BatchDismantleSkillBooksResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.BatchDismantleSkillBooksResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.BatchDismantleSkillBooks reply: %w", err)
+	}
+	return resp, nil
+}
+
+// PostSkillBookWantedOrder 异步调用 SceneSkillClientPlayer.PostSkillBookWantedOrder(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) PostSkillBookWantedOrder(c *pkg.GameClient, req *scene.PostSkillBookWantedOrderRequest, timeout time.Duration, done func(*scene.PostSkillBookWantedOrderResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerPostSkillBookWantedOrderMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodePostSkillBookWantedOrder(reply, err))
+	})
+}
+
+// PostSkillBookWantedOrderSync 同步调用 SceneSkillClientPlayer.PostSkillBookWantedOrder(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) PostSkillBookWantedOrderSync(ctx context.Context, c *pkg.GameClient, req *scene.PostSkillBookWantedOrderRequest, timeout time.Duration) (*scene.PostSkillBookWantedOrderResponse, error) {
+	return r.decodePostSkillBookWantedOrder(c.CallSync(ctx, game.SceneSkillClientPlayerPostSkillBookWantedOrderMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodePostSkillBookWantedOrder(reply *base.MessageContent, err error) (*scene.PostSkillBookWantedOrderResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.PostSkillBookWantedOrderResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.PostSkillBookWantedOrder reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CancelSkillBookWantedOrder 异步调用 SceneSkillClientPlayer.CancelSkillBookWantedOrder(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) CancelSkillBookWantedOrder(c *pkg.GameClient, req *scene.CancelSkillBookWantedOrderRequest, timeout time.Duration, done func(*scene.CancelSkillBookWantedOrderResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCancelSkillBookWantedOrder(reply, err))
+	})
+}
+
+// CancelSkillBookWantedOrderSync 同步调用 SceneSkillClientPlayer.CancelSkillBookWantedOrder(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) CancelSkillBookWantedOrderSync(ctx context.Context, c *pkg.GameClient, req *scene.CancelSkillBookWantedOrderRequest, timeout time.Duration) (*scene.CancelSkillBookWantedOrderResponse, error) {
+	return r.decodeCancelSkillBookWantedOrder(c.CallSync(ctx, game.SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeCancelSkillBookWantedOrder(reply *base.MessageContent, err error) (*scene.CancelSkillBookWantedOrderResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.CancelSkillBookWantedOrderResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.CancelSkillBookWantedOrder reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ListSkillBookWantedOrders 异步调用 SceneSkillClientPlayer.ListSkillBookWantedOrders(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) ListSkillBookWantedOrders(c *pkg.GameClient, req *scene.ListSkillBookWantedOrdersRequest, timeout time.Duration, done func(*scene.ListSkillBookWantedOrdersResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerListSkillBookWantedOrdersMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListSkillBookWantedOrders(reply, err))
+	})
+}
+
+// ListSkillBookWantedOrdersSync 同步调用 SceneSkillClientPlayer.ListSkillBookWantedOrders(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) ListSkillBookWantedOrdersSync(ctx context.Context, c *pkg.GameClient, req *scene.ListSkillBookWantedOrdersRequest, timeout time.Duration) (*scene.ListSkillBookWantedOrdersResponse, error) {
+	return r.decodeListSkillBookWantedOrders(c.CallSync(ctx, game.SceneSkillClientPlayerListSkillBookWantedOrdersMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeListSkillBookWantedOrders(reply *base.MessageContent, err error) (*scene.ListSkillBookWantedOrdersResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ListSkillBookWantedOrdersResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.ListSkillBookWantedOrders reply: %w", err)
+	}
+	return resp, nil
+}
+
+// FulfillSkillBookWantedOrder 异步调用 SceneSkillClientPlayer.FulfillSkillBookWantedOrder(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) FulfillSkillBookWantedOrder(c *pkg.GameClient, req *scene.FulfillSkillBookWantedOrderRequest, timeout time.Duration, done func(*scene.FulfillSkillBookWantedOrderResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeFulfillSkillBookWantedOrder(reply, err))
+	})
+}
+
+// FulfillSkillBookWantedOrderSync 同步调用 SceneSkillClientPlayer.FulfillSkillBookWantedOrder(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) FulfillSkillBookWantedOrderSync(ctx context.Context, c *pkg.GameClient, req *scene.FulfillSkillBookWantedOrderRequest, timeout time.Duration) (*scene.FulfillSkillBookWantedOrderResponse, error) {
+	return r.decodeFulfillSkillBookWantedOrder(c.CallSync(ctx, game.SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeFulfillSkillBookWantedOrder(reply *base.MessageContent, err error) (*scene.FulfillSkillBookWantedOrderResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.FulfillSkillBookWantedOrderResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.FulfillSkillBookWantedOrder reply: %w", err)
+	}
+	return resp, nil
+}

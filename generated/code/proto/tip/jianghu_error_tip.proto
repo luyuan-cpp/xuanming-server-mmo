@@ -1,0 +1,40 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum jianghu_error {
+  kJianghu_errorOK = 0;
+
+  kJianghuDuelDisabled = 40000;
+
+  kJianghuBlockedByPeer = 40001;
+
+  kJianghuTargetRefusesStrangers = 40002;
+
+  kJianghuSelfRefusesStrangers = 40003;
+
+  kJianghuSameTargetCooldown = 40004;
+
+  kJianghuDailyInviteLimitReached = 40005;
+
+  kJianghuTeamSizeMismatch = 40006;
+
+  kJianghuTeamChangedAborted = 40007;
+
+  kJianghuInsufficientWritOrSilver = 40008;
+
+  kJianghuInvitePendingOrExpired = 40009;
+
+  kJianghuNotInviteParticipant = 40010;
+
+  kJianghuNoActiveDefeatMark = 40011;
+
+  kJianghuGrudgeNotFound = 40012;
+
+  kJianghuServiceBusy = 40013;
+
+};

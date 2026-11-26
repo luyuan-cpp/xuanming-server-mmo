@@ -952,3 +952,118 @@ func (matchServiceRpc) decodeGetTournamentHighlights(reply *base.MessageContent,
 	}
 	return resp, nil
 }
+
+// CreateJianghuDuelInvite 异步调用 MatchService.CreateJianghuDuelInvite(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) CreateJianghuDuelInvite(c *pkg.GameClient, req *match.CreateJianghuDuelInviteRequest, timeout time.Duration, done func(*match.CreateJianghuDuelInviteResponse, error)) {
+	c.Call(game.MatchServiceCreateJianghuDuelInviteMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCreateJianghuDuelInvite(reply, err))
+	})
+}
+
+// CreateJianghuDuelInviteSync 同步调用 MatchService.CreateJianghuDuelInvite(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) CreateJianghuDuelInviteSync(ctx context.Context, c *pkg.GameClient, req *match.CreateJianghuDuelInviteRequest, timeout time.Duration) (*match.CreateJianghuDuelInviteResponse, error) {
+	return r.decodeCreateJianghuDuelInvite(c.CallSync(ctx, game.MatchServiceCreateJianghuDuelInviteMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeCreateJianghuDuelInvite(reply *base.MessageContent, err error) (*match.CreateJianghuDuelInviteResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.CreateJianghuDuelInviteResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.CreateJianghuDuelInvite reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ConfirmJianghuDuelMember 异步调用 MatchService.ConfirmJianghuDuelMember(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ConfirmJianghuDuelMember(c *pkg.GameClient, req *match.ConfirmJianghuDuelMemberRequest, timeout time.Duration, done func(*match.ConfirmJianghuDuelMemberResponse, error)) {
+	c.Call(game.MatchServiceConfirmJianghuDuelMemberMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeConfirmJianghuDuelMember(reply, err))
+	})
+}
+
+// ConfirmJianghuDuelMemberSync 同步调用 MatchService.ConfirmJianghuDuelMember(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ConfirmJianghuDuelMemberSync(ctx context.Context, c *pkg.GameClient, req *match.ConfirmJianghuDuelMemberRequest, timeout time.Duration) (*match.ConfirmJianghuDuelMemberResponse, error) {
+	return r.decodeConfirmJianghuDuelMember(c.CallSync(ctx, game.MatchServiceConfirmJianghuDuelMemberMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeConfirmJianghuDuelMember(reply *base.MessageContent, err error) (*match.ConfirmJianghuDuelMemberResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ConfirmJianghuDuelMemberResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ConfirmJianghuDuelMember reply: %w", err)
+	}
+	return resp, nil
+}
+
+// RespondJianghuDuelInvite 异步调用 MatchService.RespondJianghuDuelInvite(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) RespondJianghuDuelInvite(c *pkg.GameClient, req *match.RespondJianghuDuelInviteRequest, timeout time.Duration, done func(*match.RespondJianghuDuelInviteResponse, error)) {
+	c.Call(game.MatchServiceRespondJianghuDuelInviteMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRespondJianghuDuelInvite(reply, err))
+	})
+}
+
+// RespondJianghuDuelInviteSync 同步调用 MatchService.RespondJianghuDuelInvite(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) RespondJianghuDuelInviteSync(ctx context.Context, c *pkg.GameClient, req *match.RespondJianghuDuelInviteRequest, timeout time.Duration) (*match.RespondJianghuDuelInviteResponse, error) {
+	return r.decodeRespondJianghuDuelInvite(c.CallSync(ctx, game.MatchServiceRespondJianghuDuelInviteMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeRespondJianghuDuelInvite(reply *base.MessageContent, err error) (*match.RespondJianghuDuelInviteResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.RespondJianghuDuelInviteResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.RespondJianghuDuelInvite reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ListJianghuGrudges 异步调用 MatchService.ListJianghuGrudges(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ListJianghuGrudges(c *pkg.GameClient, req *match.ListJianghuGrudgesRequest, timeout time.Duration, done func(*match.ListJianghuGrudgesResponse, error)) {
+	c.Call(game.MatchServiceListJianghuGrudgesMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListJianghuGrudges(reply, err))
+	})
+}
+
+// ListJianghuGrudgesSync 同步调用 MatchService.ListJianghuGrudges(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ListJianghuGrudgesSync(ctx context.Context, c *pkg.GameClient, req *match.ListJianghuGrudgesRequest, timeout time.Duration) (*match.ListJianghuGrudgesResponse, error) {
+	return r.decodeListJianghuGrudges(c.CallSync(ctx, game.MatchServiceListJianghuGrudgesMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeListJianghuGrudges(reply *base.MessageContent, err error) (*match.ListJianghuGrudgesResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ListJianghuGrudgesResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ListJianghuGrudges reply: %w", err)
+	}
+	return resp, nil
+}
+
+// DismissJianghuGrudge 异步调用 MatchService.DismissJianghuGrudge(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) DismissJianghuGrudge(c *pkg.GameClient, req *match.DismissJianghuGrudgeRequest, timeout time.Duration, done func(*match.DismissJianghuGrudgeResponse, error)) {
+	c.Call(game.MatchServiceDismissJianghuGrudgeMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeDismissJianghuGrudge(reply, err))
+	})
+}
+
+// DismissJianghuGrudgeSync 同步调用 MatchService.DismissJianghuGrudge(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) DismissJianghuGrudgeSync(ctx context.Context, c *pkg.GameClient, req *match.DismissJianghuGrudgeRequest, timeout time.Duration) (*match.DismissJianghuGrudgeResponse, error) {
+	return r.decodeDismissJianghuGrudge(c.CallSync(ctx, game.MatchServiceDismissJianghuGrudgeMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeDismissJianghuGrudge(reply *base.MessageContent, err error) (*match.DismissJianghuGrudgeResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.DismissJianghuGrudgeResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.DismissJianghuGrudge reply: %w", err)
+	}
+	return resp, nil
+}

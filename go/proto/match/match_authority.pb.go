@@ -1475,8 +1475,10 @@ type MatchFormationRecord struct {
 	CustomDuelRules []byte `protobuf:"bytes,27,opt,name=custom_duel_rules,json=customDuelRules,proto3" json:"custom_duel_rules,omitempty"`
 	// true = 五行幻境周常爬塔开战（PrepareBattle 注入权威层数与已选符印）。
 	IsWuxingTower bool `protobuf:"varint,28,opt,name=is_wuxing_tower,json=isWuxingTower,proto3" json:"is_wuxing_tower,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 天墉生死状在成局提交点冻结的 JianghuDuelBattleContext 字节载荷（非生死状为空）。
+	JianghuDuelContext []byte `protobuf:"bytes,29,opt,name=jianghu_duel_context,json=jianghuDuelContext,proto3" json:"jianghu_duel_context,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1703,6 +1705,13 @@ func (x *MatchFormationRecord) GetIsWuxingTower() bool {
 		return x.IsWuxingTower
 	}
 	return false
+}
+
+func (x *MatchFormationRecord) GetJianghuDuelContext() []byte {
+	if x != nil {
+		return x.JianghuDuelContext
+	}
+	return nil
 }
 
 type MatchPreparedEndpoint struct {
@@ -5511,6 +5520,618 @@ func (x *MatchTournamentPredictionRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+type MatchJianghuDuelInvitationRecord struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	DuelInviteId        uint64                 `protobuf:"varint,1,opt,name=duel_invite_id,json=duelInviteId,proto3" json:"duel_invite_id,omitempty"`
+	WritTier            uint32                 `protobuf:"varint,2,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"` // JianghuWritTier
+	TeamSize            uint32                 `protobuf:"varint,3,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"` // 1..5
+	State               uint32                 `protobuf:"varint,4,opt,name=state,proto3" json:"state,omitempty"`                       // JianghuDuelInviteState
+	ChallengerCaptainId uint64                 `protobuf:"varint,5,opt,name=challenger_captain_id,json=challengerCaptainId,proto3" json:"challenger_captain_id,omitempty"`
+	TargetCaptainId     uint64                 `protobuf:"varint,6,opt,name=target_captain_id,json=targetCaptainId,proto3" json:"target_captain_id,omitempty"`
+	ChallengerAccount   string                 `protobuf:"bytes,7,opt,name=challenger_account,json=challengerAccount,proto3" json:"challenger_account,omitempty"`
+	ChallengerRevision  uint64                 `protobuf:"varint,8,opt,name=challenger_revision,json=challengerRevision,proto3" json:"challenger_revision,omitempty"`
+	TargetAccount       string                 `protobuf:"bytes,9,opt,name=target_account,json=targetAccount,proto3" json:"target_account,omitempty"`
+	TargetRevision      uint64                 `protobuf:"varint,10,opt,name=target_revision,json=targetRevision,proto3" json:"target_revision,omitempty"`
+	ZoneId              uint32                 `protobuf:"varint,11,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	SideAGuildId        uint64                 `protobuf:"varint,12,opt,name=side_a_guild_id,json=sideAGuildId,proto3" json:"side_a_guild_id,omitempty"`
+	SideAGuildName      string                 `protobuf:"bytes,13,opt,name=side_a_guild_name,json=sideAGuildName,proto3" json:"side_a_guild_name,omitempty"`
+	SideBGuildId        uint64                 `protobuf:"varint,14,opt,name=side_b_guild_id,json=sideBGuildId,proto3" json:"side_b_guild_id,omitempty"`
+	SideBGuildName      string                 `protobuf:"bytes,15,opt,name=side_b_guild_name,json=sideBGuildName,proto3" json:"side_b_guild_name,omitempty"`
+	MembersPayload      []byte                 `protobuf:"bytes,16,opt,name=members_payload,json=membersPayload,proto3" json:"members_payload,omitempty"` // 确定性序列化双队成员与确认态快照(JianghuDuelInviteView.challenger/target_members)
+	CreatedMs           uint64                 `protobuf:"varint,17,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	ExpiresMs           uint64                 `protobuf:"varint,18,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	ConfirmDeadlineMs   uint64                 `protobuf:"varint,19,opt,name=confirm_deadline_ms,json=confirmDeadlineMs,proto3" json:"confirm_deadline_ms,omitempty"`
+	BattleId            uint64                 `protobuf:"varint,20,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	UpdatedMs           uint64                 `protobuf:"varint,21,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *MatchJianghuDuelInvitationRecord) Reset() {
+	*x = MatchJianghuDuelInvitationRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchJianghuDuelInvitationRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchJianghuDuelInvitationRecord) ProtoMessage() {}
+
+func (x *MatchJianghuDuelInvitationRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchJianghuDuelInvitationRecord.ProtoReflect.Descriptor instead.
+func (*MatchJianghuDuelInvitationRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetDuelInviteId() uint64 {
+	if x != nil {
+		return x.DuelInviteId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetChallengerCaptainId() uint64 {
+	if x != nil {
+		return x.ChallengerCaptainId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetTargetCaptainId() uint64 {
+	if x != nil {
+		return x.TargetCaptainId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetChallengerAccount() string {
+	if x != nil {
+		return x.ChallengerAccount
+	}
+	return ""
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetChallengerRevision() uint64 {
+	if x != nil {
+		return x.ChallengerRevision
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetTargetAccount() string {
+	if x != nil {
+		return x.TargetAccount
+	}
+	return ""
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetTargetRevision() uint64 {
+	if x != nil {
+		return x.TargetRevision
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetSideAGuildId() uint64 {
+	if x != nil {
+		return x.SideAGuildId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetSideAGuildName() string {
+	if x != nil {
+		return x.SideAGuildName
+	}
+	return ""
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetSideBGuildId() uint64 {
+	if x != nil {
+		return x.SideBGuildId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetSideBGuildName() string {
+	if x != nil {
+		return x.SideBGuildName
+	}
+	return ""
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetMembersPayload() []byte {
+	if x != nil {
+		return x.MembersPayload
+	}
+	return nil
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetExpiresMs() uint64 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetConfirmDeadlineMs() uint64 {
+	if x != nil {
+		return x.ConfirmDeadlineMs
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelInvitationRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+type MatchJianghuDuelCooldownRecord struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	ChallengerPlayerId  uint64                 `protobuf:"varint,1,opt,name=challenger_player_id,json=challengerPlayerId,proto3" json:"challenger_player_id,omitempty"`
+	TargetPlayerId      uint64                 `protobuf:"varint,2,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"` // 0 = 角色每日未成局总次数计数行；非 0 = 同目标 5 分钟冷却行
+	CooldownUntilMs     uint64                 `protobuf:"varint,3,opt,name=cooldown_until_ms,json=cooldownUntilMs,proto3" json:"cooldown_until_ms,omitempty"`
+	DayKey              uint32                 `protobuf:"varint,4,opt,name=day_key,json=dayKey,proto3" json:"day_key,omitempty"` // UTC+8 05:00 游戏日 YYYYMMDD
+	DailyUnmatchedCount uint32                 `protobuf:"varint,5,opt,name=daily_unmatched_count,json=dailyUnmatchedCount,proto3" json:"daily_unmatched_count,omitempty"`
+	UpdatedMs           uint64                 `protobuf:"varint,6,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *MatchJianghuDuelCooldownRecord) Reset() {
+	*x = MatchJianghuDuelCooldownRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchJianghuDuelCooldownRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchJianghuDuelCooldownRecord) ProtoMessage() {}
+
+func (x *MatchJianghuDuelCooldownRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchJianghuDuelCooldownRecord.ProtoReflect.Descriptor instead.
+func (*MatchJianghuDuelCooldownRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *MatchJianghuDuelCooldownRecord) GetChallengerPlayerId() uint64 {
+	if x != nil {
+		return x.ChallengerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelCooldownRecord) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelCooldownRecord) GetCooldownUntilMs() uint64 {
+	if x != nil {
+		return x.CooldownUntilMs
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelCooldownRecord) GetDayKey() uint32 {
+	if x != nil {
+		return x.DayKey
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelCooldownRecord) GetDailyUnmatchedCount() uint32 {
+	if x != nil {
+		return x.DailyUnmatchedCount
+	}
+	return 0
+}
+
+func (x *MatchJianghuDuelCooldownRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+type MatchGrudgeRelationRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OwnerRevision uint64                 `protobuf:"varint,2,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"` // 过户换人递增后旧持有者恩怨自动隔离清空
+	PeerPlayerId  uint64                 `protobuf:"varint,3,opt,name=peer_player_id,json=peerPlayerId,proto3" json:"peer_player_id,omitempty"`
+	PeerName      string                 `protobuf:"bytes,4,opt,name=peer_name,json=peerName,proto3" json:"peer_name,omitempty"`
+	Wins          uint32                 `protobuf:"varint,5,opt,name=wins,proto3" json:"wins,omitempty"`
+	Losses        uint32                 `protobuf:"varint,6,opt,name=losses,proto3" json:"losses,omitempty"`
+	Draws         uint32                 `protobuf:"varint,7,opt,name=draws,proto3" json:"draws,omitempty"`
+	WinStreak     uint32                 `protobuf:"varint,8,opt,name=win_streak,json=winStreak,proto3" json:"win_streak,omitempty"`
+	LoseStreak    uint32                 `protobuf:"varint,9,opt,name=lose_streak,json=loseStreak,proto3" json:"lose_streak,omitempty"`
+	LastBattleMs  uint64                 `protobuf:"varint,10,opt,name=last_battle_ms,json=lastBattleMs,proto3" json:"last_battle_ms,omitempty"`
+	Dismissed     bool                   `protobuf:"varint,11,opt,name=dismissed,proto3" json:"dismissed,omitempty"` // 单向一笔勾销（再交手时自动重新显现）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchGrudgeRelationRecord) Reset() {
+	*x = MatchGrudgeRelationRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchGrudgeRelationRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchGrudgeRelationRecord) ProtoMessage() {}
+
+func (x *MatchGrudgeRelationRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchGrudgeRelationRecord.ProtoReflect.Descriptor instead.
+func (*MatchGrudgeRelationRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *MatchGrudgeRelationRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetPeerPlayerId() uint64 {
+	if x != nil {
+		return x.PeerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetPeerName() string {
+	if x != nil {
+		return x.PeerName
+	}
+	return ""
+}
+
+func (x *MatchGrudgeRelationRecord) GetWins() uint32 {
+	if x != nil {
+		return x.Wins
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetLosses() uint32 {
+	if x != nil {
+		return x.Losses
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetDraws() uint32 {
+	if x != nil {
+		return x.Draws
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetWinStreak() uint32 {
+	if x != nil {
+		return x.WinStreak
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetLoseStreak() uint32 {
+	if x != nil {
+		return x.LoseStreak
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetLastBattleMs() uint64 {
+	if x != nil {
+		return x.LastBattleMs
+	}
+	return 0
+}
+
+func (x *MatchGrudgeRelationRecord) GetDismissed() bool {
+	if x != nil {
+		return x.Dismissed
+	}
+	return false
+}
+
+type MatchGrudgeLogRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OwnerRevision  uint64                 `protobuf:"varint,2,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	PeerPlayerId   uint64                 `protobuf:"varint,3,opt,name=peer_player_id,json=peerPlayerId,proto3" json:"peer_player_id,omitempty"`
+	BattleId       uint64                 `protobuf:"varint,4,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	OutcomeForSelf uint32                 `protobuf:"varint,5,opt,name=outcome_for_self,json=outcomeForSelf,proto3" json:"outcome_for_self,omitempty"` // 1=胜, 2=负, 3=平
+	TotalRounds    uint32                 `protobuf:"varint,6,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	WritTier       uint32                 `protobuf:"varint,7,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`
+	TeamSize       uint32                 `protobuf:"varint,8,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	FinishedMs     uint64                 `protobuf:"varint,9,opt,name=finished_ms,json=finishedMs,proto3" json:"finished_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MatchGrudgeLogRecord) Reset() {
+	*x = MatchGrudgeLogRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchGrudgeLogRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchGrudgeLogRecord) ProtoMessage() {}
+
+func (x *MatchGrudgeLogRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchGrudgeLogRecord.ProtoReflect.Descriptor instead.
+func (*MatchGrudgeLogRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *MatchGrudgeLogRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetPeerPlayerId() uint64 {
+	if x != nil {
+		return x.PeerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetOutcomeForSelf() uint32 {
+	if x != nil {
+		return x.OutcomeForSelf
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *MatchGrudgeLogRecord) GetFinishedMs() uint64 {
+	if x != nil {
+		return x.FinishedMs
+	}
+	return 0
+}
+
+type MatchJianghuRefundRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DuelInviteId  uint64                 `protobuf:"varint,1,opt,name=duel_invite_id,json=duelInviteId,proto3" json:"duel_invite_id,omitempty"`
+	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PayerPlayerId uint64                 `protobuf:"varint,3,opt,name=payer_player_id,json=payerPlayerId,proto3" json:"payer_player_id,omitempty"`
+	WritTier      uint32                 `protobuf:"varint,4,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`
+	RefundMailId  uint64                 `protobuf:"varint,5,opt,name=refund_mail_id,json=refundMailId,proto3" json:"refund_mail_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
+	CreatedMs     uint64                 `protobuf:"varint,7,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchJianghuRefundRecord) Reset() {
+	*x = MatchJianghuRefundRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchJianghuRefundRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchJianghuRefundRecord) ProtoMessage() {}
+
+func (x *MatchJianghuRefundRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchJianghuRefundRecord.ProtoReflect.Descriptor instead.
+func (*MatchJianghuRefundRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *MatchJianghuRefundRecord) GetDuelInviteId() uint64 {
+	if x != nil {
+		return x.DuelInviteId
+	}
+	return 0
+}
+
+func (x *MatchJianghuRefundRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchJianghuRefundRecord) GetPayerPlayerId() uint64 {
+	if x != nil {
+		return x.PayerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchJianghuRefundRecord) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *MatchJianghuRefundRecord) GetRefundMailId() uint64 {
+	if x != nil {
+		return x.RefundMailId
+	}
+	return 0
+}
+
+func (x *MatchJianghuRefundRecord) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *MatchJianghuRefundRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
 var File_proto_match_match_authority_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_authority_proto_rawDesc = "" +
@@ -5658,7 +6279,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
 	"\n" +
 	"team_index\x18\x03 \x01(\rR\tteamIndex\x12\x18\n" +
-	"\acaptain\x18\x04 \x01(\bR\acaptain\"\x99\n" +
+	"\acaptain\x18\x04 \x01(\bR\acaptain\"\xcb\n" +
 	"\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
@@ -5691,7 +6312,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x10ranked_season_id\x18\x19 \x01(\rR\x0erankedSeasonId\x12-\n" +
 	"\x12tournament_context\x18\x1a \x01(\fR\x11tournamentContext\x12*\n" +
 	"\x11custom_duel_rules\x18\x1b \x01(\fR\x0fcustomDuelRules\x12&\n" +
-	"\x0fis_wuxing_tower\x18\x1c \x01(\bR\risWuxingTower:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
+	"\x0fis_wuxing_tower\x18\x1c \x01(\bR\risWuxingTower\x120\n" +
+	"\x14jianghu_duel_context\x18\x1d \x01(\fR\x12jianghuDuelContext:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xec\x01\n" +
@@ -6130,7 +6752,76 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"created_ms\x18\n" +
 	" \x01(\x04R\tcreatedMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\v \x01(\x04R\tupdatedMs:\x8c\x01\x8a\x92\xf4\x01\x1bmatch_tournament_prediction\x92\x92\xf4\x01\x1cseason_id,player_id,match_idڒ\xf4\x01Fseason_id,match_id,predicted_squad_id;season_id,result_state,player_id*\xcc\x03\n" +
+	"updated_ms\x18\v \x01(\x04R\tupdatedMs:\x8c\x01\x8a\x92\xf4\x01\x1bmatch_tournament_prediction\x92\x92\xf4\x01\x1cseason_id,player_id,match_idڒ\xf4\x01Fseason_id,match_id,predicted_squad_id;season_id,result_state,player_id\"\xeb\a\n" +
+	" MatchJianghuDuelInvitationRecord\x12$\n" +
+	"\x0eduel_invite_id\x18\x01 \x01(\x04R\fduelInviteId\x12\x1b\n" +
+	"\twrit_tier\x18\x02 \x01(\rR\bwritTier\x12\x1b\n" +
+	"\tteam_size\x18\x03 \x01(\rR\bteamSize\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\rR\x05state\x122\n" +
+	"\x15challenger_captain_id\x18\x05 \x01(\x04R\x13challengerCaptainId\x12*\n" +
+	"\x11target_captain_id\x18\x06 \x01(\x04R\x0ftargetCaptainId\x12-\n" +
+	"\x12challenger_account\x18\a \x01(\tR\x11challengerAccount\x12/\n" +
+	"\x13challenger_revision\x18\b \x01(\x04R\x12challengerRevision\x12%\n" +
+	"\x0etarget_account\x18\t \x01(\tR\rtargetAccount\x12'\n" +
+	"\x0ftarget_revision\x18\n" +
+	" \x01(\x04R\x0etargetRevision\x12\x17\n" +
+	"\azone_id\x18\v \x01(\rR\x06zoneId\x12%\n" +
+	"\x0fside_a_guild_id\x18\f \x01(\x04R\fsideAGuildId\x12)\n" +
+	"\x11side_a_guild_name\x18\r \x01(\tR\x0esideAGuildName\x12%\n" +
+	"\x0fside_b_guild_id\x18\x0e \x01(\x04R\fsideBGuildId\x12)\n" +
+	"\x11side_b_guild_name\x18\x0f \x01(\tR\x0esideBGuildName\x12'\n" +
+	"\x0fmembers_payload\x18\x10 \x01(\fR\x0emembersPayload\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x11 \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\x12 \x01(\x04R\texpiresMs\x12.\n" +
+	"\x13confirm_deadline_ms\x18\x13 \x01(\x04R\x11confirmDeadlineMs\x12\x1b\n" +
+	"\tbattle_id\x18\x14 \x01(\x04R\bbattleId\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x15 \x01(\x04R\tupdatedMs:\xb0\x01\x8a\x92\xf4\x01\x1dmatch_jianghu_duel_invitation\x92\x92\xf4\x01\x0eduel_invite_idڒ\xf4\x01gtarget_captain_id,state,expires_ms,duel_invite_id;challenger_captain_id,state,expires_ms,duel_invite_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x90\x03\n" +
+	"\x1eMatchJianghuDuelCooldownRecord\x120\n" +
+	"\x14challenger_player_id\x18\x01 \x01(\x04R\x12challengerPlayerId\x12(\n" +
+	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\x12*\n" +
+	"\x11cooldown_until_ms\x18\x03 \x01(\x04R\x0fcooldownUntilMs\x12\x17\n" +
+	"\aday_key\x18\x04 \x01(\rR\x06dayKey\x122\n" +
+	"\x15daily_unmatched_count\x18\x05 \x01(\rR\x13dailyUnmatchedCount\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:z\x8a\x92\xf4\x01\x1bmatch_jianghu_duel_cooldown\x92\x92\xf4\x01%challenger_player_id,target_player_idڒ\xf4\x01\x1cchallenger_player_id,day_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xec\x03\n" +
+	"\x19MatchGrudgeRelationRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12%\n" +
+	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\x12$\n" +
+	"\x0epeer_player_id\x18\x03 \x01(\x04R\fpeerPlayerId\x12\x1b\n" +
+	"\tpeer_name\x18\x04 \x01(\tR\bpeerName\x12\x12\n" +
+	"\x04wins\x18\x05 \x01(\rR\x04wins\x12\x16\n" +
+	"\x06losses\x18\x06 \x01(\rR\x06losses\x12\x14\n" +
+	"\x05draws\x18\a \x01(\rR\x05draws\x12\x1d\n" +
+	"\n" +
+	"win_streak\x18\b \x01(\rR\twinStreak\x12\x1f\n" +
+	"\vlose_streak\x18\t \x01(\rR\n" +
+	"loseStreak\x12$\n" +
+	"\x0elast_battle_ms\x18\n" +
+	" \x01(\x04R\flastBattleMs\x12\x1c\n" +
+	"\tdismissed\x18\v \x01(\bR\tdismissed:\x81\x01\x8a\x92\xf4\x01\x15match_grudge_relation\x92\x92\xf4\x01'player_id,owner_revision,peer_player_idڒ\xf4\x01'player_id,owner_revision,last_battle_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xda\x03\n" +
+	"\x14MatchGrudgeLogRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12%\n" +
+	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\x12$\n" +
+	"\x0epeer_player_id\x18\x03 \x01(\x04R\fpeerPlayerId\x12\x1b\n" +
+	"\tbattle_id\x18\x04 \x01(\x04R\bbattleId\x12(\n" +
+	"\x10outcome_for_self\x18\x05 \x01(\rR\x0eoutcomeForSelf\x12!\n" +
+	"\ftotal_rounds\x18\x06 \x01(\rR\vtotalRounds\x12\x1b\n" +
+	"\twrit_tier\x18\a \x01(\rR\bwritTier\x12\x1b\n" +
+	"\tteam_size\x18\b \x01(\rR\bteamSize\x12\x1f\n" +
+	"\vfinished_ms\x18\t \x01(\x04R\n" +
+	"finishedMs:\x92\x01\x8a\x92\xf4\x01\x10match_grudge_log\x92\x92\xf4\x011player_id,owner_revision,peer_player_id,battle_idڒ\xf4\x013player_id,owner_revision,peer_player_id,finished_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x02\n" +
+	"\x18MatchJianghuRefundRecord\x12$\n" +
+	"\x0eduel_invite_id\x18\x01 \x01(\x04R\fduelInviteId\x12\x1b\n" +
+	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12&\n" +
+	"\x0fpayer_player_id\x18\x03 \x01(\x04R\rpayerPlayerId\x12\x1b\n" +
+	"\twrit_tier\x18\x04 \x01(\rR\bwritTier\x12$\n" +
+	"\x0erefund_mail_id\x18\x05 \x01(\x04R\frefundMailId\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\a \x01(\x04R\tcreatedMs:;\x8a\x92\xf4\x01\x14match_jianghu_refund\x92\x92\xf4\x01\x0eduel_invite_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xcc\x03\n" +
 	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
 	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
@@ -6154,7 +6845,7 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
+var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_proto_match_match_authority_proto_goTypes = []any{
 	(MatchBattleCompletionSourceKind)(0),       // 0: match.MatchBattleCompletionSourceKind
 	(*MatchNetworkProfile)(nil),                // 1: match.MatchNetworkProfile
@@ -6203,22 +6894,27 @@ var file_proto_match_match_authority_proto_goTypes = []any{
 	(*MatchTournamentCheerRecord)(nil),         // 44: match.MatchTournamentCheerRecord
 	(*MatchTournamentRewardRecord)(nil),        // 45: match.MatchTournamentRewardRecord
 	(*MatchTournamentPredictionRecord)(nil),    // 46: match.MatchTournamentPredictionRecord
-	(*NetworkProbeReceipt)(nil),                // 47: match.NetworkProbeReceipt
-	(BattleOutcomeDecision)(0),                 // 48: match.BattleOutcomeDecision
-	(StrandedFormationMode)(0),                 // 49: match.StrandedFormationMode
-	(StrandedFormationClass)(0),                // 50: match.StrandedFormationClass
+	(*MatchJianghuDuelInvitationRecord)(nil),   // 47: match.MatchJianghuDuelInvitationRecord
+	(*MatchJianghuDuelCooldownRecord)(nil),     // 48: match.MatchJianghuDuelCooldownRecord
+	(*MatchGrudgeRelationRecord)(nil),          // 49: match.MatchGrudgeRelationRecord
+	(*MatchGrudgeLogRecord)(nil),               // 50: match.MatchGrudgeLogRecord
+	(*MatchJianghuRefundRecord)(nil),           // 51: match.MatchJianghuRefundRecord
+	(*NetworkProbeReceipt)(nil),                // 52: match.NetworkProbeReceipt
+	(BattleOutcomeDecision)(0),                 // 53: match.BattleOutcomeDecision
+	(StrandedFormationMode)(0),                 // 54: match.StrandedFormationMode
+	(StrandedFormationClass)(0),                // 55: match.StrandedFormationClass
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	47, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	52, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
 	2,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
 	14, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
 	6,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
 	13, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
 	15, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	48, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
+	53, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
 	0,  // 7: match.MatchBattleCompletionRecord.source_kind:type_name -> match.MatchBattleCompletionSourceKind
-	49, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
-	50, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
+	54, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
+	55, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
 	6,  // 10: match.MatchManualResolutionRecord.tickets_before:type_name -> match.MatchAuthorityTicketRecord
 	39, // 11: match.MatchTournamentChampionMembersBlob.members:type_name -> match.MatchTournamentMemberRecord
 	12, // [12:12] is the sub-list for method output_type
@@ -6241,7 +6937,7 @@ func file_proto_match_match_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   46,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

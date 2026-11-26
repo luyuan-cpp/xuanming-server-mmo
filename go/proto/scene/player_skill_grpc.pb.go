@@ -20,21 +20,27 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneSkillClientPlayer_ReleaseSkill_FullMethodName           = "/SceneSkillClientPlayer/ReleaseSkill"
-	SceneSkillClientPlayer_NotifySkillUsed_FullMethodName        = "/SceneSkillClientPlayer/NotifySkillUsed"
-	SceneSkillClientPlayer_NotifySkillInterrupted_FullMethodName = "/SceneSkillClientPlayer/NotifySkillInterrupted"
-	SceneSkillClientPlayer_ListSkills_FullMethodName             = "/SceneSkillClientPlayer/ListSkills"
-	SceneSkillClientPlayer_UpgradeSkill_FullMethodName           = "/SceneSkillClientPlayer/UpgradeSkill"
-	SceneSkillClientPlayer_GetSkillCraftingState_FullMethodName  = "/SceneSkillClientPlayer/GetSkillCraftingState"
-	SceneSkillClientPlayer_CraftSkillBook_FullMethodName         = "/SceneSkillClientPlayer/CraftSkillBook"
-	SceneSkillClientPlayer_LearnSkillBook_FullMethodName         = "/SceneSkillClientPlayer/LearnSkillBook"
-	SceneSkillClientPlayer_DismantleSkillBook_FullMethodName     = "/SceneSkillClientPlayer/DismantleSkillBook"
-	SceneSkillClientPlayer_SetCraftProxyStall_FullMethodName     = "/SceneSkillClientPlayer/SetCraftProxyStall"
-	SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName   = "/SceneSkillClientPlayer/ListCraftProxyStalls"
-	SceneSkillClientPlayer_SaveSkillLoadout_FullMethodName       = "/SceneSkillClientPlayer/SaveSkillLoadout"
-	SceneSkillClientPlayer_SwitchSkillLoadout_FullMethodName     = "/SceneSkillClientPlayer/SwitchSkillLoadout"
-	SceneSkillClientPlayer_SealSkillBook_FullMethodName          = "/SceneSkillClientPlayer/SealSkillBook"
-	SceneSkillClientPlayer_UnsealSkillBook_FullMethodName        = "/SceneSkillClientPlayer/UnsealSkillBook"
+	SceneSkillClientPlayer_ReleaseSkill_FullMethodName                   = "/SceneSkillClientPlayer/ReleaseSkill"
+	SceneSkillClientPlayer_NotifySkillUsed_FullMethodName                = "/SceneSkillClientPlayer/NotifySkillUsed"
+	SceneSkillClientPlayer_NotifySkillInterrupted_FullMethodName         = "/SceneSkillClientPlayer/NotifySkillInterrupted"
+	SceneSkillClientPlayer_ListSkills_FullMethodName                     = "/SceneSkillClientPlayer/ListSkills"
+	SceneSkillClientPlayer_UpgradeSkill_FullMethodName                   = "/SceneSkillClientPlayer/UpgradeSkill"
+	SceneSkillClientPlayer_GetSkillCraftingState_FullMethodName          = "/SceneSkillClientPlayer/GetSkillCraftingState"
+	SceneSkillClientPlayer_CraftSkillBook_FullMethodName                 = "/SceneSkillClientPlayer/CraftSkillBook"
+	SceneSkillClientPlayer_LearnSkillBook_FullMethodName                 = "/SceneSkillClientPlayer/LearnSkillBook"
+	SceneSkillClientPlayer_DismantleSkillBook_FullMethodName             = "/SceneSkillClientPlayer/DismantleSkillBook"
+	SceneSkillClientPlayer_SetCraftProxyStall_FullMethodName             = "/SceneSkillClientPlayer/SetCraftProxyStall"
+	SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName           = "/SceneSkillClientPlayer/ListCraftProxyStalls"
+	SceneSkillClientPlayer_SaveSkillLoadout_FullMethodName               = "/SceneSkillClientPlayer/SaveSkillLoadout"
+	SceneSkillClientPlayer_SwitchSkillLoadout_FullMethodName             = "/SceneSkillClientPlayer/SwitchSkillLoadout"
+	SceneSkillClientPlayer_SealSkillBook_FullMethodName                  = "/SceneSkillClientPlayer/SealSkillBook"
+	SceneSkillClientPlayer_UnsealSkillBook_FullMethodName                = "/SceneSkillClientPlayer/UnsealSkillBook"
+	SceneSkillClientPlayer_ClaimScrollCollectionMilestone_FullMethodName = "/SceneSkillClientPlayer/ClaimScrollCollectionMilestone"
+	SceneSkillClientPlayer_BatchDismantleSkillBooks_FullMethodName       = "/SceneSkillClientPlayer/BatchDismantleSkillBooks"
+	SceneSkillClientPlayer_PostSkillBookWantedOrder_FullMethodName       = "/SceneSkillClientPlayer/PostSkillBookWantedOrder"
+	SceneSkillClientPlayer_CancelSkillBookWantedOrder_FullMethodName     = "/SceneSkillClientPlayer/CancelSkillBookWantedOrder"
+	SceneSkillClientPlayer_ListSkillBookWantedOrders_FullMethodName      = "/SceneSkillClientPlayer/ListSkillBookWantedOrders"
+	SceneSkillClientPlayer_FulfillSkillBookWantedOrder_FullMethodName    = "/SceneSkillClientPlayer/FulfillSkillBookWantedOrder"
 )
 
 // SceneSkillClientPlayerClient is the client API for SceneSkillClientPlayer service.
@@ -57,6 +63,12 @@ type SceneSkillClientPlayerClient interface {
 	SwitchSkillLoadout(ctx context.Context, in *SwitchSkillLoadoutRequest, opts ...grpc.CallOption) (*SwitchSkillLoadoutResponse, error)
 	SealSkillBook(ctx context.Context, in *SealSkillBookRequest, opts ...grpc.CallOption) (*SealSkillBookResponse, error)
 	UnsealSkillBook(ctx context.Context, in *UnsealSkillBookRequest, opts ...grpc.CallOption) (*UnsealSkillBookResponse, error)
+	ClaimScrollCollectionMilestone(ctx context.Context, in *ClaimScrollCollectionMilestoneRequest, opts ...grpc.CallOption) (*ClaimScrollCollectionMilestoneResponse, error)
+	BatchDismantleSkillBooks(ctx context.Context, in *BatchDismantleSkillBooksRequest, opts ...grpc.CallOption) (*BatchDismantleSkillBooksResponse, error)
+	PostSkillBookWantedOrder(ctx context.Context, in *PostSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*PostSkillBookWantedOrderResponse, error)
+	CancelSkillBookWantedOrder(ctx context.Context, in *CancelSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*CancelSkillBookWantedOrderResponse, error)
+	ListSkillBookWantedOrders(ctx context.Context, in *ListSkillBookWantedOrdersRequest, opts ...grpc.CallOption) (*ListSkillBookWantedOrdersResponse, error)
+	FulfillSkillBookWantedOrder(ctx context.Context, in *FulfillSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*FulfillSkillBookWantedOrderResponse, error)
 }
 
 type sceneSkillClientPlayerClient struct {
@@ -217,6 +229,66 @@ func (c *sceneSkillClientPlayerClient) UnsealSkillBook(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *sceneSkillClientPlayerClient) ClaimScrollCollectionMilestone(ctx context.Context, in *ClaimScrollCollectionMilestoneRequest, opts ...grpc.CallOption) (*ClaimScrollCollectionMilestoneResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimScrollCollectionMilestoneResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_ClaimScrollCollectionMilestone_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) BatchDismantleSkillBooks(ctx context.Context, in *BatchDismantleSkillBooksRequest, opts ...grpc.CallOption) (*BatchDismantleSkillBooksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchDismantleSkillBooksResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_BatchDismantleSkillBooks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) PostSkillBookWantedOrder(ctx context.Context, in *PostSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*PostSkillBookWantedOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PostSkillBookWantedOrderResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_PostSkillBookWantedOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) CancelSkillBookWantedOrder(ctx context.Context, in *CancelSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*CancelSkillBookWantedOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelSkillBookWantedOrderResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_CancelSkillBookWantedOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) ListSkillBookWantedOrders(ctx context.Context, in *ListSkillBookWantedOrdersRequest, opts ...grpc.CallOption) (*ListSkillBookWantedOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSkillBookWantedOrdersResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_ListSkillBookWantedOrders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) FulfillSkillBookWantedOrder(ctx context.Context, in *FulfillSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*FulfillSkillBookWantedOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FulfillSkillBookWantedOrderResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_FulfillSkillBookWantedOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSkillClientPlayerServer is the server API for SceneSkillClientPlayer service.
 // All implementations must embed UnimplementedSceneSkillClientPlayerServer
 // for forward compatibility.
@@ -237,6 +309,12 @@ type SceneSkillClientPlayerServer interface {
 	SwitchSkillLoadout(context.Context, *SwitchSkillLoadoutRequest) (*SwitchSkillLoadoutResponse, error)
 	SealSkillBook(context.Context, *SealSkillBookRequest) (*SealSkillBookResponse, error)
 	UnsealSkillBook(context.Context, *UnsealSkillBookRequest) (*UnsealSkillBookResponse, error)
+	ClaimScrollCollectionMilestone(context.Context, *ClaimScrollCollectionMilestoneRequest) (*ClaimScrollCollectionMilestoneResponse, error)
+	BatchDismantleSkillBooks(context.Context, *BatchDismantleSkillBooksRequest) (*BatchDismantleSkillBooksResponse, error)
+	PostSkillBookWantedOrder(context.Context, *PostSkillBookWantedOrderRequest) (*PostSkillBookWantedOrderResponse, error)
+	CancelSkillBookWantedOrder(context.Context, *CancelSkillBookWantedOrderRequest) (*CancelSkillBookWantedOrderResponse, error)
+	ListSkillBookWantedOrders(context.Context, *ListSkillBookWantedOrdersRequest) (*ListSkillBookWantedOrdersResponse, error)
+	FulfillSkillBookWantedOrder(context.Context, *FulfillSkillBookWantedOrderRequest) (*FulfillSkillBookWantedOrderResponse, error)
 	mustEmbedUnimplementedSceneSkillClientPlayerServer()
 }
 
@@ -291,6 +369,24 @@ func (UnimplementedSceneSkillClientPlayerServer) SealSkillBook(context.Context, 
 }
 func (UnimplementedSceneSkillClientPlayerServer) UnsealSkillBook(context.Context, *UnsealSkillBookRequest) (*UnsealSkillBookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnsealSkillBook not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) ClaimScrollCollectionMilestone(context.Context, *ClaimScrollCollectionMilestoneRequest) (*ClaimScrollCollectionMilestoneResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimScrollCollectionMilestone not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) BatchDismantleSkillBooks(context.Context, *BatchDismantleSkillBooksRequest) (*BatchDismantleSkillBooksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchDismantleSkillBooks not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) PostSkillBookWantedOrder(context.Context, *PostSkillBookWantedOrderRequest) (*PostSkillBookWantedOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PostSkillBookWantedOrder not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) CancelSkillBookWantedOrder(context.Context, *CancelSkillBookWantedOrderRequest) (*CancelSkillBookWantedOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelSkillBookWantedOrder not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) ListSkillBookWantedOrders(context.Context, *ListSkillBookWantedOrdersRequest) (*ListSkillBookWantedOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSkillBookWantedOrders not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) FulfillSkillBookWantedOrder(context.Context, *FulfillSkillBookWantedOrderRequest) (*FulfillSkillBookWantedOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FulfillSkillBookWantedOrder not implemented")
 }
 func (UnimplementedSceneSkillClientPlayerServer) mustEmbedUnimplementedSceneSkillClientPlayerServer() {
 }
@@ -584,6 +680,114 @@ func _SceneSkillClientPlayer_UnsealSkillBook_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSkillClientPlayer_ClaimScrollCollectionMilestone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimScrollCollectionMilestoneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).ClaimScrollCollectionMilestone(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_ClaimScrollCollectionMilestone_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).ClaimScrollCollectionMilestone(ctx, req.(*ClaimScrollCollectionMilestoneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_BatchDismantleSkillBooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchDismantleSkillBooksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).BatchDismantleSkillBooks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_BatchDismantleSkillBooks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).BatchDismantleSkillBooks(ctx, req.(*BatchDismantleSkillBooksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_PostSkillBookWantedOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PostSkillBookWantedOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).PostSkillBookWantedOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_PostSkillBookWantedOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).PostSkillBookWantedOrder(ctx, req.(*PostSkillBookWantedOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_CancelSkillBookWantedOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelSkillBookWantedOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).CancelSkillBookWantedOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_CancelSkillBookWantedOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).CancelSkillBookWantedOrder(ctx, req.(*CancelSkillBookWantedOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_ListSkillBookWantedOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSkillBookWantedOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).ListSkillBookWantedOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_ListSkillBookWantedOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).ListSkillBookWantedOrders(ctx, req.(*ListSkillBookWantedOrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_FulfillSkillBookWantedOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FulfillSkillBookWantedOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).FulfillSkillBookWantedOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_FulfillSkillBookWantedOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).FulfillSkillBookWantedOrder(ctx, req.(*FulfillSkillBookWantedOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSkillClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSkillClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -650,6 +854,30 @@ var SceneSkillClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnsealSkillBook",
 			Handler:    _SceneSkillClientPlayer_UnsealSkillBook_Handler,
+		},
+		{
+			MethodName: "ClaimScrollCollectionMilestone",
+			Handler:    _SceneSkillClientPlayer_ClaimScrollCollectionMilestone_Handler,
+		},
+		{
+			MethodName: "BatchDismantleSkillBooks",
+			Handler:    _SceneSkillClientPlayer_BatchDismantleSkillBooks_Handler,
+		},
+		{
+			MethodName: "PostSkillBookWantedOrder",
+			Handler:    _SceneSkillClientPlayer_PostSkillBookWantedOrder_Handler,
+		},
+		{
+			MethodName: "CancelSkillBookWantedOrder",
+			Handler:    _SceneSkillClientPlayer_CancelSkillBookWantedOrder_Handler,
+		},
+		{
+			MethodName: "ListSkillBookWantedOrders",
+			Handler:    _SceneSkillClientPlayer_ListSkillBookWantedOrders_Handler,
+		},
+		{
+			MethodName: "FulfillSkillBookWantedOrder",
+			Handler:    _SceneSkillClientPlayer_FulfillSkillBookWantedOrder_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

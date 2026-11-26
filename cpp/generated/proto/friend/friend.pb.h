@@ -95,6 +95,22 @@ extern const ::google::protobuf::internal::ClassDataFull AddFriendResponse_class
 #else
 extern const AddFriendResponseGlobalsTypeInternal AddFriendResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class BatchCheckSocialRelationsRequest;
+struct BatchCheckSocialRelationsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BatchCheckSocialRelationsRequestGlobalsTypeInternal BatchCheckSocialRelationsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BatchCheckSocialRelationsRequest_class_data_;
+#else
+extern const BatchCheckSocialRelationsRequestGlobalsTypeInternal BatchCheckSocialRelationsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BatchCheckSocialRelationsResponse;
+struct BatchCheckSocialRelationsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BatchCheckSocialRelationsResponseGlobalsTypeInternal BatchCheckSocialRelationsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BatchCheckSocialRelationsResponse_class_data_;
+#else
+extern const BatchCheckSocialRelationsResponseGlobalsTypeInternal BatchCheckSocialRelationsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BlockEntry;
 struct BlockEntryGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3192,6 +3208,241 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BlockEntry final : public ::google:
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchCheckSocialRelationsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:friendpb.BatchCheckSocialRelationsRequest) */ {
+ public:
+  inline BatchCheckSocialRelationsRequest() : BatchCheckSocialRelationsRequest(nullptr) {}
+  ~BatchCheckSocialRelationsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BatchCheckSocialRelationsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BatchCheckSocialRelationsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BatchCheckSocialRelationsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BatchCheckSocialRelationsRequest(const BatchCheckSocialRelationsRequest& from) : BatchCheckSocialRelationsRequest(nullptr, from) {}
+  inline BatchCheckSocialRelationsRequest(BatchCheckSocialRelationsRequest&& from) noexcept : BatchCheckSocialRelationsRequest(nullptr, ::std::move(from)) {}
+  inline BatchCheckSocialRelationsRequest& operator=(const BatchCheckSocialRelationsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BatchCheckSocialRelationsRequest& operator=(BatchCheckSocialRelationsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BatchCheckSocialRelationsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchCheckSocialRelationsRequest>(&BatchCheckSocialRelationsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(BatchCheckSocialRelationsRequest& a, BatchCheckSocialRelationsRequest& b) { a.Swap(&b); }
+  inline void Swap(BatchCheckSocialRelationsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BatchCheckSocialRelationsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BatchCheckSocialRelationsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BatchCheckSocialRelationsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BatchCheckSocialRelationsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BatchCheckSocialRelationsRequest& from) { BatchCheckSocialRelationsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BatchCheckSocialRelationsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "friendpb.BatchCheckSocialRelationsRequest"; }
+
+  explicit BatchCheckSocialRelationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BatchCheckSocialRelationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BatchCheckSocialRelationsRequest& from);
+  BatchCheckSocialRelationsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BatchCheckSocialRelationsRequest&& from) noexcept
+      : BatchCheckSocialRelationsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSideAPlayerIdsFieldNumber = 1,
+    kSideBPlayerIdsFieldNumber = 2,
+  };
+  // repeated uint64 side_a_player_ids = 1;
+  [[nodiscard]] int side_a_player_ids_size()
+      const;
+  private:
+  int _internal_side_a_player_ids_size() const;
+
+  public:
+  void clear_side_a_player_ids() ;
+  [[nodiscard]] ::uint64_t side_a_player_ids(int index) const;
+  void set_side_a_player_ids(int index, ::uint64_t value);
+  void add_side_a_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& side_a_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_side_a_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_side_a_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_side_a_player_ids();
+
+  public:
+  // repeated uint64 side_b_player_ids = 2;
+  [[nodiscard]] int side_b_player_ids_size()
+      const;
+  private:
+  int _internal_side_b_player_ids_size() const;
+
+  public:
+  void clear_side_b_player_ids() ;
+  [[nodiscard]] ::uint64_t side_b_player_ids(int index) const;
+  void set_side_b_player_ids(int index, ::uint64_t value);
+  void add_side_b_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& side_b_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_side_b_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_side_b_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_side_b_player_ids();
+
+  public:
+  // @@protoc_insertion_point(class_scope:friendpb.BatchCheckSocialRelationsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BatchCheckSocialRelationsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> side_a_player_ids_;
+    ::google::protobuf::internal::CachedSize _side_a_player_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> side_b_player_ids_;
+    ::google::protobuf::internal::CachedSize _side_b_player_ids_cached_byte_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ffriend_2ffriend_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AddFriendRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:friendpb.AddFriendRequest) */ {
  public:
@@ -5376,6 +5627,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BlockResponse final : public ::goog
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ffriend_2ffriend_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchCheckSocialRelationsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:friendpb.BatchCheckSocialRelationsResponse) */ {
+ public:
+  inline BatchCheckSocialRelationsResponse() : BatchCheckSocialRelationsResponse(nullptr) {}
+  ~BatchCheckSocialRelationsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BatchCheckSocialRelationsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BatchCheckSocialRelationsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BatchCheckSocialRelationsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BatchCheckSocialRelationsResponse(const BatchCheckSocialRelationsResponse& from) : BatchCheckSocialRelationsResponse(nullptr, from) {}
+  inline BatchCheckSocialRelationsResponse(BatchCheckSocialRelationsResponse&& from) noexcept : BatchCheckSocialRelationsResponse(nullptr, ::std::move(from)) {}
+  inline BatchCheckSocialRelationsResponse& operator=(const BatchCheckSocialRelationsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BatchCheckSocialRelationsResponse& operator=(BatchCheckSocialRelationsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BatchCheckSocialRelationsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchCheckSocialRelationsResponse>(&BatchCheckSocialRelationsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(BatchCheckSocialRelationsResponse& a, BatchCheckSocialRelationsResponse& b) { a.Swap(&b); }
+  inline void Swap(BatchCheckSocialRelationsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BatchCheckSocialRelationsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BatchCheckSocialRelationsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BatchCheckSocialRelationsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BatchCheckSocialRelationsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BatchCheckSocialRelationsResponse& from) { BatchCheckSocialRelationsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BatchCheckSocialRelationsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "friendpb.BatchCheckSocialRelationsResponse"; }
+
+  explicit BatchCheckSocialRelationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BatchCheckSocialRelationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BatchCheckSocialRelationsResponse& from);
+  BatchCheckSocialRelationsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BatchCheckSocialRelationsResponse&& from) noexcept
+      : BatchCheckSocialRelationsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kHasAnyBlockFieldNumber = 2,
+    kAllAreFriendsFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // bool has_any_block = 2;
+  void clear_has_any_block() ;
+  [[nodiscard]] bool has_any_block() const;
+  void set_has_any_block(bool value);
+
+  private:
+  bool _internal_has_any_block() const;
+  void _internal_set_has_any_block(bool value);
+
+  public:
+  // bool all_are_friends = 3;
+  void clear_all_are_friends() ;
+  [[nodiscard]] bool all_are_friends() const;
+  void set_all_are_friends(bool value);
+
+  private:
+  bool _internal_all_are_friends() const;
+  void _internal_set_all_are_friends(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:friendpb.BatchCheckSocialRelationsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BatchCheckSocialRelationsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    bool has_any_block_;
+    bool all_are_friends_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8479,6 +8961,257 @@ inline ::int64_t FriendEventS2C::_internal_ts_ms() const {
 inline void FriendEventS2C::_internal_set_ts_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ts_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BatchCheckSocialRelationsRequest
+
+// repeated uint64 side_a_player_ids = 1;
+inline int BatchCheckSocialRelationsRequest::_internal_side_a_player_ids_size() const {
+  return _internal_side_a_player_ids().size();
+}
+inline int BatchCheckSocialRelationsRequest::side_a_player_ids_size() const {
+  return _internal_side_a_player_ids_size();
+}
+inline void BatchCheckSocialRelationsRequest::clear_side_a_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_a_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t BatchCheckSocialRelationsRequest::side_a_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:friendpb.BatchCheckSocialRelationsRequest.side_a_player_ids)
+  return _internal_side_a_player_ids().Get(index);
+}
+inline void BatchCheckSocialRelationsRequest::set_side_a_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_side_a_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:friendpb.BatchCheckSocialRelationsRequest.side_a_player_ids)
+}
+inline void BatchCheckSocialRelationsRequest::add_side_a_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_side_a_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:friendpb.BatchCheckSocialRelationsRequest.side_a_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BatchCheckSocialRelationsRequest::side_a_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:friendpb.BatchCheckSocialRelationsRequest.side_a_player_ids)
+  return _internal_side_a_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BatchCheckSocialRelationsRequest::mutable_side_a_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:friendpb.BatchCheckSocialRelationsRequest.side_a_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_side_a_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BatchCheckSocialRelationsRequest::_internal_side_a_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_a_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BatchCheckSocialRelationsRequest::_internal_mutable_side_a_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.side_a_player_ids_;
+}
+
+// repeated uint64 side_b_player_ids = 2;
+inline int BatchCheckSocialRelationsRequest::_internal_side_b_player_ids_size() const {
+  return _internal_side_b_player_ids().size();
+}
+inline int BatchCheckSocialRelationsRequest::side_b_player_ids_size() const {
+  return _internal_side_b_player_ids_size();
+}
+inline void BatchCheckSocialRelationsRequest::clear_side_b_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_b_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BatchCheckSocialRelationsRequest::side_b_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:friendpb.BatchCheckSocialRelationsRequest.side_b_player_ids)
+  return _internal_side_b_player_ids().Get(index);
+}
+inline void BatchCheckSocialRelationsRequest::set_side_b_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_side_b_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:friendpb.BatchCheckSocialRelationsRequest.side_b_player_ids)
+}
+inline void BatchCheckSocialRelationsRequest::add_side_b_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_side_b_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:friendpb.BatchCheckSocialRelationsRequest.side_b_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BatchCheckSocialRelationsRequest::side_b_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:friendpb.BatchCheckSocialRelationsRequest.side_b_player_ids)
+  return _internal_side_b_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BatchCheckSocialRelationsRequest::mutable_side_b_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:friendpb.BatchCheckSocialRelationsRequest.side_b_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_side_b_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BatchCheckSocialRelationsRequest::_internal_side_b_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_b_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BatchCheckSocialRelationsRequest::_internal_mutable_side_b_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.side_b_player_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// BatchCheckSocialRelationsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool BatchCheckSocialRelationsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& BatchCheckSocialRelationsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& BatchCheckSocialRelationsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:friendpb.BatchCheckSocialRelationsResponse.error_message)
+  return _internal_error_message();
+}
+inline void BatchCheckSocialRelationsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:friendpb.BatchCheckSocialRelationsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE BatchCheckSocialRelationsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE BatchCheckSocialRelationsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:friendpb.BatchCheckSocialRelationsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL BatchCheckSocialRelationsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL BatchCheckSocialRelationsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:friendpb.BatchCheckSocialRelationsResponse.error_message)
+  return _msg;
+}
+inline void BatchCheckSocialRelationsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:friendpb.BatchCheckSocialRelationsResponse.error_message)
+}
+
+// bool has_any_block = 2;
+inline void BatchCheckSocialRelationsResponse::clear_has_any_block() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_any_block_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool BatchCheckSocialRelationsResponse::has_any_block() const {
+  // @@protoc_insertion_point(field_get:friendpb.BatchCheckSocialRelationsResponse.has_any_block)
+  return _internal_has_any_block();
+}
+inline void BatchCheckSocialRelationsResponse::set_has_any_block(bool value) {
+  _internal_set_has_any_block(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:friendpb.BatchCheckSocialRelationsResponse.has_any_block)
+}
+inline bool BatchCheckSocialRelationsResponse::_internal_has_any_block() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_any_block_;
+}
+inline void BatchCheckSocialRelationsResponse::_internal_set_has_any_block(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_any_block_ = value;
+}
+
+// bool all_are_friends = 3;
+inline void BatchCheckSocialRelationsResponse::clear_all_are_friends() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.all_are_friends_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool BatchCheckSocialRelationsResponse::all_are_friends() const {
+  // @@protoc_insertion_point(field_get:friendpb.BatchCheckSocialRelationsResponse.all_are_friends)
+  return _internal_all_are_friends();
+}
+inline void BatchCheckSocialRelationsResponse::set_all_are_friends(bool value) {
+  _internal_set_all_are_friends(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:friendpb.BatchCheckSocialRelationsResponse.all_are_friends)
+}
+inline bool BatchCheckSocialRelationsResponse::_internal_all_are_friends() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.all_are_friends_;
+}
+inline void BatchCheckSocialRelationsResponse::_internal_set_all_are_friends(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.all_are_friends_ = value;
 }
 
 #ifdef __GNUC__

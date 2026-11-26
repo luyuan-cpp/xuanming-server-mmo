@@ -194,6 +194,17 @@ message SkillCraftingStateSnapshot {
   uint64 proxy_forge_fee_gold = 12;
   uint64 proxy_scroll_fee_gold = 13;
   bool craft_unlock_gate_enabled = 14; // true = 当前环境已开启“须制书解锁”门槛。
+  // ── V2 名匠江湖口碑与零属性雅号 ──
+  uint32 proxy_orders_completed = 15;
+  uint32 supreme_forged_count = 16;
+  uint32 rare_books_crafted_count = 17;
+  uint32 master_showcase_tag = 18;
+  uint32 equipped_craft_title_id = 19;
+  repeated uint32 unlocked_craft_title_ids = 20;
+  // ── V4/V5 藏经阁里程碑位图、情义免税代打与本人悬赏求书单 ──
+  bool team_free_proxy = 21;
+  bytes claimed_scroll_milestone_bits = 22;
+  repeated SkillBookWantedOrderInfo my_wanted_orders = 23;
 }
 
 message GetSkillCraftingStateRequest {}
@@ -290,6 +301,9 @@ message SetCraftProxyStallRequest {
   bool open = 1;
   uint64 proxy_forge_fee_gold = 2;  // 合法范围 50..100 银两（关摊时可填 0）。
   uint64 proxy_scroll_fee_gold = 3; // 合法范围 50..100 银两（关摊时可填 0）。
+  uint32 master_showcase_tag = 4;   // V2 预设安全招牌枚举（0..4）。
+  uint32 equipped_craft_title_id = 5; // V2 佩戴的已解锁零属性宗师雅号 ID（0..6）。
+  bool team_free_proxy = 6;         // V5 true = 对同队玩家实行情义 0 费原子代打/代制。
 }
 
 message SetCraftProxyStallResponse {
@@ -306,12 +320,126 @@ message CraftProxyStallInfo {
   uint32 scroll_bonus_rate_bps = 6;
   uint64 proxy_forge_fee_gold = 7;
   uint64 proxy_scroll_fee_gold = 8;
+  // ── V2 名匠江湖口碑与雅号 ──
+  uint32 proxy_orders_completed = 9;
+  uint32 supreme_forged_count = 10;
+  uint32 rare_books_crafted_count = 11;
+  uint32 master_showcase_tag = 12;
+  uint32 equipped_craft_title_id = 13;
+  // ── V5 同队情义零费代打 ──
+  bool team_free_proxy = 14;
+  bool viewer_gets_free_proxy = 15; // true = 当前查询者与该宗师同队且可享受 0 银两情义代打。
 }
 
 message ListCraftProxyStallsRequest {}
 message ListCraftProxyStallsResponse {
   TipInfoMessage error_message = 1;
   repeated CraftProxyStallInfo stalls = 2;
+}
+
+// ── V4 典籍藏经阁：卷宗收集里程碑（小成 >=50% 领 20 绑定残页；圆满 100% 领 40 绑定残页） ──
+message ClaimScrollCollectionMilestoneRequest {
+  uint32 scroll_id = 1;
+  uint32 milestone_tier = 2; // 1 = 小成(>=50%)，2 = 圆满(100%)。
+  uint64 expected_revision = 3;
+  uint64 client_request_id = 4;
+}
+
+message ClaimScrollCollectionMilestoneResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  uint32 rewarded_fragments = 4; // 实际发放的绑定 3406 悟道残页数（20 或 40）。
+  SkillCraftingStateSnapshot state = 5;
+}
+
+// ── V4 批量安全拆页：一次拆解 1..20 本未学常规书（严禁稀世绝学），一次性返还绑定残页 ──
+message BatchDismantleSkillBooksRequest {
+  repeated uint64 book_ids = 1;
+  uint64 expected_revision = 2;
+  uint64 client_request_id = 3;
+}
+
+message BatchDismantleSkillBooksResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  uint32 dismantled_count = 4;
+  uint32 refunded_fragments = 5;
+  SkillCraftingStateSnapshot state = 6;
+}
+
+// ── V5 西市常规技能书悬赏求购板（原子托管非绑银两，零骗局交卷扣 5% 集市税） ──
+message SkillBookWantedOrderInfo {
+  uint64 order_id = 1;
+  uint64 poster_player_id = 2;
+  string poster_name = 3;
+  uint32 skill_table_id = 4;
+  string skill_name = 5;
+  uint32 scroll_id = 6;
+  string scroll_name = 7;
+  bool require_master_signature = 8;
+  uint64 reward_gold = 9;
+  uint64 seller_net_gold = 10; // 扣 5% 集市银两税后揭榜卖家实得净银两。
+  uint64 created_at_sec = 11;
+}
+
+message PostSkillBookWantedOrderRequest {
+  uint32 skill_table_id = 1;
+  bool require_master_signature = 2;
+  uint64 reward_gold = 3; // 100..50000 非绑定银两。
+  uint64 expected_revision = 4;
+  uint64 client_request_id = 5;
+}
+
+message PostSkillBookWantedOrderResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  SkillBookWantedOrderInfo order = 4;
+  SkillCraftingStateSnapshot state = 5;
+}
+
+message CancelSkillBookWantedOrderRequest {
+  uint64 order_id = 1;
+  uint64 expected_revision = 2;
+  uint64 client_request_id = 3;
+}
+
+message CancelSkillBookWantedOrderResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  uint64 refunded_gold = 4;
+  SkillCraftingStateSnapshot state = 5;
+}
+
+message ListSkillBookWantedOrdersRequest {
+  uint32 filter_skill_table_id = 1; // 0 = 全部常规技能；非 0 = 仅看该技能求购。
+  bool only_mine = 2;               // true = 仅看本人悬赏单。
+}
+
+message ListSkillBookWantedOrdersResponse {
+  TipInfoMessage error_message = 1;
+  repeated SkillBookWantedOrderInfo orders = 2;
+}
+
+message FulfillSkillBookWantedOrderRequest {
+  uint64 poster_player_id = 1;
+  uint64 order_id = 2;
+  uint64 sealed_item_id = 3;    // 二选一：背包中匹配的未绑定 3414 封卷道籍实例 ID。
+  uint64 bookshelf_book_id = 4; // 二选一：书架中匹配的未绑定常规技能书 book_id。
+  uint64 expected_revision = 5;
+  uint64 client_request_id = 6;
+}
+
+message FulfillSkillBookWantedOrderResponse {
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  bool replayed = 3;
+  uint64 order_id = 4;
+  uint64 seller_net_gold = 5;
+  SkillCraftingStateSnapshot state = 6;
 }
 
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
@@ -349,4 +477,10 @@ service SceneSkillClientPlayer {
   rpc SwitchSkillLoadout (SwitchSkillLoadoutRequest) returns (SwitchSkillLoadoutResponse);
   rpc SealSkillBook (SealSkillBookRequest) returns (SealSkillBookResponse);
   rpc UnsealSkillBook (UnsealSkillBookRequest) returns (UnsealSkillBookResponse);
+  rpc ClaimScrollCollectionMilestone (ClaimScrollCollectionMilestoneRequest) returns (ClaimScrollCollectionMilestoneResponse);
+  rpc BatchDismantleSkillBooks (BatchDismantleSkillBooksRequest) returns (BatchDismantleSkillBooksResponse);
+  rpc PostSkillBookWantedOrder (PostSkillBookWantedOrderRequest) returns (PostSkillBookWantedOrderResponse);
+  rpc CancelSkillBookWantedOrder (CancelSkillBookWantedOrderRequest) returns (CancelSkillBookWantedOrderResponse);
+  rpc ListSkillBookWantedOrders (ListSkillBookWantedOrdersRequest) returns (ListSkillBookWantedOrdersResponse);
+  rpc FulfillSkillBookWantedOrder (FulfillSkillBookWantedOrderRequest) returns (FulfillSkillBookWantedOrderResponse);
 }

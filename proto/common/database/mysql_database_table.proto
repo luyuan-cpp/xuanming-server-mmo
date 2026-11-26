@@ -23,6 +23,7 @@ import "proto/common/component/player_trial_journal_comp.proto";
 import "proto/common/component/player_craft_comp.proto";
 import "proto/common/component/player_festival_beast_comp.proto";
 import "proto/common/component/player_spirit_shop_comp.proto";
+import "proto/common/component/player_jianghu_comp.proto";
 import "proto/common/component/player_travel_pass_comp.proto";
 import "proto/common/component/player_equip_loadout_comp.proto";
 import "proto/common/component/time_comp.proto";
@@ -243,6 +244,9 @@ message player_database
   // 放 GROWTH 组：与技能、加点、手艺同组，存盘时与背包/货币/幂等账本同事务提交（满足 I3 原子性）。
   // 旧存档缺失默认按 1 套免费方案处理合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 36，后续从 37 起。
   PlayerEquipLoadoutComp equip_loadout_component = 36 [(OptionPersistGroup) = 3];  // GROWTH
+  // 江湖恩怨与天墉生死状一期状态（闭关免战开关、30 分钟战败社交印记与清风洒脱徽记；docs/design/battle-jianghu-grudge-duel-bounty-v1.md）。
+  // 放 PROFILE 组：仅切开关/生死状结算/洗尘时变脏，不拖累普通货币写盘；旧档缺失默认为空合法，加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 37，后续从 38 起。
+  PlayerJianghuComp jianghu_component = 37 [(OptionPersistGroup) = 4];  // PROFILE
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:

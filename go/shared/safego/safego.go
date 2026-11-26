@@ -94,6 +94,12 @@ func TouchLoop(point string) {
 	loopLastRoundUnix.WithLabelValues(point).Set(float64(time.Now().Unix()))
 }
 
+// StopLoop 在循环因 ctx 正常取消退出时清理心跳序列,防止排空/下线副本误报停摆。
+func StopLoop(point string) {
+	register()
+	loopLastRoundUnix.DeleteLabelValues(point)
+}
+
 // Run 同步执行 fn 并兜住 panic,返回 fn 是否**正常跑完**。
 //
 // 它是本包的最小单元:Go 与 Loop 都建立在它之上。
@@ -148,11 +154,13 @@ func Loop(ctx context.Context, point string, interval time.Duration, round func(
 		for {
 			select {
 			case <-ctx.Done():
+				StopLoop(point)
 				return
 			case <-ticker.C:
-				// 每一轮各自 recover:单轮炸掉不影响下一轮。
-				Run(point, func() { round(ctx) })
-				TouchLoop(point)
+				// 每一轮各自 recover:仅无 panic 轮推进活性时间戳,连续 panic 可被停摆告警捕获。
+				if Run(point, func() { round(ctx) }) {
+					TouchLoop(point)
+				}
 			}
 		}
 	})

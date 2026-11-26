@@ -301,6 +301,11 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     wuxingSynergyActiveThisRound = false;
     wuxingSynergyActorIds.clear();
     activeSeasonWeeklyAffixId = 0;
+    seasonSealRuntimeByActor.clear();
+    pendingMysticExtendCasterId = 0;
+    pendingMysticExtendTargetId = 0;
+    activeGuardShieldResonanceCasterId = 0;
+    activeGuardShieldResonanceExtra = 0;
     aiControlledPlayers.clear();
 
     if (IsGuildWarBattle()) {
@@ -2632,6 +2637,9 @@ uint64_t TurnBattleEngine::SkillManaCost(const BattleActorState& actor, const Sk
     if (bossWeeklyAffixId == bossaffix::kAffixWater && actor.team_index() == 0 &&
         IsWeeklyWaterDiscountSkill(skillRow)) {
         cost = bossaffix::DiscountWaterManaCost(cost);
+    }
+    if (IsDefendBreathResonanceReady(actor, skillRow.id())) {
+        cost = seasonrules::ResonanceHalfManaCost(cost);
     }
     return cost;
 }
@@ -6056,10 +6064,15 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
             settlement.set_revenged_losses_after(bestRevenge->losses());
         }
     }
-    if (IsRankedBattle() && !UsesFreePreset()) {
-        if (actor->equipment_effects().has_season_seal()) {
-            settlement.set_final_season_seal_id(actor->equipment_effects().season_seal().seal_id());
+    if (actor->equipment_effects().has_season_seal()) {
+        settlement.set_final_season_seal_id(actor->equipment_effects().season_seal().seal_id());
+        if (const auto rtIt = seasonSealRuntimeByActor.find(playerId); rtIt != seasonSealRuntimeByActor.end()) {
+            settlement.set_season_seal_contribution_value(rtIt->second.contributionValue);
+            settlement.set_season_seal_trigger_count(rtIt->second.triggerCount);
+            settlement.set_season_seal_resonance_count(rtIt->second.resonanceCount);
         }
+    }
+    if (IsRankedBattle() && !UsesFreePreset()) {
         uint32_t starterPetTableId = 0;
         if (const auto prepIt = prepOptionsByPlayer.find(playerId);
             prepIt != prepOptionsByPlayer.end() && prepIt->second.selectedPetId != 0) {
@@ -6968,6 +6981,7 @@ bool TurnBattleEngine::FinalizePrepPhase() {
                             actor->equipment_effects().season_seal().seal_id() != opt.selectedSealId) {
                             *actor->mutable_equipment_effects()->mutable_season_seal() = seal;
                             actor->clear_season_seal_state();
+                            seasonSealRuntimeByActor.erase(playerId);
                         }
                         break;
                     }

@@ -162,3 +162,7 @@ constexpr uint32_t GuildServiceNotifyGuildWarAlertIndex = 38;
 constexpr uint32_t GuildServiceInspectFieldWarTargetsMessageId = 499;
 constexpr uint32_t GuildServiceInspectFieldWarTargetsIndex = 39;
 #define GuildServiceInspectFieldWarTargetsMethod  ::GuildService_Stub::descriptor()->method(39)
+
+constexpr uint32_t GuildServiceGetGuildJianghuGrudgeWallMessageId = 547;
+constexpr uint32_t GuildServiceGetGuildJianghuGrudgeWallIndex = 40;
+#define GuildServiceGetGuildJianghuGrudgeWallMethod  ::GuildService_Stub::descriptor()->method(40)

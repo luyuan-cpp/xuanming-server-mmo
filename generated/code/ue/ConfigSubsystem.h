@@ -73,6 +73,7 @@
 #include "GuildWarMilestoneTable.h"
 #include "GuildWarRuleTable.h"
 #include "ItemTable.h"
+#include "JianghuRuleTable.h"
 #include "MessageLimiterTable.h"
 #include "MirrorTable.h"
 #include "MissionTable.h"
@@ -149,7 +150,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 82;
+	static constexpr int32 TableCount = 83;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -331,6 +332,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UItemTable* GetItemTable() const { return ItemTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UJianghuRuleTable* GetJianghuRuleTable() const { return JianghuRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UMessageLimiterTable* GetMessageLimiterTable() const { return MessageLimiterTable; }
@@ -535,6 +539,8 @@ private:
 	TObjectPtr<UGuildWarRuleTable> GuildWarRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UItemTable> ItemTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UJianghuRuleTable> JianghuRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UMessageLimiterTable> MessageLimiterTable;
 	UPROPERTY(Transient)

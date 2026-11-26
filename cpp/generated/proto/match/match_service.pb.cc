@@ -235,6 +235,38 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::match::GetTournamentHighlightsResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::JianghuDuelMemberView
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::JianghuDuelInviteView
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::CreateJianghuDuelInviteRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::CreateJianghuDuelInviteResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::ConfirmJianghuDuelMemberRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::ConfirmJianghuDuelMemberResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::RespondJianghuDuelInviteRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::RespondJianghuDuelInviteResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::JianghuGrudgeBattleLogEntry
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::JianghuGrudgeEntry
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::ListJianghuGrudgesRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::ListJianghuGrudgesResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::DismissJianghuGrudgeRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::DismissJianghuGrudgeResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::JianghuDuelInviteS2C
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::match::JianghuDuelStatusS2C
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -3187,6 +3219,154 @@ const ::_pbi::ClassData* RespondTournamentInviteRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class RespondJianghuDuelInviteRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RespondJianghuDuelInviteRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_._has_bits_);
+};
+
+constexpr RespondJianghuDuelInviteRequest::ParseTableT_ RespondJianghuDuelInviteRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::RespondJianghuDuelInviteRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool accept = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RespondJianghuDuelInviteRequest, _impl_.accept_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_.accept_)}},
+      // uint64 duel_invite_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RespondJianghuDuelInviteRequest, _impl_.duel_invite_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_.duel_invite_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 duel_invite_id = 1;
+      {PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_.duel_invite_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool accept = 2;
+      {PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_.accept_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr RespondJianghuDuelInviteRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        duel_invite_id_{::uint64_t{0u}},
+        accept_{false} {}
+
+template <typename>
+constexpr RespondJianghuDuelInviteRequest::RespondJianghuDuelInviteRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RespondJianghuDuelInviteRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RespondJianghuDuelInviteRequest(arena);
+}
+constexpr auto RespondJianghuDuelInviteRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RespondJianghuDuelInviteRequest), alignof(RespondJianghuDuelInviteRequest));
+}
+constexpr auto RespondJianghuDuelInviteRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RespondJianghuDuelInviteRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RespondJianghuDuelInviteRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RespondJianghuDuelInviteRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RespondJianghuDuelInviteRequest>(), &RespondJianghuDuelInviteRequest::ByteSizeLong,
+              &RespondJianghuDuelInviteRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[109],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RespondJianghuDuelInviteRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RespondJianghuDuelInviteRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RespondJianghuDuelInviteRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RespondJianghuDuelInviteRequest::InternalGenerateClassData_(
+            _default, &RespondJianghuDuelInviteRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RespondJianghuDuelInviteRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RespondJianghuDuelInviteRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RespondJianghuDuelInviteRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RespondJianghuDuelInviteRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RespondJianghuDuelInviteRequestGlobalsTypeInternal RespondJianghuDuelInviteRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RespondJianghuDuelInviteRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RespondJianghuDuelInviteRequest_globals_.GetClassData();
+#else
+  return RespondJianghuDuelInviteRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RespondChallengeRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<RespondChallengeRequest>()._impl_._has_bits_);
@@ -5782,6 +5962,130 @@ const ::_pbi::ClassData* ListTournamentStandingsRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ListJianghuGrudgesRequest::_Internal {
+ public:
+};
+
+constexpr ListJianghuGrudgesRequest::ParseTableT_ ListJianghuGrudgesRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesRequest,
+                            _impl_._cached_size_),  // no hasbits
+      0, // no _extensions_
+      0, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967295,  // skipmap
+      offsetof(ParseTableT_, field_names),  // no field_entries
+      0,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ListJianghuGrudgesRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, // no field_entries, or aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr ListJianghuGrudgesRequest::ListJianghuGrudgesRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::internal::ZeroFieldsBase(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL ListJianghuGrudgesRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListJianghuGrudgesRequest(arena);
+}
+constexpr auto ListJianghuGrudgesRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ListJianghuGrudgesRequest), alignof(ListJianghuGrudgesRequest));
+}
+constexpr auto ListJianghuGrudgesRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListJianghuGrudgesRequest::MergeImpl,
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<ListJianghuGrudgesRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListJianghuGrudgesRequest::SharedDtor,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<ListJianghuGrudgesRequest>(), &ListJianghuGrudgesRequest::ByteSizeLong,
+              &ListJianghuGrudgesRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[113],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListJianghuGrudgesRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListJianghuGrudgesRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListJianghuGrudgesRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListJianghuGrudgesRequest::InternalGenerateClassData_(
+            _default, &ListJianghuGrudgesRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListJianghuGrudgesRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListJianghuGrudgesRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListJianghuGrudgesRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListJianghuGrudgesRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListJianghuGrudgesRequestGlobalsTypeInternal ListJianghuGrudgesRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListJianghuGrudgesRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListJianghuGrudgesRequest_globals_.GetClassData();
+#else
+  return ListJianghuGrudgesRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ListBattleScriptsRequest::_Internal {
  public:
 };
@@ -6408,6 +6712,345 @@ const ::_pbi::ClassData* JoinQueueRequest_get_class_data() {
   return JoinQueueRequest_globals_.GetClassData();
 #else
   return JoinQueueRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuGrudgeBattleLogEntry::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuGrudgeBattleLogEntry>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_._has_bits_);
+};
+
+constexpr JianghuGrudgeBattleLogEntry::ParseTableT_ JianghuGrudgeBattleLogEntry::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::JianghuGrudgeBattleLogEntry>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 battle_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuGrudgeBattleLogEntry, _impl_.battle_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.battle_id_)}},
+      // uint32 outcome_for_self = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeBattleLogEntry, _impl_.outcome_for_self_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.outcome_for_self_)}},
+      // uint32 total_rounds = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeBattleLogEntry, _impl_.total_rounds_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.total_rounds_)}},
+      // .match.JianghuWritTier writ_tier = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeBattleLogEntry, _impl_.writ_tier_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.writ_tier_)}},
+      // uint32 team_size = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeBattleLogEntry, _impl_.team_size_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.team_size_)}},
+      // uint64 finished_at_ms = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuGrudgeBattleLogEntry, _impl_.finished_at_ms_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.finished_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 battle_id = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.battle_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 outcome_for_self = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.outcome_for_self_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 total_rounds = 3;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.total_rounds_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .match.JianghuWritTier writ_tier = 4;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.writ_tier_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 team_size = 5;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.team_size_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 finished_at_ms = 6;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.finished_at_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr JianghuGrudgeBattleLogEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        battle_id_{::uint64_t{0u}},
+        outcome_for_self_{0u},
+        total_rounds_{0u},
+        writ_tier_{static_cast< ::match::JianghuWritTier >(0)},
+        team_size_{0u},
+        finished_at_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr JianghuGrudgeBattleLogEntry::JianghuGrudgeBattleLogEntry(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuGrudgeBattleLogEntry::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuGrudgeBattleLogEntry(arena);
+}
+constexpr auto JianghuGrudgeBattleLogEntry::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(JianghuGrudgeBattleLogEntry), alignof(JianghuGrudgeBattleLogEntry));
+}
+constexpr auto JianghuGrudgeBattleLogEntry::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuGrudgeBattleLogEntry::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuGrudgeBattleLogEntry>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuGrudgeBattleLogEntry::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuGrudgeBattleLogEntry>(), &JianghuGrudgeBattleLogEntry::ByteSizeLong,
+              &JianghuGrudgeBattleLogEntry::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[111],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuGrudgeBattleLogEntryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuGrudgeBattleLogEntryGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuGrudgeBattleLogEntry_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuGrudgeBattleLogEntry::InternalGenerateClassData_(
+            _default, &JianghuGrudgeBattleLogEntry_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuGrudgeBattleLogEntry>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuGrudgeBattleLogEntryGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuGrudgeBattleLogEntry _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuGrudgeBattleLogEntry>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntryGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuGrudgeBattleLogEntryGlobalsTypeInternal JianghuGrudgeBattleLogEntry_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuGrudgeBattleLogEntry_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuGrudgeBattleLogEntry_globals_.GetClassData();
+#else
+  return JianghuGrudgeBattleLogEntry_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuDuelMemberView::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuDuelMemberView>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_._has_bits_);
+};
+
+constexpr JianghuDuelMemberView::ParseTableT_ JianghuDuelMemberView::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::JianghuDuelMemberView>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelMemberView, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.player_id_)}},
+      // string name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.name_)}},
+      // bool confirmed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(JianghuDuelMemberView, _impl_.confirmed_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.confirmed_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string name = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool confirmed = 3;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.confirmed_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+      "\33\0\4\0\0\0\0\0"
+      "match.JianghuDuelMemberView"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr JianghuDuelMemberView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        confirmed_{false} {}
+
+template <typename>
+constexpr JianghuDuelMemberView::JianghuDuelMemberView(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuDuelMemberView::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuDuelMemberView(arena);
+}
+constexpr auto JianghuDuelMemberView::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(JianghuDuelMemberView), alignof(JianghuDuelMemberView));
+}
+constexpr auto JianghuDuelMemberView::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuDuelMemberView::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuDuelMemberView>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuDuelMemberView::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuDuelMemberView>(), &JianghuDuelMemberView::ByteSizeLong,
+              &JianghuDuelMemberView::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[103],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuDuelMemberViewGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuDuelMemberViewGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuDuelMemberView_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuDuelMemberView::InternalGenerateClassData_(
+            _default, &JianghuDuelMemberView_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelMemberView>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuDuelMemberViewGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuDuelMemberView _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelMemberView>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuDuelMemberViewGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuDuelMemberViewGlobalsTypeInternal JianghuDuelMemberView_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuDuelMemberView_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuDuelMemberView_globals_.GetClassData();
+#else
+  return JianghuDuelMemberView_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -7927,6 +8570,147 @@ const ::_pbi::ClassData* GetBattleReportRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class DismissJianghuGrudgeRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<DismissJianghuGrudgeRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeRequest, _impl_._has_bits_);
+};
+
+constexpr DismissJianghuGrudgeRequest::ParseTableT_ DismissJianghuGrudgeRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::DismissJianghuGrudgeRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 peer_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DismissJianghuGrudgeRequest, _impl_.peer_player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeRequest, _impl_.peer_player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 peer_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeRequest, _impl_.peer_player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr DismissJianghuGrudgeRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        peer_player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr DismissJianghuGrudgeRequest::DismissJianghuGrudgeRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL DismissJianghuGrudgeRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) DismissJianghuGrudgeRequest(arena);
+}
+constexpr auto DismissJianghuGrudgeRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(DismissJianghuGrudgeRequest), alignof(DismissJianghuGrudgeRequest));
+}
+constexpr auto DismissJianghuGrudgeRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &DismissJianghuGrudgeRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<DismissJianghuGrudgeRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &DismissJianghuGrudgeRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<DismissJianghuGrudgeRequest>(), &DismissJianghuGrudgeRequest::ByteSizeLong,
+              &DismissJianghuGrudgeRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[115],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct DismissJianghuGrudgeRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr DismissJianghuGrudgeRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 DismissJianghuGrudgeRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(DismissJianghuGrudgeRequest::InternalGenerateClassData_(
+            _default, &DismissJianghuGrudgeRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<DismissJianghuGrudgeRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~DismissJianghuGrudgeRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) DismissJianghuGrudgeRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<DismissJianghuGrudgeRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DismissJianghuGrudgeRequestGlobalsTypeInternal DismissJianghuGrudgeRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* DismissJianghuGrudgeRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return DismissJianghuGrudgeRequest_globals_.GetClassData();
+#else
+  return DismissJianghuGrudgeRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class DeleteBattleScriptRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<DeleteBattleScriptRequest>()._impl_._has_bits_);
@@ -8224,6 +9008,326 @@ const ::_pbi::ClassData* CreateTournamentSquadRequest_get_class_data() {
   return CreateTournamentSquadRequest_globals_.GetClassData();
 #else
   return CreateTournamentSquadRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CreateJianghuDuelInviteRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CreateJianghuDuelInviteRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_._has_bits_);
+};
+
+constexpr CreateJianghuDuelInviteRequest::ParseTableT_ CreateJianghuDuelInviteRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::CreateJianghuDuelInviteRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 target_member_ids = 4;
+      {::_pbi::TcParser::FastV64P1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.target_member_ids_)}},
+      // uint64 target_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateJianghuDuelInviteRequest, _impl_.target_player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.target_player_id_)}},
+      // .match.JianghuWritTier writ_tier = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateJianghuDuelInviteRequest, _impl_.writ_tier_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.writ_tier_)}},
+      // repeated uint64 challenger_member_ids = 3;
+      {::_pbi::TcParser::FastV64P1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.challenger_member_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 target_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.target_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .match.JianghuWritTier writ_tier = 2;
+      {PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.writ_tier_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // repeated uint64 challenger_member_ids = 3;
+      {PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.challenger_member_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // repeated uint64 target_member_ids = 4;
+      {PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.target_member_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CreateJianghuDuelInviteRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        challenger_member_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::CreateJianghuDuelInviteRequest,
+            PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.challenger_member_ids_)>()
+         }
+        ,
+        _challenger_member_ids_cached_byte_size_{0},
+        target_member_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::CreateJianghuDuelInviteRequest,
+            PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.target_member_ids_)>()
+         }
+        ,
+        _target_member_ids_cached_byte_size_{0},
+        target_player_id_{::uint64_t{0u}},
+        writ_tier_{static_cast< ::match::JianghuWritTier >(0)} {}
+
+template <typename>
+constexpr CreateJianghuDuelInviteRequest::CreateJianghuDuelInviteRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CreateJianghuDuelInviteRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CreateJianghuDuelInviteRequest(arena);
+}
+constexpr auto CreateJianghuDuelInviteRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CreateJianghuDuelInviteRequest), alignof(CreateJianghuDuelInviteRequest));
+}
+constexpr auto CreateJianghuDuelInviteRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CreateJianghuDuelInviteRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CreateJianghuDuelInviteRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CreateJianghuDuelInviteRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CreateJianghuDuelInviteRequest>(), &CreateJianghuDuelInviteRequest::ByteSizeLong,
+              &CreateJianghuDuelInviteRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[105],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CreateJianghuDuelInviteRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CreateJianghuDuelInviteRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CreateJianghuDuelInviteRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CreateJianghuDuelInviteRequest::InternalGenerateClassData_(
+            _default, &CreateJianghuDuelInviteRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CreateJianghuDuelInviteRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CreateJianghuDuelInviteRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CreateJianghuDuelInviteRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CreateJianghuDuelInviteRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CreateJianghuDuelInviteRequestGlobalsTypeInternal CreateJianghuDuelInviteRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CreateJianghuDuelInviteRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CreateJianghuDuelInviteRequest_globals_.GetClassData();
+#else
+  return CreateJianghuDuelInviteRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ConfirmJianghuDuelMemberRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ConfirmJianghuDuelMemberRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_._has_bits_);
+};
+
+constexpr ConfirmJianghuDuelMemberRequest::ParseTableT_ ConfirmJianghuDuelMemberRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ConfirmJianghuDuelMemberRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool agree = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ConfirmJianghuDuelMemberRequest, _impl_.agree_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_.agree_)}},
+      // uint64 duel_invite_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConfirmJianghuDuelMemberRequest, _impl_.duel_invite_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_.duel_invite_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 duel_invite_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_.duel_invite_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool agree = 2;
+      {PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_.agree_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ConfirmJianghuDuelMemberRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        duel_invite_id_{::uint64_t{0u}},
+        agree_{false} {}
+
+template <typename>
+constexpr ConfirmJianghuDuelMemberRequest::ConfirmJianghuDuelMemberRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ConfirmJianghuDuelMemberRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ConfirmJianghuDuelMemberRequest(arena);
+}
+constexpr auto ConfirmJianghuDuelMemberRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ConfirmJianghuDuelMemberRequest), alignof(ConfirmJianghuDuelMemberRequest));
+}
+constexpr auto ConfirmJianghuDuelMemberRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ConfirmJianghuDuelMemberRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ConfirmJianghuDuelMemberRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ConfirmJianghuDuelMemberRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ConfirmJianghuDuelMemberRequest>(), &ConfirmJianghuDuelMemberRequest::ByteSizeLong,
+              &ConfirmJianghuDuelMemberRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[107],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ConfirmJianghuDuelMemberRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ConfirmJianghuDuelMemberRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ConfirmJianghuDuelMemberRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ConfirmJianghuDuelMemberRequest::InternalGenerateClassData_(
+            _default, &ConfirmJianghuDuelMemberRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ConfirmJianghuDuelMemberRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ConfirmJianghuDuelMemberRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ConfirmJianghuDuelMemberRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ConfirmJianghuDuelMemberRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ConfirmJianghuDuelMemberRequestGlobalsTypeInternal ConfirmJianghuDuelMemberRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ConfirmJianghuDuelMemberRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ConfirmJianghuDuelMemberRequest_globals_.GetClassData();
+#else
+  return ConfirmJianghuDuelMemberRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -13894,6 +14998,544 @@ const ::_pbi::ClassData* JoinQueueResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuGrudgeEntry::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuGrudgeEntry>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_._has_bits_);
+};
+
+constexpr JianghuGrudgeEntry::ParseTableT_ JianghuGrudgeEntry::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_._has_bits_),
+      0, // no _extensions_
+      10, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966272,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      10,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::JianghuGrudgeEntry>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 peer_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuGrudgeEntry, _impl_.peer_player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_player_id_)}},
+      // string peer_name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_name_)}},
+      // uint32 wins = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeEntry, _impl_.wins_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.wins_)}},
+      // uint32 losses = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeEntry, _impl_.losses_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.losses_)}},
+      // uint32 draws = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeEntry, _impl_.draws_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.draws_)}},
+      // uint32 win_streak = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeEntry, _impl_.win_streak_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.win_streak_)}},
+      // uint32 lose_streak = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuGrudgeEntry, _impl_.lose_streak_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.lose_streak_)}},
+      // uint64 last_battle_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuGrudgeEntry, _impl_.last_battle_ms_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.last_battle_ms_)}},
+      // bool peer_online = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(JianghuGrudgeEntry, _impl_.peer_online_), 9>(),
+       {72, 9, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_online_)}},
+      // repeated .match.JianghuGrudgeBattleLogEntry recent_logs = 10;
+      {::_pbi::TcParser::FastMtR1,
+       {82, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.recent_logs_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 peer_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string peer_name = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 wins = 3;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.wins_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 losses = 4;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.losses_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 draws = 5;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.draws_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 win_streak = 6;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.win_streak_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 lose_streak = 7;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.lose_streak_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 last_battle_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.last_battle_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool peer_online = 9;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_online_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // repeated .match.JianghuGrudgeBattleLogEntry recent_logs = 10;
+      {PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.recent_logs_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuGrudgeBattleLogEntry>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuGrudgeBattleLogEntry_globals_},
+        #endif
+    }},
+    {{
+      "\30\0\11\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "match.JianghuGrudgeEntry"
+      "peer_name"
+    }},
+  };
+}
+
+
+inline constexpr JianghuGrudgeEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        recent_logs_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::JianghuGrudgeEntry,
+            PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.recent_logs_)>()
+         }
+        ,
+        peer_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        peer_player_id_{::uint64_t{0u}},
+        wins_{0u},
+        losses_{0u},
+        draws_{0u},
+        win_streak_{0u},
+        last_battle_ms_{::uint64_t{0u}},
+        lose_streak_{0u},
+        peer_online_{false} {}
+
+template <typename>
+constexpr JianghuGrudgeEntry::JianghuGrudgeEntry(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuGrudgeEntry::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuGrudgeEntry(arena);
+}
+constexpr auto JianghuGrudgeEntry::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(JianghuGrudgeEntry), alignof(JianghuGrudgeEntry));
+}
+constexpr auto JianghuGrudgeEntry::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuGrudgeEntry::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuGrudgeEntry>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuGrudgeEntry::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuGrudgeEntry>(), &JianghuGrudgeEntry::ByteSizeLong,
+              &JianghuGrudgeEntry::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[112],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuGrudgeEntryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuGrudgeEntryGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuGrudgeEntry_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuGrudgeEntry::InternalGenerateClassData_(
+            _default, &JianghuGrudgeEntry_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuGrudgeEntry>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuGrudgeEntryGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuGrudgeEntry _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuGrudgeEntry>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntryGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuGrudgeEntryGlobalsTypeInternal JianghuGrudgeEntry_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuGrudgeEntry_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuGrudgeEntry_globals_.GetClassData();
+#else
+  return JianghuGrudgeEntry_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuDuelInviteView::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuDuelInviteView>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_._has_bits_);
+};
+
+constexpr JianghuDuelInviteView::ParseTableT_ JianghuDuelInviteView::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_._has_bits_),
+      0, // no _extensions_
+      19, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294443008,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      19,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 duel_invite_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelInviteView, _impl_.duel_invite_id_), 6>(),
+       {8, 6, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.duel_invite_id_)}},
+      // .match.JianghuWritTier writ_tier = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuDuelInviteView, _impl_.writ_tier_), 7>(),
+       {16, 7, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.writ_tier_)}},
+      // uint32 team_size = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuDuelInviteView, _impl_.team_size_), 8>(),
+       {24, 8, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.team_size_)}},
+      // .match.JianghuDuelInviteState state = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuDuelInviteView, _impl_.state_), 18>(),
+       {32, 18, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.state_)}},
+      // uint64 challenger_captain_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelInviteView, _impl_.challenger_captain_id_), 9>(),
+       {40, 9, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.challenger_captain_id_)}},
+      // string challenger_captain_name = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 2, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.challenger_captain_name_)}},
+      // uint64 target_captain_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelInviteView, _impl_.target_captain_id_), 10>(),
+       {56, 10, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.target_captain_id_)}},
+      // string target_captain_name = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 3, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.target_captain_name_)}},
+      // uint64 side_a_guild_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelInviteView, _impl_.side_a_guild_id_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_a_guild_id_)}},
+      // string side_a_guild_name = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 4, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_a_guild_name_)}},
+      // uint64 side_b_guild_id = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelInviteView, _impl_.side_b_guild_id_), 12>(),
+       {88, 12, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_b_guild_id_)}},
+      // string side_b_guild_name = 12;
+      {::_pbi::TcParser::FastUS1,
+       {98, 5, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_b_guild_name_)}},
+      // repeated .match.JianghuDuelMemberView challenger_members = 13;
+      {::_pbi::TcParser::FastMtR1,
+       {106, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.challenger_members_)}},
+      // repeated .match.JianghuDuelMemberView target_members = 14;
+      {::_pbi::TcParser::FastMtR1,
+       {114, 1, 1,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.target_members_)}},
+      // uint64 created_at_ms = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelInviteView, _impl_.created_at_ms_), 13>(),
+       {120, 13, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.created_at_ms_)}},
+      // uint64 expires_at_ms = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 14, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.expires_at_ms_)}},
+      // uint64 confirm_deadline_ms = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 15, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.confirm_deadline_ms_)}},
+      // uint64 battle_id = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 16, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.battle_id_)}},
+      // uint64 server_time_ms = 19;
+      {::_pbi::TcParser::FastV64S2,
+       {408, 17, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.server_time_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 duel_invite_id = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.duel_invite_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .match.JianghuWritTier writ_tier = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.writ_tier_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 team_size = 3;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.team_size_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .match.JianghuDuelInviteState state = 4;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.state_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 challenger_captain_id = 5;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.challenger_captain_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string challenger_captain_name = 6;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.challenger_captain_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 target_captain_id = 7;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.target_captain_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string target_captain_name = 8;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.target_captain_name_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 side_a_guild_id = 9;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_a_guild_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string side_a_guild_name = 10;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_a_guild_name_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 side_b_guild_id = 11;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_b_guild_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string side_b_guild_name = 12;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.side_b_guild_name_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // repeated .match.JianghuDuelMemberView challenger_members = 13;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.challenger_members_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .match.JianghuDuelMemberView target_members = 14;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.target_members_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 created_at_ms = 15;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expires_at_ms = 16;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.expires_at_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 confirm_deadline_ms = 17;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.confirm_deadline_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 battle_id = 18;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.battle_id_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 server_time_ms = 19;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.server_time_ms_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelMemberView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelMemberView_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelMemberView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelMemberView_globals_},
+        #endif
+    }},
+    {{
+      "\33\0\0\0\0\0\27\0\23\0\21\0\21\0\0\0\0\0\0\0\0\0\0\0"
+      "match.JianghuDuelInviteView"
+      "challenger_captain_name"
+      "target_captain_name"
+      "side_a_guild_name"
+      "side_b_guild_name"
+    }},
+  };
+}
+
+
+inline constexpr JianghuDuelInviteView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        challenger_members_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::JianghuDuelInviteView,
+            PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.challenger_members_)>()
+         }
+        ,
+        target_members_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::JianghuDuelInviteView,
+            PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.target_members_)>()
+         }
+        ,
+        challenger_captain_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_captain_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        side_a_guild_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        side_b_guild_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        duel_invite_id_{::uint64_t{0u}},
+        writ_tier_{static_cast< ::match::JianghuWritTier >(0)},
+        team_size_{0u},
+        challenger_captain_id_{::uint64_t{0u}},
+        target_captain_id_{::uint64_t{0u}},
+        side_a_guild_id_{::uint64_t{0u}},
+        side_b_guild_id_{::uint64_t{0u}},
+        created_at_ms_{::uint64_t{0u}},
+        expires_at_ms_{::uint64_t{0u}},
+        confirm_deadline_ms_{::uint64_t{0u}},
+        battle_id_{::uint64_t{0u}},
+        server_time_ms_{::uint64_t{0u}},
+        state_{static_cast< ::match::JianghuDuelInviteState >(0)} {}
+
+template <typename>
+constexpr JianghuDuelInviteView::JianghuDuelInviteView(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuDuelInviteView::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuDuelInviteView(arena);
+}
+constexpr auto JianghuDuelInviteView::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(JianghuDuelInviteView), alignof(JianghuDuelInviteView));
+}
+constexpr auto JianghuDuelInviteView::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuDuelInviteView::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuDuelInviteView>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuDuelInviteView::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuDuelInviteView>(), &JianghuDuelInviteView::ByteSizeLong,
+              &JianghuDuelInviteView::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[104],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuDuelInviteViewGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuDuelInviteViewGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuDuelInviteView_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuDuelInviteView::InternalGenerateClassData_(
+            _default, &JianghuDuelInviteView_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelInviteView>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuDuelInviteViewGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuDuelInviteView _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelInviteView>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuDuelInviteViewGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuDuelInviteViewGlobalsTypeInternal JianghuDuelInviteView_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuDuelInviteView_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuDuelInviteView_globals_.GetClassData();
+#else
+  return JianghuDuelInviteView_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class InviteTournamentMemberResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<InviteTournamentMemberResponse>()._impl_._has_bits_);
@@ -14937,6 +16579,153 @@ const ::_pbi::ClassData* GetBattleReportResponse_get_class_data() {
   return GetBattleReportResponse_globals_.GetClassData();
 #else
   return GetBattleReportResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class DismissJianghuGrudgeResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<DismissJianghuGrudgeResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeResponse, _impl_._has_bits_);
+};
+
+constexpr DismissJianghuGrudgeResponse::ParseTableT_ DismissJianghuGrudgeResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::DismissJianghuGrudgeResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr DismissJianghuGrudgeResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr} {}
+
+template <typename>
+constexpr DismissJianghuGrudgeResponse::DismissJianghuGrudgeResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL DismissJianghuGrudgeResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) DismissJianghuGrudgeResponse(arena);
+}
+constexpr auto DismissJianghuGrudgeResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(DismissJianghuGrudgeResponse), alignof(DismissJianghuGrudgeResponse));
+}
+constexpr auto DismissJianghuGrudgeResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &DismissJianghuGrudgeResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<DismissJianghuGrudgeResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &DismissJianghuGrudgeResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<DismissJianghuGrudgeResponse>(), &DismissJianghuGrudgeResponse::ByteSizeLong,
+              &DismissJianghuGrudgeResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[116],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct DismissJianghuGrudgeResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr DismissJianghuGrudgeResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 DismissJianghuGrudgeResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(DismissJianghuGrudgeResponse::InternalGenerateClassData_(
+            _default, &DismissJianghuGrudgeResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<DismissJianghuGrudgeResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~DismissJianghuGrudgeResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) DismissJianghuGrudgeResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<DismissJianghuGrudgeResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(DismissJianghuGrudgeResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DismissJianghuGrudgeResponseGlobalsTypeInternal DismissJianghuGrudgeResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* DismissJianghuGrudgeResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return DismissJianghuGrudgeResponse_globals_.GetClassData();
+#else
+  return DismissJianghuGrudgeResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -16597,6 +18386,165 @@ const ::_pbi::ClassData* RespondTournamentInviteResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class RespondJianghuDuelInviteResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RespondJianghuDuelInviteResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_._has_bits_);
+};
+
+constexpr RespondJianghuDuelInviteResponse::ParseTableT_ RespondJianghuDuelInviteResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::RespondJianghuDuelInviteResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .match.JianghuDuelInviteView invite = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_.invite_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .match.JianghuDuelInviteView invite = 2;
+      {PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_.invite_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelInviteView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr RespondJianghuDuelInviteResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        invite_{nullptr} {}
+
+template <typename>
+constexpr RespondJianghuDuelInviteResponse::RespondJianghuDuelInviteResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RespondJianghuDuelInviteResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RespondJianghuDuelInviteResponse(arena);
+}
+constexpr auto RespondJianghuDuelInviteResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RespondJianghuDuelInviteResponse), alignof(RespondJianghuDuelInviteResponse));
+}
+constexpr auto RespondJianghuDuelInviteResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RespondJianghuDuelInviteResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RespondJianghuDuelInviteResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RespondJianghuDuelInviteResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RespondJianghuDuelInviteResponse>(), &RespondJianghuDuelInviteResponse::ByteSizeLong,
+              &RespondJianghuDuelInviteResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[110],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RespondJianghuDuelInviteResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RespondJianghuDuelInviteResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RespondJianghuDuelInviteResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RespondJianghuDuelInviteResponse::InternalGenerateClassData_(
+            _default, &RespondJianghuDuelInviteResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RespondJianghuDuelInviteResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RespondJianghuDuelInviteResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RespondJianghuDuelInviteResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RespondJianghuDuelInviteResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RespondJianghuDuelInviteResponseGlobalsTypeInternal RespondJianghuDuelInviteResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RespondJianghuDuelInviteResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RespondJianghuDuelInviteResponse_globals_.GetClassData();
+#else
+  return RespondJianghuDuelInviteResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RegisterTournamentSquadResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<RegisterTournamentSquadResponse>()._impl_._has_bits_);
@@ -16974,6 +18922,192 @@ const ::_pbi::ClassData* ListTournamentStandingsResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ListJianghuGrudgesResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListJianghuGrudgesResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_._has_bits_);
+};
+
+constexpr ListJianghuGrudgesResponse::ParseTableT_ ListJianghuGrudgesResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      3,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ListJianghuGrudgesResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 server_time_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListJianghuGrudgesResponse, _impl_.server_time_ms_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.server_time_ms_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.error_message_)}},
+      // repeated .match.JianghuGrudgeEntry grudges = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 1,
+        PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.grudges_)}},
+      // repeated .match.JianghuDuelInviteView active_invites = 3;
+      {::_pbi::TcParser::FastMtR1,
+       {26, 1, 2,
+        PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.active_invites_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .match.JianghuGrudgeEntry grudges = 2;
+      {PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.grudges_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .match.JianghuDuelInviteView active_invites = 3;
+      {PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.active_invites_), _Internal::kHasBitsOffset + 1, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 server_time_ms = 4;
+      {PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.server_time_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuGrudgeEntry>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuGrudgeEntry_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelInviteView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ListJianghuGrudgesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        grudges_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::ListJianghuGrudgesResponse,
+            PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.grudges_)>()
+         }
+        ,
+        active_invites_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::ListJianghuGrudgesResponse,
+            PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.active_invites_)>()
+         }
+        ,
+        error_message_{nullptr},
+        server_time_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ListJianghuGrudgesResponse::ListJianghuGrudgesResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListJianghuGrudgesResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListJianghuGrudgesResponse(arena);
+}
+constexpr auto ListJianghuGrudgesResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ListJianghuGrudgesResponse), alignof(ListJianghuGrudgesResponse));
+}
+constexpr auto ListJianghuGrudgesResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListJianghuGrudgesResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListJianghuGrudgesResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListJianghuGrudgesResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListJianghuGrudgesResponse>(), &ListJianghuGrudgesResponse::ByteSizeLong,
+              &ListJianghuGrudgesResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[114],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListJianghuGrudgesResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListJianghuGrudgesResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListJianghuGrudgesResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListJianghuGrudgesResponse::InternalGenerateClassData_(
+            _default, &ListJianghuGrudgesResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListJianghuGrudgesResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListJianghuGrudgesResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListJianghuGrudgesResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListJianghuGrudgesResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListJianghuGrudgesResponseGlobalsTypeInternal ListJianghuGrudgesResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListJianghuGrudgesResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListJianghuGrudgesResponse_globals_.GetClassData();
+#else
+  return ListJianghuGrudgesResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ListBattleReportsResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<ListBattleReportsResponse>()._impl_._has_bits_);
@@ -17300,6 +19434,312 @@ const ::_pbi::ClassData* LeaveTournamentSquadResponse_get_class_data() {
   return LeaveTournamentSquadResponse_globals_.GetClassData();
 #else
   return LeaveTournamentSquadResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuDuelStatusS2C::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuDuelStatusS2C>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_._has_bits_);
+};
+
+constexpr JianghuDuelStatusS2C::ParseTableT_ JianghuDuelStatusS2C::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::JianghuDuelStatusS2C>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string reason_code = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_.reason_code_)}},
+      // .match.JianghuDuelInviteView invite = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 1, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_.invite_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .match.JianghuDuelInviteView invite = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_.invite_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string reason_code = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_.reason_code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelInviteView_globals_},
+        #endif
+    }},
+    {{
+      "\32\0\13\0\0\0\0\0"
+      "match.JianghuDuelStatusS2C"
+      "reason_code"
+    }},
+  };
+}
+
+
+inline constexpr JianghuDuelStatusS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        reason_code_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        invite_{nullptr} {}
+
+template <typename>
+constexpr JianghuDuelStatusS2C::JianghuDuelStatusS2C(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuDuelStatusS2C::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuDuelStatusS2C(arena);
+}
+constexpr auto JianghuDuelStatusS2C::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(JianghuDuelStatusS2C), alignof(JianghuDuelStatusS2C));
+}
+constexpr auto JianghuDuelStatusS2C::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuDuelStatusS2C::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuDuelStatusS2C>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuDuelStatusS2C::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuDuelStatusS2C>(), &JianghuDuelStatusS2C::ByteSizeLong,
+              &JianghuDuelStatusS2C::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2C, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[118],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuDuelStatusS2CGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuDuelStatusS2CGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuDuelStatusS2C_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuDuelStatusS2C::InternalGenerateClassData_(
+            _default, &JianghuDuelStatusS2C_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelStatusS2C>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuDuelStatusS2CGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuDuelStatusS2C _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelStatusS2C>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuDuelStatusS2CGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuDuelStatusS2CGlobalsTypeInternal JianghuDuelStatusS2C_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuDuelStatusS2C_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuDuelStatusS2C_globals_.GetClassData();
+#else
+  return JianghuDuelStatusS2C_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuDuelInviteS2C::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuDuelInviteS2C>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuDuelInviteS2C, _impl_._has_bits_);
+};
+
+constexpr JianghuDuelInviteS2C::ParseTableT_ JianghuDuelInviteS2C::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuDuelInviteS2C, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::JianghuDuelInviteS2C>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .match.JianghuDuelInviteView invite = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelInviteS2C, _impl_.invite_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .match.JianghuDuelInviteView invite = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelInviteS2C, _impl_.invite_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelInviteView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr JianghuDuelInviteS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        invite_{nullptr} {}
+
+template <typename>
+constexpr JianghuDuelInviteS2C::JianghuDuelInviteS2C(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuDuelInviteS2C::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuDuelInviteS2C(arena);
+}
+constexpr auto JianghuDuelInviteS2C::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(JianghuDuelInviteS2C), alignof(JianghuDuelInviteS2C));
+}
+constexpr auto JianghuDuelInviteS2C::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuDuelInviteS2C::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuDuelInviteS2C>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuDuelInviteS2C::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuDuelInviteS2C>(), &JianghuDuelInviteS2C::ByteSizeLong,
+              &JianghuDuelInviteS2C::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuDuelInviteS2C, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[117],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuDuelInviteS2CGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuDuelInviteS2CGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuDuelInviteS2C_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuDuelInviteS2C::InternalGenerateClassData_(
+            _default, &JianghuDuelInviteS2C_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelInviteS2C>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuDuelInviteS2CGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuDuelInviteS2C _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelInviteS2C>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuDuelInviteS2CGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuDuelInviteS2CGlobalsTypeInternal JianghuDuelInviteS2C_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuDuelInviteS2C_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuDuelInviteS2C_globals_.GetClassData();
+#else
+  return JianghuDuelInviteS2C_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -18088,6 +20528,324 @@ const ::_pbi::ClassData* CreateTournamentSquadResponse_get_class_data() {
   return CreateTournamentSquadResponse_globals_.GetClassData();
 #else
   return CreateTournamentSquadResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CreateJianghuDuelInviteResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CreateJianghuDuelInviteResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_._has_bits_);
+};
+
+constexpr CreateJianghuDuelInviteResponse::ParseTableT_ CreateJianghuDuelInviteResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::CreateJianghuDuelInviteResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .match.JianghuDuelInviteView invite = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_.invite_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .match.JianghuDuelInviteView invite = 2;
+      {PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_.invite_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelInviteView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CreateJianghuDuelInviteResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        invite_{nullptr} {}
+
+template <typename>
+constexpr CreateJianghuDuelInviteResponse::CreateJianghuDuelInviteResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CreateJianghuDuelInviteResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CreateJianghuDuelInviteResponse(arena);
+}
+constexpr auto CreateJianghuDuelInviteResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CreateJianghuDuelInviteResponse), alignof(CreateJianghuDuelInviteResponse));
+}
+constexpr auto CreateJianghuDuelInviteResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CreateJianghuDuelInviteResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CreateJianghuDuelInviteResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CreateJianghuDuelInviteResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CreateJianghuDuelInviteResponse>(), &CreateJianghuDuelInviteResponse::ByteSizeLong,
+              &CreateJianghuDuelInviteResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[106],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CreateJianghuDuelInviteResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CreateJianghuDuelInviteResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CreateJianghuDuelInviteResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CreateJianghuDuelInviteResponse::InternalGenerateClassData_(
+            _default, &CreateJianghuDuelInviteResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CreateJianghuDuelInviteResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CreateJianghuDuelInviteResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CreateJianghuDuelInviteResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CreateJianghuDuelInviteResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CreateJianghuDuelInviteResponseGlobalsTypeInternal CreateJianghuDuelInviteResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CreateJianghuDuelInviteResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CreateJianghuDuelInviteResponse_globals_.GetClassData();
+#else
+  return CreateJianghuDuelInviteResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ConfirmJianghuDuelMemberResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ConfirmJianghuDuelMemberResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_._has_bits_);
+};
+
+constexpr ConfirmJianghuDuelMemberResponse::ParseTableT_ ConfirmJianghuDuelMemberResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::ConfirmJianghuDuelMemberResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .match.JianghuDuelInviteView invite = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_.invite_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .match.JianghuDuelInviteView invite = 2;
+      {PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_.invite_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::match::JianghuDuelInviteView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::match::JianghuDuelInviteView_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ConfirmJianghuDuelMemberResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        invite_{nullptr} {}
+
+template <typename>
+constexpr ConfirmJianghuDuelMemberResponse::ConfirmJianghuDuelMemberResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ConfirmJianghuDuelMemberResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ConfirmJianghuDuelMemberResponse(arena);
+}
+constexpr auto ConfirmJianghuDuelMemberResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ConfirmJianghuDuelMemberResponse), alignof(ConfirmJianghuDuelMemberResponse));
+}
+constexpr auto ConfirmJianghuDuelMemberResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ConfirmJianghuDuelMemberResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ConfirmJianghuDuelMemberResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ConfirmJianghuDuelMemberResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ConfirmJianghuDuelMemberResponse>(), &ConfirmJianghuDuelMemberResponse::ByteSizeLong,
+              &ConfirmJianghuDuelMemberResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[108],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ConfirmJianghuDuelMemberResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ConfirmJianghuDuelMemberResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ConfirmJianghuDuelMemberResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ConfirmJianghuDuelMemberResponse::InternalGenerateClassData_(
+            _default, &ConfirmJianghuDuelMemberResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ConfirmJianghuDuelMemberResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ConfirmJianghuDuelMemberResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ConfirmJianghuDuelMemberResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ConfirmJianghuDuelMemberResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ConfirmJianghuDuelMemberResponseGlobalsTypeInternal ConfirmJianghuDuelMemberResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ConfirmJianghuDuelMemberResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ConfirmJianghuDuelMemberResponse_globals_.GetClassData();
+#else
+  return ConfirmJianghuDuelMemberResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -18997,7 +21755,7 @@ const ::_pbi::ClassData* ListBattleScriptsResponse_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace match
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[17];
+    file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[19];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto = nullptr;
 const ::uint32_t
@@ -20416,6 +23174,174 @@ const ::uint32_t
         3,
         0,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelMemberView, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelMemberView, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelMemberView, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelMemberView, _impl_.confirmed_),
+        1,
+        0,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_._has_bits_),
+        22, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.duel_invite_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.writ_tier_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.team_size_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.challenger_captain_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.challenger_captain_name_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.target_captain_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.target_captain_name_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.side_a_guild_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.side_a_guild_name_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.side_b_guild_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.side_b_guild_name_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.challenger_members_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.target_members_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.created_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.expires_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.confirm_deadline_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.server_time_ms_),
+        6,
+        7,
+        8,
+        18,
+        9,
+        2,
+        10,
+        3,
+        11,
+        4,
+        12,
+        5,
+        0,
+        1,
+        13,
+        14,
+        15,
+        16,
+        17,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.target_player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.writ_tier_),
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.challenger_member_ids_),
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.target_member_ids_),
+        2,
+        3,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteResponse, _impl_.invite_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ConfirmJianghuDuelMemberRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ConfirmJianghuDuelMemberRequest, _impl_.duel_invite_id_),
+        PROTOBUF_FIELD_OFFSET(::match::ConfirmJianghuDuelMemberRequest, _impl_.agree_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ConfirmJianghuDuelMemberResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ConfirmJianghuDuelMemberResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::match::ConfirmJianghuDuelMemberResponse, _impl_.invite_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::RespondJianghuDuelInviteRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::RespondJianghuDuelInviteRequest, _impl_.duel_invite_id_),
+        PROTOBUF_FIELD_OFFSET(::match::RespondJianghuDuelInviteRequest, _impl_.accept_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::RespondJianghuDuelInviteResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::RespondJianghuDuelInviteResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::match::RespondJianghuDuelInviteResponse, _impl_.invite_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_.outcome_for_self_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_.total_rounds_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_.writ_tier_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_.team_size_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeBattleLogEntry, _impl_.finished_at_ms_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_._has_bits_),
+        13, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.peer_player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.peer_name_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.wins_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.losses_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.draws_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.win_streak_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.lose_streak_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.last_battle_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.peer_online_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.recent_logs_),
+        2,
+        1,
+        3,
+        4,
+        5,
+        6,
+        8,
+        7,
+        9,
+        0,
+        0x000, // bitmap
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.grudges_),
+        PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.active_invites_),
+        PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.server_time_ms_),
+        2,
+        0,
+        1,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::DismissJianghuGrudgeRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::DismissJianghuGrudgeRequest, _impl_.peer_player_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::DismissJianghuGrudgeResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::DismissJianghuGrudgeResponse, _impl_.error_message_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteS2C, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteS2C, _impl_.invite_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelStatusS2C, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelStatusS2C, _impl_.invite_),
+        PROTOBUF_FIELD_OFFSET(::match::JianghuDuelStatusS2C, _impl_.reason_code_),
+        1,
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -20523,6 +23449,22 @@ static const ::_pbi::MigrationSchema
         {1388, sizeof(::match::TournamentHighlightEntry)},
         {1397, sizeof(::match::GetTournamentHighlightsRequest)},
         {1402, sizeof(::match::GetTournamentHighlightsResponse)},
+        {1413, sizeof(::match::JianghuDuelMemberView)},
+        {1422, sizeof(::match::JianghuDuelInviteView)},
+        {1463, sizeof(::match::CreateJianghuDuelInviteRequest)},
+        {1474, sizeof(::match::CreateJianghuDuelInviteResponse)},
+        {1481, sizeof(::match::ConfirmJianghuDuelMemberRequest)},
+        {1488, sizeof(::match::ConfirmJianghuDuelMemberResponse)},
+        {1495, sizeof(::match::RespondJianghuDuelInviteRequest)},
+        {1502, sizeof(::match::RespondJianghuDuelInviteResponse)},
+        {1509, sizeof(::match::JianghuGrudgeBattleLogEntry)},
+        {1524, sizeof(::match::JianghuGrudgeEntry)},
+        {1547, sizeof(::match::ListJianghuGrudgesRequest)},
+        {1548, sizeof(::match::ListJianghuGrudgesResponse)},
+        {1559, sizeof(::match::DismissJianghuGrudgeRequest)},
+        {1564, sizeof(::match::DismissJianghuGrudgeResponse)},
+        {1569, sizeof(::match::JianghuDuelInviteS2C)},
+        {1574, sizeof(::match::JianghuDuelStatusS2C)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -20629,6 +23571,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::match::TournamentHighlightEntry_globals_,
         &::match::GetTournamentHighlightsRequest_globals_,
         &::match::GetTournamentHighlightsResponse_globals_,
+        &::match::JianghuDuelMemberView_globals_,
+        &::match::JianghuDuelInviteView_globals_,
+        &::match::CreateJianghuDuelInviteRequest_globals_,
+        &::match::CreateJianghuDuelInviteResponse_globals_,
+        &::match::ConfirmJianghuDuelMemberRequest_globals_,
+        &::match::ConfirmJianghuDuelMemberResponse_globals_,
+        &::match::RespondJianghuDuelInviteRequest_globals_,
+        &::match::RespondJianghuDuelInviteResponse_globals_,
+        &::match::JianghuGrudgeBattleLogEntry_globals_,
+        &::match::JianghuGrudgeEntry_globals_,
+        &::match::ListJianghuGrudgesRequest_globals_,
+        &::match::ListJianghuGrudgesResponse_globals_,
+        &::match::DismissJianghuGrudgeRequest_globals_,
+        &::match::DismissJianghuGrudgeResponse_globals_,
+        &::match::JianghuDuelInviteS2C_globals_,
+        &::match::JianghuDuelStatusS2C_globals_,
 };
 const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -21104,206 +24062,292 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] A
     "sage\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tseason_id"
     "\030\002 \001(\r\0223\n\nhighlights\030\003 \003(\0132\037.match.Tourn"
     "amentHighlightEntry\022\026\n\016server_time_ms\030\004 "
-    "\001(\004*\311\002\n\tMatchMode\022\032\n\026MATCH_MODE_UNSPECIF"
-    "IED\020\000\022\022\n\016MATCH_MODE_5V5\020\001\022\022\n\016MATCH_MODE_"
-    "3V3\020\002\022\022\n\016MATCH_MODE_1V1\020\003\022\027\n\023MATCH_MODE_"
-    "PVE_SOLO\020\004\022\027\n\023MATCH_MODE_PVE_TEAM\020\005\022\034\n\030M"
-    "ATCH_MODE_PVP_CHALLENGE\020\006\022\027\n\023MATCH_MODE_"
-    "PVP_TEAM\020\007\022\033\n\027MATCH_MODE_POLARITY_5V5\020\010\022"
-    "\034\n\030MATCH_MODE_GUILD_WAR_PVP\020\t\022\036\n\032MATCH_M"
-    "ODE_GUILD_WAR_SIEGE\020\n\022 \n\034MATCH_MODE_SEAS"
-    "ON_TOURNAMENT\020\013*\247\001\n\nQueueState\022\033\n\027QUEUE_"
-    "STATE_UNSPECIFIED\020\000\022\026\n\022QUEUE_STATE_QUEUE"
-    "D\020\001\022\027\n\023QUEUE_STATE_MATCHED\020\002\022\025\n\021QUEUE_ST"
-    "ATE_READY\020\003\022\030\n\024QUEUE_STATE_ENTERING\020\004\022\032\n"
-    "\026QUEUE_STATE_NOT_QUEUED\020\005*j\n\021eSpectateDe"
-    "livery\022\032\n\026SPECTATE_DELIVERY_NONE\020\000\022\034\n\030SP"
-    "ECTATE_DELIVERY_DIRECT\020\001\022\033\n\027SPECTATE_DEL"
-    "IVERY_LOBBY\020\002*\247\001\n\027BattleScriptReviewStat"
-    "e\022$\n BATTLE_SCRIPT_REVIEW_UNSPECIFIED\020\000\022"
-    " \n\034BATTLE_SCRIPT_REVIEW_PENDING\020\001\022!\n\035BAT"
-    "TLE_SCRIPT_REVIEW_APPROVED\020\002\022!\n\035BATTLE_S"
-    "CRIPT_REVIEW_REJECTED\020\003*\250\001\n\nRankedTier\022\033"
-    "\n\027RANKED_TIER_UNSPECIFIED\020\000\022\026\n\022RANKED_TI"
-    "ER_CHUSHI\020\001\022\030\n\024RANKED_TIER_QINGFENG\020\002\022\030\n"
-    "\024RANKED_TIER_YUNZHANG\020\003\022\027\n\023RANKED_TIER_T"
-    "IANSHU\020\004\022\030\n\024RANKED_TIER_WUSHUANG\020\005*\232\001\n\021R"
-    "ankedSeasonState\022#\n\037RANKED_SEASON_STATE_"
-    "UNSPECIFIED\020\000\022\036\n\032RANKED_SEASON_STATE_ACT"
-    "IVE\020\001\022 \n\034RANKED_SEASON_STATE_SETTLING\020\002\022"
-    "\036\n\032RANKED_SEASON_STATE_CLOSED\020\003*\234\002\n\020Rank"
-    "edRewardKind\022\"\n\036RANKED_REWARD_KIND_UNSPE"
-    "CIFIED\020\000\022 \n\034RANKED_REWARD_AVATAR_PATTERN"
-    "\020\001\022!\n\035RANKED_REWARD_CARD_BACKGROUND\020\002\022\032\n"
-    "\026RANKED_REWARD_TALISMAN\020\003\022\034\n\030RANKED_REWA"
-    "RD_TIER_BADGE\020\004\022\034\n\030RANKED_REWARD_TIER_TI"
-    "TLE\020\005\022&\n\"RANKED_REWARD_CHAMPION_INSCRIPT"
-    "ION\020\006\022\037\n\033RANKED_REWARD_WIN_MILESTONE\020\007*\304"
-    "\001\n\027RankedMatchRatingStatus\022#\n\037RANKED_MAT"
-    "CH_RATING_UNSPECIFIED\020\000\022\037\n\033RANKED_MATCH_"
-    "RATING_PENDING\020\001\022!\n\035RANKED_MATCH_RATING_"
-    "CONFIRMED\020\002\022\034\n\030RANKED_MATCH_RATING_VOID\020"
-    "\003\022\"\n\036RANKED_MATCH_RATING_ZERO_ROUND\020\004*\263\001"
-    "\n\017TournamentStage\022 \n\034TOURNAMENT_STAGE_UN"
-    "SPECIFIED\020\000\022!\n\035TOURNAMENT_STAGE_REGISTRA"
-    "TION\020\001\022\036\n\032TOURNAMENT_STAGE_QUALIFIER\020\002\022\035"
-    "\n\031TOURNAMENT_STAGE_KNOCKOUT\020\003\022\034\n\030TOURNAM"
-    "ENT_STAGE_SETTLED\020\004*\371\001\n\024TournamentSquadS"
-    "tate\022&\n\"TOURNAMENT_SQUAD_STATE_UNSPECIFI"
-    "ED\020\000\022 \n\034TOURNAMENT_SQUAD_STATE_DRAFT\020\001\022%"
-    "\n!TOURNAMENT_SQUAD_STATE_REGISTERED\020\002\022%\n"
-    "!TOURNAMENT_SQUAD_STATE_ELIMINATED\020\003\022#\n\037"
-    "TOURNAMENT_SQUAD_STATE_CHAMPION\020\004\022$\n TOU"
-    "RNAMENT_SQUAD_STATE_DISBANDED\020\005*\255\001\n\024Tour"
-    "namentMemberRole\022&\n\"TOURNAMENT_MEMBER_RO"
-    "LE_UNSPECIFIED\020\000\022\"\n\036TOURNAMENT_MEMBER_RO"
-    "LE_CAPTAIN\020\001\022\"\n\036TOURNAMENT_MEMBER_ROLE_S"
-    "TARTER\020\002\022%\n!TOURNAMENT_MEMBER_ROLE_SUBST"
-    "ITUTE\020\003*\254\001\n\024TournamentMatchPhase\022&\n\"TOUR"
-    "NAMENT_MATCH_PHASE_UNSPECIFIED\020\000\022$\n TOUR"
-    "NAMENT_MATCH_PHASE_QUALIFIER\020\001\022#\n\037TOURNA"
-    "MENT_MATCH_PHASE_KNOCKOUT\020\002\022!\n\035TOURNAMEN"
-    "T_MATCH_PHASE_WARMUP\020\003*\337\002\n\025TournamentSqu"
-    "adEmblem\022\'\n#TOURNAMENT_SQUAD_EMBLEM_UNSP"
-    "ECIFIED\020\000\022!\n\035TOURNAMENT_SQUAD_EMBLEM_SWO"
-    "RD\020\001\022!\n\035TOURNAMENT_SQUAD_EMBLEM_TAIJI\020\002\022"
-    "#\n\037TOURNAMENT_SQUAD_EMBLEM_FURNACE\020\003\022!\n\035"
-    "TOURNAMENT_SQUAD_EMBLEM_LOTUS\020\004\022!\n\035TOURN"
-    "AMENT_SQUAD_EMBLEM_CRANE\020\005\022#\n\037TOURNAMENT"
-    "_SQUAD_EMBLEM_THUNDER\020\006\022!\n\035TOURNAMENT_SQ"
-    "UAD_EMBLEM_BAGUA\020\007\022$\n TOURNAMENT_SQUAD_E"
-    "MBLEM_CAULDRON\020\010*\305\002\n\024TournamentMatchStat"
-    "e\022&\n\"TOURNAMENT_MATCH_STATE_UNSPECIFIED\020"
-    "\000\022+\n\'TOURNAMENT_MATCH_STATE_WAITING_OPPO"
-    "NENT\020\001\022 \n\034TOURNAMENT_MATCH_STATE_READY\020\002"
-    "\022$\n TOURNAMENT_MATCH_STATE_IN_BATTLE\020\003\022#"
-    "\n\037TOURNAMENT_MATCH_STATE_FINISHED\020\004\022\036\n\032T"
-    "OURNAMENT_MATCH_STATE_BYE\020\005\022\"\n\036TOURNAMEN"
-    "T_MATCH_STATE_FORFEIT\020\006\022\'\n#TOURNAMENT_MA"
-    "TCH_STATE_INTERMISSION\020\007*\212\003\n\030TournamentR"
-    "ewardTierKind\022&\n\"TOURNAMENT_REWARD_TIER_"
-    "UNSPECIFIED\020\000\022#\n\037TOURNAMENT_REWARD_TIER_"
-    "CHAMPION\020\001\022$\n TOURNAMENT_REWARD_TIER_RUN"
-    "NER_UP\020\002\022\037\n\033TOURNAMENT_REWARD_TIER_TOP4\020"
-    "\003\022\037\n\033TOURNAMENT_REWARD_TIER_TOP8\020\004\022 \n\034TO"
-    "URNAMENT_REWARD_TIER_TOP16\020\005\022&\n\"TOURNAME"
-    "NT_REWARD_TIER_PARTICIPANT\020\006\022 \n\034TOURNAME"
-    "NT_REWARD_TIER_CHEER\020\007\022&\n\"TOURNAMENT_REW"
-    "ARD_TIER_THIRD_PLACE\020\010\022%\n!TOURNAMENT_REW"
-    "ARD_TIER_PREDICTION\020\t*\307\001\n\035TournamentRewa"
-    "rdDeliveryState\022*\n&TOURNAMENT_REWARD_DEL"
-    "IVERY_UNSPECIFIED\020\000\022(\n$TOURNAMENT_REWARD"
-    "_DELIVERY_CLAIMABLE\020\001\022&\n\"TOURNAMENT_REWA"
-    "RD_DELIVERY_CLAIMED\020\002\022(\n$TOURNAMENT_REWA"
-    "RD_DELIVERY_ABANDONED\020\003*\342\001\n\026TournamentHi"
-    "ghlightTag\022(\n$TOURNAMENT_HIGHLIGHT_TAG_U"
-    "NSPECIFIED\020\000\022\"\n\036TOURNAMENT_HIGHLIGHT_TAG"
-    "_FINAL\020\001\022)\n%TOURNAMENT_HIGHLIGHT_TAG_BO3"
-    "_THRILLER\020\002\022(\n$TOURNAMENT_HIGHLIGHT_TAG_"
-    "THIRD_PLACE\020\003\022%\n!TOURNAMENT_HIGHLIGHT_TA"
-    "G_HIGH_MVP\020\0042\311\037\n\014MatchService\022^\n\023GetNetw"
-    "orkProbePlan\022!.match.GetNetworkProbePlan"
-    "Request\032\".match.GetNetworkProbePlanRespo"
-    "nse\"\000\022[\n\022CommitNetworkProbe\022 .match.Comm"
-    "itNetworkProbeRequest\032!.match.CommitNetw"
-    "orkProbeResponse\"\000\022@\n\tJoinQueue\022\027.match."
-    "JoinQueueRequest\032\030.match.JoinQueueRespon"
-    "se\"\000\0222\n\013CancelQueue\022\031.match.CancelQueueR"
-    "equest\032\006.Empty\"\000\022O\n\016GetQueueStatus\022\034.mat"
-    "ch.GetQueueStatusRequest\032\035.match.GetQueu"
-    "eStatusResponse\"\000\022R\n\017ChallengePlayer\022\035.m"
-    "atch.ChallengePlayerRequest\032\036.match.Chal"
-    "lengePlayerResponse\"\000\022U\n\020RespondChalleng"
-    "e\022\036.match.RespondChallengeRequest\032\037.matc"
-    "h.RespondChallengeResponse\"\000\022A\n\025NotifyCh"
-    "allengeInvite\022\031.match.ChallengeInviteS2C"
-    "\032\006.Empty\"\005\210\231\310\001\002\022A\n\025NotifyChallengeResult"
-    "\022\031.match.ChallengeResultS2C\032\006.Empty\"\005\210\231\310"
-    "\001\002\022F\n\013WatchBattle\022\031.match.WatchBattleReq"
-    "uest\032\032.match.WatchBattleResponse\"\000\022R\n\023Re"
-    "questBattleTicket\022\033.RequestBattleTicketR"
-    "equest\032\034.RequestBattleTicketResponse\"\000\022a"
-    "\n\024ListWatchableBattles\022\".match.ListWatch"
-    "ableBattlesRequest\032#.match.ListWatchable"
-    "BattlesResponse\"\000\022X\n\021ListBattleReports\022\037"
-    ".match.ListBattleReportsRequest\032 .match."
-    "ListBattleReportsResponse\"\000\022R\n\017GetBattle"
-    "Report\022\035.match.GetBattleReportRequest\032\036."
-    "match.GetBattleReportResponse\"\000\022X\n\021ListB"
-    "attleScripts\022\037.match.ListBattleScriptsRe"
-    "quest\032 .match.ListBattleScriptsResponse\""
-    "\000\022[\n\022SubmitBattleScript\022 .match.SubmitBa"
-    "ttleScriptRequest\032!.match.SubmitBattleSc"
-    "riptResponse\"\000\022[\n\022DeleteBattleScript\022 .m"
-    "atch.DeleteBattleScriptRequest\032!.match.D"
-    "eleteBattleScriptResponse\"\000\022g\n\026SetBattle"
-    "ScriptLoadout\022$.match.SetBattleScriptLoa"
-    "doutRequest\032%.match.SetBattleScriptLoado"
-    "utResponse\"\000\022U\n\020GetRankedProfile\022\036.match"
-    ".GetRankedProfileRequest\032\037.match.GetRank"
-    "edProfileResponse\"\000\022U\n\020SaveRankedPreset\022"
-    "\036.match.SaveRankedPresetRequest\032\037.match."
-    "SaveRankedPresetResponse\"\000\022a\n\024UpdateRank"
-    "edCosmetic\022\".match.UpdateRankedCosmeticR"
-    "equest\032#.match.UpdateRankedCosmeticRespo"
-    "nse\"\000\022d\n\025GetRankedBattleResult\022#.match.G"
-    "etRankedBattleResultRequest\032$.match.GetR"
-    "ankedBattleResultResponse\"\000\022d\n\025GetTourna"
-    "mentOverview\022#.match.GetTournamentOvervi"
-    "ewRequest\032$.match.GetTournamentOverviewR"
-    "esponse\"\000\022d\n\025CreateTournamentSquad\022#.mat"
-    "ch.CreateTournamentSquadRequest\032$.match."
-    "CreateTournamentSquadResponse\"\000\022g\n\026Invit"
-    "eTournamentMember\022$.match.InviteTourname"
-    "ntMemberRequest\032%.match.InviteTournament"
-    "MemberResponse\"\000\022j\n\027RespondTournamentInv"
-    "ite\022%.match.RespondTournamentInviteReque"
-    "st\032&.match.RespondTournamentInviteRespon"
-    "se\"\000\022a\n\024LeaveTournamentSquad\022\".match.Lea"
-    "veTournamentSquadRequest\032#.match.LeaveTo"
-    "urnamentSquadResponse\"\000\022g\n\026UpdateTournam"
-    "entLineup\022$.match.UpdateTournamentLineup"
-    "Request\032%.match.UpdateTournamentLineupRe"
-    "sponse\"\000\022j\n\027RegisterTournamentSquad\022%.ma"
-    "tch.RegisterTournamentSquadRequest\032&.mat"
-    "ch.RegisterTournamentSquadResponse\"\000\022j\n\027"
-    "ListTournamentStandings\022%.match.ListTour"
-    "namentStandingsRequest\032&.match.ListTourn"
-    "amentStandingsResponse\"\000\022a\n\024StartTournam"
-    "entMatch\022\".match.StartTournamentMatchReq"
-    "uest\032#.match.StartTournamentMatchRespons"
-    "e\"\000\022a\n\024CheerTournamentSquad\022\".match.Chee"
-    "rTournamentSquadRequest\032#.match.CheerTou"
-    "rnamentSquadResponse\"\000\022d\n\025ClaimTournamen"
-    "tReward\022#.match.ClaimTournamentRewardReq"
-    "uest\032$.match.ClaimTournamentRewardRespon"
-    "se\"\000\022m\n\030SaluteTournamentChampion\022&.match"
-    ".SaluteTournamentChampionRequest\032\'.match"
-    ".SaluteTournamentChampionResponse\"\000\022v\n\033S"
-    "endTournamentSpectateCheer\022).match.SendT"
-    "ournamentSpectateCheerRequest\032*.match.Se"
-    "ndTournamentSpectateCheerResponse\"\000\022s\n\032G"
-    "etTournamentSpectateCheer\022(.match.GetTou"
-    "rnamentSpectateCheerRequest\032).match.GetT"
-    "ournamentSpectateCheerResponse\"\000\022v\n\033Upda"
-    "teTournamentSquadEmblem\022).match.UpdateTo"
-    "urnamentSquadEmblemRequest\032*.match.Updat"
-    "eTournamentSquadEmblemResponse\"\000\022d\n\025Star"
-    "tTournamentWarmup\022#.match.StartTournamen"
-    "tWarmupRequest\032$.match.StartTournamentWa"
-    "rmupResponse\"\000\022g\n\026PredictTournamentMatch"
-    "\022$.match.PredictTournamentMatchRequest\032%"
-    ".match.PredictTournamentMatchResponse\"\000\022"
-    "y\n\034GetTournamentPredictionBoard\022*.match."
-    "GetTournamentPredictionBoardRequest\032+.ma"
-    "tch.GetTournamentPredictionBoardResponse"
-    "\"\000\022a\n\024BanTournamentLeyline\022\".match.BanTo"
-    "urnamentLeylineRequest\032#.match.BanTourna"
-    "mentLeylineResponse\"\000\022j\n\027GetTournamentHi"
-    "ghlights\022%.match.GetTournamentHighlights"
-    "Request\032&.match.GetTournamentHighlightsR"
-    "esponse\"\000\032\005\210\250\303\001\001B\021Z\013match/match\230\324a\025b\006pro"
-    "to3"
+    "\001(\004\"K\n\025JianghuDuelMemberView\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n\tconfirmed\030\003 \001(\010"
+    "\"\341\004\n\025JianghuDuelInviteView\022\026\n\016duel_invit"
+    "e_id\030\001 \001(\004\022)\n\twrit_tier\030\002 \001(\0162\026.match.Ji"
+    "anghuWritTier\022\021\n\tteam_size\030\003 \001(\r\022,\n\005stat"
+    "e\030\004 \001(\0162\035.match.JianghuDuelInviteState\022\035"
+    "\n\025challenger_captain_id\030\005 \001(\004\022\037\n\027challen"
+    "ger_captain_name\030\006 \001(\t\022\031\n\021target_captain"
+    "_id\030\007 \001(\004\022\033\n\023target_captain_name\030\010 \001(\t\022\027"
+    "\n\017side_a_guild_id\030\t \001(\004\022\031\n\021side_a_guild_"
+    "name\030\n \001(\t\022\027\n\017side_b_guild_id\030\013 \001(\004\022\031\n\021s"
+    "ide_b_guild_name\030\014 \001(\t\0228\n\022challenger_mem"
+    "bers\030\r \003(\0132\034.match.JianghuDuelMemberView"
+    "\0224\n\016target_members\030\016 \003(\0132\034.match.Jianghu"
+    "DuelMemberView\022\025\n\rcreated_at_ms\030\017 \001(\004\022\025\n"
+    "\rexpires_at_ms\030\020 \001(\004\022\033\n\023confirm_deadline"
+    "_ms\030\021 \001(\004\022\021\n\tbattle_id\030\022 \001(\004\022\026\n\016server_t"
+    "ime_ms\030\023 \001(\004\"\237\001\n\036CreateJianghuDuelInvite"
+    "Request\022\030\n\020target_player_id\030\001 \001(\004\022)\n\twri"
+    "t_tier\030\002 \001(\0162\026.match.JianghuWritTier\022\035\n\025"
+    "challenger_member_ids\030\003 \003(\004\022\031\n\021target_me"
+    "mber_ids\030\004 \003(\004\"w\n\037CreateJianghuDuelInvit"
+    "eResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
+    "foMessage\022,\n\006invite\030\002 \001(\0132\034.match.Jiangh"
+    "uDuelInviteView\"H\n\037ConfirmJianghuDuelMem"
+    "berRequest\022\026\n\016duel_invite_id\030\001 \001(\004\022\r\n\005ag"
+    "ree\030\002 \001(\010\"x\n ConfirmJianghuDuelMemberRes"
+    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
+    "ssage\022,\n\006invite\030\002 \001(\0132\034.match.JianghuDue"
+    "lInviteView\"I\n\037RespondJianghuDuelInviteR"
+    "equest\022\026\n\016duel_invite_id\030\001 \001(\004\022\016\n\006accept"
+    "\030\002 \001(\010\"x\n RespondJianghuDuelInviteRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022,\n\006invite\030\002 \001(\0132\034.match.JianghuDuelIn"
+    "viteView\"\266\001\n\033JianghuGrudgeBattleLogEntry"
+    "\022\021\n\tbattle_id\030\001 \001(\004\022\030\n\020outcome_for_self\030"
+    "\002 \001(\r\022\024\n\014total_rounds\030\003 \001(\r\022)\n\twrit_tier"
+    "\030\004 \001(\0162\026.match.JianghuWritTier\022\021\n\tteam_s"
+    "ize\030\005 \001(\r\022\026\n\016finished_at_ms\030\006 \001(\004\"\373\001\n\022Ji"
+    "anghuGrudgeEntry\022\026\n\016peer_player_id\030\001 \001(\004"
+    "\022\021\n\tpeer_name\030\002 \001(\t\022\014\n\004wins\030\003 \001(\r\022\016\n\006los"
+    "ses\030\004 \001(\r\022\r\n\005draws\030\005 \001(\r\022\022\n\nwin_streak\030\006"
+    " \001(\r\022\023\n\013lose_streak\030\007 \001(\r\022\026\n\016last_battle"
+    "_ms\030\010 \001(\004\022\023\n\013peer_online\030\t \001(\010\0227\n\013recent"
+    "_logs\030\n \003(\0132\".match.JianghuGrudgeBattleL"
+    "ogEntry\"\033\n\031ListJianghuGrudgesRequest\"\276\001\n"
+    "\032ListJianghuGrudgesResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\022*\n\007grudges\030\002"
+    " \003(\0132\031.match.JianghuGrudgeEntry\0224\n\016activ"
+    "e_invites\030\003 \003(\0132\034.match.JianghuDuelInvit"
+    "eView\022\026\n\016server_time_ms\030\004 \001(\004\"5\n\033Dismiss"
+    "JianghuGrudgeRequest\022\026\n\016peer_player_id\030\001"
+    " \001(\004\"F\n\034DismissJianghuGrudgeResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\"D\n\024"
+    "JianghuDuelInviteS2C\022,\n\006invite\030\001 \001(\0132\034.m"
+    "atch.JianghuDuelInviteView\"Y\n\024JianghuDue"
+    "lStatusS2C\022,\n\006invite\030\001 \001(\0132\034.match.Jiang"
+    "huDuelInviteView\022\023\n\013reason_code\030\002 \001(\t*\346\002"
+    "\n\tMatchMode\022\032\n\026MATCH_MODE_UNSPECIFIED\020\000\022"
+    "\022\n\016MATCH_MODE_5V5\020\001\022\022\n\016MATCH_MODE_3V3\020\002\022"
+    "\022\n\016MATCH_MODE_1V1\020\003\022\027\n\023MATCH_MODE_PVE_SO"
+    "LO\020\004\022\027\n\023MATCH_MODE_PVE_TEAM\020\005\022\034\n\030MATCH_M"
+    "ODE_PVP_CHALLENGE\020\006\022\027\n\023MATCH_MODE_PVP_TE"
+    "AM\020\007\022\033\n\027MATCH_MODE_POLARITY_5V5\020\010\022\034\n\030MAT"
+    "CH_MODE_GUILD_WAR_PVP\020\t\022\036\n\032MATCH_MODE_GU"
+    "ILD_WAR_SIEGE\020\n\022 \n\034MATCH_MODE_SEASON_TOU"
+    "RNAMENT\020\013\022\033\n\027MATCH_MODE_JIANGHU_DUEL\020\014*\247"
+    "\001\n\nQueueState\022\033\n\027QUEUE_STATE_UNSPECIFIED"
+    "\020\000\022\026\n\022QUEUE_STATE_QUEUED\020\001\022\027\n\023QUEUE_STAT"
+    "E_MATCHED\020\002\022\025\n\021QUEUE_STATE_READY\020\003\022\030\n\024QU"
+    "EUE_STATE_ENTERING\020\004\022\032\n\026QUEUE_STATE_NOT_"
+    "QUEUED\020\005*j\n\021eSpectateDelivery\022\032\n\026SPECTAT"
+    "E_DELIVERY_NONE\020\000\022\034\n\030SPECTATE_DELIVERY_D"
+    "IRECT\020\001\022\033\n\027SPECTATE_DELIVERY_LOBBY\020\002*\247\001\n"
+    "\027BattleScriptReviewState\022$\n BATTLE_SCRIP"
+    "T_REVIEW_UNSPECIFIED\020\000\022 \n\034BATTLE_SCRIPT_"
+    "REVIEW_PENDING\020\001\022!\n\035BATTLE_SCRIPT_REVIEW"
+    "_APPROVED\020\002\022!\n\035BATTLE_SCRIPT_REVIEW_REJE"
+    "CTED\020\003*\250\001\n\nRankedTier\022\033\n\027RANKED_TIER_UNS"
+    "PECIFIED\020\000\022\026\n\022RANKED_TIER_CHUSHI\020\001\022\030\n\024RA"
+    "NKED_TIER_QINGFENG\020\002\022\030\n\024RANKED_TIER_YUNZ"
+    "HANG\020\003\022\027\n\023RANKED_TIER_TIANSHU\020\004\022\030\n\024RANKE"
+    "D_TIER_WUSHUANG\020\005*\232\001\n\021RankedSeasonState\022"
+    "#\n\037RANKED_SEASON_STATE_UNSPECIFIED\020\000\022\036\n\032"
+    "RANKED_SEASON_STATE_ACTIVE\020\001\022 \n\034RANKED_S"
+    "EASON_STATE_SETTLING\020\002\022\036\n\032RANKED_SEASON_"
+    "STATE_CLOSED\020\003*\234\002\n\020RankedRewardKind\022\"\n\036R"
+    "ANKED_REWARD_KIND_UNSPECIFIED\020\000\022 \n\034RANKE"
+    "D_REWARD_AVATAR_PATTERN\020\001\022!\n\035RANKED_REWA"
+    "RD_CARD_BACKGROUND\020\002\022\032\n\026RANKED_REWARD_TA"
+    "LISMAN\020\003\022\034\n\030RANKED_REWARD_TIER_BADGE\020\004\022\034"
+    "\n\030RANKED_REWARD_TIER_TITLE\020\005\022&\n\"RANKED_R"
+    "EWARD_CHAMPION_INSCRIPTION\020\006\022\037\n\033RANKED_R"
+    "EWARD_WIN_MILESTONE\020\007*\304\001\n\027RankedMatchRat"
+    "ingStatus\022#\n\037RANKED_MATCH_RATING_UNSPECI"
+    "FIED\020\000\022\037\n\033RANKED_MATCH_RATING_PENDING\020\001\022"
+    "!\n\035RANKED_MATCH_RATING_CONFIRMED\020\002\022\034\n\030RA"
+    "NKED_MATCH_RATING_VOID\020\003\022\"\n\036RANKED_MATCH"
+    "_RATING_ZERO_ROUND\020\004*\263\001\n\017TournamentStage"
+    "\022 \n\034TOURNAMENT_STAGE_UNSPECIFIED\020\000\022!\n\035TO"
+    "URNAMENT_STAGE_REGISTRATION\020\001\022\036\n\032TOURNAM"
+    "ENT_STAGE_QUALIFIER\020\002\022\035\n\031TOURNAMENT_STAG"
+    "E_KNOCKOUT\020\003\022\034\n\030TOURNAMENT_STAGE_SETTLED"
+    "\020\004*\371\001\n\024TournamentSquadState\022&\n\"TOURNAMEN"
+    "T_SQUAD_STATE_UNSPECIFIED\020\000\022 \n\034TOURNAMEN"
+    "T_SQUAD_STATE_DRAFT\020\001\022%\n!TOURNAMENT_SQUA"
+    "D_STATE_REGISTERED\020\002\022%\n!TOURNAMENT_SQUAD"
+    "_STATE_ELIMINATED\020\003\022#\n\037TOURNAMENT_SQUAD_"
+    "STATE_CHAMPION\020\004\022$\n TOURNAMENT_SQUAD_STA"
+    "TE_DISBANDED\020\005*\255\001\n\024TournamentMemberRole\022"
+    "&\n\"TOURNAMENT_MEMBER_ROLE_UNSPECIFIED\020\000\022"
+    "\"\n\036TOURNAMENT_MEMBER_ROLE_CAPTAIN\020\001\022\"\n\036T"
+    "OURNAMENT_MEMBER_ROLE_STARTER\020\002\022%\n!TOURN"
+    "AMENT_MEMBER_ROLE_SUBSTITUTE\020\003*\254\001\n\024Tourn"
+    "amentMatchPhase\022&\n\"TOURNAMENT_MATCH_PHAS"
+    "E_UNSPECIFIED\020\000\022$\n TOURNAMENT_MATCH_PHAS"
+    "E_QUALIFIER\020\001\022#\n\037TOURNAMENT_MATCH_PHASE_"
+    "KNOCKOUT\020\002\022!\n\035TOURNAMENT_MATCH_PHASE_WAR"
+    "MUP\020\003*\337\002\n\025TournamentSquadEmblem\022\'\n#TOURN"
+    "AMENT_SQUAD_EMBLEM_UNSPECIFIED\020\000\022!\n\035TOUR"
+    "NAMENT_SQUAD_EMBLEM_SWORD\020\001\022!\n\035TOURNAMEN"
+    "T_SQUAD_EMBLEM_TAIJI\020\002\022#\n\037TOURNAMENT_SQU"
+    "AD_EMBLEM_FURNACE\020\003\022!\n\035TOURNAMENT_SQUAD_"
+    "EMBLEM_LOTUS\020\004\022!\n\035TOURNAMENT_SQUAD_EMBLE"
+    "M_CRANE\020\005\022#\n\037TOURNAMENT_SQUAD_EMBLEM_THU"
+    "NDER\020\006\022!\n\035TOURNAMENT_SQUAD_EMBLEM_BAGUA\020"
+    "\007\022$\n TOURNAMENT_SQUAD_EMBLEM_CAULDRON\020\010*"
+    "\305\002\n\024TournamentMatchState\022&\n\"TOURNAMENT_M"
+    "ATCH_STATE_UNSPECIFIED\020\000\022+\n\'TOURNAMENT_M"
+    "ATCH_STATE_WAITING_OPPONENT\020\001\022 \n\034TOURNAM"
+    "ENT_MATCH_STATE_READY\020\002\022$\n TOURNAMENT_MA"
+    "TCH_STATE_IN_BATTLE\020\003\022#\n\037TOURNAMENT_MATC"
+    "H_STATE_FINISHED\020\004\022\036\n\032TOURNAMENT_MATCH_S"
+    "TATE_BYE\020\005\022\"\n\036TOURNAMENT_MATCH_STATE_FOR"
+    "FEIT\020\006\022\'\n#TOURNAMENT_MATCH_STATE_INTERMI"
+    "SSION\020\007*\212\003\n\030TournamentRewardTierKind\022&\n\""
+    "TOURNAMENT_REWARD_TIER_UNSPECIFIED\020\000\022#\n\037"
+    "TOURNAMENT_REWARD_TIER_CHAMPION\020\001\022$\n TOU"
+    "RNAMENT_REWARD_TIER_RUNNER_UP\020\002\022\037\n\033TOURN"
+    "AMENT_REWARD_TIER_TOP4\020\003\022\037\n\033TOURNAMENT_R"
+    "EWARD_TIER_TOP8\020\004\022 \n\034TOURNAMENT_REWARD_T"
+    "IER_TOP16\020\005\022&\n\"TOURNAMENT_REWARD_TIER_PA"
+    "RTICIPANT\020\006\022 \n\034TOURNAMENT_REWARD_TIER_CH"
+    "EER\020\007\022&\n\"TOURNAMENT_REWARD_TIER_THIRD_PL"
+    "ACE\020\010\022%\n!TOURNAMENT_REWARD_TIER_PREDICTI"
+    "ON\020\t*\307\001\n\035TournamentRewardDeliveryState\022*"
+    "\n&TOURNAMENT_REWARD_DELIVERY_UNSPECIFIED"
+    "\020\000\022(\n$TOURNAMENT_REWARD_DELIVERY_CLAIMAB"
+    "LE\020\001\022&\n\"TOURNAMENT_REWARD_DELIVERY_CLAIM"
+    "ED\020\002\022(\n$TOURNAMENT_REWARD_DELIVERY_ABAND"
+    "ONED\020\003*\342\001\n\026TournamentHighlightTag\022(\n$TOU"
+    "RNAMENT_HIGHLIGHT_TAG_UNSPECIFIED\020\000\022\"\n\036T"
+    "OURNAMENT_HIGHLIGHT_TAG_FINAL\020\001\022)\n%TOURN"
+    "AMENT_HIGHLIGHT_TAG_BO3_THRILLER\020\002\022(\n$TO"
+    "URNAMENT_HIGHLIGHT_TAG_THIRD_PLACE\020\003\022%\n!"
+    "TOURNAMENT_HIGHLIGHT_TAG_HIGH_MVP\020\004*s\n\017J"
+    "ianghuWritTier\022!\n\035JIANGHU_WRIT_TIER_UNSP"
+    "ECIFIED\020\000\022\034\n\030JIANGHU_WRIT_TIER_SILVER\020\001\022"
+    "\037\n\033JIANGHU_WRIT_TIER_GOLD_ITEM\020\002*\323\002\n\026Jia"
+    "nghuDuelInviteState\022)\n%JIANGHU_DUEL_INVI"
+    "TE_STATE_UNSPECIFIED\020\000\0226\n2JIANGHU_DUEL_I"
+    "NVITE_STATE_AWAITING_CHALLENGER_TEAM\020\001\022,"
+    "\n(JIANGHU_DUEL_INVITE_STATE_PENDING_TARG"
+    "ET\020\002\0222\n.JIANGHU_DUEL_INVITE_STATE_AWAITI"
+    "NG_TARGET_TEAM\020\003\022%\n!JIANGHU_DUEL_INVITE_"
+    "STATE_MATCHED\020\004\022&\n\"JIANGHU_DUEL_INVITE_S"
+    "TATE_DECLINED\020\005\022%\n!JIANGHU_DUEL_INVITE_S"
+    "TATE_ABORTED\020\0062\341$\n\014MatchService\022^\n\023GetNe"
+    "tworkProbePlan\022!.match.GetNetworkProbePl"
+    "anRequest\032\".match.GetNetworkProbePlanRes"
+    "ponse\"\000\022[\n\022CommitNetworkProbe\022 .match.Co"
+    "mmitNetworkProbeRequest\032!.match.CommitNe"
+    "tworkProbeResponse\"\000\022@\n\tJoinQueue\022\027.matc"
+    "h.JoinQueueRequest\032\030.match.JoinQueueResp"
+    "onse\"\000\0222\n\013CancelQueue\022\031.match.CancelQueu"
+    "eRequest\032\006.Empty\"\000\022O\n\016GetQueueStatus\022\034.m"
+    "atch.GetQueueStatusRequest\032\035.match.GetQu"
+    "eueStatusResponse\"\000\022R\n\017ChallengePlayer\022\035"
+    ".match.ChallengePlayerRequest\032\036.match.Ch"
+    "allengePlayerResponse\"\000\022U\n\020RespondChalle"
+    "nge\022\036.match.RespondChallengeRequest\032\037.ma"
+    "tch.RespondChallengeResponse\"\000\022A\n\025Notify"
+    "ChallengeInvite\022\031.match.ChallengeInviteS"
+    "2C\032\006.Empty\"\005\210\231\310\001\002\022A\n\025NotifyChallengeResu"
+    "lt\022\031.match.ChallengeResultS2C\032\006.Empty\"\005\210"
+    "\231\310\001\002\022F\n\013WatchBattle\022\031.match.WatchBattleR"
+    "equest\032\032.match.WatchBattleResponse\"\000\022R\n\023"
+    "RequestBattleTicket\022\033.RequestBattleTicke"
+    "tRequest\032\034.RequestBattleTicketResponse\"\000"
+    "\022a\n\024ListWatchableBattles\022\".match.ListWat"
+    "chableBattlesRequest\032#.match.ListWatchab"
+    "leBattlesResponse\"\000\022X\n\021ListBattleReports"
+    "\022\037.match.ListBattleReportsRequest\032 .matc"
+    "h.ListBattleReportsResponse\"\000\022R\n\017GetBatt"
+    "leReport\022\035.match.GetBattleReportRequest\032"
+    "\036.match.GetBattleReportResponse\"\000\022X\n\021Lis"
+    "tBattleScripts\022\037.match.ListBattleScripts"
+    "Request\032 .match.ListBattleScriptsRespons"
+    "e\"\000\022[\n\022SubmitBattleScript\022 .match.Submit"
+    "BattleScriptRequest\032!.match.SubmitBattle"
+    "ScriptResponse\"\000\022[\n\022DeleteBattleScript\022 "
+    ".match.DeleteBattleScriptRequest\032!.match"
+    ".DeleteBattleScriptResponse\"\000\022g\n\026SetBatt"
+    "leScriptLoadout\022$.match.SetBattleScriptL"
+    "oadoutRequest\032%.match.SetBattleScriptLoa"
+    "doutResponse\"\000\022U\n\020GetRankedProfile\022\036.mat"
+    "ch.GetRankedProfileRequest\032\037.match.GetRa"
+    "nkedProfileResponse\"\000\022U\n\020SaveRankedPrese"
+    "t\022\036.match.SaveRankedPresetRequest\032\037.matc"
+    "h.SaveRankedPresetResponse\"\000\022a\n\024UpdateRa"
+    "nkedCosmetic\022\".match.UpdateRankedCosmeti"
+    "cRequest\032#.match.UpdateRankedCosmeticRes"
+    "ponse\"\000\022d\n\025GetRankedBattleResult\022#.match"
+    ".GetRankedBattleResultRequest\032$.match.Ge"
+    "tRankedBattleResultResponse\"\000\022d\n\025GetTour"
+    "namentOverview\022#.match.GetTournamentOver"
+    "viewRequest\032$.match.GetTournamentOvervie"
+    "wResponse\"\000\022d\n\025CreateTournamentSquad\022#.m"
+    "atch.CreateTournamentSquadRequest\032$.matc"
+    "h.CreateTournamentSquadResponse\"\000\022g\n\026Inv"
+    "iteTournamentMember\022$.match.InviteTourna"
+    "mentMemberRequest\032%.match.InviteTourname"
+    "ntMemberResponse\"\000\022j\n\027RespondTournamentI"
+    "nvite\022%.match.RespondTournamentInviteReq"
+    "uest\032&.match.RespondTournamentInviteResp"
+    "onse\"\000\022a\n\024LeaveTournamentSquad\022\".match.L"
+    "eaveTournamentSquadRequest\032#.match.Leave"
+    "TournamentSquadResponse\"\000\022g\n\026UpdateTourn"
+    "amentLineup\022$.match.UpdateTournamentLine"
+    "upRequest\032%.match.UpdateTournamentLineup"
+    "Response\"\000\022j\n\027RegisterTournamentSquad\022%."
+    "match.RegisterTournamentSquadRequest\032&.m"
+    "atch.RegisterTournamentSquadResponse\"\000\022j"
+    "\n\027ListTournamentStandings\022%.match.ListTo"
+    "urnamentStandingsRequest\032&.match.ListTou"
+    "rnamentStandingsResponse\"\000\022a\n\024StartTourn"
+    "amentMatch\022\".match.StartTournamentMatchR"
+    "equest\032#.match.StartTournamentMatchRespo"
+    "nse\"\000\022a\n\024CheerTournamentSquad\022\".match.Ch"
+    "eerTournamentSquadRequest\032#.match.CheerT"
+    "ournamentSquadResponse\"\000\022d\n\025ClaimTournam"
+    "entReward\022#.match.ClaimTournamentRewardR"
+    "equest\032$.match.ClaimTournamentRewardResp"
+    "onse\"\000\022m\n\030SaluteTournamentChampion\022&.mat"
+    "ch.SaluteTournamentChampionRequest\032\'.mat"
+    "ch.SaluteTournamentChampionResponse\"\000\022v\n"
+    "\033SendTournamentSpectateCheer\022).match.Sen"
+    "dTournamentSpectateCheerRequest\032*.match."
+    "SendTournamentSpectateCheerResponse\"\000\022s\n"
+    "\032GetTournamentSpectateCheer\022(.match.GetT"
+    "ournamentSpectateCheerRequest\032).match.Ge"
+    "tTournamentSpectateCheerResponse\"\000\022v\n\033Up"
+    "dateTournamentSquadEmblem\022).match.Update"
+    "TournamentSquadEmblemRequest\032*.match.Upd"
+    "ateTournamentSquadEmblemResponse\"\000\022d\n\025St"
+    "artTournamentWarmup\022#.match.StartTournam"
+    "entWarmupRequest\032$.match.StartTournament"
+    "WarmupResponse\"\000\022g\n\026PredictTournamentMat"
+    "ch\022$.match.PredictTournamentMatchRequest"
+    "\032%.match.PredictTournamentMatchResponse\""
+    "\000\022y\n\034GetTournamentPredictionBoard\022*.matc"
+    "h.GetTournamentPredictionBoardRequest\032+."
+    "match.GetTournamentPredictionBoardRespon"
+    "se\"\000\022a\n\024BanTournamentLeyline\022\".match.Ban"
+    "TournamentLeylineRequest\032#.match.BanTour"
+    "namentLeylineResponse\"\000\022j\n\027GetTournament"
+    "Highlights\022%.match.GetTournamentHighligh"
+    "tsRequest\032&.match.GetTournamentHighlight"
+    "sResponse\"\000\022j\n\027CreateJianghuDuelInvite\022%"
+    ".match.CreateJianghuDuelInviteRequest\032&."
+    "match.CreateJianghuDuelInviteResponse\"\000\022"
+    "m\n\030ConfirmJianghuDuelMember\022&.match.Conf"
+    "irmJianghuDuelMemberRequest\032\'.match.Conf"
+    "irmJianghuDuelMemberResponse\"\000\022m\n\030Respon"
+    "dJianghuDuelInvite\022&.match.RespondJiangh"
+    "uDuelInviteRequest\032\'.match.RespondJiangh"
+    "uDuelInviteResponse\"\000\022[\n\022ListJianghuGrud"
+    "ges\022 .match.ListJianghuGrudgesRequest\032!."
+    "match.ListJianghuGrudgesResponse\"\000\022a\n\024Di"
+    "smissJianghuGrudge\022\".match.DismissJiangh"
+    "uGrudgeRequest\032#.match.DismissJianghuGru"
+    "dgeResponse\"\000\022E\n\027NotifyJianghuDuelInvite"
+    "\022\033.match.JianghuDuelInviteS2C\032\006.Empty\"\005\210"
+    "\231\310\001\002\022E\n\027NotifyJianghuDuelStatus\022\033.match."
+    "JianghuDuelStatusS2C\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303"
+    "\001\001B\021Z\013match/match\230\324a\025b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_deps[7] = {
@@ -21319,13 +24363,13 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fservice_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto = {
     false,
     false,
-    26843,
+    30309,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto,
     "proto/match/match_service.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_deps,
     7,
-    103,
+    119,
     schemas,
     file_message_globals,
     TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto::offsets,
@@ -21339,7 +24383,7 @@ MatchMode_descriptor() {
   return file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t MatchMode_internal_data_[] = {
-    786432u, 0u, };
+    851968u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 QueueState_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto);
@@ -21452,6 +24496,20 @@ TournamentHighlightTag_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t TournamentHighlightTag_internal_data_[] = {
     327680u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+JianghuWritTier_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto);
+  return file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[17];
+}
+PROTOBUF_CONSTINIT const uint32_t JianghuWritTier_internal_data_[] = {
+    196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+JianghuDuelInviteState_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto);
+  return file_level_enum_descriptors_proto_2fmatch_2fmatch_5fservice_2eproto[18];
+}
+PROTOBUF_CONSTINIT const uint32_t JianghuDuelInviteState_internal_data_[] = {
+    458752u, 0u, };
 // ===================================================================
 
 JoinQueueRequest::JoinQueueRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -55454,6 +58512,4602 @@ void GetTournamentHighlightsResponse::InternalSwap(GetTournamentHighlightsRespon
 }
 
 ::google::protobuf::Metadata GetTournamentHighlightsResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuDuelMemberView::JianghuDuelMemberView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelMemberView_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.JianghuDuelMemberView)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelMemberView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::JianghuDuelMemberView& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+JianghuDuelMemberView::JianghuDuelMemberView(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const JianghuDuelMemberView& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelMemberView_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JianghuDuelMemberView* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, confirmed_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::confirmed_));
+
+  // @@protoc_insertion_point(copy_constructor:match.JianghuDuelMemberView)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelMemberView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void JianghuDuelMemberView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, confirmed_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::confirmed_));
+}
+JianghuDuelMemberView::~JianghuDuelMemberView() {
+  // @@protoc_insertion_point(destructor:match.JianghuDuelMemberView)
+  SharedDtor(*this);
+}
+inline void JianghuDuelMemberView::SharedDtor(MessageLite& self) {
+  JianghuDuelMemberView& this_ = static_cast<JianghuDuelMemberView&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuDuelMemberView_class_data_ =
+        JianghuDuelMemberView::InternalGenerateClassData_(JianghuDuelMemberView_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelMemberView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelMemberView_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuDuelMemberView_class_data_.tc_table);
+  return JianghuDuelMemberView_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelMemberView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelMemberView_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuDuelMemberView_globals_));
+  return JianghuDuelMemberView_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuDuelMemberView::ParseTableT_
+    JianghuDuelMemberView::_table_ =
+        JianghuDuelMemberView::InternalGenerateParseTable_(JianghuDuelMemberView_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuDuelMemberView::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.JianghuDuelMemberView)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.confirmed_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.confirmed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuDuelMemberView::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuDuelMemberView& this_ = static_cast<const JianghuDuelMemberView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuDuelMemberView::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuDuelMemberView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.JianghuDuelMemberView)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuDuelMemberView.name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // bool confirmed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_confirmed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_confirmed(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.JianghuDuelMemberView)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuDuelMemberView::ByteSizeLong(const MessageLite& base) {
+  const JianghuDuelMemberView& this_ = static_cast<const JianghuDuelMemberView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuDuelMemberView::ByteSizeLong() const {
+  const JianghuDuelMemberView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.JianghuDuelMemberView)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // bool confirmed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_confirmed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuDuelMemberView::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuDuelMemberView*>(&to_msg);
+  auto& from = static_cast<const JianghuDuelMemberView&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.JianghuDuelMemberView)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_confirmed() != 0) {
+        _this->_impl_.confirmed_ = from._impl_.confirmed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuDuelMemberView::CopyFrom(const JianghuDuelMemberView& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.JianghuDuelMemberView)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuDuelMemberView::InternalSwap(JianghuDuelMemberView* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.confirmed_)
+      + sizeof(JianghuDuelMemberView::_impl_.confirmed_)
+      - PROTOBUF_FIELD_OFFSET(JianghuDuelMemberView, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata JianghuDuelMemberView::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuDuelInviteView::JianghuDuelInviteView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelInviteView_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.JianghuDuelInviteView)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelInviteView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::JianghuDuelInviteView& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        challenger_members_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::JianghuDuelInviteView,
+              PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.challenger_members_)>()
+          , from.challenger_members_
+        }
+        ,
+        target_members_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::JianghuDuelInviteView,
+              PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.target_members_)>()
+          , from.target_members_
+        }
+        ,
+        challenger_captain_name_(arena, from.challenger_captain_name_),
+        target_captain_name_(arena, from.target_captain_name_),
+        side_a_guild_name_(arena, from.side_a_guild_name_),
+        side_b_guild_name_(arena, from.side_b_guild_name_) {}
+
+JianghuDuelInviteView::JianghuDuelInviteView(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const JianghuDuelInviteView& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelInviteView_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JianghuDuelInviteView* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, duel_invite_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, duel_invite_id_),
+           offsetof(Impl_, state_) -
+               offsetof(Impl_, duel_invite_id_) +
+               sizeof(Impl_::state_));
+
+  // @@protoc_insertion_point(copy_constructor:match.JianghuDuelInviteView)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelInviteView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        challenger_members_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::JianghuDuelInviteView,
+            PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.challenger_members_)>()
+         }
+        ,
+        target_members_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::JianghuDuelInviteView,
+            PROTOBUF_FIELD_OFFSET(::match::JianghuDuelInviteView, _impl_.target_members_)>()
+         }
+        ,
+        challenger_captain_name_(arena),
+        target_captain_name_(arena),
+        side_a_guild_name_(arena),
+        side_b_guild_name_(arena) {}
+
+inline void JianghuDuelInviteView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, duel_invite_id_),
+           0,
+           offsetof(Impl_, state_) -
+               offsetof(Impl_, duel_invite_id_) +
+               sizeof(Impl_::state_));
+}
+JianghuDuelInviteView::~JianghuDuelInviteView() {
+  // @@protoc_insertion_point(destructor:match.JianghuDuelInviteView)
+  SharedDtor(*this);
+}
+inline void JianghuDuelInviteView::SharedDtor(MessageLite& self) {
+  JianghuDuelInviteView& this_ = static_cast<JianghuDuelInviteView&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.challenger_captain_name_.Destroy();
+  this_._impl_.target_captain_name_.Destroy();
+  this_._impl_.side_a_guild_name_.Destroy();
+  this_._impl_.side_b_guild_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuDuelInviteView_class_data_ =
+        JianghuDuelInviteView::InternalGenerateClassData_(JianghuDuelInviteView_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelInviteView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelInviteView_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuDuelInviteView_class_data_.tc_table);
+  return JianghuDuelInviteView_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelInviteView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelInviteView_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuDuelInviteView_globals_));
+  return JianghuDuelInviteView_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuDuelInviteView::ParseTableT_
+    JianghuDuelInviteView::_table_ =
+        JianghuDuelInviteView::InternalGenerateParseTable_(JianghuDuelInviteView_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuDuelInviteView::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.JianghuDuelInviteView)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.challenger_members_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.target_members_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.challenger_captain_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.target_captain_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.side_a_guild_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.side_b_guild_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
+    ::memset(&_impl_.duel_invite_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.writ_tier_) -
+        reinterpret_cast<char*>(&_impl_.duel_invite_id_)) + sizeof(_impl_.writ_tier_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.team_size_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.confirm_deadline_ms_) -
+        reinterpret_cast<char*>(&_impl_.team_size_)) + sizeof(_impl_.confirm_deadline_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.state_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.state_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuDuelInviteView::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuDuelInviteView& this_ = static_cast<const JianghuDuelInviteView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuDuelInviteView::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuDuelInviteView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.JianghuDuelInviteView)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 duel_invite_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_duel_invite_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_duel_invite_id(), target);
+    }
+  }
+
+  // .match.JianghuWritTier writ_tier = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_writ_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_writ_tier(), target);
+    }
+  }
+
+  // uint32 team_size = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_team_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_team_size(), target);
+    }
+  }
+
+  // .match.JianghuDuelInviteState state = 4;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          4, this_._internal_state(), target);
+    }
+  }
+
+  // uint64 challenger_captain_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_challenger_captain_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_challenger_captain_id(), target);
+    }
+  }
+
+  // string challenger_captain_name = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_challenger_captain_name().empty()) {
+      const ::std::string& _s = this_._internal_challenger_captain_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuDuelInviteView.challenger_captain_name");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // uint64 target_captain_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_target_captain_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_target_captain_id(), target);
+    }
+  }
+
+  // string target_captain_name = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_target_captain_name().empty()) {
+      const ::std::string& _s = this_._internal_target_captain_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuDuelInviteView.target_captain_name");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // uint64 side_a_guild_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_side_a_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_side_a_guild_id(), target);
+    }
+  }
+
+  // string side_a_guild_name = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_side_a_guild_name().empty()) {
+      const ::std::string& _s = this_._internal_side_a_guild_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuDuelInviteView.side_a_guild_name");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // uint64 side_b_guild_id = 11;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_side_b_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_side_b_guild_id(), target);
+    }
+  }
+
+  // string side_b_guild_name = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_side_b_guild_name().empty()) {
+      const ::std::string& _s = this_._internal_side_b_guild_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuDuelInviteView.side_b_guild_name");
+      target = stream->WriteStringMaybeAliased(12, _s, target);
+    }
+  }
+
+  // repeated .match.JianghuDuelMemberView challenger_members = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_challenger_members_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_challenger_members().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              13, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated .match.JianghuDuelMemberView target_members = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_target_members_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_target_members().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              14, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint64 created_at_ms = 15;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_created_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          15, this_._internal_created_at_ms(), target);
+    }
+  }
+
+  // uint64 expires_at_ms = 16;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_expires_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          16, this_._internal_expires_at_ms(), target);
+    }
+  }
+
+  // uint64 confirm_deadline_ms = 17;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_confirm_deadline_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_confirm_deadline_ms(), target);
+    }
+  }
+
+  // uint64 battle_id = 18;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint64 server_time_ms = 19;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_server_time_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          19, this_._internal_server_time_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.JianghuDuelInviteView)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuDuelInviteView::ByteSizeLong(const MessageLite& base) {
+  const JianghuDuelInviteView& this_ = static_cast<const JianghuDuelInviteView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuDuelInviteView::ByteSizeLong() const {
+  const JianghuDuelInviteView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.JianghuDuelInviteView)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated .match.JianghuDuelMemberView challenger_members = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_challenger_members_size();
+      for (const auto& msg : this_._internal_challenger_members()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .match.JianghuDuelMemberView target_members = 14;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_target_members_size();
+      for (const auto& msg : this_._internal_target_members()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string challenger_captain_name = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_challenger_captain_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_challenger_captain_name());
+      }
+    }
+    // string target_captain_name = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_target_captain_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_captain_name());
+      }
+    }
+    // string side_a_guild_name = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_side_a_guild_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_side_a_guild_name());
+      }
+    }
+    // string side_b_guild_name = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_side_b_guild_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_side_b_guild_name());
+      }
+    }
+    // uint64 duel_invite_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_duel_invite_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_duel_invite_id());
+      }
+    }
+    // .match.JianghuWritTier writ_tier = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_writ_tier() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_writ_tier());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint32 team_size = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_team_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_size());
+      }
+    }
+    // uint64 challenger_captain_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_challenger_captain_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_challenger_captain_id());
+      }
+    }
+    // uint64 target_captain_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_target_captain_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_target_captain_id());
+      }
+    }
+    // uint64 side_a_guild_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_side_a_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_side_a_guild_id());
+      }
+    }
+    // uint64 side_b_guild_id = 11;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_side_b_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_side_b_guild_id());
+      }
+    }
+    // uint64 created_at_ms = 15;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_created_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_at_ms());
+      }
+    }
+    // uint64 expires_at_ms = 16;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_expires_at_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_expires_at_ms());
+      }
+    }
+    // uint64 confirm_deadline_ms = 17;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_confirm_deadline_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_confirm_deadline_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    // uint64 battle_id = 18;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_battle_id());
+      }
+    }
+    // uint64 server_time_ms = 19;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_server_time_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_server_time_ms());
+      }
+    }
+    // .match.JianghuDuelInviteState state = 4;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_state() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuDuelInviteView::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuDuelInviteView*>(&to_msg);
+  auto& from = static_cast<const JianghuDuelInviteView&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.JianghuDuelInviteView)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_challenger_members()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_challenger_members());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_target_members()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_target_members());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_challenger_captain_name().empty()) {
+        _this->_internal_set_challenger_captain_name(from._internal_challenger_captain_name());
+      } else {
+        if (_this->_impl_.challenger_captain_name_.IsDefault()) {
+          _this->_internal_set_challenger_captain_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_target_captain_name().empty()) {
+        _this->_internal_set_target_captain_name(from._internal_target_captain_name());
+      } else {
+        if (_this->_impl_.target_captain_name_.IsDefault()) {
+          _this->_internal_set_target_captain_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_side_a_guild_name().empty()) {
+        _this->_internal_set_side_a_guild_name(from._internal_side_a_guild_name());
+      } else {
+        if (_this->_impl_.side_a_guild_name_.IsDefault()) {
+          _this->_internal_set_side_a_guild_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_side_b_guild_name().empty()) {
+        _this->_internal_set_side_b_guild_name(from._internal_side_b_guild_name());
+      } else {
+        if (_this->_impl_.side_b_guild_name_.IsDefault()) {
+          _this->_internal_set_side_b_guild_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_duel_invite_id() != 0) {
+        _this->_impl_.duel_invite_id_ = from._impl_.duel_invite_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_writ_tier() != 0) {
+        _this->_impl_.writ_tier_ = from._impl_.writ_tier_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_team_size() != 0) {
+        _this->_impl_.team_size_ = from._impl_.team_size_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_challenger_captain_id() != 0) {
+        _this->_impl_.challenger_captain_id_ = from._impl_.challenger_captain_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_target_captain_id() != 0) {
+        _this->_impl_.target_captain_id_ = from._impl_.target_captain_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_side_a_guild_id() != 0) {
+        _this->_impl_.side_a_guild_id_ = from._impl_.side_a_guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_side_b_guild_id() != 0) {
+        _this->_impl_.side_b_guild_id_ = from._impl_.side_b_guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_created_at_ms() != 0) {
+        _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_expires_at_ms() != 0) {
+        _this->_impl_.expires_at_ms_ = from._impl_.expires_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_confirm_deadline_ms() != 0) {
+        _this->_impl_.confirm_deadline_ms_ = from._impl_.confirm_deadline_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_server_time_ms() != 0) {
+        _this->_impl_.server_time_ms_ = from._impl_.server_time_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuDuelInviteView::CopyFrom(const JianghuDuelInviteView& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.JianghuDuelInviteView)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuDuelInviteView::InternalSwap(JianghuDuelInviteView* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.challenger_members_.InternalSwap(&other->_impl_.challenger_members_);
+  _impl_.target_members_.InternalSwap(&other->_impl_.target_members_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.challenger_captain_name_, &other->_impl_.challenger_captain_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_captain_name_, &other->_impl_.target_captain_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.side_a_guild_name_, &other->_impl_.side_a_guild_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.side_b_guild_name_, &other->_impl_.side_b_guild_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.state_)
+      + sizeof(JianghuDuelInviteView::_impl_.state_)
+      - PROTOBUF_FIELD_OFFSET(JianghuDuelInviteView, _impl_.duel_invite_id_)>(
+          reinterpret_cast<char*>(&_impl_.duel_invite_id_),
+          reinterpret_cast<char*>(&other->_impl_.duel_invite_id_));
+}
+
+::google::protobuf::Metadata JianghuDuelInviteView::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CreateJianghuDuelInviteRequest::CreateJianghuDuelInviteRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CreateJianghuDuelInviteRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.CreateJianghuDuelInviteRequest)
+}
+PROTOBUF_NDEBUG_INLINE CreateJianghuDuelInviteRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::CreateJianghuDuelInviteRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        challenger_member_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::CreateJianghuDuelInviteRequest,
+              PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.challenger_member_ids_)>()
+          , from.challenger_member_ids_
+        }
+        ,
+        _challenger_member_ids_cached_byte_size_{0},
+        target_member_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::CreateJianghuDuelInviteRequest,
+              PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.target_member_ids_)>()
+          , from.target_member_ids_
+        }
+        ,
+        _target_member_ids_cached_byte_size_{0} {}
+
+CreateJianghuDuelInviteRequest::CreateJianghuDuelInviteRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CreateJianghuDuelInviteRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CreateJianghuDuelInviteRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CreateJianghuDuelInviteRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, target_player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, target_player_id_),
+           offsetof(Impl_, writ_tier_) -
+               offsetof(Impl_, target_player_id_) +
+               sizeof(Impl_::writ_tier_));
+
+  // @@protoc_insertion_point(copy_constructor:match.CreateJianghuDuelInviteRequest)
+}
+PROTOBUF_NDEBUG_INLINE CreateJianghuDuelInviteRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        challenger_member_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::CreateJianghuDuelInviteRequest,
+            PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.challenger_member_ids_)>()
+         }
+        ,
+        _challenger_member_ids_cached_byte_size_{0},
+        target_member_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::CreateJianghuDuelInviteRequest,
+            PROTOBUF_FIELD_OFFSET(::match::CreateJianghuDuelInviteRequest, _impl_.target_member_ids_)>()
+         }
+        ,
+        _target_member_ids_cached_byte_size_{0} {}
+
+inline void CreateJianghuDuelInviteRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, target_player_id_),
+           0,
+           offsetof(Impl_, writ_tier_) -
+               offsetof(Impl_, target_player_id_) +
+               sizeof(Impl_::writ_tier_));
+}
+CreateJianghuDuelInviteRequest::~CreateJianghuDuelInviteRequest() {
+  // @@protoc_insertion_point(destructor:match.CreateJianghuDuelInviteRequest)
+  SharedDtor(*this);
+}
+inline void CreateJianghuDuelInviteRequest::SharedDtor(MessageLite& self) {
+  CreateJianghuDuelInviteRequest& this_ = static_cast<CreateJianghuDuelInviteRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CreateJianghuDuelInviteRequest_class_data_ =
+        CreateJianghuDuelInviteRequest::InternalGenerateClassData_(CreateJianghuDuelInviteRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CreateJianghuDuelInviteRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CreateJianghuDuelInviteRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CreateJianghuDuelInviteRequest_class_data_.tc_table);
+  return CreateJianghuDuelInviteRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CreateJianghuDuelInviteRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CreateJianghuDuelInviteRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CreateJianghuDuelInviteRequest_globals_));
+  return CreateJianghuDuelInviteRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CreateJianghuDuelInviteRequest::ParseTableT_
+    CreateJianghuDuelInviteRequest::_table_ =
+        CreateJianghuDuelInviteRequest::InternalGenerateParseTable_(CreateJianghuDuelInviteRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CreateJianghuDuelInviteRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.CreateJianghuDuelInviteRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.challenger_member_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.target_member_ids_.Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+    ::memset(&_impl_.target_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.writ_tier_) -
+        reinterpret_cast<char*>(&_impl_.target_player_id_)) + sizeof(_impl_.writ_tier_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CreateJianghuDuelInviteRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CreateJianghuDuelInviteRequest& this_ = static_cast<const CreateJianghuDuelInviteRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CreateJianghuDuelInviteRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CreateJianghuDuelInviteRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.CreateJianghuDuelInviteRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 target_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_target_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_target_player_id(), target);
+    }
+  }
+
+  // .match.JianghuWritTier writ_tier = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_writ_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_writ_tier(), target);
+    }
+  }
+
+  // repeated uint64 challenger_member_ids = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._challenger_member_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            3, this_._internal_challenger_member_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint64 target_member_ids = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._target_member_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            4, this_._internal_target_member_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.CreateJianghuDuelInviteRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CreateJianghuDuelInviteRequest::ByteSizeLong(const MessageLite& base) {
+  const CreateJianghuDuelInviteRequest& this_ = static_cast<const CreateJianghuDuelInviteRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CreateJianghuDuelInviteRequest::ByteSizeLong() const {
+  const CreateJianghuDuelInviteRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.CreateJianghuDuelInviteRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // repeated uint64 challenger_member_ids = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_challenger_member_ids(), 1,
+              this_._impl_._challenger_member_ids_cached_byte_size_);
+    }
+    // repeated uint64 target_member_ids = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_target_member_ids(), 1,
+              this_._impl_._target_member_ids_cached_byte_size_);
+    }
+    // uint64 target_player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_target_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_target_player_id());
+      }
+    }
+    // .match.JianghuWritTier writ_tier = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_writ_tier() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_writ_tier());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CreateJianghuDuelInviteRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CreateJianghuDuelInviteRequest*>(&to_msg);
+  auto& from = static_cast<const CreateJianghuDuelInviteRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.CreateJianghuDuelInviteRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_challenger_member_ids()->MergeFrom(from._internal_challenger_member_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_target_member_ids()->MergeFrom(from._internal_target_member_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_target_player_id() != 0) {
+        _this->_impl_.target_player_id_ = from._impl_.target_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_writ_tier() != 0) {
+        _this->_impl_.writ_tier_ = from._impl_.writ_tier_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CreateJianghuDuelInviteRequest::CopyFrom(const CreateJianghuDuelInviteRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.CreateJianghuDuelInviteRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CreateJianghuDuelInviteRequest::InternalSwap(CreateJianghuDuelInviteRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.challenger_member_ids_.InternalSwap(&other->_impl_.challenger_member_ids_);
+  _impl_.target_member_ids_.InternalSwap(&other->_impl_.target_member_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.writ_tier_)
+      + sizeof(CreateJianghuDuelInviteRequest::_impl_.writ_tier_)
+      - PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteRequest, _impl_.target_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.target_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.target_player_id_));
+}
+
+::google::protobuf::Metadata CreateJianghuDuelInviteRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void CreateJianghuDuelInviteResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+CreateJianghuDuelInviteResponse::CreateJianghuDuelInviteResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CreateJianghuDuelInviteResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.CreateJianghuDuelInviteResponse)
+}
+PROTOBUF_NDEBUG_INLINE CreateJianghuDuelInviteResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::CreateJianghuDuelInviteResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+CreateJianghuDuelInviteResponse::CreateJianghuDuelInviteResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CreateJianghuDuelInviteResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CreateJianghuDuelInviteResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CreateJianghuDuelInviteResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.invite_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:match.CreateJianghuDuelInviteResponse)
+}
+PROTOBUF_NDEBUG_INLINE CreateJianghuDuelInviteResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void CreateJianghuDuelInviteResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, invite_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::invite_));
+}
+CreateJianghuDuelInviteResponse::~CreateJianghuDuelInviteResponse() {
+  // @@protoc_insertion_point(destructor:match.CreateJianghuDuelInviteResponse)
+  SharedDtor(*this);
+}
+inline void CreateJianghuDuelInviteResponse::SharedDtor(MessageLite& self) {
+  CreateJianghuDuelInviteResponse& this_ = static_cast<CreateJianghuDuelInviteResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.invite_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CreateJianghuDuelInviteResponse_class_data_ =
+        CreateJianghuDuelInviteResponse::InternalGenerateClassData_(CreateJianghuDuelInviteResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CreateJianghuDuelInviteResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CreateJianghuDuelInviteResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CreateJianghuDuelInviteResponse_class_data_.tc_table);
+  return CreateJianghuDuelInviteResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CreateJianghuDuelInviteResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CreateJianghuDuelInviteResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CreateJianghuDuelInviteResponse_globals_));
+  return CreateJianghuDuelInviteResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CreateJianghuDuelInviteResponse::ParseTableT_
+    CreateJianghuDuelInviteResponse::_table_ =
+        CreateJianghuDuelInviteResponse::InternalGenerateParseTable_(CreateJianghuDuelInviteResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CreateJianghuDuelInviteResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.CreateJianghuDuelInviteResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.invite_ != nullptr);
+      _impl_.invite_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CreateJianghuDuelInviteResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CreateJianghuDuelInviteResponse& this_ = static_cast<const CreateJianghuDuelInviteResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CreateJianghuDuelInviteResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CreateJianghuDuelInviteResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.CreateJianghuDuelInviteResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .match.JianghuDuelInviteView invite = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.invite_, this_._impl_.invite_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.CreateJianghuDuelInviteResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CreateJianghuDuelInviteResponse::ByteSizeLong(const MessageLite& base) {
+  const CreateJianghuDuelInviteResponse& this_ = static_cast<const CreateJianghuDuelInviteResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CreateJianghuDuelInviteResponse::ByteSizeLong() const {
+  const CreateJianghuDuelInviteResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.CreateJianghuDuelInviteResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .match.JianghuDuelInviteView invite = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.invite_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CreateJianghuDuelInviteResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CreateJianghuDuelInviteResponse*>(&to_msg);
+  auto& from = static_cast<const CreateJianghuDuelInviteResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.CreateJianghuDuelInviteResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.invite_ != nullptr);
+      if (_this->_impl_.invite_ == nullptr) {
+        _this->_impl_.invite_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_);
+      } else {
+        _this->_impl_.invite_->MergeFrom(*from._impl_.invite_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CreateJianghuDuelInviteResponse::CopyFrom(const CreateJianghuDuelInviteResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.CreateJianghuDuelInviteResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CreateJianghuDuelInviteResponse::InternalSwap(CreateJianghuDuelInviteResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_.invite_)
+      + sizeof(CreateJianghuDuelInviteResponse::_impl_.invite_)
+      - PROTOBUF_FIELD_OFFSET(CreateJianghuDuelInviteResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata CreateJianghuDuelInviteResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ConfirmJianghuDuelMemberRequest::ConfirmJianghuDuelMemberRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConfirmJianghuDuelMemberRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ConfirmJianghuDuelMemberRequest)
+}
+ConfirmJianghuDuelMemberRequest::ConfirmJianghuDuelMemberRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConfirmJianghuDuelMemberRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConfirmJianghuDuelMemberRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ConfirmJianghuDuelMemberRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ConfirmJianghuDuelMemberRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, duel_invite_id_),
+           0,
+           offsetof(Impl_, agree_) -
+               offsetof(Impl_, duel_invite_id_) +
+               sizeof(Impl_::agree_));
+}
+ConfirmJianghuDuelMemberRequest::~ConfirmJianghuDuelMemberRequest() {
+  // @@protoc_insertion_point(destructor:match.ConfirmJianghuDuelMemberRequest)
+  SharedDtor(*this);
+}
+inline void ConfirmJianghuDuelMemberRequest::SharedDtor(MessageLite& self) {
+  ConfirmJianghuDuelMemberRequest& this_ = static_cast<ConfirmJianghuDuelMemberRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ConfirmJianghuDuelMemberRequest_class_data_ =
+        ConfirmJianghuDuelMemberRequest::InternalGenerateClassData_(ConfirmJianghuDuelMemberRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConfirmJianghuDuelMemberRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConfirmJianghuDuelMemberRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ConfirmJianghuDuelMemberRequest_class_data_.tc_table);
+  return ConfirmJianghuDuelMemberRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConfirmJianghuDuelMemberRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConfirmJianghuDuelMemberRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ConfirmJianghuDuelMemberRequest_globals_));
+  return ConfirmJianghuDuelMemberRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ConfirmJianghuDuelMemberRequest::ParseTableT_
+    ConfirmJianghuDuelMemberRequest::_table_ =
+        ConfirmJianghuDuelMemberRequest::InternalGenerateParseTable_(ConfirmJianghuDuelMemberRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ConfirmJianghuDuelMemberRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ConfirmJianghuDuelMemberRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.duel_invite_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.agree_) -
+        reinterpret_cast<char*>(&_impl_.duel_invite_id_)) + sizeof(_impl_.agree_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ConfirmJianghuDuelMemberRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ConfirmJianghuDuelMemberRequest& this_ = static_cast<const ConfirmJianghuDuelMemberRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ConfirmJianghuDuelMemberRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ConfirmJianghuDuelMemberRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ConfirmJianghuDuelMemberRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 duel_invite_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_duel_invite_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_duel_invite_id(), target);
+    }
+  }
+
+  // bool agree = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_agree() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_agree(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ConfirmJianghuDuelMemberRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ConfirmJianghuDuelMemberRequest::ByteSizeLong(const MessageLite& base) {
+  const ConfirmJianghuDuelMemberRequest& this_ = static_cast<const ConfirmJianghuDuelMemberRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ConfirmJianghuDuelMemberRequest::ByteSizeLong() const {
+  const ConfirmJianghuDuelMemberRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ConfirmJianghuDuelMemberRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 duel_invite_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_duel_invite_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_duel_invite_id());
+      }
+    }
+    // bool agree = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_agree() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ConfirmJianghuDuelMemberRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ConfirmJianghuDuelMemberRequest*>(&to_msg);
+  auto& from = static_cast<const ConfirmJianghuDuelMemberRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ConfirmJianghuDuelMemberRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_duel_invite_id() != 0) {
+        _this->_impl_.duel_invite_id_ = from._impl_.duel_invite_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_agree() != 0) {
+        _this->_impl_.agree_ = from._impl_.agree_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ConfirmJianghuDuelMemberRequest::CopyFrom(const ConfirmJianghuDuelMemberRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ConfirmJianghuDuelMemberRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ConfirmJianghuDuelMemberRequest::InternalSwap(ConfirmJianghuDuelMemberRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_.agree_)
+      + sizeof(ConfirmJianghuDuelMemberRequest::_impl_.agree_)
+      - PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberRequest, _impl_.duel_invite_id_)>(
+          reinterpret_cast<char*>(&_impl_.duel_invite_id_),
+          reinterpret_cast<char*>(&other->_impl_.duel_invite_id_));
+}
+
+::google::protobuf::Metadata ConfirmJianghuDuelMemberRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ConfirmJianghuDuelMemberResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ConfirmJianghuDuelMemberResponse::ConfirmJianghuDuelMemberResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConfirmJianghuDuelMemberResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ConfirmJianghuDuelMemberResponse)
+}
+PROTOBUF_NDEBUG_INLINE ConfirmJianghuDuelMemberResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::ConfirmJianghuDuelMemberResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ConfirmJianghuDuelMemberResponse::ConfirmJianghuDuelMemberResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ConfirmJianghuDuelMemberResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ConfirmJianghuDuelMemberResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ConfirmJianghuDuelMemberResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.invite_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:match.ConfirmJianghuDuelMemberResponse)
+}
+PROTOBUF_NDEBUG_INLINE ConfirmJianghuDuelMemberResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ConfirmJianghuDuelMemberResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, invite_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::invite_));
+}
+ConfirmJianghuDuelMemberResponse::~ConfirmJianghuDuelMemberResponse() {
+  // @@protoc_insertion_point(destructor:match.ConfirmJianghuDuelMemberResponse)
+  SharedDtor(*this);
+}
+inline void ConfirmJianghuDuelMemberResponse::SharedDtor(MessageLite& self) {
+  ConfirmJianghuDuelMemberResponse& this_ = static_cast<ConfirmJianghuDuelMemberResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.invite_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ConfirmJianghuDuelMemberResponse_class_data_ =
+        ConfirmJianghuDuelMemberResponse::InternalGenerateClassData_(ConfirmJianghuDuelMemberResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConfirmJianghuDuelMemberResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConfirmJianghuDuelMemberResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ConfirmJianghuDuelMemberResponse_class_data_.tc_table);
+  return ConfirmJianghuDuelMemberResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConfirmJianghuDuelMemberResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConfirmJianghuDuelMemberResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ConfirmJianghuDuelMemberResponse_globals_));
+  return ConfirmJianghuDuelMemberResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ConfirmJianghuDuelMemberResponse::ParseTableT_
+    ConfirmJianghuDuelMemberResponse::_table_ =
+        ConfirmJianghuDuelMemberResponse::InternalGenerateParseTable_(ConfirmJianghuDuelMemberResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ConfirmJianghuDuelMemberResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ConfirmJianghuDuelMemberResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.invite_ != nullptr);
+      _impl_.invite_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ConfirmJianghuDuelMemberResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ConfirmJianghuDuelMemberResponse& this_ = static_cast<const ConfirmJianghuDuelMemberResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ConfirmJianghuDuelMemberResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ConfirmJianghuDuelMemberResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ConfirmJianghuDuelMemberResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .match.JianghuDuelInviteView invite = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.invite_, this_._impl_.invite_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ConfirmJianghuDuelMemberResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ConfirmJianghuDuelMemberResponse::ByteSizeLong(const MessageLite& base) {
+  const ConfirmJianghuDuelMemberResponse& this_ = static_cast<const ConfirmJianghuDuelMemberResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ConfirmJianghuDuelMemberResponse::ByteSizeLong() const {
+  const ConfirmJianghuDuelMemberResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ConfirmJianghuDuelMemberResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .match.JianghuDuelInviteView invite = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.invite_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ConfirmJianghuDuelMemberResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ConfirmJianghuDuelMemberResponse*>(&to_msg);
+  auto& from = static_cast<const ConfirmJianghuDuelMemberResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ConfirmJianghuDuelMemberResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.invite_ != nullptr);
+      if (_this->_impl_.invite_ == nullptr) {
+        _this->_impl_.invite_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_);
+      } else {
+        _this->_impl_.invite_->MergeFrom(*from._impl_.invite_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ConfirmJianghuDuelMemberResponse::CopyFrom(const ConfirmJianghuDuelMemberResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ConfirmJianghuDuelMemberResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ConfirmJianghuDuelMemberResponse::InternalSwap(ConfirmJianghuDuelMemberResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_.invite_)
+      + sizeof(ConfirmJianghuDuelMemberResponse::_impl_.invite_)
+      - PROTOBUF_FIELD_OFFSET(ConfirmJianghuDuelMemberResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata ConfirmJianghuDuelMemberResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+RespondJianghuDuelInviteRequest::RespondJianghuDuelInviteRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RespondJianghuDuelInviteRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.RespondJianghuDuelInviteRequest)
+}
+RespondJianghuDuelInviteRequest::RespondJianghuDuelInviteRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RespondJianghuDuelInviteRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RespondJianghuDuelInviteRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE RespondJianghuDuelInviteRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void RespondJianghuDuelInviteRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, duel_invite_id_),
+           0,
+           offsetof(Impl_, accept_) -
+               offsetof(Impl_, duel_invite_id_) +
+               sizeof(Impl_::accept_));
+}
+RespondJianghuDuelInviteRequest::~RespondJianghuDuelInviteRequest() {
+  // @@protoc_insertion_point(destructor:match.RespondJianghuDuelInviteRequest)
+  SharedDtor(*this);
+}
+inline void RespondJianghuDuelInviteRequest::SharedDtor(MessageLite& self) {
+  RespondJianghuDuelInviteRequest& this_ = static_cast<RespondJianghuDuelInviteRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RespondJianghuDuelInviteRequest_class_data_ =
+        RespondJianghuDuelInviteRequest::InternalGenerateClassData_(RespondJianghuDuelInviteRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RespondJianghuDuelInviteRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RespondJianghuDuelInviteRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RespondJianghuDuelInviteRequest_class_data_.tc_table);
+  return RespondJianghuDuelInviteRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RespondJianghuDuelInviteRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RespondJianghuDuelInviteRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RespondJianghuDuelInviteRequest_globals_));
+  return RespondJianghuDuelInviteRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RespondJianghuDuelInviteRequest::ParseTableT_
+    RespondJianghuDuelInviteRequest::_table_ =
+        RespondJianghuDuelInviteRequest::InternalGenerateParseTable_(RespondJianghuDuelInviteRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RespondJianghuDuelInviteRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.RespondJianghuDuelInviteRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.duel_invite_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.accept_) -
+        reinterpret_cast<char*>(&_impl_.duel_invite_id_)) + sizeof(_impl_.accept_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RespondJianghuDuelInviteRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RespondJianghuDuelInviteRequest& this_ = static_cast<const RespondJianghuDuelInviteRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RespondJianghuDuelInviteRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RespondJianghuDuelInviteRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.RespondJianghuDuelInviteRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 duel_invite_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_duel_invite_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_duel_invite_id(), target);
+    }
+  }
+
+  // bool accept = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_accept() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_accept(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.RespondJianghuDuelInviteRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RespondJianghuDuelInviteRequest::ByteSizeLong(const MessageLite& base) {
+  const RespondJianghuDuelInviteRequest& this_ = static_cast<const RespondJianghuDuelInviteRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RespondJianghuDuelInviteRequest::ByteSizeLong() const {
+  const RespondJianghuDuelInviteRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.RespondJianghuDuelInviteRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 duel_invite_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_duel_invite_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_duel_invite_id());
+      }
+    }
+    // bool accept = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_accept() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RespondJianghuDuelInviteRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RespondJianghuDuelInviteRequest*>(&to_msg);
+  auto& from = static_cast<const RespondJianghuDuelInviteRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.RespondJianghuDuelInviteRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_duel_invite_id() != 0) {
+        _this->_impl_.duel_invite_id_ = from._impl_.duel_invite_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_accept() != 0) {
+        _this->_impl_.accept_ = from._impl_.accept_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RespondJianghuDuelInviteRequest::CopyFrom(const RespondJianghuDuelInviteRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.RespondJianghuDuelInviteRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RespondJianghuDuelInviteRequest::InternalSwap(RespondJianghuDuelInviteRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_.accept_)
+      + sizeof(RespondJianghuDuelInviteRequest::_impl_.accept_)
+      - PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteRequest, _impl_.duel_invite_id_)>(
+          reinterpret_cast<char*>(&_impl_.duel_invite_id_),
+          reinterpret_cast<char*>(&other->_impl_.duel_invite_id_));
+}
+
+::google::protobuf::Metadata RespondJianghuDuelInviteRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void RespondJianghuDuelInviteResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+RespondJianghuDuelInviteResponse::RespondJianghuDuelInviteResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RespondJianghuDuelInviteResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.RespondJianghuDuelInviteResponse)
+}
+PROTOBUF_NDEBUG_INLINE RespondJianghuDuelInviteResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::RespondJianghuDuelInviteResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+RespondJianghuDuelInviteResponse::RespondJianghuDuelInviteResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RespondJianghuDuelInviteResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RespondJianghuDuelInviteResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RespondJianghuDuelInviteResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.invite_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:match.RespondJianghuDuelInviteResponse)
+}
+PROTOBUF_NDEBUG_INLINE RespondJianghuDuelInviteResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void RespondJianghuDuelInviteResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, invite_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::invite_));
+}
+RespondJianghuDuelInviteResponse::~RespondJianghuDuelInviteResponse() {
+  // @@protoc_insertion_point(destructor:match.RespondJianghuDuelInviteResponse)
+  SharedDtor(*this);
+}
+inline void RespondJianghuDuelInviteResponse::SharedDtor(MessageLite& self) {
+  RespondJianghuDuelInviteResponse& this_ = static_cast<RespondJianghuDuelInviteResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.invite_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RespondJianghuDuelInviteResponse_class_data_ =
+        RespondJianghuDuelInviteResponse::InternalGenerateClassData_(RespondJianghuDuelInviteResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RespondJianghuDuelInviteResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RespondJianghuDuelInviteResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RespondJianghuDuelInviteResponse_class_data_.tc_table);
+  return RespondJianghuDuelInviteResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RespondJianghuDuelInviteResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RespondJianghuDuelInviteResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RespondJianghuDuelInviteResponse_globals_));
+  return RespondJianghuDuelInviteResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RespondJianghuDuelInviteResponse::ParseTableT_
+    RespondJianghuDuelInviteResponse::_table_ =
+        RespondJianghuDuelInviteResponse::InternalGenerateParseTable_(RespondJianghuDuelInviteResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RespondJianghuDuelInviteResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.RespondJianghuDuelInviteResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.invite_ != nullptr);
+      _impl_.invite_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RespondJianghuDuelInviteResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RespondJianghuDuelInviteResponse& this_ = static_cast<const RespondJianghuDuelInviteResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RespondJianghuDuelInviteResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RespondJianghuDuelInviteResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.RespondJianghuDuelInviteResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .match.JianghuDuelInviteView invite = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.invite_, this_._impl_.invite_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.RespondJianghuDuelInviteResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RespondJianghuDuelInviteResponse::ByteSizeLong(const MessageLite& base) {
+  const RespondJianghuDuelInviteResponse& this_ = static_cast<const RespondJianghuDuelInviteResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RespondJianghuDuelInviteResponse::ByteSizeLong() const {
+  const RespondJianghuDuelInviteResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.RespondJianghuDuelInviteResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .match.JianghuDuelInviteView invite = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.invite_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RespondJianghuDuelInviteResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RespondJianghuDuelInviteResponse*>(&to_msg);
+  auto& from = static_cast<const RespondJianghuDuelInviteResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.RespondJianghuDuelInviteResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.invite_ != nullptr);
+      if (_this->_impl_.invite_ == nullptr) {
+        _this->_impl_.invite_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_);
+      } else {
+        _this->_impl_.invite_->MergeFrom(*from._impl_.invite_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RespondJianghuDuelInviteResponse::CopyFrom(const RespondJianghuDuelInviteResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.RespondJianghuDuelInviteResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RespondJianghuDuelInviteResponse::InternalSwap(RespondJianghuDuelInviteResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_.invite_)
+      + sizeof(RespondJianghuDuelInviteResponse::_impl_.invite_)
+      - PROTOBUF_FIELD_OFFSET(RespondJianghuDuelInviteResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata RespondJianghuDuelInviteResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuGrudgeBattleLogEntry::JianghuGrudgeBattleLogEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuGrudgeBattleLogEntry_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.JianghuGrudgeBattleLogEntry)
+}
+JianghuGrudgeBattleLogEntry::JianghuGrudgeBattleLogEntry(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JianghuGrudgeBattleLogEntry& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuGrudgeBattleLogEntry_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE JianghuGrudgeBattleLogEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void JianghuGrudgeBattleLogEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, battle_id_),
+           0,
+           offsetof(Impl_, finished_at_ms_) -
+               offsetof(Impl_, battle_id_) +
+               sizeof(Impl_::finished_at_ms_));
+}
+JianghuGrudgeBattleLogEntry::~JianghuGrudgeBattleLogEntry() {
+  // @@protoc_insertion_point(destructor:match.JianghuGrudgeBattleLogEntry)
+  SharedDtor(*this);
+}
+inline void JianghuGrudgeBattleLogEntry::SharedDtor(MessageLite& self) {
+  JianghuGrudgeBattleLogEntry& this_ = static_cast<JianghuGrudgeBattleLogEntry&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuGrudgeBattleLogEntry_class_data_ =
+        JianghuGrudgeBattleLogEntry::InternalGenerateClassData_(JianghuGrudgeBattleLogEntry_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuGrudgeBattleLogEntry::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuGrudgeBattleLogEntry_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuGrudgeBattleLogEntry_class_data_.tc_table);
+  return JianghuGrudgeBattleLogEntry_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuGrudgeBattleLogEntry::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuGrudgeBattleLogEntry_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuGrudgeBattleLogEntry_globals_));
+  return JianghuGrudgeBattleLogEntry_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuGrudgeBattleLogEntry::ParseTableT_
+    JianghuGrudgeBattleLogEntry::_table_ =
+        JianghuGrudgeBattleLogEntry::InternalGenerateParseTable_(JianghuGrudgeBattleLogEntry_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuGrudgeBattleLogEntry::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.JianghuGrudgeBattleLogEntry)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.finished_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.finished_at_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuGrudgeBattleLogEntry::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuGrudgeBattleLogEntry& this_ = static_cast<const JianghuGrudgeBattleLogEntry&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuGrudgeBattleLogEntry::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuGrudgeBattleLogEntry& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.JianghuGrudgeBattleLogEntry)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 battle_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint32 outcome_for_self = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_outcome_for_self() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_outcome_for_self(), target);
+    }
+  }
+
+  // uint32 total_rounds = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_total_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_total_rounds(), target);
+    }
+  }
+
+  // .match.JianghuWritTier writ_tier = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_writ_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          4, this_._internal_writ_tier(), target);
+    }
+  }
+
+  // uint32 team_size = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_team_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_team_size(), target);
+    }
+  }
+
+  // uint64 finished_at_ms = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_finished_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_finished_at_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.JianghuGrudgeBattleLogEntry)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuGrudgeBattleLogEntry::ByteSizeLong(const MessageLite& base) {
+  const JianghuGrudgeBattleLogEntry& this_ = static_cast<const JianghuGrudgeBattleLogEntry&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuGrudgeBattleLogEntry::ByteSizeLong() const {
+  const JianghuGrudgeBattleLogEntry& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.JianghuGrudgeBattleLogEntry)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // uint64 battle_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint32 outcome_for_self = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_outcome_for_self() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_outcome_for_self());
+      }
+    }
+    // uint32 total_rounds = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_total_rounds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_total_rounds());
+      }
+    }
+    // .match.JianghuWritTier writ_tier = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_writ_tier() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_writ_tier());
+      }
+    }
+    // uint32 team_size = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_team_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_size());
+      }
+    }
+    // uint64 finished_at_ms = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_finished_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_finished_at_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuGrudgeBattleLogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuGrudgeBattleLogEntry*>(&to_msg);
+  auto& from = static_cast<const JianghuGrudgeBattleLogEntry&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.JianghuGrudgeBattleLogEntry)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_outcome_for_self() != 0) {
+        _this->_impl_.outcome_for_self_ = from._impl_.outcome_for_self_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_total_rounds() != 0) {
+        _this->_impl_.total_rounds_ = from._impl_.total_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_writ_tier() != 0) {
+        _this->_impl_.writ_tier_ = from._impl_.writ_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_team_size() != 0) {
+        _this->_impl_.team_size_ = from._impl_.team_size_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_finished_at_ms() != 0) {
+        _this->_impl_.finished_at_ms_ = from._impl_.finished_at_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuGrudgeBattleLogEntry::CopyFrom(const JianghuGrudgeBattleLogEntry& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.JianghuGrudgeBattleLogEntry)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuGrudgeBattleLogEntry::InternalSwap(JianghuGrudgeBattleLogEntry* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.finished_at_ms_)
+      + sizeof(JianghuGrudgeBattleLogEntry::_impl_.finished_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(JianghuGrudgeBattleLogEntry, _impl_.battle_id_)>(
+          reinterpret_cast<char*>(&_impl_.battle_id_),
+          reinterpret_cast<char*>(&other->_impl_.battle_id_));
+}
+
+::google::protobuf::Metadata JianghuGrudgeBattleLogEntry::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuGrudgeEntry::JianghuGrudgeEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuGrudgeEntry_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.JianghuGrudgeEntry)
+}
+PROTOBUF_NDEBUG_INLINE JianghuGrudgeEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::JianghuGrudgeEntry& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        recent_logs_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::JianghuGrudgeEntry,
+              PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.recent_logs_)>()
+          , from.recent_logs_
+        }
+        ,
+        peer_name_(arena, from.peer_name_) {}
+
+JianghuGrudgeEntry::JianghuGrudgeEntry(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const JianghuGrudgeEntry& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuGrudgeEntry_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JianghuGrudgeEntry* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, peer_player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, peer_player_id_),
+           offsetof(Impl_, peer_online_) -
+               offsetof(Impl_, peer_player_id_) +
+               sizeof(Impl_::peer_online_));
+
+  // @@protoc_insertion_point(copy_constructor:match.JianghuGrudgeEntry)
+}
+PROTOBUF_NDEBUG_INLINE JianghuGrudgeEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        recent_logs_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::JianghuGrudgeEntry,
+            PROTOBUF_FIELD_OFFSET(::match::JianghuGrudgeEntry, _impl_.recent_logs_)>()
+         }
+        ,
+        peer_name_(arena) {}
+
+inline void JianghuGrudgeEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, peer_player_id_),
+           0,
+           offsetof(Impl_, peer_online_) -
+               offsetof(Impl_, peer_player_id_) +
+               sizeof(Impl_::peer_online_));
+}
+JianghuGrudgeEntry::~JianghuGrudgeEntry() {
+  // @@protoc_insertion_point(destructor:match.JianghuGrudgeEntry)
+  SharedDtor(*this);
+}
+inline void JianghuGrudgeEntry::SharedDtor(MessageLite& self) {
+  JianghuGrudgeEntry& this_ = static_cast<JianghuGrudgeEntry&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.peer_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuGrudgeEntry_class_data_ =
+        JianghuGrudgeEntry::InternalGenerateClassData_(JianghuGrudgeEntry_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuGrudgeEntry::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuGrudgeEntry_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuGrudgeEntry_class_data_.tc_table);
+  return JianghuGrudgeEntry_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuGrudgeEntry::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuGrudgeEntry_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuGrudgeEntry_globals_));
+  return JianghuGrudgeEntry_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuGrudgeEntry::ParseTableT_
+    JianghuGrudgeEntry::_table_ =
+        JianghuGrudgeEntry::InternalGenerateParseTable_(JianghuGrudgeEntry_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuGrudgeEntry::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.JianghuGrudgeEntry)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.recent_logs_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.peer_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.peer_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.last_battle_ms_) -
+        reinterpret_cast<char*>(&_impl_.peer_player_id_)) + sizeof(_impl_.last_battle_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.lose_streak_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.peer_online_) -
+        reinterpret_cast<char*>(&_impl_.lose_streak_)) + sizeof(_impl_.peer_online_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuGrudgeEntry::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuGrudgeEntry& this_ = static_cast<const JianghuGrudgeEntry&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuGrudgeEntry::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuGrudgeEntry& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.JianghuGrudgeEntry)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 peer_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_peer_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_peer_player_id(), target);
+    }
+  }
+
+  // string peer_name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_peer_name().empty()) {
+      const ::std::string& _s = this_._internal_peer_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuGrudgeEntry.peer_name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 wins = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_wins() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_wins(), target);
+    }
+  }
+
+  // uint32 losses = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_losses() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_losses(), target);
+    }
+  }
+
+  // uint32 draws = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_draws() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_draws(), target);
+    }
+  }
+
+  // uint32 win_streak = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_win_streak() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_win_streak(), target);
+    }
+  }
+
+  // uint32 lose_streak = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_lose_streak() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_lose_streak(), target);
+    }
+  }
+
+  // uint64 last_battle_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_last_battle_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_last_battle_ms(), target);
+    }
+  }
+
+  // bool peer_online = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_peer_online() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          9, this_._internal_peer_online(), target);
+    }
+  }
+
+  // repeated .match.JianghuGrudgeBattleLogEntry recent_logs = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_recent_logs_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_recent_logs().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              10, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.JianghuGrudgeEntry)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuGrudgeEntry::ByteSizeLong(const MessageLite& base) {
+  const JianghuGrudgeEntry& this_ = static_cast<const JianghuGrudgeEntry&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuGrudgeEntry::ByteSizeLong() const {
+  const JianghuGrudgeEntry& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.JianghuGrudgeEntry)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated .match.JianghuGrudgeBattleLogEntry recent_logs = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_recent_logs_size();
+      for (const auto& msg : this_._internal_recent_logs()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string peer_name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_peer_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_peer_name());
+      }
+    }
+    // uint64 peer_player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_peer_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_peer_player_id());
+      }
+    }
+    // uint32 wins = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_wins() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_wins());
+      }
+    }
+    // uint32 losses = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_losses() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_losses());
+      }
+    }
+    // uint32 draws = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_draws() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_draws());
+      }
+    }
+    // uint32 win_streak = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_win_streak() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_win_streak());
+      }
+    }
+    // uint64 last_battle_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_last_battle_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_last_battle_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint32 lose_streak = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_lose_streak() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_lose_streak());
+      }
+    }
+    // bool peer_online = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_peer_online() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuGrudgeEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuGrudgeEntry*>(&to_msg);
+  auto& from = static_cast<const JianghuGrudgeEntry&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.JianghuGrudgeEntry)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_recent_logs()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_recent_logs());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_peer_name().empty()) {
+        _this->_internal_set_peer_name(from._internal_peer_name());
+      } else {
+        if (_this->_impl_.peer_name_.IsDefault()) {
+          _this->_internal_set_peer_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_peer_player_id() != 0) {
+        _this->_impl_.peer_player_id_ = from._impl_.peer_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_wins() != 0) {
+        _this->_impl_.wins_ = from._impl_.wins_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_losses() != 0) {
+        _this->_impl_.losses_ = from._impl_.losses_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_draws() != 0) {
+        _this->_impl_.draws_ = from._impl_.draws_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_win_streak() != 0) {
+        _this->_impl_.win_streak_ = from._impl_.win_streak_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_last_battle_ms() != 0) {
+        _this->_impl_.last_battle_ms_ = from._impl_.last_battle_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_lose_streak() != 0) {
+        _this->_impl_.lose_streak_ = from._impl_.lose_streak_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_peer_online() != 0) {
+        _this->_impl_.peer_online_ = from._impl_.peer_online_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuGrudgeEntry::CopyFrom(const JianghuGrudgeEntry& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.JianghuGrudgeEntry)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuGrudgeEntry::InternalSwap(JianghuGrudgeEntry* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.recent_logs_.InternalSwap(&other->_impl_.recent_logs_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.peer_name_, &other->_impl_.peer_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_online_)
+      + sizeof(JianghuGrudgeEntry::_impl_.peer_online_)
+      - PROTOBUF_FIELD_OFFSET(JianghuGrudgeEntry, _impl_.peer_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.peer_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.peer_player_id_));
+}
+
+::google::protobuf::Metadata JianghuGrudgeEntry::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ListJianghuGrudgesRequest::ListJianghuGrudgesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, ListJianghuGrudgesRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:match.ListJianghuGrudgesRequest)
+}
+ListJianghuGrudgesRequest::ListJianghuGrudgesRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListJianghuGrudgesRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, ListJianghuGrudgesRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListJianghuGrudgesRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:match.ListJianghuGrudgesRequest)
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListJianghuGrudgesRequest_class_data_ =
+        ListJianghuGrudgesRequest::InternalGenerateClassData_(ListJianghuGrudgesRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListJianghuGrudgesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListJianghuGrudgesRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListJianghuGrudgesRequest_class_data_.tc_table);
+  return ListJianghuGrudgesRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListJianghuGrudgesRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListJianghuGrudgesRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListJianghuGrudgesRequest_globals_));
+  return ListJianghuGrudgesRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListJianghuGrudgesRequest::ParseTableT_
+    ListJianghuGrudgesRequest::_table_ =
+        ListJianghuGrudgesRequest::InternalGenerateParseTable_(ListJianghuGrudgesRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+
+
+
+
+
+
+
+::google::protobuf::Metadata ListJianghuGrudgesRequest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ListJianghuGrudgesResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+ListJianghuGrudgesResponse::ListJianghuGrudgesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListJianghuGrudgesResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.ListJianghuGrudgesResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListJianghuGrudgesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::ListJianghuGrudgesResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        grudges_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::ListJianghuGrudgesResponse,
+              PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.grudges_)>()
+          , from.grudges_
+        }
+        ,
+        active_invites_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::match::ListJianghuGrudgesResponse,
+              PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.active_invites_)>()
+          , from.active_invites_
+        }
+     {}
+
+ListJianghuGrudgesResponse::ListJianghuGrudgesResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListJianghuGrudgesResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListJianghuGrudgesResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListJianghuGrudgesResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.server_time_ms_ = from._impl_.server_time_ms_;
+
+  // @@protoc_insertion_point(copy_constructor:match.ListJianghuGrudgesResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListJianghuGrudgesResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        grudges_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::ListJianghuGrudgesResponse,
+            PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.grudges_)>()
+         }
+        ,
+        active_invites_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::match::ListJianghuGrudgesResponse,
+            PROTOBUF_FIELD_OFFSET(::match::ListJianghuGrudgesResponse, _impl_.active_invites_)>()
+         }
+     {}
+
+inline void ListJianghuGrudgesResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, server_time_ms_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::server_time_ms_));
+}
+ListJianghuGrudgesResponse::~ListJianghuGrudgesResponse() {
+  // @@protoc_insertion_point(destructor:match.ListJianghuGrudgesResponse)
+  SharedDtor(*this);
+}
+inline void ListJianghuGrudgesResponse::SharedDtor(MessageLite& self) {
+  ListJianghuGrudgesResponse& this_ = static_cast<ListJianghuGrudgesResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListJianghuGrudgesResponse_class_data_ =
+        ListJianghuGrudgesResponse::InternalGenerateClassData_(ListJianghuGrudgesResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListJianghuGrudgesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListJianghuGrudgesResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListJianghuGrudgesResponse_class_data_.tc_table);
+  return ListJianghuGrudgesResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListJianghuGrudgesResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListJianghuGrudgesResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListJianghuGrudgesResponse_globals_));
+  return ListJianghuGrudgesResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListJianghuGrudgesResponse::ParseTableT_
+    ListJianghuGrudgesResponse::_table_ =
+        ListJianghuGrudgesResponse::InternalGenerateParseTable_(ListJianghuGrudgesResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListJianghuGrudgesResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.ListJianghuGrudgesResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.grudges_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.active_invites_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  _impl_.server_time_ms_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListJianghuGrudgesResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListJianghuGrudgesResponse& this_ = static_cast<const ListJianghuGrudgesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListJianghuGrudgesResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListJianghuGrudgesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.ListJianghuGrudgesResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .match.JianghuGrudgeEntry grudges = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_grudges_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_grudges().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated .match.JianghuDuelInviteView active_invites = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_active_invites_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_active_invites().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              3, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint64 server_time_ms = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_server_time_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_server_time_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.ListJianghuGrudgesResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListJianghuGrudgesResponse::ByteSizeLong(const MessageLite& base) {
+  const ListJianghuGrudgesResponse& this_ = static_cast<const ListJianghuGrudgesResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListJianghuGrudgesResponse::ByteSizeLong() const {
+  const ListJianghuGrudgesResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.ListJianghuGrudgesResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // repeated .match.JianghuGrudgeEntry grudges = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_grudges_size();
+      for (const auto& msg : this_._internal_grudges()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .match.JianghuDuelInviteView active_invites = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_active_invites_size();
+      for (const auto& msg : this_._internal_active_invites()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint64 server_time_ms = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_server_time_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_server_time_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListJianghuGrudgesResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListJianghuGrudgesResponse*>(&to_msg);
+  auto& from = static_cast<const ListJianghuGrudgesResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.ListJianghuGrudgesResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_grudges()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_grudges());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_active_invites()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_active_invites());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_server_time_ms() != 0) {
+        _this->_impl_.server_time_ms_ = from._impl_.server_time_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListJianghuGrudgesResponse::CopyFrom(const ListJianghuGrudgesResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.ListJianghuGrudgesResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListJianghuGrudgesResponse::InternalSwap(ListJianghuGrudgesResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.grudges_.InternalSwap(&other->_impl_.grudges_);
+  _impl_.active_invites_.InternalSwap(&other->_impl_.active_invites_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.server_time_ms_)
+      + sizeof(ListJianghuGrudgesResponse::_impl_.server_time_ms_)
+      - PROTOBUF_FIELD_OFFSET(ListJianghuGrudgesResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata ListJianghuGrudgesResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+DismissJianghuGrudgeRequest::DismissJianghuGrudgeRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, DismissJianghuGrudgeRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.DismissJianghuGrudgeRequest)
+}
+DismissJianghuGrudgeRequest::DismissJianghuGrudgeRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DismissJianghuGrudgeRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, DismissJianghuGrudgeRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE DismissJianghuGrudgeRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void DismissJianghuGrudgeRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.peer_player_id_ = {};
+}
+DismissJianghuGrudgeRequest::~DismissJianghuGrudgeRequest() {
+  // @@protoc_insertion_point(destructor:match.DismissJianghuGrudgeRequest)
+  SharedDtor(*this);
+}
+inline void DismissJianghuGrudgeRequest::SharedDtor(MessageLite& self) {
+  DismissJianghuGrudgeRequest& this_ = static_cast<DismissJianghuGrudgeRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull DismissJianghuGrudgeRequest_class_data_ =
+        DismissJianghuGrudgeRequest::InternalGenerateClassData_(DismissJianghuGrudgeRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+DismissJianghuGrudgeRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&DismissJianghuGrudgeRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(DismissJianghuGrudgeRequest_class_data_.tc_table);
+  return DismissJianghuGrudgeRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+DismissJianghuGrudgeRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&DismissJianghuGrudgeRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&DismissJianghuGrudgeRequest_globals_));
+  return DismissJianghuGrudgeRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const DismissJianghuGrudgeRequest::ParseTableT_
+    DismissJianghuGrudgeRequest::_table_ =
+        DismissJianghuGrudgeRequest::InternalGenerateParseTable_(DismissJianghuGrudgeRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void DismissJianghuGrudgeRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.DismissJianghuGrudgeRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.peer_player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL DismissJianghuGrudgeRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const DismissJianghuGrudgeRequest& this_ = static_cast<const DismissJianghuGrudgeRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL DismissJianghuGrudgeRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const DismissJianghuGrudgeRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.DismissJianghuGrudgeRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 peer_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_peer_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_peer_player_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.DismissJianghuGrudgeRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t DismissJianghuGrudgeRequest::ByteSizeLong(const MessageLite& base) {
+  const DismissJianghuGrudgeRequest& this_ = static_cast<const DismissJianghuGrudgeRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t DismissJianghuGrudgeRequest::ByteSizeLong() const {
+  const DismissJianghuGrudgeRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.DismissJianghuGrudgeRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint64 peer_player_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_peer_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_peer_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void DismissJianghuGrudgeRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<DismissJianghuGrudgeRequest*>(&to_msg);
+  auto& from = static_cast<const DismissJianghuGrudgeRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.DismissJianghuGrudgeRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_peer_player_id() != 0) {
+      _this->_impl_.peer_player_id_ = from._impl_.peer_player_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void DismissJianghuGrudgeRequest::CopyFrom(const DismissJianghuGrudgeRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.DismissJianghuGrudgeRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void DismissJianghuGrudgeRequest::InternalSwap(DismissJianghuGrudgeRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.peer_player_id_, other->_impl_.peer_player_id_);
+}
+
+::google::protobuf::Metadata DismissJianghuGrudgeRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void DismissJianghuGrudgeResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+DismissJianghuGrudgeResponse::DismissJianghuGrudgeResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, DismissJianghuGrudgeResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.DismissJianghuGrudgeResponse)
+}
+PROTOBUF_NDEBUG_INLINE DismissJianghuGrudgeResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::DismissJianghuGrudgeResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+DismissJianghuGrudgeResponse::DismissJianghuGrudgeResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const DismissJianghuGrudgeResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, DismissJianghuGrudgeResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  DismissJianghuGrudgeResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:match.DismissJianghuGrudgeResponse)
+}
+PROTOBUF_NDEBUG_INLINE DismissJianghuGrudgeResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void DismissJianghuGrudgeResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.error_message_ = {};
+}
+DismissJianghuGrudgeResponse::~DismissJianghuGrudgeResponse() {
+  // @@protoc_insertion_point(destructor:match.DismissJianghuGrudgeResponse)
+  SharedDtor(*this);
+}
+inline void DismissJianghuGrudgeResponse::SharedDtor(MessageLite& self) {
+  DismissJianghuGrudgeResponse& this_ = static_cast<DismissJianghuGrudgeResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull DismissJianghuGrudgeResponse_class_data_ =
+        DismissJianghuGrudgeResponse::InternalGenerateClassData_(DismissJianghuGrudgeResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+DismissJianghuGrudgeResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&DismissJianghuGrudgeResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(DismissJianghuGrudgeResponse_class_data_.tc_table);
+  return DismissJianghuGrudgeResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+DismissJianghuGrudgeResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&DismissJianghuGrudgeResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&DismissJianghuGrudgeResponse_globals_));
+  return DismissJianghuGrudgeResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const DismissJianghuGrudgeResponse::ParseTableT_
+    DismissJianghuGrudgeResponse::_table_ =
+        DismissJianghuGrudgeResponse::InternalGenerateParseTable_(DismissJianghuGrudgeResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void DismissJianghuGrudgeResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.DismissJianghuGrudgeResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL DismissJianghuGrudgeResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const DismissJianghuGrudgeResponse& this_ = static_cast<const DismissJianghuGrudgeResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL DismissJianghuGrudgeResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const DismissJianghuGrudgeResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.DismissJianghuGrudgeResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.DismissJianghuGrudgeResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t DismissJianghuGrudgeResponse::ByteSizeLong(const MessageLite& base) {
+  const DismissJianghuGrudgeResponse& this_ = static_cast<const DismissJianghuGrudgeResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t DismissJianghuGrudgeResponse::ByteSizeLong() const {
+  const DismissJianghuGrudgeResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.DismissJianghuGrudgeResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .TipInfoMessage error_message = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void DismissJianghuGrudgeResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<DismissJianghuGrudgeResponse*>(&to_msg);
+  auto& from = static_cast<const DismissJianghuGrudgeResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.DismissJianghuGrudgeResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+    if (_this->_impl_.error_message_ == nullptr) {
+      _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+    } else {
+      _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void DismissJianghuGrudgeResponse::CopyFrom(const DismissJianghuGrudgeResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.DismissJianghuGrudgeResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void DismissJianghuGrudgeResponse::InternalSwap(DismissJianghuGrudgeResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.error_message_, other->_impl_.error_message_);
+}
+
+::google::protobuf::Metadata DismissJianghuGrudgeResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuDuelInviteS2C::JianghuDuelInviteS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelInviteS2C_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.JianghuDuelInviteS2C)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelInviteS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::JianghuDuelInviteS2C& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+JianghuDuelInviteS2C::JianghuDuelInviteS2C(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const JianghuDuelInviteS2C& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelInviteS2C_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JianghuDuelInviteS2C* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.invite_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:match.JianghuDuelInviteS2C)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelInviteS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void JianghuDuelInviteS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.invite_ = {};
+}
+JianghuDuelInviteS2C::~JianghuDuelInviteS2C() {
+  // @@protoc_insertion_point(destructor:match.JianghuDuelInviteS2C)
+  SharedDtor(*this);
+}
+inline void JianghuDuelInviteS2C::SharedDtor(MessageLite& self) {
+  JianghuDuelInviteS2C& this_ = static_cast<JianghuDuelInviteS2C&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.invite_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuDuelInviteS2C_class_data_ =
+        JianghuDuelInviteS2C::InternalGenerateClassData_(JianghuDuelInviteS2C_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelInviteS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelInviteS2C_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuDuelInviteS2C_class_data_.tc_table);
+  return JianghuDuelInviteS2C_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelInviteS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelInviteS2C_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuDuelInviteS2C_globals_));
+  return JianghuDuelInviteS2C_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuDuelInviteS2C::ParseTableT_
+    JianghuDuelInviteS2C::_table_ =
+        JianghuDuelInviteS2C::InternalGenerateParseTable_(JianghuDuelInviteS2C_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuDuelInviteS2C::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.JianghuDuelInviteS2C)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.invite_ != nullptr);
+    _impl_.invite_->Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuDuelInviteS2C::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuDuelInviteS2C& this_ = static_cast<const JianghuDuelInviteS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuDuelInviteS2C::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuDuelInviteS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.JianghuDuelInviteS2C)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .match.JianghuDuelInviteView invite = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.invite_, this_._impl_.invite_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.JianghuDuelInviteS2C)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuDuelInviteS2C::ByteSizeLong(const MessageLite& base) {
+  const JianghuDuelInviteS2C& this_ = static_cast<const JianghuDuelInviteS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuDuelInviteS2C::ByteSizeLong() const {
+  const JianghuDuelInviteS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.JianghuDuelInviteS2C)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .match.JianghuDuelInviteView invite = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.invite_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuDuelInviteS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuDuelInviteS2C*>(&to_msg);
+  auto& from = static_cast<const JianghuDuelInviteS2C&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.JianghuDuelInviteS2C)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(from._impl_.invite_ != nullptr);
+    if (_this->_impl_.invite_ == nullptr) {
+      _this->_impl_.invite_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_);
+    } else {
+      _this->_impl_.invite_->MergeFrom(*from._impl_.invite_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuDuelInviteS2C::CopyFrom(const JianghuDuelInviteS2C& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.JianghuDuelInviteS2C)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuDuelInviteS2C::InternalSwap(JianghuDuelInviteS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.invite_, other->_impl_.invite_);
+}
+
+::google::protobuf::Metadata JianghuDuelInviteS2C::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuDuelStatusS2C::JianghuDuelStatusS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelStatusS2C_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.JianghuDuelStatusS2C)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelStatusS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::JianghuDuelStatusS2C& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        reason_code_(arena, from.reason_code_) {}
+
+JianghuDuelStatusS2C::JianghuDuelStatusS2C(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const JianghuDuelStatusS2C& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelStatusS2C_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JianghuDuelStatusS2C* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.invite_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:match.JianghuDuelStatusS2C)
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelStatusS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        reason_code_(arena) {}
+
+inline void JianghuDuelStatusS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.invite_ = {};
+}
+JianghuDuelStatusS2C::~JianghuDuelStatusS2C() {
+  // @@protoc_insertion_point(destructor:match.JianghuDuelStatusS2C)
+  SharedDtor(*this);
+}
+inline void JianghuDuelStatusS2C::SharedDtor(MessageLite& self) {
+  JianghuDuelStatusS2C& this_ = static_cast<JianghuDuelStatusS2C&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.reason_code_.Destroy();
+  delete this_._impl_.invite_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuDuelStatusS2C_class_data_ =
+        JianghuDuelStatusS2C::InternalGenerateClassData_(JianghuDuelStatusS2C_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelStatusS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelStatusS2C_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuDuelStatusS2C_class_data_.tc_table);
+  return JianghuDuelStatusS2C_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelStatusS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelStatusS2C_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuDuelStatusS2C_globals_));
+  return JianghuDuelStatusS2C_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuDuelStatusS2C::ParseTableT_
+    JianghuDuelStatusS2C::_table_ =
+        JianghuDuelStatusS2C::InternalGenerateParseTable_(JianghuDuelStatusS2C_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuDuelStatusS2C::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.JianghuDuelStatusS2C)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.reason_code_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.invite_ != nullptr);
+      _impl_.invite_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuDuelStatusS2C::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuDuelStatusS2C& this_ = static_cast<const JianghuDuelStatusS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuDuelStatusS2C::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuDuelStatusS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.JianghuDuelStatusS2C)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .match.JianghuDuelInviteView invite = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.invite_, this_._impl_.invite_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string reason_code = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_reason_code().empty()) {
+      const ::std::string& _s = this_._internal_reason_code();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.JianghuDuelStatusS2C.reason_code");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.JianghuDuelStatusS2C)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuDuelStatusS2C::ByteSizeLong(const MessageLite& base) {
+  const JianghuDuelStatusS2C& this_ = static_cast<const JianghuDuelStatusS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuDuelStatusS2C::ByteSizeLong() const {
+  const JianghuDuelStatusS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.JianghuDuelStatusS2C)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string reason_code = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_reason_code().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason_code());
+      }
+    }
+    // .match.JianghuDuelInviteView invite = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.invite_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuDuelStatusS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuDuelStatusS2C*>(&to_msg);
+  auto& from = static_cast<const JianghuDuelStatusS2C&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.JianghuDuelStatusS2C)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_reason_code().empty()) {
+        _this->_internal_set_reason_code(from._internal_reason_code());
+      } else {
+        if (_this->_impl_.reason_code_.IsDefault()) {
+          _this->_internal_set_reason_code("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.invite_ != nullptr);
+      if (_this->_impl_.invite_ == nullptr) {
+        _this->_impl_.invite_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.invite_);
+      } else {
+        _this->_impl_.invite_->MergeFrom(*from._impl_.invite_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuDuelStatusS2C::CopyFrom(const JianghuDuelStatusS2C& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.JianghuDuelStatusS2C)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuDuelStatusS2C::InternalSwap(JianghuDuelStatusS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_code_, &other->_impl_.reason_code_, arena);
+  swap(_impl_.invite_, other->_impl_.invite_);
+}
+
+::google::protobuf::Metadata JianghuDuelStatusS2C::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

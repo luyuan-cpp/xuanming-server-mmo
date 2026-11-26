@@ -1470,5 +1470,32 @@
     <ClInclude Include="proto\tournamentreward_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClCompile Include="code\jianghurule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="code\jianghurule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\jianghurule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClCompile Include="code\jianghurule_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="code\jianghurule_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClCompile Include="proto\jianghurule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="proto\jianghurule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClCompile Include="proto\tip\jianghu_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="proto\tip\jianghu_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

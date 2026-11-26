@@ -85,6 +85,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
         // ::guildpb::GuildWarRivalryRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
+        // ::guildpb::GuildJianghuRivalSummaryRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
+        // ::guildpb::GuildJianghuGrudgeRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -4064,6 +4068,422 @@ const ::_pbi::ClassData* GuildMemberRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GuildJianghuRivalSummaryRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GuildJianghuRivalSummaryRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_._has_bits_);
+};
+
+constexpr GuildJianghuRivalSummaryRecord::ParseTableT_ GuildJianghuRivalSummaryRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::guildpb::GuildJianghuRivalSummaryRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 guild_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuRivalSummaryRecord, _impl_.guild_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.guild_id_)}},
+      // uint64 rival_guild_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuRivalSummaryRecord, _impl_.rival_guild_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.rival_guild_id_)}},
+      // string rival_guild_name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.rival_guild_name_)}},
+      // uint32 wins = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuRivalSummaryRecord, _impl_.wins_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.wins_)}},
+      // uint32 losses = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuRivalSummaryRecord, _impl_.losses_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.losses_)}},
+      // uint32 draws = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuRivalSummaryRecord, _impl_.draws_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.draws_)}},
+      // uint64 last_battle_ms = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuRivalSummaryRecord, _impl_.last_battle_ms_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.last_battle_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 guild_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.guild_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 rival_guild_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.rival_guild_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string rival_guild_name = 3;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.rival_guild_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 wins = 4;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.wins_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 losses = 5;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.losses_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 draws = 6;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.draws_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 last_battle_ms = 7;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.last_battle_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\46\0\0\20\0\0\0\0"
+      "guildpb.GuildJianghuRivalSummaryRecord"
+      "rival_guild_name"
+    }},
+  };
+}
+
+
+inline constexpr GuildJianghuRivalSummaryRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        rival_guild_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        guild_id_{::uint64_t{0u}},
+        rival_guild_id_{::uint64_t{0u}},
+        wins_{0u},
+        losses_{0u},
+        last_battle_ms_{::uint64_t{0u}},
+        draws_{0u} {}
+
+template <typename>
+constexpr GuildJianghuRivalSummaryRecord::GuildJianghuRivalSummaryRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GuildJianghuRivalSummaryRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GuildJianghuRivalSummaryRecord(arena);
+}
+constexpr auto GuildJianghuRivalSummaryRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GuildJianghuRivalSummaryRecord), alignof(GuildJianghuRivalSummaryRecord));
+}
+constexpr auto GuildJianghuRivalSummaryRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GuildJianghuRivalSummaryRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GuildJianghuRivalSummaryRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GuildJianghuRivalSummaryRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GuildJianghuRivalSummaryRecord>(), &GuildJianghuRivalSummaryRecord::ByteSizeLong,
+              &GuildJianghuRivalSummaryRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[28],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GuildJianghuRivalSummaryRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GuildJianghuRivalSummaryRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GuildJianghuRivalSummaryRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GuildJianghuRivalSummaryRecord::InternalGenerateClassData_(
+            _default, &GuildJianghuRivalSummaryRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GuildJianghuRivalSummaryRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GuildJianghuRivalSummaryRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GuildJianghuRivalSummaryRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GuildJianghuRivalSummaryRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GuildJianghuRivalSummaryRecordGlobalsTypeInternal GuildJianghuRivalSummaryRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GuildJianghuRivalSummaryRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GuildJianghuRivalSummaryRecord_globals_.GetClassData();
+#else
+  return GuildJianghuRivalSummaryRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GuildJianghuGrudgeRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GuildJianghuGrudgeRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_._has_bits_);
+};
+
+constexpr GuildJianghuGrudgeRecord::ParseTableT_ GuildJianghuGrudgeRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      11, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294965248,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      11,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::guildpb::GuildJianghuGrudgeRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 guild_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuGrudgeRecord, _impl_.guild_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.guild_id_)}},
+      // uint64 battle_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuGrudgeRecord, _impl_.battle_id_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.battle_id_)}},
+      // uint64 rival_guild_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuGrudgeRecord, _impl_.rival_guild_id_), 5>(),
+       {24, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.rival_guild_id_)}},
+      // string rival_guild_name = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.rival_guild_name_)}},
+      // uint32 outcome_for_guild = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuGrudgeRecord, _impl_.outcome_for_guild_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.outcome_for_guild_)}},
+      // uint32 writ_tier = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuGrudgeRecord, _impl_.writ_tier_), 7>(),
+       {48, 7, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.writ_tier_)}},
+      // uint32 team_size = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuGrudgeRecord, _impl_.team_size_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.team_size_)}},
+      // uint32 total_rounds = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildJianghuGrudgeRecord, _impl_.total_rounds_), 9>(),
+       {64, 9, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.total_rounds_)}},
+      // string our_captain_name = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.our_captain_name_)}},
+      // string rival_captain_name = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.rival_captain_name_)}},
+      // uint64 finished_ms = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuGrudgeRecord, _impl_.finished_ms_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.finished_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 guild_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.guild_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 battle_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.battle_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 rival_guild_id = 3;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.rival_guild_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string rival_guild_name = 4;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.rival_guild_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 outcome_for_guild = 5;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.outcome_for_guild_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 writ_tier = 6;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.writ_tier_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 team_size = 7;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.team_size_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 total_rounds = 8;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.total_rounds_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string our_captain_name = 9;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.our_captain_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string rival_captain_name = 10;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.rival_captain_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 finished_ms = 11;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.finished_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\40\0\0\0\20\0\0\0\0\20\22\0\0\0\0\0"
+      "guildpb.GuildJianghuGrudgeRecord"
+      "rival_guild_name"
+      "our_captain_name"
+      "rival_captain_name"
+    }},
+  };
+}
+
+
+inline constexpr GuildJianghuGrudgeRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        rival_guild_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        our_captain_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        rival_captain_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        guild_id_{::uint64_t{0u}},
+        battle_id_{::uint64_t{0u}},
+        rival_guild_id_{::uint64_t{0u}},
+        outcome_for_guild_{0u},
+        writ_tier_{0u},
+        team_size_{0u},
+        total_rounds_{0u},
+        finished_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GuildJianghuGrudgeRecord::GuildJianghuGrudgeRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GuildJianghuGrudgeRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GuildJianghuGrudgeRecord(arena);
+}
+constexpr auto GuildJianghuGrudgeRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GuildJianghuGrudgeRecord), alignof(GuildJianghuGrudgeRecord));
+}
+constexpr auto GuildJianghuGrudgeRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GuildJianghuGrudgeRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GuildJianghuGrudgeRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GuildJianghuGrudgeRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GuildJianghuGrudgeRecord>(), &GuildJianghuGrudgeRecord::ByteSizeLong,
+              &GuildJianghuGrudgeRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[29],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GuildJianghuGrudgeRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GuildJianghuGrudgeRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GuildJianghuGrudgeRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GuildJianghuGrudgeRecord::InternalGenerateClassData_(
+            _default, &GuildJianghuGrudgeRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GuildJianghuGrudgeRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GuildJianghuGrudgeRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GuildJianghuGrudgeRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GuildJianghuGrudgeRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GuildJianghuGrudgeRecordGlobalsTypeInternal GuildJianghuGrudgeRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GuildJianghuGrudgeRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GuildJianghuGrudgeRecord_globals_.GetClassData();
+#else
+  return GuildJianghuGrudgeRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GuildDailyCounterRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<GuildDailyCounterRecord>()._impl_._has_bits_);
@@ -6413,6 +6833,48 @@ const ::uint32_t
         3,
         5,
         4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.guild_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.rival_guild_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.rival_guild_name_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.wins_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.losses_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.draws_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuRivalSummaryRecord, _impl_.last_battle_ms_),
+        1,
+        2,
+        0,
+        3,
+        4,
+        6,
+        5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_._has_bits_),
+        14, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.guild_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.rival_guild_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.rival_guild_name_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.outcome_for_guild_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.writ_tier_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.team_size_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.total_rounds_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.our_captain_name_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.rival_captain_name_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeRecord, _impl_.finished_ms_),
+        3,
+        4,
+        5,
+        0,
+        6,
+        7,
+        8,
+        9,
+        1,
+        2,
+        10,
 };
 
 static const ::_pbi::MigrationSchema
@@ -6445,6 +6907,8 @@ static const ::_pbi::MigrationSchema
         {485, sizeof(::guildpb::GuildWarBountyRecord)},
         {522, sizeof(::guildpb::GuildWarBattleRecord)},
         {577, sizeof(::guildpb::GuildWarRivalryRecord)},
+        {592, sizeof(::guildpb::GuildJianghuRivalSummaryRecord)},
+        {609, sizeof(::guildpb::GuildJianghuGrudgeRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6476,6 +6940,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::guildpb::GuildWarBountyRecord_globals_,
         &::guildpb::GuildWarBattleRecord_globals_,
         &::guildpb::GuildWarRivalryRecord_globals_,
+        &::guildpb::GuildJianghuRivalSummaryRecord_globals_,
+        &::guildpb::GuildJianghuGrudgeRecord_globals_,
 };
 const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -6696,40 +7162,56 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_A
     "nt\030\004 \001(\r\022\025\n\rbounty_marked\030\005 \001(\r\022\022\n\nupdat"
     "ed_ms\030\006 \001(\004:M\212\222\364\001\021guild_war_rivalry\222\222\364\001#"
     "guild_id_low,guild_id_high,week_key\250\223\364\001\001"
-    "\260\223\364\001\004\270\223\364\001\004*\230\002\n\022GuildAssetOpStatus\022%\n!GUI"
-    "LD_ASSET_OP_STATUS_UNSPECIFIED\020\000\022!\n\035GUIL"
-    "D_ASSET_OP_STATUS_PENDING\020\001\022!\n\035GUILD_ASS"
-    "ET_OP_STATUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_OP"
-    "_STATUS_REJECTED\020\003\022!\n\035GUILD_ASSET_OP_STA"
-    "TUS_ABORTED\020\004\022)\n%GUILD_ASSET_OP_STATUS_A"
-    "PPLIED_PARTIAL\020\005\022#\n\037GUILD_ASSET_OP_STATU"
-    "S_ABANDONED\020\006*\220\002\n\020GuildAssetOpKind\022#\n\037GU"
-    "ILD_ASSET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUILD"
-    "_ASSET_OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET_O"
-    "P_KIND_SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_ACT"
-    "IVITY_REWARD\020\003\022\"\n\036GUILD_ASSET_OP_KIND_WA"
-    "R_REWARD\020\005\022%\n!GUILD_ASSET_OP_KIND_BOUNTY"
-    "_ESCROW\020\006\022%\n!GUILD_ASSET_OP_KIND_BOUNTY_"
-    "PAYOUT\020\007*\220\002\n\025GuildDailyCounterKind\022(\n$GU"
-    "ILD_DAILY_COUNTER_KIND_UNSPECIFIED\020\000\022#\n\037"
-    "GUILD_DAILY_COUNTER_KIND_DONATE\020\001\022!\n\035GUI"
-    "LD_DAILY_COUNTER_KIND_SHOP\020\002\022%\n!GUILD_DA"
-    "ILY_COUNTER_KIND_ACTIVITY\020\003\022.\n*GUILD_DAI"
-    "LY_COUNTER_KIND_WAR_BOUNTY_PAYOUT\020\004\022.\n*G"
-    "UILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNT"
-    "Y\020\005*\263\001\n\025GuildTrialBattleState\022(\n$GUILD_T"
-    "RIAL_BATTLE_STATE_UNSPECIFIED\020\000\022$\n GUILD"
-    "_TRIAL_BATTLE_STATE_STARTED\020\001\022$\n GUILD_T"
-    "RIAL_BATTLE_STATE_SETTLED\020\002\022$\n GUILD_TRI"
-    "AL_BATTLE_STATE_EXPIRED\020\003*\210\002\n\026GuildTrial"
-    "SettleResult\022)\n%GUILD_TRIAL_SETTLE_RESUL"
-    "T_UNSPECIFIED\020\000\022!\n\035GUILD_TRIAL_SETTLE_RE"
-    "SULT_WIN\020\001\022\"\n\036GUILD_TRIAL_SETTLE_RESULT_"
-    "LOSS\020\002\022(\n$GUILD_TRIAL_SETTLE_RESULT_GUIL"
-    "D_GONE\020\003\022,\n(GUILD_TRIAL_SETTLE_RESULT_CO"
-    "NFIG_MISSING\020\004\022$\n GUILD_TRIAL_SETTLE_RES"
-    "ULT_POISON\020\005B\023Z\021guild/proto/guildb\006proto"
-    "3"
+    "\260\223\364\001\004\270\223\364\001\004\"\222\002\n\036GuildJianghuRivalSummaryR"
+    "ecord\022\020\n\010guild_id\030\001 \001(\004\022\026\n\016rival_guild_i"
+    "d\030\002 \001(\004\022\030\n\020rival_guild_name\030\003 \001(\t\022\014\n\004win"
+    "s\030\004 \001(\r\022\016\n\006losses\030\005 \001(\r\022\r\n\005draws\030\006 \001(\r\022\026"
+    "\n\016last_battle_ms\030\007 \001(\004:g\212\222\364\001\033guild_jiang"
+    "hu_rival_summary\222\222\364\001\027guild_id,rival_guil"
+    "d_id\332\222\364\001\027guild_id,last_battle_ms\250\223\364\001\001\260\223\364"
+    "\001\004\270\223\364\001\004\"\364\002\n\030GuildJianghuGrudgeRecord\022\020\n\010"
+    "guild_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\026\n\016riv"
+    "al_guild_id\030\003 \001(\004\022\030\n\020rival_guild_name\030\004 "
+    "\001(\t\022\031\n\021outcome_for_guild\030\005 \001(\r\022\021\n\twrit_t"
+    "ier\030\006 \001(\r\022\021\n\tteam_size\030\007 \001(\r\022\024\n\014total_ro"
+    "unds\030\010 \001(\r\022\030\n\020our_captain_name\030\t \001(\t\022\032\n\022"
+    "rival_captain_name\030\n \001(\t\022\023\n\013finished_ms\030"
+    "\013 \001(\004:_\212\222\364\001\033guild_jianghu_grudge_record\222"
+    "\222\364\001\022guild_id,battle_id\332\222\364\001\024guild_id,fini"
+    "shed_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\230\002\n\022GuildAssetOpS"
+    "tatus\022%\n!GUILD_ASSET_OP_STATUS_UNSPECIFI"
+    "ED\020\000\022!\n\035GUILD_ASSET_OP_STATUS_PENDING\020\001\022"
+    "!\n\035GUILD_ASSET_OP_STATUS_APPLIED\020\002\022\"\n\036GU"
+    "ILD_ASSET_OP_STATUS_REJECTED\020\003\022!\n\035GUILD_"
+    "ASSET_OP_STATUS_ABORTED\020\004\022)\n%GUILD_ASSET"
+    "_OP_STATUS_APPLIED_PARTIAL\020\005\022#\n\037GUILD_AS"
+    "SET_OP_STATUS_ABANDONED\020\006*\220\002\n\020GuildAsset"
+    "OpKind\022#\n\037GUILD_ASSET_OP_KIND_UNSPECIFIE"
+    "D\020\000\022\036\n\032GUILD_ASSET_OP_KIND_DONATE\020\001\022\034\n\030G"
+    "UILD_ASSET_OP_KIND_SHOP\020\002\022\'\n#GUILD_ASSET"
+    "_OP_KIND_ACTIVITY_REWARD\020\003\022\"\n\036GUILD_ASSE"
+    "T_OP_KIND_WAR_REWARD\020\005\022%\n!GUILD_ASSET_OP"
+    "_KIND_BOUNTY_ESCROW\020\006\022%\n!GUILD_ASSET_OP_"
+    "KIND_BOUNTY_PAYOUT\020\007*\220\002\n\025GuildDailyCount"
+    "erKind\022(\n$GUILD_DAILY_COUNTER_KIND_UNSPE"
+    "CIFIED\020\000\022#\n\037GUILD_DAILY_COUNTER_KIND_DON"
+    "ATE\020\001\022!\n\035GUILD_DAILY_COUNTER_KIND_SHOP\020\002"
+    "\022%\n!GUILD_DAILY_COUNTER_KIND_ACTIVITY\020\003\022"
+    ".\n*GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_P"
+    "AYOUT\020\004\022.\n*GUILD_DAILY_COUNTER_KIND_WAR_"
+    "PUBLIC_BOUNTY\020\005*\263\001\n\025GuildTrialBattleStat"
+    "e\022(\n$GUILD_TRIAL_BATTLE_STATE_UNSPECIFIE"
+    "D\020\000\022$\n GUILD_TRIAL_BATTLE_STATE_STARTED\020"
+    "\001\022$\n GUILD_TRIAL_BATTLE_STATE_SETTLED\020\002\022"
+    "$\n GUILD_TRIAL_BATTLE_STATE_EXPIRED\020\003*\210\002"
+    "\n\026GuildTrialSettleResult\022)\n%GUILD_TRIAL_"
+    "SETTLE_RESULT_UNSPECIFIED\020\000\022!\n\035GUILD_TRI"
+    "AL_SETTLE_RESULT_WIN\020\001\022\"\n\036GUILD_TRIAL_SE"
+    "TTLE_RESULT_LOSS\020\002\022(\n$GUILD_TRIAL_SETTLE"
+    "_RESULT_GUILD_GONE\020\003\022,\n(GUILD_TRIAL_SETT"
+    "LE_RESULT_CONFIG_MISSING\020\004\022$\n GUILD_TRIA"
+    "L_SETTLE_RESULT_POISON\020\005B\023Z\021guild/proto/"
+    "guildb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps[1] = {
@@ -6739,13 +7221,13 @@ static ::absl::once_flag descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fguild_2fguild_5fdb_2eproto = {
     false,
     false,
-    10001,
+    10653,
     descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto,
     "proto/guild/guild_db.proto",
     &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_once,
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps,
     1,
-    28,
+    30,
     schemas,
     file_message_globals,
     TableStruct_proto_2fguild_2fguild_5fdb_2eproto::offsets,
@@ -18060,6 +18542,859 @@ void GuildWarRivalryRecord::InternalSwap(GuildWarRivalryRecord* PROTOBUF_RESTRIC
 }
 
 ::google::protobuf::Metadata GuildWarRivalryRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GuildJianghuRivalSummaryRecord::GuildJianghuRivalSummaryRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildJianghuRivalSummaryRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:guildpb.GuildJianghuRivalSummaryRecord)
+}
+PROTOBUF_NDEBUG_INLINE GuildJianghuRivalSummaryRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::guildpb::GuildJianghuRivalSummaryRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        rival_guild_name_(arena, from.rival_guild_name_) {}
+
+GuildJianghuRivalSummaryRecord::GuildJianghuRivalSummaryRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GuildJianghuRivalSummaryRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildJianghuRivalSummaryRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GuildJianghuRivalSummaryRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, guild_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, guild_id_),
+           offsetof(Impl_, draws_) -
+               offsetof(Impl_, guild_id_) +
+               sizeof(Impl_::draws_));
+
+  // @@protoc_insertion_point(copy_constructor:guildpb.GuildJianghuRivalSummaryRecord)
+}
+PROTOBUF_NDEBUG_INLINE GuildJianghuRivalSummaryRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        rival_guild_name_(arena) {}
+
+inline void GuildJianghuRivalSummaryRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, guild_id_),
+           0,
+           offsetof(Impl_, draws_) -
+               offsetof(Impl_, guild_id_) +
+               sizeof(Impl_::draws_));
+}
+GuildJianghuRivalSummaryRecord::~GuildJianghuRivalSummaryRecord() {
+  // @@protoc_insertion_point(destructor:guildpb.GuildJianghuRivalSummaryRecord)
+  SharedDtor(*this);
+}
+inline void GuildJianghuRivalSummaryRecord::SharedDtor(MessageLite& self) {
+  GuildJianghuRivalSummaryRecord& this_ = static_cast<GuildJianghuRivalSummaryRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.rival_guild_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GuildJianghuRivalSummaryRecord_class_data_ =
+        GuildJianghuRivalSummaryRecord::InternalGenerateClassData_(GuildJianghuRivalSummaryRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildJianghuRivalSummaryRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildJianghuRivalSummaryRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GuildJianghuRivalSummaryRecord_class_data_.tc_table);
+  return GuildJianghuRivalSummaryRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildJianghuRivalSummaryRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildJianghuRivalSummaryRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GuildJianghuRivalSummaryRecord_globals_));
+  return GuildJianghuRivalSummaryRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GuildJianghuRivalSummaryRecord::ParseTableT_
+    GuildJianghuRivalSummaryRecord::_table_ =
+        GuildJianghuRivalSummaryRecord::InternalGenerateParseTable_(GuildJianghuRivalSummaryRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GuildJianghuRivalSummaryRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:guildpb.GuildJianghuRivalSummaryRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.rival_guild_name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+    ::memset(&_impl_.guild_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.draws_) -
+        reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.draws_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GuildJianghuRivalSummaryRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GuildJianghuRivalSummaryRecord& this_ = static_cast<const GuildJianghuRivalSummaryRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GuildJianghuRivalSummaryRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GuildJianghuRivalSummaryRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:guildpb.GuildJianghuRivalSummaryRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 guild_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_guild_id(), target);
+    }
+  }
+
+  // uint64 rival_guild_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_rival_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_rival_guild_id(), target);
+    }
+  }
+
+  // string rival_guild_name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_rival_guild_name().empty()) {
+      const ::std::string& _s = this_._internal_rival_guild_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "guildpb.GuildJianghuRivalSummaryRecord.rival_guild_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 wins = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_wins() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_wins(), target);
+    }
+  }
+
+  // uint32 losses = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_losses() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_losses(), target);
+    }
+  }
+
+  // uint32 draws = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_draws() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_draws(), target);
+    }
+  }
+
+  // uint64 last_battle_ms = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_last_battle_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_last_battle_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:guildpb.GuildJianghuRivalSummaryRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GuildJianghuRivalSummaryRecord::ByteSizeLong(const MessageLite& base) {
+  const GuildJianghuRivalSummaryRecord& this_ = static_cast<const GuildJianghuRivalSummaryRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GuildJianghuRivalSummaryRecord::ByteSizeLong() const {
+  const GuildJianghuRivalSummaryRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:guildpb.GuildJianghuRivalSummaryRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // string rival_guild_name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_rival_guild_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_rival_guild_name());
+      }
+    }
+    // uint64 guild_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_guild_id());
+      }
+    }
+    // uint64 rival_guild_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_rival_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_rival_guild_id());
+      }
+    }
+    // uint32 wins = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_wins() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_wins());
+      }
+    }
+    // uint32 losses = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_losses() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_losses());
+      }
+    }
+    // uint64 last_battle_ms = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_last_battle_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_last_battle_ms());
+      }
+    }
+    // uint32 draws = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_draws() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_draws());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GuildJianghuRivalSummaryRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GuildJianghuRivalSummaryRecord*>(&to_msg);
+  auto& from = static_cast<const GuildJianghuRivalSummaryRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:guildpb.GuildJianghuRivalSummaryRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_rival_guild_name().empty()) {
+        _this->_internal_set_rival_guild_name(from._internal_rival_guild_name());
+      } else {
+        if (_this->_impl_.rival_guild_name_.IsDefault()) {
+          _this->_internal_set_rival_guild_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_guild_id() != 0) {
+        _this->_impl_.guild_id_ = from._impl_.guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_rival_guild_id() != 0) {
+        _this->_impl_.rival_guild_id_ = from._impl_.rival_guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_wins() != 0) {
+        _this->_impl_.wins_ = from._impl_.wins_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_losses() != 0) {
+        _this->_impl_.losses_ = from._impl_.losses_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_last_battle_ms() != 0) {
+        _this->_impl_.last_battle_ms_ = from._impl_.last_battle_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_draws() != 0) {
+        _this->_impl_.draws_ = from._impl_.draws_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GuildJianghuRivalSummaryRecord::CopyFrom(const GuildJianghuRivalSummaryRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:guildpb.GuildJianghuRivalSummaryRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GuildJianghuRivalSummaryRecord::InternalSwap(GuildJianghuRivalSummaryRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rival_guild_name_, &other->_impl_.rival_guild_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.draws_)
+      + sizeof(GuildJianghuRivalSummaryRecord::_impl_.draws_)
+      - PROTOBUF_FIELD_OFFSET(GuildJianghuRivalSummaryRecord, _impl_.guild_id_)>(
+          reinterpret_cast<char*>(&_impl_.guild_id_),
+          reinterpret_cast<char*>(&other->_impl_.guild_id_));
+}
+
+::google::protobuf::Metadata GuildJianghuRivalSummaryRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GuildJianghuGrudgeRecord::GuildJianghuGrudgeRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildJianghuGrudgeRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:guildpb.GuildJianghuGrudgeRecord)
+}
+PROTOBUF_NDEBUG_INLINE GuildJianghuGrudgeRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::guildpb::GuildJianghuGrudgeRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        rival_guild_name_(arena, from.rival_guild_name_),
+        our_captain_name_(arena, from.our_captain_name_),
+        rival_captain_name_(arena, from.rival_captain_name_) {}
+
+GuildJianghuGrudgeRecord::GuildJianghuGrudgeRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GuildJianghuGrudgeRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildJianghuGrudgeRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GuildJianghuGrudgeRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, guild_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, guild_id_),
+           offsetof(Impl_, finished_ms_) -
+               offsetof(Impl_, guild_id_) +
+               sizeof(Impl_::finished_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:guildpb.GuildJianghuGrudgeRecord)
+}
+PROTOBUF_NDEBUG_INLINE GuildJianghuGrudgeRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        rival_guild_name_(arena),
+        our_captain_name_(arena),
+        rival_captain_name_(arena) {}
+
+inline void GuildJianghuGrudgeRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, guild_id_),
+           0,
+           offsetof(Impl_, finished_ms_) -
+               offsetof(Impl_, guild_id_) +
+               sizeof(Impl_::finished_ms_));
+}
+GuildJianghuGrudgeRecord::~GuildJianghuGrudgeRecord() {
+  // @@protoc_insertion_point(destructor:guildpb.GuildJianghuGrudgeRecord)
+  SharedDtor(*this);
+}
+inline void GuildJianghuGrudgeRecord::SharedDtor(MessageLite& self) {
+  GuildJianghuGrudgeRecord& this_ = static_cast<GuildJianghuGrudgeRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.rival_guild_name_.Destroy();
+  this_._impl_.our_captain_name_.Destroy();
+  this_._impl_.rival_captain_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GuildJianghuGrudgeRecord_class_data_ =
+        GuildJianghuGrudgeRecord::InternalGenerateClassData_(GuildJianghuGrudgeRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildJianghuGrudgeRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildJianghuGrudgeRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GuildJianghuGrudgeRecord_class_data_.tc_table);
+  return GuildJianghuGrudgeRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildJianghuGrudgeRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildJianghuGrudgeRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GuildJianghuGrudgeRecord_globals_));
+  return GuildJianghuGrudgeRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GuildJianghuGrudgeRecord::ParseTableT_
+    GuildJianghuGrudgeRecord::_table_ =
+        GuildJianghuGrudgeRecord::InternalGenerateParseTable_(GuildJianghuGrudgeRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GuildJianghuGrudgeRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:guildpb.GuildJianghuGrudgeRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.rival_guild_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.our_captain_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.rival_captain_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.guild_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.writ_tier_) -
+        reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.writ_tier_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.team_size_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.finished_ms_) -
+        reinterpret_cast<char*>(&_impl_.team_size_)) + sizeof(_impl_.finished_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GuildJianghuGrudgeRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GuildJianghuGrudgeRecord& this_ = static_cast<const GuildJianghuGrudgeRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GuildJianghuGrudgeRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GuildJianghuGrudgeRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:guildpb.GuildJianghuGrudgeRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 guild_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_guild_id(), target);
+    }
+  }
+
+  // uint64 battle_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint64 rival_guild_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_rival_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_rival_guild_id(), target);
+    }
+  }
+
+  // string rival_guild_name = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_rival_guild_name().empty()) {
+      const ::std::string& _s = this_._internal_rival_guild_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "guildpb.GuildJianghuGrudgeRecord.rival_guild_name");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint32 outcome_for_guild = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_outcome_for_guild() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_outcome_for_guild(), target);
+    }
+  }
+
+  // uint32 writ_tier = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_writ_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_writ_tier(), target);
+    }
+  }
+
+  // uint32 team_size = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_team_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_team_size(), target);
+    }
+  }
+
+  // uint32 total_rounds = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_total_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_total_rounds(), target);
+    }
+  }
+
+  // string our_captain_name = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_our_captain_name().empty()) {
+      const ::std::string& _s = this_._internal_our_captain_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "guildpb.GuildJianghuGrudgeRecord.our_captain_name");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // string rival_captain_name = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_rival_captain_name().empty()) {
+      const ::std::string& _s = this_._internal_rival_captain_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "guildpb.GuildJianghuGrudgeRecord.rival_captain_name");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // uint64 finished_ms = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_finished_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_finished_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:guildpb.GuildJianghuGrudgeRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GuildJianghuGrudgeRecord::ByteSizeLong(const MessageLite& base) {
+  const GuildJianghuGrudgeRecord& this_ = static_cast<const GuildJianghuGrudgeRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GuildJianghuGrudgeRecord::ByteSizeLong() const {
+  const GuildJianghuGrudgeRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:guildpb.GuildJianghuGrudgeRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string rival_guild_name = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_rival_guild_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_rival_guild_name());
+      }
+    }
+    // string our_captain_name = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_our_captain_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_our_captain_name());
+      }
+    }
+    // string rival_captain_name = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_rival_captain_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_rival_captain_name());
+      }
+    }
+    // uint64 guild_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_guild_id());
+      }
+    }
+    // uint64 battle_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint64 rival_guild_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_rival_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_rival_guild_id());
+      }
+    }
+    // uint32 outcome_for_guild = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_outcome_for_guild() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_outcome_for_guild());
+      }
+    }
+    // uint32 writ_tier = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_writ_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_writ_tier());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // uint32 team_size = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_team_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_team_size());
+      }
+    }
+    // uint32 total_rounds = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_total_rounds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_total_rounds());
+      }
+    }
+    // uint64 finished_ms = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_finished_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_finished_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GuildJianghuGrudgeRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GuildJianghuGrudgeRecord*>(&to_msg);
+  auto& from = static_cast<const GuildJianghuGrudgeRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:guildpb.GuildJianghuGrudgeRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_rival_guild_name().empty()) {
+        _this->_internal_set_rival_guild_name(from._internal_rival_guild_name());
+      } else {
+        if (_this->_impl_.rival_guild_name_.IsDefault()) {
+          _this->_internal_set_rival_guild_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_our_captain_name().empty()) {
+        _this->_internal_set_our_captain_name(from._internal_our_captain_name());
+      } else {
+        if (_this->_impl_.our_captain_name_.IsDefault()) {
+          _this->_internal_set_our_captain_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_rival_captain_name().empty()) {
+        _this->_internal_set_rival_captain_name(from._internal_rival_captain_name());
+      } else {
+        if (_this->_impl_.rival_captain_name_.IsDefault()) {
+          _this->_internal_set_rival_captain_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_guild_id() != 0) {
+        _this->_impl_.guild_id_ = from._impl_.guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_rival_guild_id() != 0) {
+        _this->_impl_.rival_guild_id_ = from._impl_.rival_guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_outcome_for_guild() != 0) {
+        _this->_impl_.outcome_for_guild_ = from._impl_.outcome_for_guild_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_writ_tier() != 0) {
+        _this->_impl_.writ_tier_ = from._impl_.writ_tier_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_team_size() != 0) {
+        _this->_impl_.team_size_ = from._impl_.team_size_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_total_rounds() != 0) {
+        _this->_impl_.total_rounds_ = from._impl_.total_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_finished_ms() != 0) {
+        _this->_impl_.finished_ms_ = from._impl_.finished_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GuildJianghuGrudgeRecord::CopyFrom(const GuildJianghuGrudgeRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:guildpb.GuildJianghuGrudgeRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GuildJianghuGrudgeRecord::InternalSwap(GuildJianghuGrudgeRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rival_guild_name_, &other->_impl_.rival_guild_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.our_captain_name_, &other->_impl_.our_captain_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rival_captain_name_, &other->_impl_.rival_captain_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.finished_ms_)
+      + sizeof(GuildJianghuGrudgeRecord::_impl_.finished_ms_)
+      - PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeRecord, _impl_.guild_id_)>(
+          reinterpret_cast<char*>(&_impl_.guild_id_),
+          reinterpret_cast<char*>(&other->_impl_.guild_id_));
+}
+
+::google::protobuf::Metadata GuildJianghuGrudgeRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

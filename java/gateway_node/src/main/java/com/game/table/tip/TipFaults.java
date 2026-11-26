@@ -94,7 +94,8 @@ public final class TipFaults {
             new Fault(37000, "spirit_shop_error", "SpiritShopUnavailable"),
             new Fault(38000, "travel_pass_error", "TravelPassUnavailable"),
             new Fault(39000, "rewarded_ad_error", "RewardedAdUnavailable"),
-            new Fault(39011, "rewarded_ad_error", "RewardedAdFrozen")
+            new Fault(39011, "rewarded_ad_error", "RewardedAdFrozen"),
+            new Fault(40013, "jianghu_error", "JianghuServiceBusy")
     );
 
     /** 由 FAULTS 派生,不单独生成第二份字面量。 */

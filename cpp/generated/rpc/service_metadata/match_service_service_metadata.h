@@ -170,3 +170,31 @@ constexpr uint32_t MatchServiceBanTournamentLeylineIndex = 40;
 constexpr uint32_t MatchServiceGetTournamentHighlightsMessageId = 535;
 constexpr uint32_t MatchServiceGetTournamentHighlightsIndex = 41;
 #define MatchServiceGetTournamentHighlightsMethod  ::MatchService_Stub::descriptor()->method(41)
+
+constexpr uint32_t MatchServiceCreateJianghuDuelInviteMessageId = 548;
+constexpr uint32_t MatchServiceCreateJianghuDuelInviteIndex = 42;
+#define MatchServiceCreateJianghuDuelInviteMethod  ::MatchService_Stub::descriptor()->method(42)
+
+constexpr uint32_t MatchServiceConfirmJianghuDuelMemberMessageId = 549;
+constexpr uint32_t MatchServiceConfirmJianghuDuelMemberIndex = 43;
+#define MatchServiceConfirmJianghuDuelMemberMethod  ::MatchService_Stub::descriptor()->method(43)
+
+constexpr uint32_t MatchServiceRespondJianghuDuelInviteMessageId = 550;
+constexpr uint32_t MatchServiceRespondJianghuDuelInviteIndex = 44;
+#define MatchServiceRespondJianghuDuelInviteMethod  ::MatchService_Stub::descriptor()->method(44)
+
+constexpr uint32_t MatchServiceListJianghuGrudgesMessageId = 551;
+constexpr uint32_t MatchServiceListJianghuGrudgesIndex = 45;
+#define MatchServiceListJianghuGrudgesMethod  ::MatchService_Stub::descriptor()->method(45)
+
+constexpr uint32_t MatchServiceDismissJianghuGrudgeMessageId = 552;
+constexpr uint32_t MatchServiceDismissJianghuGrudgeIndex = 46;
+#define MatchServiceDismissJianghuGrudgeMethod  ::MatchService_Stub::descriptor()->method(46)
+
+constexpr uint32_t MatchServiceNotifyJianghuDuelInviteMessageId = 553;
+constexpr uint32_t MatchServiceNotifyJianghuDuelInviteIndex = 47;
+#define MatchServiceNotifyJianghuDuelInviteMethod  ::MatchService_Stub::descriptor()->method(47)
+
+constexpr uint32_t MatchServiceNotifyJianghuDuelStatusMessageId = 554;
+constexpr uint32_t MatchServiceNotifyJianghuDuelStatusIndex = 48;
+#define MatchServiceNotifyJianghuDuelStatusMethod  ::MatchService_Stub::descriptor()->method(48)

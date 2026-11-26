@@ -79,6 +79,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ffriend_2ffriend_2eproto, /* tracker*/ nullptr,},
         // ::friendpb::FriendEventS2C
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ffriend_2ffriend_2eproto, /* tracker*/ nullptr,},
+        // ::friendpb::BatchCheckSocialRelationsRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ffriend_2ffriend_2eproto, /* tracker*/ nullptr,},
+        // ::friendpb::BatchCheckSocialRelationsResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ffriend_2ffriend_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -2123,6 +2127,164 @@ const ::_pbi::ClassData* BlockEntry_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchCheckSocialRelationsRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchCheckSocialRelationsRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_._has_bits_);
+};
+
+constexpr BatchCheckSocialRelationsRequest::ParseTableT_ BatchCheckSocialRelationsRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::friendpb::BatchCheckSocialRelationsRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 side_b_player_ids = 2;
+      {::_pbi::TcParser::FastV64P1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)}},
+      // repeated uint64 side_a_player_ids = 1;
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 side_a_player_ids = 1;
+      {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // repeated uint64 side_b_player_ids = 2;
+      {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchCheckSocialRelationsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        side_a_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::friendpb::BatchCheckSocialRelationsRequest,
+            PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_)>()
+         }
+        ,
+        _side_a_player_ids_cached_byte_size_{0},
+        side_b_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::friendpb::BatchCheckSocialRelationsRequest,
+            PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)>()
+         }
+        ,
+        _side_b_player_ids_cached_byte_size_{0} {}
+
+template <typename>
+constexpr BatchCheckSocialRelationsRequest::BatchCheckSocialRelationsRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchCheckSocialRelationsRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchCheckSocialRelationsRequest(arena);
+}
+constexpr auto BatchCheckSocialRelationsRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BatchCheckSocialRelationsRequest), alignof(BatchCheckSocialRelationsRequest));
+}
+constexpr auto BatchCheckSocialRelationsRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchCheckSocialRelationsRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchCheckSocialRelationsRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchCheckSocialRelationsRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchCheckSocialRelationsRequest>(), &BatchCheckSocialRelationsRequest::ByteSizeLong,
+              &BatchCheckSocialRelationsRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[25],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ffriend_2ffriend_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchCheckSocialRelationsRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchCheckSocialRelationsRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchCheckSocialRelationsRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchCheckSocialRelationsRequest::InternalGenerateClassData_(
+            _default, &BatchCheckSocialRelationsRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchCheckSocialRelationsRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchCheckSocialRelationsRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchCheckSocialRelationsRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchCheckSocialRelationsRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchCheckSocialRelationsRequestGlobalsTypeInternal BatchCheckSocialRelationsRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchCheckSocialRelationsRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchCheckSocialRelationsRequest_globals_.GetClassData();
+#else
+  return BatchCheckSocialRelationsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class AddFriendRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<AddFriendRequest>()._impl_._has_bits_);
@@ -3671,6 +3833,168 @@ const ::_pbi::ClassData* BlockResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchCheckSocialRelationsResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchCheckSocialRelationsResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_._has_bits_);
+};
+
+constexpr BatchCheckSocialRelationsResponse::ParseTableT_ BatchCheckSocialRelationsResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::friendpb::BatchCheckSocialRelationsResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.error_message_)}},
+      // bool has_any_block = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BatchCheckSocialRelationsResponse, _impl_.has_any_block_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.has_any_block_)}},
+      // bool all_are_friends = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BatchCheckSocialRelationsResponse, _impl_.all_are_friends_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.all_are_friends_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool has_any_block = 2;
+      {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.has_any_block_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool all_are_friends = 3;
+      {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.all_are_friends_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchCheckSocialRelationsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        has_any_block_{false},
+        all_are_friends_{false} {}
+
+template <typename>
+constexpr BatchCheckSocialRelationsResponse::BatchCheckSocialRelationsResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchCheckSocialRelationsResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchCheckSocialRelationsResponse(arena);
+}
+constexpr auto BatchCheckSocialRelationsResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BatchCheckSocialRelationsResponse), alignof(BatchCheckSocialRelationsResponse));
+}
+constexpr auto BatchCheckSocialRelationsResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchCheckSocialRelationsResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchCheckSocialRelationsResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchCheckSocialRelationsResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchCheckSocialRelationsResponse>(), &BatchCheckSocialRelationsResponse::ByteSizeLong,
+              &BatchCheckSocialRelationsResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[26],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ffriend_2ffriend_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchCheckSocialRelationsResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchCheckSocialRelationsResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchCheckSocialRelationsResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchCheckSocialRelationsResponse::InternalGenerateClassData_(
+            _default, &BatchCheckSocialRelationsResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchCheckSocialRelationsResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchCheckSocialRelationsResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchCheckSocialRelationsResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchCheckSocialRelationsResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchCheckSocialRelationsResponseGlobalsTypeInternal BatchCheckSocialRelationsResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchCheckSocialRelationsResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchCheckSocialRelationsResponse_globals_.GetClassData();
+#else
+  return BatchCheckSocialRelationsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class AddFriendResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<AddFriendResponse>()._impl_._has_bits_);
@@ -4169,6 +4493,22 @@ const ::uint32_t
         2,
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_),
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsResponse, _impl_.has_any_block_),
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsResponse, _impl_.all_are_friends_),
+        0,
+        1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -4198,6 +4538,8 @@ static const ::_pbi::MigrationSchema
         {146, sizeof(::friendpb::RecommendEntry)},
         {169, sizeof(::friendpb::RecommendFriendsResponse)},
         {180, sizeof(::friendpb::FriendEventS2C)},
+        {189, sizeof(::friendpb::BatchCheckSocialRelationsRequest)},
+        {196, sizeof(::friendpb::BatchCheckSocialRelationsResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4226,6 +4568,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::friendpb::RecommendEntry_globals_,
         &::friendpb::RecommendFriendsResponse_globals_,
         &::friendpb::FriendEventS2C_globals_,
+        &::friendpb::BatchCheckSocialRelationsRequest_globals_,
+        &::friendpb::BatchCheckSocialRelationsResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2ffriend_2ffriend_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -4287,37 +4631,45 @@ const char descriptor_table_protodef_proto_2ffriend_2ffriend_2eproto[] ABSL_ATTR
     "\022\023\n\013next_cursor\030\003 \001(\t\022\030\n\020online_director"
     "y\030\004 \001(\010\"b\n\016FriendEventS2C\022+\n\006reason\030\001 \001("
     "\0162\033.friendpb.FriendEventReason\022\024\n\014by_pla"
-    "yer_id\030\002 \001(\004\022\r\n\005ts_ms\030\003 \001(\003*\207\001\n\023FriendRe"
-    "questStatus\022\032\n\026FRIEND_REQUEST_UNKNOWN\020\000\022"
-    "\032\n\026FRIEND_REQUEST_PENDING\020\001\022\033\n\027FRIEND_RE"
-    "QUEST_ACCEPTED\020\002\022\033\n\027FRIEND_REQUEST_REJEC"
-    "TED\020\003*\214\001\n\021FriendEventReason\022#\n\037FRIEND_EV"
-    "ENT_REASON_UNSPECIFIED\020\000\022(\n$FRIEND_EVENT"
-    "_REASON_REQUEST_RECEIVED\020\001\022(\n$FRIEND_EVE"
-    "NT_REASON_REQUEST_ACCEPTED\020\0022\335\006\n\022ClientP"
-    "layerFriend\022D\n\tAddFriend\022\032.friendpb.AddF"
-    "riendRequest\032\033.friendpb.AddFriendRespons"
-    "e\022M\n\014AcceptFriend\022\035.friendpb.AcceptFrien"
-    "dRequest\032\036.friendpb.AcceptFriendResponse"
-    "\022M\n\014RejectFriend\022\035.friendpb.RejectFriend"
-    "Request\032\036.friendpb.RejectFriendResponse\022"
-    "M\n\014RemoveFriend\022\035.friendpb.RemoveFriendR"
-    "equest\032\036.friendpb.RemoveFriendResponse\022P"
-    "\n\rGetFriendList\022\036.friendpb.GetFriendList"
-    "Request\032\037.friendpb.GetFriendListResponse"
-    "\022_\n\022GetPendingRequests\022#.friendpb.GetPen"
-    "dingRequestsRequest\032$.friendpb.GetPendin"
-    "gRequestsResponse\0228\n\005Block\022\026.friendpb.Bl"
-    "ockRequest\032\027.friendpb.BlockResponse\022>\n\007U"
-    "nblock\022\030.friendpb.UnblockRequest\032\031.frien"
-    "dpb.UnblockResponse\022G\n\nListBlocks\022\033.frie"
-    "ndpb.ListBlocksRequest\032\034.friendpb.ListBl"
-    "ocksResponse\022Y\n\020RecommendFriends\022!.frien"
-    "dpb.RecommendFriendsRequest\032\".friendpb.R"
-    "ecommendFriendsResponse\022<\n\021NotifyFriendE"
-    "vent\022\030.friendpb.FriendEventS2C\032\006.Empty\"\005"
-    "\210\231\310\001\002\032\005\210\250\303\001\001B\025Z\023friend/proto/friendb\006pro"
-    "to3"
+    "yer_id\030\002 \001(\004\022\r\n\005ts_ms\030\003 \001(\003\"X\n BatchChec"
+    "kSocialRelationsRequest\022\031\n\021side_a_player"
+    "_ids\030\001 \003(\004\022\031\n\021side_b_player_ids\030\002 \003(\004\"{\n"
+    "!BatchCheckSocialRelationsResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\rha"
+    "s_any_block\030\002 \001(\010\022\027\n\017all_are_friends\030\003 \001"
+    "(\010*\207\001\n\023FriendRequestStatus\022\032\n\026FRIEND_REQ"
+    "UEST_UNKNOWN\020\000\022\032\n\026FRIEND_REQUEST_PENDING"
+    "\020\001\022\033\n\027FRIEND_REQUEST_ACCEPTED\020\002\022\033\n\027FRIEN"
+    "D_REQUEST_REJECTED\020\003*\214\001\n\021FriendEventReas"
+    "on\022#\n\037FRIEND_EVENT_REASON_UNSPECIFIED\020\000\022"
+    "(\n$FRIEND_EVENT_REASON_REQUEST_RECEIVED\020"
+    "\001\022(\n$FRIEND_EVENT_REASON_REQUEST_ACCEPTE"
+    "D\020\0022\332\007\n\022ClientPlayerFriend\022D\n\tAddFriend\022"
+    "\032.friendpb.AddFriendRequest\032\033.friendpb.A"
+    "ddFriendResponse\022M\n\014AcceptFriend\022\035.frien"
+    "dpb.AcceptFriendRequest\032\036.friendpb.Accep"
+    "tFriendResponse\022M\n\014RejectFriend\022\035.friend"
+    "pb.RejectFriendRequest\032\036.friendpb.Reject"
+    "FriendResponse\022M\n\014RemoveFriend\022\035.friendp"
+    "b.RemoveFriendRequest\032\036.friendpb.RemoveF"
+    "riendResponse\022P\n\rGetFriendList\022\036.friendp"
+    "b.GetFriendListRequest\032\037.friendpb.GetFri"
+    "endListResponse\022_\n\022GetPendingRequests\022#."
+    "friendpb.GetPendingRequestsRequest\032$.fri"
+    "endpb.GetPendingRequestsResponse\0228\n\005Bloc"
+    "k\022\026.friendpb.BlockRequest\032\027.friendpb.Blo"
+    "ckResponse\022>\n\007Unblock\022\030.friendpb.Unblock"
+    "Request\032\031.friendpb.UnblockResponse\022G\n\nLi"
+    "stBlocks\022\033.friendpb.ListBlocksRequest\032\034."
+    "friendpb.ListBlocksResponse\022Y\n\020Recommend"
+    "Friends\022!.friendpb.RecommendFriendsReque"
+    "st\032\".friendpb.RecommendFriendsResponse\022<"
+    "\n\021NotifyFriendEvent\022\030.friendpb.FriendEve"
+    "ntS2C\032\006.Empty\"\005\210\231\310\001\002\022{\n\031BatchCheckSocial"
+    "Relations\022*.friendpb.BatchCheckSocialRel"
+    "ationsRequest\032+.friendpb.BatchCheckSocia"
+    "lRelationsResponse\"\005\210\231\310\001\003\032\005\210\250\303\001\001B\025Z\023frie"
+    "nd/proto/friendb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ffriend_2ffriend_2eproto_deps[3] = {
@@ -4329,13 +4681,13 @@ static ::absl::once_flag descriptor_table_proto_2ffriend_2ffriend_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ffriend_2ffriend_2eproto = {
     false,
     false,
-    3523,
+    3863,
     descriptor_table_protodef_proto_2ffriend_2ffriend_2eproto,
     "proto/friend/friend.proto",
     &descriptor_table_proto_2ffriend_2ffriend_2eproto_once,
     descriptor_table_proto_2ffriend_2ffriend_2eproto_deps,
     3,
-    25,
+    27,
     schemas,
     file_message_globals,
     TableStruct_proto_2ffriend_2ffriend_2eproto::offsets,
@@ -10231,6 +10583,547 @@ void FriendEventS2C::InternalSwap(FriendEventS2C* PROTOBUF_RESTRICT PROTOBUF_NON
 }
 
 ::google::protobuf::Metadata FriendEventS2C::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+BatchCheckSocialRelationsRequest::BatchCheckSocialRelationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchCheckSocialRelationsRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:friendpb.BatchCheckSocialRelationsRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchCheckSocialRelationsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::friendpb::BatchCheckSocialRelationsRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        side_a_player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::friendpb::BatchCheckSocialRelationsRequest,
+              PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_)>()
+          , from.side_a_player_ids_
+        }
+        ,
+        _side_a_player_ids_cached_byte_size_{0},
+        side_b_player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::friendpb::BatchCheckSocialRelationsRequest,
+              PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)>()
+          , from.side_b_player_ids_
+        }
+        ,
+        _side_b_player_ids_cached_byte_size_{0} {}
+
+BatchCheckSocialRelationsRequest::BatchCheckSocialRelationsRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchCheckSocialRelationsRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchCheckSocialRelationsRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchCheckSocialRelationsRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:friendpb.BatchCheckSocialRelationsRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchCheckSocialRelationsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        side_a_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::friendpb::BatchCheckSocialRelationsRequest,
+            PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_)>()
+         }
+        ,
+        _side_a_player_ids_cached_byte_size_{0},
+        side_b_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::friendpb::BatchCheckSocialRelationsRequest,
+            PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)>()
+         }
+        ,
+        _side_b_player_ids_cached_byte_size_{0} {}
+
+inline void BatchCheckSocialRelationsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BatchCheckSocialRelationsRequest::~BatchCheckSocialRelationsRequest() {
+  // @@protoc_insertion_point(destructor:friendpb.BatchCheckSocialRelationsRequest)
+  SharedDtor(*this);
+}
+inline void BatchCheckSocialRelationsRequest::SharedDtor(MessageLite& self) {
+  BatchCheckSocialRelationsRequest& this_ = static_cast<BatchCheckSocialRelationsRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchCheckSocialRelationsRequest_class_data_ =
+        BatchCheckSocialRelationsRequest::InternalGenerateClassData_(BatchCheckSocialRelationsRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchCheckSocialRelationsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchCheckSocialRelationsRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchCheckSocialRelationsRequest_class_data_.tc_table);
+  return BatchCheckSocialRelationsRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchCheckSocialRelationsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchCheckSocialRelationsRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchCheckSocialRelationsRequest_globals_));
+  return BatchCheckSocialRelationsRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchCheckSocialRelationsRequest::ParseTableT_
+    BatchCheckSocialRelationsRequest::_table_ =
+        BatchCheckSocialRelationsRequest::InternalGenerateParseTable_(BatchCheckSocialRelationsRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchCheckSocialRelationsRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:friendpb.BatchCheckSocialRelationsRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.side_a_player_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.side_b_player_ids_.Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchCheckSocialRelationsRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchCheckSocialRelationsRequest& this_ = static_cast<const BatchCheckSocialRelationsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchCheckSocialRelationsRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchCheckSocialRelationsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:friendpb.BatchCheckSocialRelationsRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 side_a_player_ids = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._side_a_player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_side_a_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint64 side_b_player_ids = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._side_b_player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            2, this_._internal_side_b_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:friendpb.BatchCheckSocialRelationsRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchCheckSocialRelationsRequest::ByteSizeLong(const MessageLite& base) {
+  const BatchCheckSocialRelationsRequest& this_ = static_cast<const BatchCheckSocialRelationsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchCheckSocialRelationsRequest::ByteSizeLong() const {
+  const BatchCheckSocialRelationsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:friendpb.BatchCheckSocialRelationsRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated uint64 side_a_player_ids = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_side_a_player_ids(), 1,
+              this_._impl_._side_a_player_ids_cached_byte_size_);
+    }
+    // repeated uint64 side_b_player_ids = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_side_b_player_ids(), 1,
+              this_._impl_._side_b_player_ids_cached_byte_size_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchCheckSocialRelationsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchCheckSocialRelationsRequest*>(&to_msg);
+  auto& from = static_cast<const BatchCheckSocialRelationsRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:friendpb.BatchCheckSocialRelationsRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_side_a_player_ids()->MergeFrom(from._internal_side_a_player_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_side_b_player_ids()->MergeFrom(from._internal_side_b_player_ids());
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchCheckSocialRelationsRequest::CopyFrom(const BatchCheckSocialRelationsRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:friendpb.BatchCheckSocialRelationsRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchCheckSocialRelationsRequest::InternalSwap(BatchCheckSocialRelationsRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.side_a_player_ids_.InternalSwap(&other->_impl_.side_a_player_ids_);
+  _impl_.side_b_player_ids_.InternalSwap(&other->_impl_.side_b_player_ids_);
+}
+
+::google::protobuf::Metadata BatchCheckSocialRelationsRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void BatchCheckSocialRelationsResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+BatchCheckSocialRelationsResponse::BatchCheckSocialRelationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchCheckSocialRelationsResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:friendpb.BatchCheckSocialRelationsResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchCheckSocialRelationsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::friendpb::BatchCheckSocialRelationsResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+BatchCheckSocialRelationsResponse::BatchCheckSocialRelationsResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchCheckSocialRelationsResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchCheckSocialRelationsResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchCheckSocialRelationsResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, has_any_block_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, has_any_block_),
+           offsetof(Impl_, all_are_friends_) -
+               offsetof(Impl_, has_any_block_) +
+               sizeof(Impl_::all_are_friends_));
+
+  // @@protoc_insertion_point(copy_constructor:friendpb.BatchCheckSocialRelationsResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchCheckSocialRelationsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BatchCheckSocialRelationsResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, all_are_friends_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::all_are_friends_));
+}
+BatchCheckSocialRelationsResponse::~BatchCheckSocialRelationsResponse() {
+  // @@protoc_insertion_point(destructor:friendpb.BatchCheckSocialRelationsResponse)
+  SharedDtor(*this);
+}
+inline void BatchCheckSocialRelationsResponse::SharedDtor(MessageLite& self) {
+  BatchCheckSocialRelationsResponse& this_ = static_cast<BatchCheckSocialRelationsResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchCheckSocialRelationsResponse_class_data_ =
+        BatchCheckSocialRelationsResponse::InternalGenerateClassData_(BatchCheckSocialRelationsResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchCheckSocialRelationsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchCheckSocialRelationsResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchCheckSocialRelationsResponse_class_data_.tc_table);
+  return BatchCheckSocialRelationsResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchCheckSocialRelationsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchCheckSocialRelationsResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchCheckSocialRelationsResponse_globals_));
+  return BatchCheckSocialRelationsResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchCheckSocialRelationsResponse::ParseTableT_
+    BatchCheckSocialRelationsResponse::_table_ =
+        BatchCheckSocialRelationsResponse::InternalGenerateParseTable_(BatchCheckSocialRelationsResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchCheckSocialRelationsResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:friendpb.BatchCheckSocialRelationsResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  ::memset(&_impl_.has_any_block_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.all_are_friends_) -
+      reinterpret_cast<char*>(&_impl_.has_any_block_)) + sizeof(_impl_.all_are_friends_));
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchCheckSocialRelationsResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchCheckSocialRelationsResponse& this_ = static_cast<const BatchCheckSocialRelationsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchCheckSocialRelationsResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchCheckSocialRelationsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:friendpb.BatchCheckSocialRelationsResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool has_any_block = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_has_any_block() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_has_any_block(), target);
+    }
+  }
+
+  // bool all_are_friends = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_all_are_friends() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_all_are_friends(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:friendpb.BatchCheckSocialRelationsResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchCheckSocialRelationsResponse::ByteSizeLong(const MessageLite& base) {
+  const BatchCheckSocialRelationsResponse& this_ = static_cast<const BatchCheckSocialRelationsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchCheckSocialRelationsResponse::ByteSizeLong() const {
+  const BatchCheckSocialRelationsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:friendpb.BatchCheckSocialRelationsResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // bool has_any_block = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_has_any_block() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool all_are_friends = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_all_are_friends() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchCheckSocialRelationsResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchCheckSocialRelationsResponse*>(&to_msg);
+  auto& from = static_cast<const BatchCheckSocialRelationsResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:friendpb.BatchCheckSocialRelationsResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_has_any_block() != 0) {
+        _this->_impl_.has_any_block_ = from._impl_.has_any_block_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_all_are_friends() != 0) {
+        _this->_impl_.all_are_friends_ = from._impl_.all_are_friends_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchCheckSocialRelationsResponse::CopyFrom(const BatchCheckSocialRelationsResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:friendpb.BatchCheckSocialRelationsResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchCheckSocialRelationsResponse::InternalSwap(BatchCheckSocialRelationsResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.all_are_friends_)
+      + sizeof(BatchCheckSocialRelationsResponse::_impl_.all_are_friends_)
+      - PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata BatchCheckSocialRelationsResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

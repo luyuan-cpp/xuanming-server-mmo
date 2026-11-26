@@ -381,6 +381,14 @@ extern const ::google::protobuf::internal::ClassDataFull GuildWarBattleContext_c
 #else
 extern const GuildWarBattleContextGlobalsTypeInternal GuildWarBattleContext_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class JianghuDuelBattleContext;
+struct JianghuDuelBattleContextGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern JianghuDuelBattleContextGlobalsTypeInternal JianghuDuelBattleContext_globals_;
+extern const ::google::protobuf::internal::ClassDataFull JianghuDuelBattleContext_class_data_;
+#else
+extern const JianghuDuelBattleContextGlobalsTypeInternal JianghuDuelBattleContext_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RankedMatchContext;
 struct RankedMatchContextGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2655,6 +2663,359 @@ class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMatchContext_MemberWinStreaksE
       const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
       ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JianghuDuelBattleContext final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:JianghuDuelBattleContext) */ {
+ public:
+  inline JianghuDuelBattleContext() : JianghuDuelBattleContext(nullptr) {}
+  ~JianghuDuelBattleContext() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JianghuDuelBattleContext* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JianghuDuelBattleContext));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr JianghuDuelBattleContext(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline JianghuDuelBattleContext(const JianghuDuelBattleContext& from) : JianghuDuelBattleContext(nullptr, from) {}
+  inline JianghuDuelBattleContext(JianghuDuelBattleContext&& from) noexcept : JianghuDuelBattleContext(nullptr, ::std::move(from)) {}
+  inline JianghuDuelBattleContext& operator=(const JianghuDuelBattleContext& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JianghuDuelBattleContext& operator=(JianghuDuelBattleContext&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const JianghuDuelBattleContext& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<JianghuDuelBattleContext>(&JianghuDuelBattleContext_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 46;
+  friend void swap(JianghuDuelBattleContext& a, JianghuDuelBattleContext& b) { a.Swap(&b); }
+  inline void Swap(JianghuDuelBattleContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JianghuDuelBattleContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] JianghuDuelBattleContext* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<JianghuDuelBattleContext>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const JianghuDuelBattleContext& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const JianghuDuelBattleContext& from) { JianghuDuelBattleContext::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(JianghuDuelBattleContext* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "JianghuDuelBattleContext"; }
+
+  explicit JianghuDuelBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  JianghuDuelBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JianghuDuelBattleContext& from);
+  JianghuDuelBattleContext(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, JianghuDuelBattleContext&& from) noexcept
+      : JianghuDuelBattleContext(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kChallengerCaptainNameFieldNumber = 4,
+    kTargetCaptainNameFieldNumber = 6,
+    kSideAGuildNameFieldNumber = 8,
+    kSideBGuildNameFieldNumber = 10,
+    kDuelInviteIdFieldNumber = 1,
+    kChallengerCaptainIdFieldNumber = 3,
+    kTargetCaptainIdFieldNumber = 5,
+    kWritTierFieldNumber = 2,
+    kRoundLimitOverrideFieldNumber = 11,
+    kSideAGuildIdFieldNumber = 7,
+    kSideBGuildIdFieldNumber = 9,
+    kTeamSizeFieldNumber = 12,
+  };
+  // string challenger_captain_name = 4;
+  void clear_challenger_captain_name() ;
+  [[nodiscard]] const ::std::string& challenger_captain_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_challenger_captain_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_challenger_captain_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_challenger_captain_name();
+  void set_allocated_challenger_captain_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_challenger_captain_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_challenger_captain_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_challenger_captain_name();
+
+  public:
+  // string target_captain_name = 6;
+  void clear_target_captain_name() ;
+  [[nodiscard]] const ::std::string& target_captain_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_captain_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_captain_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_captain_name();
+  void set_allocated_target_captain_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_captain_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_captain_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_captain_name();
+
+  public:
+  // string side_a_guild_name = 8;
+  void clear_side_a_guild_name() ;
+  [[nodiscard]] const ::std::string& side_a_guild_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_side_a_guild_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_side_a_guild_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_side_a_guild_name();
+  void set_allocated_side_a_guild_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_side_a_guild_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_side_a_guild_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_side_a_guild_name();
+
+  public:
+  // string side_b_guild_name = 10;
+  void clear_side_b_guild_name() ;
+  [[nodiscard]] const ::std::string& side_b_guild_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_side_b_guild_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_side_b_guild_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_side_b_guild_name();
+  void set_allocated_side_b_guild_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_side_b_guild_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_side_b_guild_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_side_b_guild_name();
+
+  public:
+  // uint64 duel_invite_id = 1;
+  void clear_duel_invite_id() ;
+  [[nodiscard]] ::uint64_t duel_invite_id() const;
+  void set_duel_invite_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_duel_invite_id() const;
+  void _internal_set_duel_invite_id(::uint64_t value);
+
+  public:
+  // uint64 challenger_captain_id = 3;
+  void clear_challenger_captain_id() ;
+  [[nodiscard]] ::uint64_t challenger_captain_id() const;
+  void set_challenger_captain_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_challenger_captain_id() const;
+  void _internal_set_challenger_captain_id(::uint64_t value);
+
+  public:
+  // uint64 target_captain_id = 5;
+  void clear_target_captain_id() ;
+  [[nodiscard]] ::uint64_t target_captain_id() const;
+  void set_target_captain_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_captain_id() const;
+  void _internal_set_target_captain_id(::uint64_t value);
+
+  public:
+  // uint32 writ_tier = 2;
+  void clear_writ_tier() ;
+  [[nodiscard]] ::uint32_t writ_tier() const;
+  void set_writ_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_writ_tier() const;
+  void _internal_set_writ_tier(::uint32_t value);
+
+  public:
+  // uint32 round_limit_override = 11;
+  void clear_round_limit_override() ;
+  [[nodiscard]] ::uint32_t round_limit_override() const;
+  void set_round_limit_override(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_round_limit_override() const;
+  void _internal_set_round_limit_override(::uint32_t value);
+
+  public:
+  // uint64 side_a_guild_id = 7;
+  void clear_side_a_guild_id() ;
+  [[nodiscard]] ::uint64_t side_a_guild_id() const;
+  void set_side_a_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_side_a_guild_id() const;
+  void _internal_set_side_a_guild_id(::uint64_t value);
+
+  public:
+  // uint64 side_b_guild_id = 9;
+  void clear_side_b_guild_id() ;
+  [[nodiscard]] ::uint64_t side_b_guild_id() const;
+  void set_side_b_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_side_b_guild_id() const;
+  void _internal_set_side_b_guild_id(::uint64_t value);
+
+  public:
+  // uint32 team_size = 12;
+  void clear_team_size() ;
+  [[nodiscard]] ::uint32_t team_size() const;
+  void set_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_team_size() const;
+  void _internal_set_team_size(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:JianghuDuelBattleContext)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 117,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const JianghuDuelBattleContext& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr challenger_captain_name_;
+    ::google::protobuf::internal::ArenaStringPtr target_captain_name_;
+    ::google::protobuf::internal::ArenaStringPtr side_a_guild_name_;
+    ::google::protobuf::internal::ArenaStringPtr side_b_guild_name_;
+    ::uint64_t duel_invite_id_;
+    ::uint64_t challenger_captain_id_;
+    ::uint64_t target_captain_id_;
+    ::uint32_t writ_tier_;
+    ::uint32_t round_limit_override_;
+    ::uint64_t side_a_guild_id_;
+    ::uint64_t side_b_guild_id_;
+    ::uint32_t team_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
 };
 // -------------------------------------------------------------------
 
@@ -9956,6 +10317,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     kRevengedOpponentNameFieldNumber = 44,
     kPlayerDisplayNameFieldNumber = 50,
     kTowerSettlementFieldNumber = 36,
+    kJianghuDuelFieldNumber = 51,
     kTotalDamageDealtFieldNumber = 33,
     kTotalHealingDoneFieldNumber = 34,
     kTotalControlsLandedFieldNumber = 35,
@@ -9971,6 +10333,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     kRevengedLossesAfterFieldNumber = 46,
     kFinalSeasonSealIdFieldNumber = 47,
     kStarterPetTableIdFieldNumber = 48,
+    kSeasonSealTriggerCountFieldNumber = 53,
+    kSeasonSealContributionValueFieldNumber = 52,
+    kSeasonSealResonanceCountFieldNumber = 54,
   };
   // repeated .BattleItemEntry items_consumed = 9;
   [[nodiscard]] int items_consumed_size()
@@ -10425,6 +10790,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   ::WuxingTowerSettlementEcho* PROTOBUF_NONNULL _internal_mutable_tower_settlement();
 
   public:
+  // .JianghuDuelBattleContext jianghu_duel = 51;
+  [[nodiscard]] bool has_jianghu_duel()
+      const;
+  void clear_jianghu_duel() ;
+  [[nodiscard]] const ::JianghuDuelBattleContext& jianghu_duel() const;
+  [[nodiscard]] ::JianghuDuelBattleContext* PROTOBUF_NULLABLE release_jianghu_duel();
+  ::JianghuDuelBattleContext* PROTOBUF_NONNULL mutable_jianghu_duel();
+  void set_allocated_jianghu_duel(::JianghuDuelBattleContext* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_jianghu_duel(::JianghuDuelBattleContext* PROTOBUF_NULLABLE value);
+  ::JianghuDuelBattleContext* PROTOBUF_NULLABLE unsafe_arena_release_jianghu_duel();
+
+  private:
+  const ::JianghuDuelBattleContext& _internal_jianghu_duel() const;
+  ::JianghuDuelBattleContext* PROTOBUF_NONNULL _internal_mutable_jianghu_duel();
+
+  public:
   // uint64 total_damage_dealt = 33;
   void clear_total_damage_dealt() ;
   [[nodiscard]] ::uint64_t total_damage_dealt() const;
@@ -10575,12 +10956,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   void _internal_set_starter_pet_table_id(::uint32_t value);
 
   public:
+  // uint32 season_seal_trigger_count = 53;
+  void clear_season_seal_trigger_count() ;
+  [[nodiscard]] ::uint32_t season_seal_trigger_count() const;
+  void set_season_seal_trigger_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_trigger_count() const;
+  void _internal_set_season_seal_trigger_count(::uint32_t value);
+
+  public:
+  // uint64 season_seal_contribution_value = 52;
+  void clear_season_seal_contribution_value() ;
+  [[nodiscard]] ::uint64_t season_seal_contribution_value() const;
+  void set_season_seal_contribution_value(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_season_seal_contribution_value() const;
+  void _internal_set_season_seal_contribution_value(::uint64_t value);
+
+  public:
+  // uint32 season_seal_resonance_count = 54;
+  void clear_season_seal_resonance_count() ;
+  [[nodiscard]] ::uint32_t season_seal_resonance_count() const;
+  void set_season_seal_resonance_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_resonance_count() const;
+  void _internal_set_season_seal_resonance_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleSettlementData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 50,
-                          8, 118,
+      ::google::protobuf::internal::TcParseTable<5, 54,
+                          9, 118,
                           9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -10645,6 +11056,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     ::google::protobuf::internal::ArenaStringPtr revenged_opponent_name_;
     ::google::protobuf::internal::ArenaStringPtr player_display_name_;
     ::WuxingTowerSettlementEcho* PROTOBUF_NULLABLE tower_settlement_;
+    ::JianghuDuelBattleContext* PROTOBUF_NULLABLE jianghu_duel_;
     ::uint64_t total_damage_dealt_;
     ::uint64_t total_healing_done_;
     ::uint32_t total_controls_landed_;
@@ -10660,6 +11072,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     ::uint32_t revenged_losses_after_;
     ::uint32_t final_season_seal_id_;
     ::uint32_t starter_pet_table_id_;
+    ::uint32_t season_seal_trigger_count_;
+    ::uint64_t season_seal_contribution_value_;
+    ::uint32_t season_seal_resonance_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -23153,7 +23568,7 @@ inline void BattleSettlementData::set_allocated_festival_beast(::FestivalBeastBa
 inline void BattleSettlementData::clear_surrendered() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.surrendered_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline bool BattleSettlementData::surrendered() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.surrendered)
@@ -23161,7 +23576,7 @@ inline bool BattleSettlementData::surrendered() const {
 }
 inline void BattleSettlementData::set_surrendered(bool value) {
   _internal_set_surrendered(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.surrendered)
 }
 inline bool BattleSettlementData::_internal_surrendered() const {
@@ -23177,7 +23592,7 @@ inline void BattleSettlementData::_internal_set_surrendered(bool value) {
 inline void BattleSettlementData::clear_total_damage_dealt() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_damage_dealt_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
 }
 inline ::uint64_t BattleSettlementData::total_damage_dealt() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_damage_dealt)
@@ -23185,7 +23600,7 @@ inline ::uint64_t BattleSettlementData::total_damage_dealt() const {
 }
 inline void BattleSettlementData::set_total_damage_dealt(::uint64_t value) {
   _internal_set_total_damage_dealt(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_damage_dealt)
 }
 inline ::uint64_t BattleSettlementData::_internal_total_damage_dealt() const {
@@ -23201,7 +23616,7 @@ inline void BattleSettlementData::_internal_set_total_damage_dealt(::uint64_t va
 inline void BattleSettlementData::clear_total_healing_done() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_healing_done_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
 }
 inline ::uint64_t BattleSettlementData::total_healing_done() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_healing_done)
@@ -23209,7 +23624,7 @@ inline ::uint64_t BattleSettlementData::total_healing_done() const {
 }
 inline void BattleSettlementData::set_total_healing_done(::uint64_t value) {
   _internal_set_total_healing_done(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_healing_done)
 }
 inline ::uint64_t BattleSettlementData::_internal_total_healing_done() const {
@@ -23225,7 +23640,7 @@ inline void BattleSettlementData::_internal_set_total_healing_done(::uint64_t va
 inline void BattleSettlementData::clear_total_controls_landed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_controls_landed_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 inline ::uint32_t BattleSettlementData::total_controls_landed() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_controls_landed)
@@ -23233,7 +23648,7 @@ inline ::uint32_t BattleSettlementData::total_controls_landed() const {
 }
 inline void BattleSettlementData::set_total_controls_landed(::uint32_t value) {
   _internal_set_total_controls_landed(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_controls_landed)
 }
 inline ::uint32_t BattleSettlementData::_internal_total_controls_landed() const {
@@ -23347,7 +23762,7 @@ inline void BattleSettlementData::set_allocated_tower_settlement(::WuxingTowerSe
 inline void BattleSettlementData::clear_primary_focus_damage_dealt() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.primary_focus_damage_dealt_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
 }
 inline ::uint64_t BattleSettlementData::primary_focus_damage_dealt() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.primary_focus_damage_dealt)
@@ -23355,7 +23770,7 @@ inline ::uint64_t BattleSettlementData::primary_focus_damage_dealt() const {
 }
 inline void BattleSettlementData::set_primary_focus_damage_dealt(::uint64_t value) {
   _internal_set_primary_focus_damage_dealt(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.primary_focus_damage_dealt)
 }
 inline ::uint64_t BattleSettlementData::_internal_primary_focus_damage_dealt() const {
@@ -23371,7 +23786,7 @@ inline void BattleSettlementData::_internal_set_primary_focus_damage_dealt(::uin
 inline void BattleSettlementData::clear_total_shield_granted() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_shield_granted_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
 }
 inline ::uint64_t BattleSettlementData::total_shield_granted() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_shield_granted)
@@ -23379,7 +23794,7 @@ inline ::uint64_t BattleSettlementData::total_shield_granted() const {
 }
 inline void BattleSettlementData::set_total_shield_granted(::uint64_t value) {
   _internal_set_total_shield_granted(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_shield_granted)
 }
 inline ::uint64_t BattleSettlementData::_internal_total_shield_granted() const {
@@ -23395,7 +23810,7 @@ inline void BattleSettlementData::_internal_set_total_shield_granted(::uint64_t 
 inline void BattleSettlementData::clear_total_dispels_landed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_dispels_landed_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
 }
 inline ::uint32_t BattleSettlementData::total_dispels_landed() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_dispels_landed)
@@ -23403,7 +23818,7 @@ inline ::uint32_t BattleSettlementData::total_dispels_landed() const {
 }
 inline void BattleSettlementData::set_total_dispels_landed(::uint32_t value) {
   _internal_set_total_dispels_landed(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_dispels_landed)
 }
 inline ::uint32_t BattleSettlementData::_internal_total_dispels_landed() const {
@@ -23419,7 +23834,7 @@ inline void BattleSettlementData::_internal_set_total_dispels_landed(::uint32_t 
 inline void BattleSettlementData::clear_damage_taken() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.damage_taken_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
 }
 inline ::uint64_t BattleSettlementData::damage_taken() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.damage_taken)
@@ -23427,7 +23842,7 @@ inline ::uint64_t BattleSettlementData::damage_taken() const {
 }
 inline void BattleSettlementData::set_damage_taken(::uint64_t value) {
   _internal_set_damage_taken(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.damage_taken)
 }
 inline ::uint64_t BattleSettlementData::_internal_damage_taken() const {
@@ -23443,7 +23858,7 @@ inline void BattleSettlementData::_internal_set_damage_taken(::uint64_t value) {
 inline void BattleSettlementData::clear_highlight_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.highlight_kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00002000U);
 }
 inline ::BattleHighlightKind BattleSettlementData::highlight_kind() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.highlight_kind)
@@ -23451,7 +23866,7 @@ inline ::BattleHighlightKind BattleSettlementData::highlight_kind() const {
 }
 inline void BattleSettlementData::set_highlight_kind(::BattleHighlightKind value) {
   _internal_set_highlight_kind(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00002000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.highlight_kind)
 }
 inline ::BattleHighlightKind BattleSettlementData::_internal_highlight_kind() const {
@@ -23467,7 +23882,7 @@ inline void BattleSettlementData::_internal_set_highlight_kind(::BattleHighlight
 inline void BattleSettlementData::clear_ended_opponent_streak() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ended_opponent_streak_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00004000U);
 }
 inline ::uint32_t BattleSettlementData::ended_opponent_streak() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.ended_opponent_streak)
@@ -23475,7 +23890,7 @@ inline ::uint32_t BattleSettlementData::ended_opponent_streak() const {
 }
 inline void BattleSettlementData::set_ended_opponent_streak(::uint32_t value) {
   _internal_set_ended_opponent_streak(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.ended_opponent_streak)
 }
 inline ::uint32_t BattleSettlementData::_internal_ended_opponent_streak() const {
@@ -23491,7 +23906,7 @@ inline void BattleSettlementData::_internal_set_ended_opponent_streak(::uint32_t
 inline void BattleSettlementData::clear_revenged_rival() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revenged_rival_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 inline bool BattleSettlementData::revenged_rival() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.revenged_rival)
@@ -23499,7 +23914,7 @@ inline bool BattleSettlementData::revenged_rival() const {
 }
 inline void BattleSettlementData::set_revenged_rival(bool value) {
   _internal_set_revenged_rival(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.revenged_rival)
 }
 inline bool BattleSettlementData::_internal_revenged_rival() const {
@@ -23579,7 +23994,7 @@ inline void BattleSettlementData::set_allocated_revenged_opponent_name(::std::st
 inline void BattleSettlementData::clear_revenged_wins_after() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revenged_wins_after_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00008000U);
 }
 inline ::uint32_t BattleSettlementData::revenged_wins_after() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.revenged_wins_after)
@@ -23587,7 +24002,7 @@ inline ::uint32_t BattleSettlementData::revenged_wins_after() const {
 }
 inline void BattleSettlementData::set_revenged_wins_after(::uint32_t value) {
   _internal_set_revenged_wins_after(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00008000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.revenged_wins_after)
 }
 inline ::uint32_t BattleSettlementData::_internal_revenged_wins_after() const {
@@ -23603,7 +24018,7 @@ inline void BattleSettlementData::_internal_set_revenged_wins_after(::uint32_t v
 inline void BattleSettlementData::clear_revenged_losses_after() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revenged_losses_after_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00010000U);
 }
 inline ::uint32_t BattleSettlementData::revenged_losses_after() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.revenged_losses_after)
@@ -23611,7 +24026,7 @@ inline ::uint32_t BattleSettlementData::revenged_losses_after() const {
 }
 inline void BattleSettlementData::set_revenged_losses_after(::uint32_t value) {
   _internal_set_revenged_losses_after(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00010000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.revenged_losses_after)
 }
 inline ::uint32_t BattleSettlementData::_internal_revenged_losses_after() const {
@@ -23627,7 +24042,7 @@ inline void BattleSettlementData::_internal_set_revenged_losses_after(::uint32_t
 inline void BattleSettlementData::clear_final_season_seal_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.final_season_seal_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00020000U);
 }
 inline ::uint32_t BattleSettlementData::final_season_seal_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.final_season_seal_id)
@@ -23635,7 +24050,7 @@ inline ::uint32_t BattleSettlementData::final_season_seal_id() const {
 }
 inline void BattleSettlementData::set_final_season_seal_id(::uint32_t value) {
   _internal_set_final_season_seal_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00020000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.final_season_seal_id)
 }
 inline ::uint32_t BattleSettlementData::_internal_final_season_seal_id() const {
@@ -23651,7 +24066,7 @@ inline void BattleSettlementData::_internal_set_final_season_seal_id(::uint32_t 
 inline void BattleSettlementData::clear_starter_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.starter_pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00040000U);
 }
 inline ::uint32_t BattleSettlementData::starter_pet_table_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.starter_pet_table_id)
@@ -23659,7 +24074,7 @@ inline ::uint32_t BattleSettlementData::starter_pet_table_id() const {
 }
 inline void BattleSettlementData::set_starter_pet_table_id(::uint32_t value) {
   _internal_set_starter_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00040000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.starter_pet_table_id)
 }
 inline ::uint32_t BattleSettlementData::_internal_starter_pet_table_id() const {
@@ -23784,6 +24199,176 @@ inline void BattleSettlementData::set_allocated_player_display_name(::std::strin
     _impl_.player_display_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:BattleSettlementData.player_display_name)
+}
+
+// .JianghuDuelBattleContext jianghu_duel = 51;
+inline bool BattleSettlementData::has_jianghu_duel() const {
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.jianghu_duel_ != nullptr);
+  return value;
+}
+inline void BattleSettlementData::clear_jianghu_duel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.jianghu_duel_ != nullptr) _impl_.jianghu_duel_->Clear();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline const ::JianghuDuelBattleContext& BattleSettlementData::_internal_jianghu_duel() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::JianghuDuelBattleContext* p = _impl_.jianghu_duel_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::JianghuDuelBattleContext>(&::JianghuDuelBattleContext_globals_);
+}
+inline const ::JianghuDuelBattleContext& BattleSettlementData::jianghu_duel() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.jianghu_duel)
+  return _internal_jianghu_duel();
+}
+inline void BattleSettlementData::unsafe_arena_set_allocated_jianghu_duel(
+    ::JianghuDuelBattleContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.jianghu_duel_);
+  }
+  _impl_.jianghu_duel_ = reinterpret_cast<::JianghuDuelBattleContext*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleSettlementData.jianghu_duel)
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NULLABLE BattleSettlementData::release_jianghu_duel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ::JianghuDuelBattleContext* released = _impl_.jianghu_duel_;
+  _impl_.jianghu_duel_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NULLABLE BattleSettlementData::unsafe_arena_release_jianghu_duel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleSettlementData.jianghu_duel)
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ::JianghuDuelBattleContext* temp = _impl_.jianghu_duel_;
+  _impl_.jianghu_duel_ = nullptr;
+  return temp;
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NONNULL BattleSettlementData::_internal_mutable_jianghu_duel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.jianghu_duel_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::JianghuDuelBattleContext>(GetArena());
+    _impl_.jianghu_duel_ = reinterpret_cast<::JianghuDuelBattleContext*>(p);
+  }
+  return _impl_.jianghu_duel_;
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NONNULL BattleSettlementData::mutable_jianghu_duel()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ::JianghuDuelBattleContext* _msg = _internal_mutable_jianghu_duel();
+  // @@protoc_insertion_point(field_mutable:BattleSettlementData.jianghu_duel)
+  return _msg;
+}
+inline void BattleSettlementData::set_allocated_jianghu_duel(::JianghuDuelBattleContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.jianghu_duel_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  }
+
+  _impl_.jianghu_duel_ = reinterpret_cast<::JianghuDuelBattleContext*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattleSettlementData.jianghu_duel)
+}
+
+// uint64 season_seal_contribution_value = 52;
+inline void BattleSettlementData::clear_season_seal_contribution_value() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_contribution_value_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00100000U);
+}
+inline ::uint64_t BattleSettlementData::season_seal_contribution_value() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.season_seal_contribution_value)
+  return _internal_season_seal_contribution_value();
+}
+inline void BattleSettlementData::set_season_seal_contribution_value(::uint64_t value) {
+  _internal_set_season_seal_contribution_value(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00100000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.season_seal_contribution_value)
+}
+inline ::uint64_t BattleSettlementData::_internal_season_seal_contribution_value() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_seal_contribution_value_;
+}
+inline void BattleSettlementData::_internal_set_season_seal_contribution_value(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_contribution_value_ = value;
+}
+
+// uint32 season_seal_trigger_count = 53;
+inline void BattleSettlementData::clear_season_seal_trigger_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_trigger_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00080000U);
+}
+inline ::uint32_t BattleSettlementData::season_seal_trigger_count() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.season_seal_trigger_count)
+  return _internal_season_seal_trigger_count();
+}
+inline void BattleSettlementData::set_season_seal_trigger_count(::uint32_t value) {
+  _internal_set_season_seal_trigger_count(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00080000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.season_seal_trigger_count)
+}
+inline ::uint32_t BattleSettlementData::_internal_season_seal_trigger_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_seal_trigger_count_;
+}
+inline void BattleSettlementData::_internal_set_season_seal_trigger_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_trigger_count_ = value;
+}
+
+// uint32 season_seal_resonance_count = 54;
+inline void BattleSettlementData::clear_season_seal_resonance_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_resonance_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00200000U);
+}
+inline ::uint32_t BattleSettlementData::season_seal_resonance_count() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.season_seal_resonance_count)
+  return _internal_season_seal_resonance_count();
+}
+inline void BattleSettlementData::set_season_seal_resonance_count(::uint32_t value) {
+  _internal_set_season_seal_resonance_count(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00200000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.season_seal_resonance_count)
+}
+inline ::uint32_t BattleSettlementData::_internal_season_seal_resonance_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_seal_resonance_count_;
+}
+inline void BattleSettlementData::_internal_set_season_seal_resonance_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_resonance_count_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -28187,6 +28772,458 @@ inline bool BattleActorBuildSummary::_internal_used_free_preset() const {
 inline void BattleActorBuildSummary::_internal_set_used_free_preset(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.used_free_preset_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// JianghuDuelBattleContext
+
+// uint64 duel_invite_id = 1;
+inline void JianghuDuelBattleContext::clear_duel_invite_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duel_invite_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t JianghuDuelBattleContext::duel_invite_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.duel_invite_id)
+  return _internal_duel_invite_id();
+}
+inline void JianghuDuelBattleContext::set_duel_invite_id(::uint64_t value) {
+  _internal_set_duel_invite_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.duel_invite_id)
+}
+inline ::uint64_t JianghuDuelBattleContext::_internal_duel_invite_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.duel_invite_id_;
+}
+inline void JianghuDuelBattleContext::_internal_set_duel_invite_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duel_invite_id_ = value;
+}
+
+// uint32 writ_tier = 2;
+inline void JianghuDuelBattleContext::clear_writ_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writ_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t JianghuDuelBattleContext::writ_tier() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.writ_tier)
+  return _internal_writ_tier();
+}
+inline void JianghuDuelBattleContext::set_writ_tier(::uint32_t value) {
+  _internal_set_writ_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.writ_tier)
+}
+inline ::uint32_t JianghuDuelBattleContext::_internal_writ_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.writ_tier_;
+}
+inline void JianghuDuelBattleContext::_internal_set_writ_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writ_tier_ = value;
+}
+
+// uint64 challenger_captain_id = 3;
+inline void JianghuDuelBattleContext::clear_challenger_captain_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.challenger_captain_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t JianghuDuelBattleContext::challenger_captain_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.challenger_captain_id)
+  return _internal_challenger_captain_id();
+}
+inline void JianghuDuelBattleContext::set_challenger_captain_id(::uint64_t value) {
+  _internal_set_challenger_captain_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.challenger_captain_id)
+}
+inline ::uint64_t JianghuDuelBattleContext::_internal_challenger_captain_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.challenger_captain_id_;
+}
+inline void JianghuDuelBattleContext::_internal_set_challenger_captain_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.challenger_captain_id_ = value;
+}
+
+// string challenger_captain_name = 4;
+inline void JianghuDuelBattleContext::clear_challenger_captain_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.challenger_captain_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& JianghuDuelBattleContext::challenger_captain_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.challenger_captain_name)
+  return _internal_challenger_captain_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void JianghuDuelBattleContext::set_challenger_captain_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.challenger_captain_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.challenger_captain_name)
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::mutable_challenger_captain_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_challenger_captain_name();
+  // @@protoc_insertion_point(field_mutable:JianghuDuelBattleContext.challenger_captain_name)
+  return _s;
+}
+inline const ::std::string& JianghuDuelBattleContext::_internal_challenger_captain_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.challenger_captain_name_.Get();
+}
+inline void JianghuDuelBattleContext::_internal_set_challenger_captain_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.challenger_captain_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::_internal_mutable_challenger_captain_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.challenger_captain_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE JianghuDuelBattleContext::release_challenger_captain_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:JianghuDuelBattleContext.challenger_captain_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.challenger_captain_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.challenger_captain_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void JianghuDuelBattleContext::set_allocated_challenger_captain_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.challenger_captain_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.challenger_captain_name_.IsDefault()) {
+    _impl_.challenger_captain_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:JianghuDuelBattleContext.challenger_captain_name)
+}
+
+// uint64 target_captain_id = 5;
+inline void JianghuDuelBattleContext::clear_target_captain_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_captain_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t JianghuDuelBattleContext::target_captain_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.target_captain_id)
+  return _internal_target_captain_id();
+}
+inline void JianghuDuelBattleContext::set_target_captain_id(::uint64_t value) {
+  _internal_set_target_captain_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.target_captain_id)
+}
+inline ::uint64_t JianghuDuelBattleContext::_internal_target_captain_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_captain_id_;
+}
+inline void JianghuDuelBattleContext::_internal_set_target_captain_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_captain_id_ = value;
+}
+
+// string target_captain_name = 6;
+inline void JianghuDuelBattleContext::clear_target_captain_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_captain_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& JianghuDuelBattleContext::target_captain_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.target_captain_name)
+  return _internal_target_captain_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void JianghuDuelBattleContext::set_target_captain_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.target_captain_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.target_captain_name)
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::mutable_target_captain_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_target_captain_name();
+  // @@protoc_insertion_point(field_mutable:JianghuDuelBattleContext.target_captain_name)
+  return _s;
+}
+inline const ::std::string& JianghuDuelBattleContext::_internal_target_captain_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_captain_name_.Get();
+}
+inline void JianghuDuelBattleContext::_internal_set_target_captain_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_captain_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::_internal_mutable_target_captain_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_captain_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE JianghuDuelBattleContext::release_target_captain_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:JianghuDuelBattleContext.target_captain_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.target_captain_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_captain_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void JianghuDuelBattleContext::set_allocated_target_captain_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.target_captain_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_captain_name_.IsDefault()) {
+    _impl_.target_captain_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:JianghuDuelBattleContext.target_captain_name)
+}
+
+// uint64 side_a_guild_id = 7;
+inline void JianghuDuelBattleContext::clear_side_a_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_a_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t JianghuDuelBattleContext::side_a_guild_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.side_a_guild_id)
+  return _internal_side_a_guild_id();
+}
+inline void JianghuDuelBattleContext::set_side_a_guild_id(::uint64_t value) {
+  _internal_set_side_a_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.side_a_guild_id)
+}
+inline ::uint64_t JianghuDuelBattleContext::_internal_side_a_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_a_guild_id_;
+}
+inline void JianghuDuelBattleContext::_internal_set_side_a_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_a_guild_id_ = value;
+}
+
+// string side_a_guild_name = 8;
+inline void JianghuDuelBattleContext::clear_side_a_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_a_guild_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& JianghuDuelBattleContext::side_a_guild_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.side_a_guild_name)
+  return _internal_side_a_guild_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void JianghuDuelBattleContext::set_side_a_guild_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.side_a_guild_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.side_a_guild_name)
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::mutable_side_a_guild_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_side_a_guild_name();
+  // @@protoc_insertion_point(field_mutable:JianghuDuelBattleContext.side_a_guild_name)
+  return _s;
+}
+inline const ::std::string& JianghuDuelBattleContext::_internal_side_a_guild_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_a_guild_name_.Get();
+}
+inline void JianghuDuelBattleContext::_internal_set_side_a_guild_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_a_guild_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::_internal_mutable_side_a_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.side_a_guild_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE JianghuDuelBattleContext::release_side_a_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:JianghuDuelBattleContext.side_a_guild_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.side_a_guild_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.side_a_guild_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void JianghuDuelBattleContext::set_allocated_side_a_guild_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.side_a_guild_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.side_a_guild_name_.IsDefault()) {
+    _impl_.side_a_guild_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:JianghuDuelBattleContext.side_a_guild_name)
+}
+
+// uint64 side_b_guild_id = 9;
+inline void JianghuDuelBattleContext::clear_side_b_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_b_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t JianghuDuelBattleContext::side_b_guild_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.side_b_guild_id)
+  return _internal_side_b_guild_id();
+}
+inline void JianghuDuelBattleContext::set_side_b_guild_id(::uint64_t value) {
+  _internal_set_side_b_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.side_b_guild_id)
+}
+inline ::uint64_t JianghuDuelBattleContext::_internal_side_b_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_b_guild_id_;
+}
+inline void JianghuDuelBattleContext::_internal_set_side_b_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_b_guild_id_ = value;
+}
+
+// string side_b_guild_name = 10;
+inline void JianghuDuelBattleContext::clear_side_b_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_b_guild_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& JianghuDuelBattleContext::side_b_guild_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.side_b_guild_name)
+  return _internal_side_b_guild_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void JianghuDuelBattleContext::set_side_b_guild_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.side_b_guild_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.side_b_guild_name)
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::mutable_side_b_guild_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_side_b_guild_name();
+  // @@protoc_insertion_point(field_mutable:JianghuDuelBattleContext.side_b_guild_name)
+  return _s;
+}
+inline const ::std::string& JianghuDuelBattleContext::_internal_side_b_guild_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_b_guild_name_.Get();
+}
+inline void JianghuDuelBattleContext::_internal_set_side_b_guild_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_b_guild_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL JianghuDuelBattleContext::_internal_mutable_side_b_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.side_b_guild_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE JianghuDuelBattleContext::release_side_b_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:JianghuDuelBattleContext.side_b_guild_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.side_b_guild_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.side_b_guild_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void JianghuDuelBattleContext::set_allocated_side_b_guild_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.side_b_guild_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.side_b_guild_name_.IsDefault()) {
+    _impl_.side_b_guild_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:JianghuDuelBattleContext.side_b_guild_name)
+}
+
+// uint32 round_limit_override = 11;
+inline void JianghuDuelBattleContext::clear_round_limit_override() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_limit_override_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t JianghuDuelBattleContext::round_limit_override() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.round_limit_override)
+  return _internal_round_limit_override();
+}
+inline void JianghuDuelBattleContext::set_round_limit_override(::uint32_t value) {
+  _internal_set_round_limit_override(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.round_limit_override)
+}
+inline ::uint32_t JianghuDuelBattleContext::_internal_round_limit_override() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.round_limit_override_;
+}
+inline void JianghuDuelBattleContext::_internal_set_round_limit_override(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_limit_override_ = value;
+}
+
+// uint32 team_size = 12;
+inline void JianghuDuelBattleContext::clear_team_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t JianghuDuelBattleContext::team_size() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelBattleContext.team_size)
+  return _internal_team_size();
+}
+inline void JianghuDuelBattleContext::set_team_size(::uint32_t value) {
+  _internal_set_team_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:JianghuDuelBattleContext.team_size)
+}
+inline ::uint32_t JianghuDuelBattleContext::_internal_team_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_size_;
+}
+inline void JianghuDuelBattleContext::_internal_set_team_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = value;
 }
 
 #ifdef __GNUC__

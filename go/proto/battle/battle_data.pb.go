@@ -3422,8 +3422,14 @@ type BattleSettlementData struct {
 	StarterPetTableId    uint32   `protobuf:"varint,48,opt,name=starter_pet_table_id,json=starterPetTableId,proto3" json:"starter_pet_table_id,omitempty"`       // 本局最终首发出战灵宠表 ID（含 V3 战前换宠结果，无宠为 0）
 	CoreSkillIds         []uint32 `protobuf:"varint,49,rep,packed,name=core_skill_ids,json=coreSkillIds,proto3" json:"core_skill_ids,omitempty"`                 // 主角本局携带的核心主动技能 ID（最多 4 个，用于问道名局流派汇总）
 	PlayerDisplayName    string   `protobuf:"bytes,50,opt,name=player_display_name,json=playerDisplayName,proto3" json:"player_display_name,omitempty"`          // 主角展示名（供问道名局与宿敌账本展示）
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 天墉生死状冻结上下文回传（供 scene 在结算时挂载 30 分钟败者印记或复仇清标，非生死状留空）。
+	JianghuDuel *JianghuDuelBattleContext `protobuf:"bytes,51,opt,name=jianghu_duel,json=jianghuDuel,proto3" json:"jianghu_duel,omitempty"`
+	// 赛季玩法 V3：本场单槽赛季印实战功劳摘要（零经济/零持久化扩展，随 BattleEndS2C.settlement 即时展示）。
+	SeasonSealContributionValue uint64 `protobuf:"varint,52,opt,name=season_seal_contribution_value,json=seasonSealContributionValue,proto3" json:"season_seal_contribution_value,omitempty"` // 主贡献累计值（101/102 削盾量、103 减伤+共鸣增盾量、104 回蓝+共鸣省蓝量）
+	SeasonSealTriggerCount      uint32 `protobuf:"varint,53,opt,name=season_seal_trigger_count,json=seasonSealTriggerCount,proto3" json:"season_seal_trigger_count,omitempty"`                // 本场赛季印基础效果触发次数
+	SeasonSealResonanceCount    uint32 `protobuf:"varint,54,opt,name=season_seal_resonance_count,json=seasonSealResonanceCount,proto3" json:"season_seal_resonance_count,omitempty"`          // 本场「技印共鸣」触发次数
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -3804,6 +3810,34 @@ func (x *BattleSettlementData) GetPlayerDisplayName() string {
 		return x.PlayerDisplayName
 	}
 	return ""
+}
+
+func (x *BattleSettlementData) GetJianghuDuel() *JianghuDuelBattleContext {
+	if x != nil {
+		return x.JianghuDuel
+	}
+	return nil
+}
+
+func (x *BattleSettlementData) GetSeasonSealContributionValue() uint64 {
+	if x != nil {
+		return x.SeasonSealContributionValue
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetSeasonSealTriggerCount() uint32 {
+	if x != nil {
+		return x.SeasonSealTriggerCount
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetSeasonSealResonanceCount() uint32 {
+	if x != nil {
+		return x.SeasonSealResonanceCount
+	}
+	return 0
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -5521,6 +5555,140 @@ func (x *BattleActorBuildSummary) GetUsedFreePreset() bool {
 	return false
 }
 
+// ---- 江湖恩怨·天墉生死状开局冻结上下文(docs/design/battle-jianghu-grudge-duel-bounty-v1.md) ----
+// 由 match 在成局提交点冻结，透传至 CreateBattleRequest / 战斗房间 / BattleSettlementData / BattleResultEvent。
+type JianghuDuelBattleContext struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	DuelInviteId          uint64                 `protobuf:"varint,1,opt,name=duel_invite_id,json=duelInviteId,proto3" json:"duel_invite_id,omitempty"`                           // 发号器永久 ID（兼作幂等扣费与退费键）
+	WritTier              uint32                 `protobuf:"varint,2,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`                                         // 1=普通 500 银两战书, 2=金帖生死状(Item 3415)
+	ChallengerCaptainId   uint64                 `protobuf:"varint,3,opt,name=challenger_captain_id,json=challengerCaptainId,proto3" json:"challenger_captain_id,omitempty"`      // A 方（发起方）队长 player_id
+	ChallengerCaptainName string                 `protobuf:"bytes,4,opt,name=challenger_captain_name,json=challengerCaptainName,proto3" json:"challenger_captain_name,omitempty"` // A 方队长展示名
+	TargetCaptainId       uint64                 `protobuf:"varint,5,opt,name=target_captain_id,json=targetCaptainId,proto3" json:"target_captain_id,omitempty"`                  // B 方（应战方）队长 player_id
+	TargetCaptainName     string                 `protobuf:"bytes,6,opt,name=target_captain_name,json=targetCaptainName,proto3" json:"target_captain_name,omitempty"`             // B 方队长展示名
+	SideAGuildId          uint64                 `protobuf:"varint,7,opt,name=side_a_guild_id,json=sideAGuildId,proto3" json:"side_a_guild_id,omitempty"`                         // 若 A 方全员同帮则为该帮 guild_id，否则 0
+	SideAGuildName        string                 `protobuf:"bytes,8,opt,name=side_a_guild_name,json=sideAGuildName,proto3" json:"side_a_guild_name,omitempty"`
+	SideBGuildId          uint64                 `protobuf:"varint,9,opt,name=side_b_guild_id,json=sideBGuildId,proto3" json:"side_b_guild_id,omitempty"` // 若 B 方全员同帮则为该帮 guild_id，否则 0
+	SideBGuildName        string                 `protobuf:"bytes,10,opt,name=side_b_guild_name,json=sideBGuildName,proto3" json:"side_b_guild_name,omitempty"`
+	RoundLimitOverride    uint32                 `protobuf:"varint,11,opt,name=round_limit_override,json=roundLimitOverride,proto3" json:"round_limit_override,omitempty"` // 冻结的生死状回合上限（默认 30，打满双方存活权威判平）
+	TeamSize              uint32                 `protobuf:"varint,12,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`                                 // 每侧人数（1..5）
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *JianghuDuelBattleContext) Reset() {
+	*x = JianghuDuelBattleContext{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JianghuDuelBattleContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JianghuDuelBattleContext) ProtoMessage() {}
+
+func (x *JianghuDuelBattleContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JianghuDuelBattleContext.ProtoReflect.Descriptor instead.
+func (*JianghuDuelBattleContext) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *JianghuDuelBattleContext) GetDuelInviteId() uint64 {
+	if x != nil {
+		return x.DuelInviteId
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetChallengerCaptainId() uint64 {
+	if x != nil {
+		return x.ChallengerCaptainId
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetChallengerCaptainName() string {
+	if x != nil {
+		return x.ChallengerCaptainName
+	}
+	return ""
+}
+
+func (x *JianghuDuelBattleContext) GetTargetCaptainId() uint64 {
+	if x != nil {
+		return x.TargetCaptainId
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetTargetCaptainName() string {
+	if x != nil {
+		return x.TargetCaptainName
+	}
+	return ""
+}
+
+func (x *JianghuDuelBattleContext) GetSideAGuildId() uint64 {
+	if x != nil {
+		return x.SideAGuildId
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetSideAGuildName() string {
+	if x != nil {
+		return x.SideAGuildName
+	}
+	return ""
+}
+
+func (x *JianghuDuelBattleContext) GetSideBGuildId() uint64 {
+	if x != nil {
+		return x.SideBGuildId
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetSideBGuildName() string {
+	if x != nil {
+		return x.SideBGuildName
+	}
+	return ""
+}
+
+func (x *JianghuDuelBattleContext) GetRoundLimitOverride() uint32 {
+	if x != nil {
+		return x.RoundLimitOverride
+	}
+	return 0
+}
+
+func (x *JianghuDuelBattleContext) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
 var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
@@ -5843,7 +6011,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xd3\x11\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xd0\x13\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -5897,7 +6065,11 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x14final_season_seal_id\x18/ \x01(\rR\x11finalSeasonSealId\x12/\n" +
 	"\x14starter_pet_table_id\x180 \x01(\rR\x11starterPetTableId\x12$\n" +
 	"\x0ecore_skill_ids\x181 \x03(\rR\fcoreSkillIds\x12.\n" +
-	"\x13player_display_name\x182 \x01(\tR\x11playerDisplayName\"u\n" +
+	"\x13player_display_name\x182 \x01(\tR\x11playerDisplayName\x12<\n" +
+	"\fjianghu_duel\x183 \x01(\v2\x19.JianghuDuelBattleContextR\vjianghuDuel\x12C\n" +
+	"\x1eseason_seal_contribution_value\x184 \x01(\x04R\x1bseasonSealContributionValue\x129\n" +
+	"\x19season_seal_trigger_count\x185 \x01(\rR\x16seasonSealTriggerCount\x12=\n" +
+	"\x1bseason_seal_resonance_count\x186 \x01(\rR\x18seasonSealResonanceCount\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -6080,7 +6252,21 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12active_pet_element\x18\v \x01(\rR\x10activePetElement\x12&\n" +
 	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\x12(\n" +
 	"\x10wuxing_sigil_ids\x18\r \x03(\rR\x0ewuxingSigilIds\x12(\n" +
-	"\x10used_free_preset\x18\x0e \x01(\bR\x0eusedFreePreset*\x86\x01\n" +
+	"\x10used_free_preset\x18\x0e \x01(\bR\x0eusedFreePreset\"\x98\x04\n" +
+	"\x18JianghuDuelBattleContext\x12$\n" +
+	"\x0eduel_invite_id\x18\x01 \x01(\x04R\fduelInviteId\x12\x1b\n" +
+	"\twrit_tier\x18\x02 \x01(\rR\bwritTier\x122\n" +
+	"\x15challenger_captain_id\x18\x03 \x01(\x04R\x13challengerCaptainId\x126\n" +
+	"\x17challenger_captain_name\x18\x04 \x01(\tR\x15challengerCaptainName\x12*\n" +
+	"\x11target_captain_id\x18\x05 \x01(\x04R\x0ftargetCaptainId\x12.\n" +
+	"\x13target_captain_name\x18\x06 \x01(\tR\x11targetCaptainName\x12%\n" +
+	"\x0fside_a_guild_id\x18\a \x01(\x04R\fsideAGuildId\x12)\n" +
+	"\x11side_a_guild_name\x18\b \x01(\tR\x0esideAGuildName\x12%\n" +
+	"\x0fside_b_guild_id\x18\t \x01(\x04R\fsideBGuildId\x12)\n" +
+	"\x11side_b_guild_name\x18\n" +
+	" \x01(\tR\x0esideBGuildName\x120\n" +
+	"\x14round_limit_override\x18\v \x01(\rR\x12roundLimitOverride\x12\x1b\n" +
+	"\tteam_size\x18\f \x01(\rR\bteamSize*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
@@ -6183,7 +6369,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                   // 0: eBattleActorType
 	(EBattleActionType)(0),                  // 1: eBattleActionType
@@ -6233,52 +6419,53 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*WuxingTowerSettlementEcho)(nil),       // 45: WuxingTowerSettlementEcho
 	(*CustomDuelRules)(nil),                 // 46: CustomDuelRules
 	(*BattleActorBuildSummary)(nil),         // 47: BattleActorBuildSummary
-	nil,                                     // 48: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                     // 49: BattlePlayerSnapshot.EquippedSkillVfxEntry
-	nil,                                     // 50: BattlePetSnapshot.SkillRanksEntry
-	nil,                                     // 51: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                     // 52: BattleActorState.SkillRanksEntry
-	nil,                                     // 53: BattleActorState.AbilityUseCountsEntry
-	nil,                                     // 54: BattleActorState.RoundEffectUsageEntry
-	nil,                                     // 55: BattleActorState.EquippedSkillVfxEntry
-	nil,                                     // 56: RankedMatchContext.MemberWinStreaksEntry
-	(*component.BaseAttributesComp)(nil),    // 57: BaseAttributesComp
-	(*component.CombatAttributes)(nil),      // 58: CombatAttributes
-	(*component.EquipmentEffects)(nil),      // 59: EquipmentEffects
-	(*component.SeasonSealEffect)(nil),      // 60: SeasonSealEffect
-	(*component.PetCultivationEffects)(nil), // 61: PetCultivationEffects
-	(*component.SupportEffectSummary)(nil),  // 62: SupportEffectSummary
+	(*JianghuDuelBattleContext)(nil),        // 48: JianghuDuelBattleContext
+	nil,                                     // 49: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                     // 50: BattlePlayerSnapshot.EquippedSkillVfxEntry
+	nil,                                     // 51: BattlePetSnapshot.SkillRanksEntry
+	nil,                                     // 52: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                     // 53: BattleActorState.SkillRanksEntry
+	nil,                                     // 54: BattleActorState.AbilityUseCountsEntry
+	nil,                                     // 55: BattleActorState.RoundEffectUsageEntry
+	nil,                                     // 56: BattleActorState.EquippedSkillVfxEntry
+	nil,                                     // 57: RankedMatchContext.MemberWinStreaksEntry
+	(*component.BaseAttributesComp)(nil),    // 58: BaseAttributesComp
+	(*component.CombatAttributes)(nil),      // 59: CombatAttributes
+	(*component.EquipmentEffects)(nil),      // 60: EquipmentEffects
+	(*component.SeasonSealEffect)(nil),      // 61: SeasonSealEffect
+	(*component.PetCultivationEffects)(nil), // 62: PetCultivationEffects
+	(*component.SupportEffectSummary)(nil),  // 63: SupportEffectSummary
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	57, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	58, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
 	12, // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
 	13, // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
 	11, // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
 	15, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	58, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
-	48, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
-	59, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
+	59, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
+	49, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
+	60, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
 	15, // 8: BattlePlayerSnapshot.standby_pets:type_name -> BattlePetSnapshot
-	60, // 9: BattlePlayerSnapshot.available_season_seals:type_name -> SeasonSealEffect
+	61, // 9: BattlePlayerSnapshot.available_season_seals:type_name -> SeasonSealEffect
 	44, // 10: BattlePlayerSnapshot.tower_context:type_name -> WuxingTowerBattleContext
-	49, // 11: BattlePlayerSnapshot.equipped_skill_vfx:type_name -> BattlePlayerSnapshot.EquippedSkillVfxEntry
-	57, // 12: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
-	50, // 13: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
-	61, // 14: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
+	50, // 11: BattlePlayerSnapshot.equipped_skill_vfx:type_name -> BattlePlayerSnapshot.EquippedSkillVfxEntry
+	58, // 12: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	51, // 13: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
+	62, // 14: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
 	0,  // 15: BattleActorState.actor_type:type_name -> eBattleActorType
-	57, // 16: BattleActorState.attributes:type_name -> BaseAttributesComp
+	58, // 16: BattleActorState.attributes:type_name -> BaseAttributesComp
 	12, // 17: BattleActorState.buffs:type_name -> BattleBuffEntry
-	51, // 18: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	58, // 19: BattleActorState.combat:type_name -> CombatAttributes
-	52, // 20: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	53, // 21: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
-	54, // 22: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
-	59, // 23: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	52, // 18: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	59, // 19: BattleActorState.combat:type_name -> CombatAttributes
+	53, // 20: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	54, // 21: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	55, // 22: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	60, // 23: BattleActorState.equipment_effects:type_name -> EquipmentEffects
 	17, // 24: BattleActorState.artifact_states:type_name -> BattleArtifactState
-	61, // 25: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
-	62, // 26: BattleActorState.support_effects:type_name -> SupportEffectSummary
+	62, // 25: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
+	63, // 26: BattleActorState.support_effects:type_name -> SupportEffectSummary
 	17, // 27: BattleActorState.season_seal_state:type_name -> BattleArtifactState
-	55, // 28: BattleActorState.equipped_skill_vfx:type_name -> BattleActorState.EquippedSkillVfxEntry
+	56, // 28: BattleActorState.equipped_skill_vfx:type_name -> BattleActorState.EquippedSkillVfxEntry
 	1,  // 29: BattleAction.action_type:type_name -> eBattleActionType
 	2,  // 30: BattleEventItem.event_type:type_name -> eBattleEventType
 	3,  // 31: BattleEventItem.hit_kind:type_name -> eBattleHitKind
@@ -6300,20 +6487,21 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	35, // 47: BattleSettlementData.festival_beast:type_name -> FestivalBeastBattleContext
 	45, // 48: BattleSettlementData.tower_settlement:type_name -> WuxingTowerSettlementEcho
 	5,  // 49: BattleSettlementData.highlight_kind:type_name -> BattleHighlightKind
-	7,  // 50: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	35, // 51: BattleActivityContext.festival_beast:type_name -> FestivalBeastBattleContext
-	34, // 52: BattleActivityContext.guild_war:type_name -> GuildWarBattleContext
-	37, // 53: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
-	38, // 54: RankedMatchContext.members:type_name -> RankedMemberLoadout
-	56, // 55: RankedMatchContext.member_win_streaks:type_name -> RankedMatchContext.MemberWinStreaksEntry
-	24, // 56: RankedMatchContext.rivalry_encounters:type_name -> RankedRivalryEncounter
-	10, // 57: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
-	10, // 58: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
-	59, // [59:59] is the sub-list for method output_type
-	59, // [59:59] is the sub-list for method input_type
-	59, // [59:59] is the sub-list for extension type_name
-	59, // [59:59] is the sub-list for extension extendee
-	0,  // [0:59] is the sub-list for field type_name
+	48, // 50: BattleSettlementData.jianghu_duel:type_name -> JianghuDuelBattleContext
+	7,  // 51: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	35, // 52: BattleActivityContext.festival_beast:type_name -> FestivalBeastBattleContext
+	34, // 53: BattleActivityContext.guild_war:type_name -> GuildWarBattleContext
+	37, // 54: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
+	38, // 55: RankedMatchContext.members:type_name -> RankedMemberLoadout
+	57, // 56: RankedMatchContext.member_win_streaks:type_name -> RankedMatchContext.MemberWinStreaksEntry
+	24, // 57: RankedMatchContext.rivalry_encounters:type_name -> RankedRivalryEncounter
+	10, // 58: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
+	10, // 59: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
+	60, // [60:60] is the sub-list for method output_type
+	60, // [60:60] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -6329,7 +6517,7 @@ func file_proto_battle_battle_data_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   46,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

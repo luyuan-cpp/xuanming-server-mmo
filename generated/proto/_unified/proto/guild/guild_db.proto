@@ -691,3 +691,43 @@ message GuildWarRivalryRecord {
   uint32 bounty_marked = 5;          // 1 = 互挂过追杀令直接成宿敌
   uint64 updated_ms = 6;
 }
+
+// 锁序位置 20:帮派生死状恩怨汇总(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2)。
+message GuildJianghuRivalSummaryRecord {
+  option(OptionTableName) = "guild_jianghu_rival_summary";
+  option(OptionPrimaryKey) = "guild_id,rival_guild_id";
+  option(OptionIndex) = "guild_id,last_battle_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 rival_guild_id = 2;
+  string rival_guild_name = 3;
+  uint32 wins = 4;
+  uint32 losses = 5;
+  uint32 draws = 6;
+  uint64 last_battle_ms = 7;
+}
+
+// 锁序位置 21:帮派生死状恩怨墙近期战绩(每帮保留最近 20 场,按 (guild_id, battle_id) 幂等去重)。
+message GuildJianghuGrudgeRecord {
+  option(OptionTableName) = "guild_jianghu_grudge_record";
+  option(OptionPrimaryKey) = "guild_id,battle_id";
+  option(OptionIndex) = "guild_id,finished_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 battle_id = 2;
+  uint64 rival_guild_id = 3;
+  string rival_guild_name = 4;
+  uint32 outcome_for_guild = 5; // 1=胜, 2=负, 3=平
+  uint32 writ_tier = 6;         // 1=普通战书, 2=金帖生死状
+  uint32 team_size = 7;
+  uint32 total_rounds = 8;
+  string our_captain_name = 9;
+  string rival_captain_name = 10;
+  uint64 finished_ms = 11;
+}

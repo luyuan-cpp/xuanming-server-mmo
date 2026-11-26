@@ -279,3 +279,26 @@ func TestLoopUpdatesLivenessHeartbeat(t *testing.T) {
 		return rounds.Load() >= 1 && testutil.ToFloat64(loopLastRoundUnix.WithLabelValues(point)) >= before
 	})
 }
+
+func TestLoopPanicDoesNotAdvanceLiveness(t *testing.T) {
+	logtest.NewCollector(t)
+
+	const point = "test.loop.panic_no_touch"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var panics atomic.Int32
+	Loop(ctx, point, 2*time.Millisecond, func(context.Context) {
+		panics.Add(1)
+		panic("boom")
+	})
+
+	// 将时间戳拨回过去，确认连续 panic 轮绝不会把它推回当前时间。
+	waitFor(t, 5*time.Second, "at least one panic observed", func() bool { return panics.Load() >= 1 })
+	loopLastRoundUnix.WithLabelValues(point).Set(100)
+	before := panics.Load()
+	waitFor(t, 5*time.Second, "more panic rounds observed", func() bool { return panics.Load() >= before+3 })
+	if got := testutil.ToFloat64(loopLastRoundUnix.WithLabelValues(point)); got != 100 {
+		t.Fatalf("panicking loop must not advance liveness heartbeat, got %v want 100", got)
+	}
+}

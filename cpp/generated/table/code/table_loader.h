@@ -52,6 +52,7 @@ struct GuildShopTableSnapshot;
 struct GuildWarMilestoneTableSnapshot;
 struct GuildWarRuleTableSnapshot;
 struct ItemTableSnapshot;
+struct JianghuRuleTableSnapshot;
 struct MessageLimiterTableSnapshot;
 struct MirrorTableSnapshot;
 struct MissionTableSnapshot;
@@ -96,7 +97,7 @@ using LoadSuccessCallback = std::function<void()>;
 
 // 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
 // 运行期只加载 schema_digest 与本常量一致的表包。
-inline constexpr std::string_view kTableSchemaDigest = "8f1aa7cb914ec44f";
+inline constexpr std::string_view kTableSchemaDigest = "8a767b1f823342bd";
 
 // 一次加载或热更表包的身份元数据。
 struct TableBundleIdentity {
@@ -198,6 +199,8 @@ struct TableSet {
     std::shared_ptr<const GuildWarRuleTableSnapshot> guildWarRuleTable;
 
     std::shared_ptr<const ItemTableSnapshot> itemTable;
+
+    std::shared_ptr<const JianghuRuleTableSnapshot> jianghuRuleTable;
 
     std::shared_ptr<const MessageLimiterTableSnapshot> messageLimiterTable;
 

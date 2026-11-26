@@ -179,3 +179,5 @@ c�c:	改名卡BQ使用后可修改一次角色名（冷却 7 天，旧名保�
 ��c:技能特效卷B�仅自用绑定特效卷：可在衣柜「特效」页永久解锁一款支持兑换的技能特效，已拥有特效随时免费切换（纯画面零数值）。J/UI/Ugui/WardrobeCosmetics/item_skill_vfx_scroll
 ��c:装备方案扩容符B{官方便利配套符箓。解锁额外装备流派方案位时优先消耗 1 张，不提供任何属性或战力加成。J3UI/Ugui/EquipLoadoutV1/icon_loadout_expand_talisman
 ��:封卷道籍B已封缄的可交易常规技能书，可上架聚宝斋/集市或面对面交易，开卷回书架后即可研习或拆页。JUI/Icons/item_sealed_skill_book
+��c:金帖生死状B�仅自用绑定江湖战书：在天墉生死擂下帖成局后触发金色横幅全服播报、公开围观与战报金框留痕（0 战力加成，拒战或作废不扣消耗）。J)UI/Ugui/JianghuDuelV1/item_gold_duel_writ
+��c:清风洗尘符B�仅自用绑定江湖符箓：立即消除天墉生死状战败社交印记，并附赠 30 分钟「清风拂尘」洒脱徽记（纯社交外观，0 战力加成）。J+UI/Ugui/JianghuDuelV1/item_clear_dust_charm

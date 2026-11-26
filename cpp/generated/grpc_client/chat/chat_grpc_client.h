@@ -39,6 +39,14 @@ void SendClientPlayerChatRetractWorldChat(entt::registry& registry, entt::entity
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendClientPlayerChatRetractWorldChatErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region ClientPlayerChatPublishSystemWorldNotice
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerChatPublishSystemWorldNoticeGrpcPath = "/chatpb.ClientPlayerChat/PublishSystemWorldNotice";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerChatPublishSystemWorldNotice(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::PublishSystemWorldNoticeRequest& request, GrpcDone<::chatpb::PublishSystemWorldNoticeResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerChatPublishSystemWorldNoticeErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region ClientPlayerChatNotifyWorldChat
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kClientPlayerChatNotifyWorldChatGrpcPath = "/chatpb.ClientPlayerChat/NotifyWorldChat";

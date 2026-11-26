@@ -86,6 +86,7 @@ var Faults = []Fault{
 	{Code: 38000, Group: "travel_pass_error", Name: "TravelPassUnavailable"},
 	{Code: 39000, Group: "rewarded_ad_error", Name: "RewardedAdUnavailable"},
 	{Code: 39011, Group: "rewarded_ad_error", Name: "RewardedAdFrozen"},
+	{Code: 40013, Group: "jianghu_error", Name: "JianghuServiceBusy"},
 }
 
 // faultSet 由 Faults 派生,不单独生成一份字面量:

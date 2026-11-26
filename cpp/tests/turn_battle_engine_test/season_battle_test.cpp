@@ -1653,3 +1653,328 @@ TEST_F(SeasonBattleTest, BossTrialWeeklyAffixFireAndEarthEffects) {
         EXPECT_GT(earthR3Dmg, baseR3Dmg) << "土周化劲后下一回合我方全伤害应额外 +12%";
     }
 }
+
+TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
+    // 1. 破阵锐印(101) × 破阵裂锋(15001)：击碎护盾返还 30% 耗蓝；未击碎不返蓝；结算回传削盾功劳与共鸣数
+    {
+        auto& skill = AddModernSkill(seasonrules::kSkillPozhenLiefeng, 1, combatdamage::kPhysicalDamage, 1000.0);
+        skill.set_mana_percent(0.06); // max_mana 10000 -> cost 600, 30% refund = 180
+        Player(kHero).set_active_season_id(1);
+        Player(kHero).add_skill_table_ids(seasonrules::kSkillPozhenLiefeng);
+        (*Player(kHero).mutable_skill_ranks())[seasonrules::kSkillPozhenLiefeng] = 1;
+        auto* seal = Player(kHero).mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(1);
+        seal->set_seal_id(seasonrules::kSealPozhenRuiyin);
+        seal->set_effect_id(1);
+        seal->set_bonus_bps(1000);
+        seal->set_per_round_limit(1);
+
+        // 1a. 护盾剩余极薄，锐印额外破盾将其彻底击碎 -> 返蓝 180，共鸣事件 101
+        AddShieldBuff(kEnemy, 96001, 50);
+        TurnBattleEngine shatterEng(data);
+        ASSERT_TRUE(shatterEng.Initialize(request));
+        shatterEng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kEnemy, seasonrules::kSkillPozhenLiefeng));
+        shatterEng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turn = shatterEng.ResolveCurrentRound();
+        uint64_t resonanceRefund = 0;
+        for (const auto& ev : turn.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
+                ev.season_seal_id() == seasonrules::kSealPozhenRuiyin &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventSharpManaRefund) {
+                resonanceRefund += ev.value();
+            }
+        }
+        // 注：若直伤本身已先破 50 盾，额外破盾为 0；因此用刚好比直伤多 30 点的盾精确由锐印击碎
+        // 下方先测一次厚盾拿到精准直伤再验证击碎边界
+        (void)resonanceRefund;
+    }
+
+    // 1 (精确可控盾厚)：先用厚盾测出一次未击碎（不返蓝），再按直伤+10 盾厚精确由锐印击碎（返蓝 180）
+    {
+        auto reqThick = request;
+        reqThick.mutable_players(0)->set_active_season_id(1);
+        reqThick.mutable_players(0)->add_skill_table_ids(seasonrules::kSkillPozhenLiefeng);
+        (*reqThick.mutable_players(0)->mutable_skill_ranks())[seasonrules::kSkillPozhenLiefeng] = 1;
+        auto* seal = reqThick.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(1);
+        seal->set_seal_id(seasonrules::kSealPozhenRuiyin);
+        seal->set_effect_id(1);
+        seal->set_bonus_bps(1000);
+        seal->set_per_round_limit(1);
+
+        auto& shieldRow = data->AddBuff(96002);
+        shieldRow.Clear();
+        shieldRow.set_id(96002);
+        shieldRow.set_infinite_duration(1);
+        shieldRow.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Shield));
+        shieldRow.set_effect_priority(20);
+        auto* thickEntry = reqThick.mutable_players(1)->add_buffs();
+        thickEntry->set_buff_id(96002);
+        thickEntry->set_buff_table_id(96002);
+        thickEntry->set_caster_id(kEnemy);
+        thickEntry->set_layer(1);
+        thickEntry->set_remaining_capacity(50000);
+        thickEntry->set_snapshot_value(50000);
+        thickEntry->set_tick_round(999);
+
+        TurnBattleEngine noShatterEng(data);
+        ASSERT_TRUE(noShatterEng.Initialize(reqThick));
+        noShatterEng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kEnemy, seasonrules::kSkillPozhenLiefeng));
+        noShatterEng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turnNoShatter = noShatterEng.ResolveCurrentRound();
+        uint64_t directAbsorbed = 0;
+        uint64_t sealStripped = 0;
+        bool sawResonance = false;
+        for (const auto& ev : turnNoShatter.events()) {
+            if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kHero) {
+                directAbsorbed = ev.absorbed();
+            }
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT && ev.season_seal_id() == seasonrules::kSealPozhenRuiyin) {
+                if (ev.artifact_effect_id() == 1u) sealStripped = ev.value();
+                if (ev.artifact_effect_id() == seasonrules::kResonanceEventSharpManaRefund) sawResonance = true;
+            }
+        }
+        ASSERT_GT(directAbsorbed, 0u);
+        ASSERT_GT(sealStripped, 0u);
+        EXPECT_FALSE(sawResonance) << "未击碎护盾不应触发锐印返蓝共鸣";
+        EXPECT_EQ(ActorOf(turnNoShatter.state(), kHero).attributes().mana(), 9400u);
+        const auto noShatterSettle = noShatterEng.BuildSettlement(kHero);
+        EXPECT_EQ(noShatterSettle.final_season_seal_id(), seasonrules::kSealPozhenRuiyin);
+        EXPECT_EQ(noShatterSettle.season_seal_contribution_value(), sealStripped);
+        EXPECT_EQ(noShatterSettle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(noShatterSettle.season_seal_resonance_count(), 0u);
+
+        // 精确设置盾厚 = 直伤吸收 + min(sealStripped, 10)，保证由锐印额外破盾击碎最后一层盾
+        auto reqShatter = reqThick;
+        const uint64_t exactCap = directAbsorbed + std::min<uint64_t>(sealStripped, 10u);
+        reqShatter.mutable_players(1)->mutable_buffs(0)->set_remaining_capacity(exactCap);
+        reqShatter.mutable_players(1)->mutable_buffs(0)->set_snapshot_value(exactCap);
+        TurnBattleEngine shatterEng(data);
+        ASSERT_TRUE(shatterEng.Initialize(reqShatter));
+        shatterEng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kEnemy, seasonrules::kSkillPozhenLiefeng));
+        shatterEng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turnShatter = shatterEng.ResolveCurrentRound();
+        uint64_t refundEventVal = 0;
+        for (const auto& ev : turnShatter.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
+                ev.season_seal_id() == seasonrules::kSealPozhenRuiyin &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventSharpManaRefund) {
+                refundEventVal = ev.value();
+            }
+        }
+        EXPECT_EQ(refundEventVal, 180u) << "锐印击碎护盾应返还 30% 耗蓝(600 * 30% = 180)";
+        EXPECT_EQ(ActorOf(turnShatter.state(), kHero).attributes().mana(), 9580u);
+        const auto shatterSettle = shatterEng.BuildSettlement(kHero);
+        EXPECT_EQ(shatterSettle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(shatterSettle.season_seal_resonance_count(), 1u);
+        EXPECT_EQ(shatterSettle.season_seal_contribution_value(), std::min<uint64_t>(sealStripped, 10u));
+    }
+
+    // 2. 破阵玄印(102) × 破阵灵雷(15002)：命中有盾目标触发破盾，减防持续回合 2 -> 3 + 共鸣事件 102
+    {
+        auto& magicSkill = AddModernSkill(seasonrules::kSkillPozhenLinglei, 1, combatdamage::kMagicDamage, 1000.0);
+        magicSkill.set_mana_percent(0.06);
+        magicSkill.add_effect(96021);
+        auto& debuff = data->AddBuff(96021);
+        debuff.Clear();
+        debuff.set_id(96021);
+        debuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Modifier));
+        debuff.set_modifier_stat(static_cast<uint32_t>(BattleModifier::Defense));
+        debuff.set_ratio(-0.15);
+        debuff.set_duration_rounds(2);
+
+        auto reqMystic = request;
+        reqMystic.mutable_players(0)->set_active_season_id(1);
+        reqMystic.mutable_players(0)->add_skill_table_ids(seasonrules::kSkillPozhenLinglei);
+        (*reqMystic.mutable_players(0)->mutable_skill_ranks())[seasonrules::kSkillPozhenLinglei] = 1;
+        auto* seal = reqMystic.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(1);
+        seal->set_seal_id(seasonrules::kSealPozhenXuanyin);
+        seal->set_effect_id(2);
+        seal->set_bonus_bps(1000);
+        seal->set_per_round_limit(1);
+        auto* shieldEntry = reqMystic.mutable_players(1)->add_buffs();
+        shieldEntry->set_buff_id(96002);
+        shieldEntry->set_buff_table_id(96002);
+        shieldEntry->set_caster_id(kEnemy);
+        shieldEntry->set_layer(1);
+        shieldEntry->set_remaining_capacity(50000);
+        shieldEntry->set_snapshot_value(50000);
+        shieldEntry->set_tick_round(999);
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqMystic));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kEnemy, seasonrules::kSkillPozhenLinglei));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turn = eng.ResolveCurrentRound();
+        uint32_t debuffRemain = 0;
+        for (const auto& b : ActorOf(turn.state(), kEnemy).buffs()) {
+            if (b.buff_table_id() == 96021u) debuffRemain = b.remain_rounds();
+        }
+        bool sawExtendEvent = false;
+        for (const auto& ev : turn.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
+                ev.season_seal_id() == seasonrules::kSealPozhenXuanyin &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventMysticExtendDebuff &&
+                ev.value() == 1u) {
+                sawExtendEvent = true;
+            }
+        }
+        EXPECT_EQ(debuffRemain, 3u) << "玄印破盾共鸣应使 15002 减防回合 2 -> 3";
+        EXPECT_TRUE(sawExtendEvent);
+        const auto settle = eng.BuildSettlement(kHero);
+        EXPECT_EQ(settle.final_season_seal_id(), seasonrules::kSealPozhenXuanyin);
+        EXPECT_GT(settle.season_seal_contribution_value(), 0u);
+        EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
+    }
+
+    // 3. 固阵守印(103) × 固阵灵障(15003)：R1 受直伤触发守印 -> R2 灵障护盾 +10%；R3 不再重复增盾
+    {
+        auto& shieldSkill = data->AddSkill(seasonrules::kSkillGuzhenLingzhang);
+        shieldSkill.Clear();
+        shieldSkill.set_id(seasonrules::kSkillGuzhenLingzhang);
+        shieldSkill.set_battle_model(1);
+        shieldSkill.set_ability_kind(1);
+        shieldSkill.set_caster_mask(1);
+        shieldSkill.set_target_team(2);
+        shieldSkill.set_max_targets(1);
+        shieldSkill.set_pet_max_targets(1);
+        shieldSkill.add_skill_type(1);
+        shieldSkill.set_season_id(1);
+        shieldSkill.set_unlock_level(1);
+        shieldSkill.set_max_rank(10);
+        shieldSkill.add_effect(96030);
+        auto& shieldBuff = data->AddBuff(96030);
+        shieldBuff.Clear();
+        shieldBuff.set_id(96030);
+        shieldBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Shield));
+        shieldBuff.set_duration_rounds(2);
+        shieldBuff.set_max_layer(1);
+        shieldBuff.set_refresh_policy(2);
+        shieldBuff.set_effect_priority(20);
+        shieldBuff.set_flat_value(1000.0);
+
+        auto reqGuard = request;
+        reqGuard.mutable_players(0)->set_active_season_id(1);
+        reqGuard.mutable_players(0)->add_skill_table_ids(seasonrules::kSkillGuzhenLingzhang);
+        (*reqGuard.mutable_players(0)->mutable_skill_ranks())[seasonrules::kSkillGuzhenLingzhang] = 1;
+        auto* seal = reqGuard.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(1);
+        seal->set_seal_id(seasonrules::kSealGuzhenShouyin);
+        seal->set_effect_id(6);
+        seal->set_bonus_bps(1000);
+        seal->set_cap_bps(300);
+        seal->set_active_rounds(2);
+        seal->set_battle_limit(1);
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqGuard));
+        // R1: 敌方普攻打主角触发固阵守印减伤
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_ATTACK, kHero));
+        const auto r1 = eng.ResolveCurrentRound();
+        uint64_t r1Mitigated = 0;
+        for (const auto& ev : r1.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
+                ev.season_seal_id() == seasonrules::kSealGuzhenShouyin &&
+                ev.artifact_effect_id() == 6u) {
+                r1Mitigated = ev.value();
+            }
+        }
+        ASSERT_GT(r1Mitigated, 0u);
+
+        // R2: 施放 15003 固阵灵障 -> 护盾量 1000 * 1.10 = 1100（额外 +100）
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, seasonrules::kSkillGuzhenLingzhang));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r2 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ShieldCapacity(r2.state(), kHero, 96030u), 1100u) << "固阵守印次轮释放固阵灵障护盾应 +10%";
+        uint64_t boostEventVal = 0;
+        for (const auto& ev : r2.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
+                ev.season_seal_id() == seasonrules::kSealGuzhenShouyin &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventGuardShieldBoost) {
+                boostEventVal = ev.value();
+            }
+        }
+        EXPECT_EQ(boostEventVal, 100u);
+        const auto settle = eng.BuildSettlement(kHero);
+        EXPECT_EQ(settle.final_season_seal_id(), seasonrules::kSealGuzhenShouyin);
+        EXPECT_EQ(settle.season_seal_contribution_value(), r1Mitigated + 100u);
+        EXPECT_EQ(settle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
+    }
+
+    // 4. 聚息援印(104) × 破阵蓄势(15004)：R1 防御回蓝 -> R2 破阵蓄势耗蓝减半(500 -> 250)，R3 恢复全价 500
+    {
+        auto& auraSkill = data->AddSkill(seasonrules::kSkillPozhenXushi);
+        auraSkill.Clear();
+        auraSkill.set_id(seasonrules::kSkillPozhenXushi);
+        auraSkill.set_battle_model(1);
+        auraSkill.set_ability_kind(1);
+        auraSkill.set_caster_mask(1);
+        auraSkill.set_target_team(2);
+        auraSkill.set_max_targets(1);
+        auraSkill.set_pet_max_targets(1);
+        auraSkill.add_skill_type(1);
+        auraSkill.set_season_id(1);
+        auraSkill.set_unlock_level(1);
+        auraSkill.set_max_rank(10);
+        auraSkill.set_mana_percent(0.05); // max_mana 10000 -> full cost 500, half cost 250
+        auraSkill.add_effect(96040);
+        auto& auraBuff = data->AddBuff(96040);
+        auraBuff.Clear();
+        auraBuff.set_id(96040);
+        auraBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Modifier));
+        auraBuff.set_modifier_stat(static_cast<uint32_t>(BattleModifier::PhysicalAttack));
+        auraBuff.set_ratio(0.15);
+        auraBuff.set_duration_rounds(2);
+
+        auto reqBreath = request;
+        reqBreath.mutable_players(0)->set_active_season_id(1);
+        reqBreath.mutable_players(0)->mutable_base_attributes()->set_mana(5000);
+        reqBreath.mutable_players(0)->add_skill_table_ids(seasonrules::kSkillPozhenXushi);
+        (*reqBreath.mutable_players(0)->mutable_skill_ranks())[seasonrules::kSkillPozhenXushi] = 1;
+        auto* seal = reqBreath.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(1);
+        seal->set_seal_id(seasonrules::kSealJuxiYuanyin);
+        seal->set_effect_id(7);
+        seal->set_bonus_bps(400); // +400 mana
+        seal->set_per_round_limit(1);
+        seal->set_battle_limit(3);
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqBreath));
+        // R1: 普通防御 -> 援印回蓝 400 (5000 -> 5400)
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r1 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(r1.state(), kHero).attributes().mana(), 5400u);
+
+        // R2: 施放 15004 破阵蓄势 -> 耗蓝减半 250 (5400 -> 5150)，省蓝 250
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, seasonrules::kSkillPozhenXushi));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r2 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(r2.state(), kHero).attributes().mana(), 5150u) << "聚息援印次轮释放破阵蓄势应耗蓝减半";
+        uint64_t savedEventVal = 0;
+        for (const auto& ev : r2.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
+                ev.season_seal_id() == seasonrules::kSealJuxiYuanyin &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventBreathHalfMana) {
+                savedEventVal = ev.value();
+            }
+        }
+        EXPECT_EQ(savedEventVal, 250u);
+
+        // R3: 未防御再放 15004 -> 恢复全价 500 (5150 -> 4650)
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, seasonrules::kSkillPozhenXushi));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r3 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(r3.state(), kHero).attributes().mana(), 4650u);
+
+        const auto settle = eng.BuildSettlement(kHero);
+        EXPECT_EQ(settle.final_season_seal_id(), seasonrules::kSealJuxiYuanyin);
+        EXPECT_EQ(settle.season_seal_contribution_value(), 650u); // 400 回蓝 + 250 省蓝
+        EXPECT_EQ(settle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
+    }
+}

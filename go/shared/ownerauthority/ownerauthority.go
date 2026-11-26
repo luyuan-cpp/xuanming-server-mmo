@@ -178,7 +178,12 @@ type BeginRequest struct {
 	Target         OwnerTarget
 	OperationID    string
 	SourceRevision uint64
-	Detail         string
+	// AllowSameSourceRevision allows moving to a different target while keeping the same
+	// SourceRevision (for monotonic non-decreasing revisions such as account-role ownership
+	// revisions that stay constant across normal scene switches). Lower revisions and 0-after-nonzero
+	// are still rejected fail-closed as ErrSourceRevisionStale.
+	AllowSameSourceRevision bool
+	Detail                  string
 }
 
 // AdmitRequest requests promotion of a PENDING epoch to ADMITTED.
@@ -297,6 +302,7 @@ func OpenStrongDB(ctx context.Context, dsn, expectedDatabase, backendRaw string,
 	}
 	db.SetMaxOpenConns(maxOpen)
 	db.SetMaxIdleConns(maxOpen / 2)
+	db.SetConnMaxLifetime(30 * time.Minute)
 	db.SetConnMaxIdleTime(3 * time.Minute)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
@@ -376,7 +382,7 @@ func (s *Store) BeginTransition(ctx context.Context, req BeginRequest) (OwnerRec
 			if req.SourceRevision == 0 || req.SourceRevision < cur.SourceRevision {
 				return OwnerRecord{}, ErrSourceRevisionStale
 			}
-			if req.SourceRevision == cur.SourceRevision && !cur.Target.Equal(req.Target) {
+			if !req.AllowSameSourceRevision && req.SourceRevision == cur.SourceRevision && !cur.Target.Equal(req.Target) {
 				return OwnerRecord{}, ErrSourceRevisionStale
 			}
 		}
@@ -386,6 +392,11 @@ func (s *Store) BeginTransition(ctx context.Context, req BeginRequest) (OwnerRec
 
 	nowMs := s.now().UnixMilli()
 	admitNotBeforeMs := nowMs
+	// Preserve any unexpired barrier retained from a prior Release or Pending transition so
+	// release-then-begin or rapid Pending->Pending retargeting can never shorten an active lease fence.
+	if found && cur.AdmitNotBeforeMs > admitNotBeforeMs {
+		admitNotBeforeMs = cur.AdmitNotBeforeMs
+	}
 	// Cross-instance handoff: lock outgoing holder lease in fixed second order.
 	if found && cur.Phase != PhaseNone && cur.Target.PodName != "" && !cur.Target.SameInstance(req.Target) {
 		var (
@@ -592,18 +603,40 @@ func (s *Store) Release(ctx context.Context, req ReleaseRequest) (OwnerRecord, b
 	}
 
 	nowMs := s.now().UnixMilli()
+	// Retain barrier across Release: lock outgoing holder lease in fixed second order so
+	// a subsequent BeginTransition cannot admit a new node while the released holder's lease is live.
+	retainedBarrier := cur.AdmitNotBeforeMs
+	if cur.Target.PodName != "" {
+		var (
+			leaseUID      string
+			leaseEpoch    uint32
+			leaseDeadline int64
+		)
+		lerr := tx.QueryRowContext(ctx,
+			`SELECT instance_uid, instance_epoch, lease_deadline_ms FROM owner_instance_lease WHERE pod_name = ? FOR UPDATE`,
+			cur.Target.PodName).Scan(&leaseUID, &leaseEpoch, &leaseDeadline)
+		if lerr != nil && !errors.Is(lerr, sql.ErrNoRows) {
+			return OwnerRecord{}, false, fmt.Errorf("ownerauthority lock lease for release: %w", lerr)
+		}
+		if lerr == nil && leaseUID == cur.Target.InstanceUID && leaseEpoch == cur.Target.InstanceEpoch {
+			if barrier := leaseDeadline + s.skewMargin.Milliseconds(); barrier > retainedBarrier {
+				retainedBarrier = barrier
+			}
+		}
+	}
+
 	cur.OwnerType = OwnerNone
 	cur.Phase = PhaseNone
 	cur.Target = OwnerTarget{}
-	cur.AdmitNotBeforeMs = 0
+	cur.AdmitNotBeforeMs = retainedBarrier
 	cur.UpdatedAtMs = nowMs
 
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE owner_record
 		 SET owner_type = ?, phase = ?, pod_name = '', instance_uid = '', instance_epoch = 0,
-		     assignment_id = '', release_track = '', admit_not_before_ms = 0, updated_at_ms = ?
+		     assignment_id = '', release_track = '', admit_not_before_ms = ?, updated_at_ms = ?
 		 WHERE player_id = ?`,
-		int8(cur.OwnerType), int8(cur.Phase), cur.UpdatedAtMs, cur.PlayerID); err != nil {
+		int8(cur.OwnerType), int8(cur.Phase), cur.AdmitNotBeforeMs, cur.UpdatedAtMs, cur.PlayerID); err != nil {
 		return OwnerRecord{}, false, fmt.Errorf("ownerauthority update release: %w", err)
 	}
 	if err := insertTransitionLog(ctx, tx, cur.PlayerID, cur.OwnerEpoch, cur.OperationID, "release", req.Detail, nowMs); err != nil {

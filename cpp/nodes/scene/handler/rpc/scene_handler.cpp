@@ -671,3 +671,12 @@ void SceneHandler::NodeHandshake(::google::protobuf::RpcController* controller, 
 	///<<< END WRITING YOUR CODE
 
 }
+
+void SceneHandler::CheckJianghuDuelEligibility(::google::protobuf::RpcController* controller, const ::CheckJianghuDuelEligibilityRequest* request,
+	::CheckJianghuDuelEligibilityResponse* response,
+	::google::protobuf::Closure* done)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+
+}

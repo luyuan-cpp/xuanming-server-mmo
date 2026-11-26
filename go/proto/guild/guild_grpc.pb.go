@@ -20,46 +20,47 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GuildService_CreateGuild_FullMethodName              = "/guildpb.GuildService/CreateGuild"
-	GuildService_GetGuild_FullMethodName                 = "/guildpb.GuildService/GetGuild"
-	GuildService_GetPlayerGuild_FullMethodName           = "/guildpb.GuildService/GetPlayerGuild"
-	GuildService_LeaveGuild_FullMethodName               = "/guildpb.GuildService/LeaveGuild"
-	GuildService_DisbandGuild_FullMethodName             = "/guildpb.GuildService/DisbandGuild"
-	GuildService_SetAnnouncement_FullMethodName          = "/guildpb.GuildService/SetAnnouncement"
-	GuildService_RenameGuild_FullMethodName              = "/guildpb.GuildService/RenameGuild"
-	GuildService_SetGuildMemberRole_FullMethodName       = "/guildpb.GuildService/SetGuildMemberRole"
-	GuildService_KickGuildMember_FullMethodName          = "/guildpb.GuildService/KickGuildMember"
-	GuildService_TransferGuildLeader_FullMethodName      = "/guildpb.GuildService/TransferGuildLeader"
-	GuildService_ApplyJoinGuild_FullMethodName           = "/guildpb.GuildService/ApplyJoinGuild"
-	GuildService_CancelGuildApplication_FullMethodName   = "/guildpb.GuildService/CancelGuildApplication"
-	GuildService_ListMyGuildApplications_FullMethodName  = "/guildpb.GuildService/ListMyGuildApplications"
-	GuildService_ListGuildApplications_FullMethodName    = "/guildpb.GuildService/ListGuildApplications"
-	GuildService_ReviewGuildApplication_FullMethodName   = "/guildpb.GuildService/ReviewGuildApplication"
-	GuildService_NotifyGuildChanged_FullMethodName       = "/guildpb.GuildService/NotifyGuildChanged"
-	GuildService_UpdateGuildScore_FullMethodName         = "/guildpb.GuildService/UpdateGuildScore"
-	GuildService_GetGuildRank_FullMethodName             = "/guildpb.GuildService/GetGuildRank"
-	GuildService_GetGuildRankByGuild_FullMethodName      = "/guildpb.GuildService/GetGuildRankByGuild"
-	GuildService_GetGuildDonateOptions_FullMethodName    = "/guildpb.GuildService/GetGuildDonateOptions"
-	GuildService_DonateToGuild_FullMethodName            = "/guildpb.GuildService/DonateToGuild"
-	GuildService_UpgradeGuild_FullMethodName             = "/guildpb.GuildService/UpgradeGuild"
-	GuildService_GetGuildShop_FullMethodName             = "/guildpb.GuildService/GetGuildShop"
-	GuildService_BuyGuildShopGoods_FullMethodName        = "/guildpb.GuildService/BuyGuildShopGoods"
-	GuildService_GetGuildActivities_FullMethodName       = "/guildpb.GuildService/GetGuildActivities"
-	GuildService_LightGuildLantern_FullMethodName        = "/guildpb.GuildService/LightGuildLantern"
-	GuildService_ClaimGuildReunion_FullMethodName        = "/guildpb.GuildService/ClaimGuildReunion"
-	GuildService_StartGuildTrial_FullMethodName          = "/guildpb.GuildService/StartGuildTrial"
-	GuildService_RespondGuildTrialInvite_FullMethodName  = "/guildpb.GuildService/RespondGuildTrialInvite"
-	GuildService_GetGuildWarOverview_FullMethodName      = "/guildpb.GuildService/GetGuildWarOverview"
-	GuildService_SetGuildWarStance_FullMethodName        = "/guildpb.GuildService/SetGuildWarStance"
-	GuildService_RegisterGuildWarGarrison_FullMethodName = "/guildpb.GuildService/RegisterGuildWarGarrison"
-	GuildService_StartGuildWarBattle_FullMethodName      = "/guildpb.GuildService/StartGuildWarBattle"
-	GuildService_ClaimGuildWarMilestone_FullMethodName   = "/guildpb.GuildService/ClaimGuildWarMilestone"
-	GuildService_ClaimGuildWarDividend_FullMethodName    = "/guildpb.GuildService/ClaimGuildWarDividend"
-	GuildService_PostGuildWarBounty_FullMethodName       = "/guildpb.GuildService/PostGuildWarBounty"
-	GuildService_TrackGuildWarBounty_FullMethodName      = "/guildpb.GuildService/TrackGuildWarBounty"
-	GuildService_GetGuildWarBattleResult_FullMethodName  = "/guildpb.GuildService/GetGuildWarBattleResult"
-	GuildService_NotifyGuildWarAlert_FullMethodName      = "/guildpb.GuildService/NotifyGuildWarAlert"
-	GuildService_InspectFieldWarTargets_FullMethodName   = "/guildpb.GuildService/InspectFieldWarTargets"
+	GuildService_CreateGuild_FullMethodName               = "/guildpb.GuildService/CreateGuild"
+	GuildService_GetGuild_FullMethodName                  = "/guildpb.GuildService/GetGuild"
+	GuildService_GetPlayerGuild_FullMethodName            = "/guildpb.GuildService/GetPlayerGuild"
+	GuildService_LeaveGuild_FullMethodName                = "/guildpb.GuildService/LeaveGuild"
+	GuildService_DisbandGuild_FullMethodName              = "/guildpb.GuildService/DisbandGuild"
+	GuildService_SetAnnouncement_FullMethodName           = "/guildpb.GuildService/SetAnnouncement"
+	GuildService_RenameGuild_FullMethodName               = "/guildpb.GuildService/RenameGuild"
+	GuildService_SetGuildMemberRole_FullMethodName        = "/guildpb.GuildService/SetGuildMemberRole"
+	GuildService_KickGuildMember_FullMethodName           = "/guildpb.GuildService/KickGuildMember"
+	GuildService_TransferGuildLeader_FullMethodName       = "/guildpb.GuildService/TransferGuildLeader"
+	GuildService_ApplyJoinGuild_FullMethodName            = "/guildpb.GuildService/ApplyJoinGuild"
+	GuildService_CancelGuildApplication_FullMethodName    = "/guildpb.GuildService/CancelGuildApplication"
+	GuildService_ListMyGuildApplications_FullMethodName   = "/guildpb.GuildService/ListMyGuildApplications"
+	GuildService_ListGuildApplications_FullMethodName     = "/guildpb.GuildService/ListGuildApplications"
+	GuildService_ReviewGuildApplication_FullMethodName    = "/guildpb.GuildService/ReviewGuildApplication"
+	GuildService_NotifyGuildChanged_FullMethodName        = "/guildpb.GuildService/NotifyGuildChanged"
+	GuildService_UpdateGuildScore_FullMethodName          = "/guildpb.GuildService/UpdateGuildScore"
+	GuildService_GetGuildRank_FullMethodName              = "/guildpb.GuildService/GetGuildRank"
+	GuildService_GetGuildRankByGuild_FullMethodName       = "/guildpb.GuildService/GetGuildRankByGuild"
+	GuildService_GetGuildDonateOptions_FullMethodName     = "/guildpb.GuildService/GetGuildDonateOptions"
+	GuildService_DonateToGuild_FullMethodName             = "/guildpb.GuildService/DonateToGuild"
+	GuildService_UpgradeGuild_FullMethodName              = "/guildpb.GuildService/UpgradeGuild"
+	GuildService_GetGuildShop_FullMethodName              = "/guildpb.GuildService/GetGuildShop"
+	GuildService_BuyGuildShopGoods_FullMethodName         = "/guildpb.GuildService/BuyGuildShopGoods"
+	GuildService_GetGuildActivities_FullMethodName        = "/guildpb.GuildService/GetGuildActivities"
+	GuildService_LightGuildLantern_FullMethodName         = "/guildpb.GuildService/LightGuildLantern"
+	GuildService_ClaimGuildReunion_FullMethodName         = "/guildpb.GuildService/ClaimGuildReunion"
+	GuildService_StartGuildTrial_FullMethodName           = "/guildpb.GuildService/StartGuildTrial"
+	GuildService_RespondGuildTrialInvite_FullMethodName   = "/guildpb.GuildService/RespondGuildTrialInvite"
+	GuildService_GetGuildWarOverview_FullMethodName       = "/guildpb.GuildService/GetGuildWarOverview"
+	GuildService_SetGuildWarStance_FullMethodName         = "/guildpb.GuildService/SetGuildWarStance"
+	GuildService_RegisterGuildWarGarrison_FullMethodName  = "/guildpb.GuildService/RegisterGuildWarGarrison"
+	GuildService_StartGuildWarBattle_FullMethodName       = "/guildpb.GuildService/StartGuildWarBattle"
+	GuildService_ClaimGuildWarMilestone_FullMethodName    = "/guildpb.GuildService/ClaimGuildWarMilestone"
+	GuildService_ClaimGuildWarDividend_FullMethodName     = "/guildpb.GuildService/ClaimGuildWarDividend"
+	GuildService_PostGuildWarBounty_FullMethodName        = "/guildpb.GuildService/PostGuildWarBounty"
+	GuildService_TrackGuildWarBounty_FullMethodName       = "/guildpb.GuildService/TrackGuildWarBounty"
+	GuildService_GetGuildWarBattleResult_FullMethodName   = "/guildpb.GuildService/GetGuildWarBattleResult"
+	GuildService_NotifyGuildWarAlert_FullMethodName       = "/guildpb.GuildService/NotifyGuildWarAlert"
+	GuildService_InspectFieldWarTargets_FullMethodName    = "/guildpb.GuildService/InspectFieldWarTargets"
+	GuildService_GetGuildJianghuGrudgeWall_FullMethodName = "/guildpb.GuildService/GetGuildJianghuGrudgeWall"
 )
 
 // GuildServiceClient is the client API for GuildService service.
@@ -127,6 +128,8 @@ type GuildServiceClient interface {
 	GetGuildWarBattleResult(ctx context.Context, in *GetGuildWarBattleResultRequest, opts ...grpc.CallOption) (*GetGuildWarBattleResultResponse, error)
 	NotifyGuildWarAlert(ctx context.Context, in *GuildWarAlertS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	InspectFieldWarTargets(ctx context.Context, in *InspectFieldWarTargetsRequest, opts ...grpc.CallOption) (*InspectFieldWarTargetsResponse, error)
+	// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
+	GetGuildJianghuGrudgeWall(ctx context.Context, in *GetGuildJianghuGrudgeWallRequest, opts ...grpc.CallOption) (*GetGuildJianghuGrudgeWallResponse, error)
 }
 
 type guildServiceClient struct {
@@ -537,6 +540,16 @@ func (c *guildServiceClient) InspectFieldWarTargets(ctx context.Context, in *Ins
 	return out, nil
 }
 
+func (c *guildServiceClient) GetGuildJianghuGrudgeWall(ctx context.Context, in *GetGuildJianghuGrudgeWallRequest, opts ...grpc.CallOption) (*GetGuildJianghuGrudgeWallResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGuildJianghuGrudgeWallResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetGuildJianghuGrudgeWall_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GuildServiceServer is the server API for GuildService service.
 // All implementations must embed UnimplementedGuildServiceServer
 // for forward compatibility.
@@ -602,6 +615,8 @@ type GuildServiceServer interface {
 	GetGuildWarBattleResult(context.Context, *GetGuildWarBattleResultRequest) (*GetGuildWarBattleResultResponse, error)
 	NotifyGuildWarAlert(context.Context, *GuildWarAlertS2C) (*base.Empty, error)
 	InspectFieldWarTargets(context.Context, *InspectFieldWarTargetsRequest) (*InspectFieldWarTargetsResponse, error)
+	// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
+	GetGuildJianghuGrudgeWall(context.Context, *GetGuildJianghuGrudgeWallRequest) (*GetGuildJianghuGrudgeWallResponse, error)
 	mustEmbedUnimplementedGuildServiceServer()
 }
 
@@ -731,6 +746,9 @@ func (UnimplementedGuildServiceServer) NotifyGuildWarAlert(context.Context, *Gui
 }
 func (UnimplementedGuildServiceServer) InspectFieldWarTargets(context.Context, *InspectFieldWarTargetsRequest) (*InspectFieldWarTargetsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectFieldWarTargets not implemented")
+}
+func (UnimplementedGuildServiceServer) GetGuildJianghuGrudgeWall(context.Context, *GetGuildJianghuGrudgeWallRequest) (*GetGuildJianghuGrudgeWallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGuildJianghuGrudgeWall not implemented")
 }
 func (UnimplementedGuildServiceServer) mustEmbedUnimplementedGuildServiceServer() {}
 func (UnimplementedGuildServiceServer) testEmbeddedByValue()                      {}
@@ -1473,6 +1491,24 @@ func _GuildService_InspectFieldWarTargets_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_GetGuildJianghuGrudgeWall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGuildJianghuGrudgeWallRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetGuildJianghuGrudgeWall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetGuildJianghuGrudgeWall_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetGuildJianghuGrudgeWall(ctx, req.(*GetGuildJianghuGrudgeWallRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GuildService_ServiceDesc is the grpc.ServiceDesc for GuildService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1639,6 +1675,10 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InspectFieldWarTargets",
 			Handler:    _GuildService_InspectFieldWarTargets_Handler,
+		},
+		{
+			MethodName: "GetGuildJianghuGrudgeWall",
+			Handler:    _GuildService_GetGuildJianghuGrudgeWall_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

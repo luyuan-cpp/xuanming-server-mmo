@@ -530,4 +530,10 @@
     <ClCompile Include="scene\player_rewarded_ad.pb.cc" />
     <ClInclude Include="scene\player_rewarded_ad.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_jianghu_comp.pb.cc" />
+    <ClCompile Include="scene\player_jianghu.pb.cc" />
+    <ClInclude Include="common\component\player_jianghu_comp.pb.h" />
+    <ClInclude Include="scene\player_jianghu.pb.h" />
+  </ItemGroup>
 </Project>

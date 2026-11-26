@@ -50,16 +50,16 @@
 
 ### 2. 配置表与 Tip 清单
 
-- `data/Item.xlsx` 末尾顺延新增 2 行（当前最大 `3410`）：
-  - `3411`：**金帖生死状**（绑定仅自用、`max_stack_size = 99`、`icon_key = "UI/Items/3411"`）
-  - `3412`：**清风洗尘符**（绑定仅自用、`max_stack_size = 99`、`icon_key = "UI/Items/3412"`）
+- `data/Item.xlsx` 末尾顺延新增 2 行（按 2026-11-26 实时最大号 `3414` 顺延）：
+  - `3415`：**金帖生死状**（绑定仅自用、`max_stack_size = 99`、`icon_key = "UI/Ugui/JianghuDuelV1/item_gold_duel_writ"`）
+  - `3416`：**清风洗尘符**（绑定仅自用、`max_stack_size = 99`、`icon_key = "UI/Ugui/JianghuDuelV1/item_clear_dust_charm"`）
 - `data/SpiritShopGoods.xlsx` 追加 2 行（直接复用现役百宝阁 `tab_id = 3 外观便利`，零改 `java/mall_game`）：
-  - `goods_id = 303`：金帖生死状（`currency_type = 1` 灵石、`price = 20`、`item_id_1 = 3411`、`item_count_1 = 1`、`item_bound_1 = 1`、`max_buy_per_request = 20`、不限购）
-  - `goods_id = 304`：清风洗尘符（`currency_type = 1` 灵石、`price = 10`、`item_id_1 = 3412`、`item_count_1 = 1`、`item_bound_1 = 1`、`max_buy_per_request = 20`、不限购）
+  - `goods_id = 305`：金帖生死状（`currency_type = 1` 灵石、`price = 20`、`item_id_1 = 3415`、`item_count_1 = 1`、`item_bound_1 = 1`、`max_buy_per_request = 20`、不限购）
+  - `goods_id = 306`：清风洗尘符（`currency_type = 1` 灵石、`price = 10`、`item_id_1 = 3416`、`item_count_1 = 1`、`item_bound_1 = 1`、`max_buy_per_request = 20`、不限购）
 - `data/schema/jianghurule_table.proto` + `data/JianghuRule.xlsx`（`id = 1` 单行全局规则，支持热更）：
-  - `silver_writ_cost = 500`、`gold_writ_item_id = 3411`、`invite_ttl_sec = 60`、`team_confirm_sec = 30`、`same_target_cooldown_sec = 300`、`daily_unmatched_invite_limit = 20`、`duel_round_limit = 30`、`duel_timeout_sec = 720`、`defeat_mark_duration_sec = 1800`、`silver_clear_cost = 1000`、`clear_item_id = 3412`、`clear_badge_duration_sec = 1800`、`grudge_max_rivals = 50`、`grudge_max_logs_per_rival = 20`、`guild_wall_max_records = 20`。
-- `data/PlayMode.xlsx`：为 `MATCH_MODE_JIANGHU_DUEL (12)` 注册默认天墉城生死擂副本配置模板行。
-- `data/tip/Tip.xlsx`：末尾新增独立组头 `//jianghu_error base=38000 width=1000`，分配错误码 `kJianghuDuelDisabled`、`kJianghuBlockedByPeer`、`kJianghuTargetRefusesStrangers`、`kJianghuSelfRefusesStrangers`、`kJianghuSameTargetCooldown`、`kJianghuDailyInviteLimitReached`、`kJianghuTeamSizeMismatch`、`kJianghuTeamChangedAborted`、`kJianghuInsufficientWritOrSilver`、`kJianghuInvitePendingOrExpired`、`kJianghuNotInviteParticipant`、`kJianghuNoActiveDefeatMark`、`kJianghuGrudgeNotFound`、`kJianghuServiceBusy`（仅此项 `fault = 1`）。
+  - `silver_writ_cost = 500`、`gold_writ_item_id = 3415`、`invite_ttl_sec = 60`、`team_confirm_sec = 30`、`same_target_cooldown_sec = 300`、`daily_unmatched_invite_limit = 20`、`duel_round_limit = 30`、`duel_timeout_sec = 720`、`defeat_mark_duration_sec = 1800`、`silver_clear_cost = 1000`、`clear_item_id = 3416`、`clear_badge_duration_sec = 1800`、`grudge_max_rivals = 50`、`grudge_max_logs_per_rival = 20`、`guild_wall_max_records = 20`、`streak_highlight_threshold = 3`。
+- `data/PlayMode.xlsx`：为 `MATCH_MODE_JIANGHU_DUEL (12)` 注册默认天墉城生死擂模板行（`id = 474, match_mode = 12, battle_config_id = 0, enabled = True, team_size_max = 0`）。
+- `data/tip/Tip.xlsx`：末尾新增独立组头 `//jianghu_error base=40000 width=1000`，分配 14 个错误码（仅 `JianghuServiceBusy` `fault = 1`）；`player_database` 组件字段顺延取 `37`。
 
 ---
 

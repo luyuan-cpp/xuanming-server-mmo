@@ -66,6 +66,10 @@ type ClientRequestRecord struct {
 	RewardedAdCurrencyType       uint32 `protobuf:"varint,35,opt,name=rewarded_ad_currency_type,json=rewardedAdCurrencyType,proto3" json:"rewarded_ad_currency_type,omitempty"`                     // 激励视频领奖：首次实际发放币种（默认 3 = 绑定银两）。
 	RewardedAdAmount             uint64 `protobuf:"varint,36,opt,name=rewarded_ad_amount,json=rewardedAdAmount,proto3" json:"rewarded_ad_amount,omitempty"`                                         // 激励视频领奖：首次实际发放金额。
 	SealedBookItemId             uint64 `protobuf:"varint,37,opt,name=sealed_book_item_id,json=sealedBookItemId,proto3" json:"sealed_book_item_id,omitempty"`                                       // 技能书封卷入包：首次产出的 3414 封卷道籍背包实例 ID。
+	EquipmentPolishAttemptsUsed  uint32 `protobuf:"varint,38,opt,name=equipment_polish_attempts_used,json=equipmentPolishAttemptsUsed,proto3" json:"equipment_polish_attempts_used,omitempty"`      // V3 装备智能定档连磨：首次实际消耗打磨手数（1..8）。
+	EquipmentActualGoldSpent     uint64 `protobuf:"varint,39,opt,name=equipment_actual_gold_spent,json=equipmentActualGoldSpent,proto3" json:"equipment_actual_gold_spent,omitempty"`               // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
+	WantedOrderId                uint64 `protobuf:"varint,40,opt,name=wanted_order_id,json=wantedOrderId,proto3" json:"wanted_order_id,omitempty"`                                                  // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
+	WantedOrderGold              uint64 `protobuf:"varint,41,opt,name=wanted_order_gold,json=wantedOrderGold,proto3" json:"wanted_order_gold,omitempty"`                                            // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -355,6 +359,34 @@ func (x *ClientRequestRecord) GetRewardedAdAmount() uint64 {
 func (x *ClientRequestRecord) GetSealedBookItemId() uint64 {
 	if x != nil {
 		return x.SealedBookItemId
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetEquipmentPolishAttemptsUsed() uint32 {
+	if x != nil {
+		return x.EquipmentPolishAttemptsUsed
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetEquipmentActualGoldSpent() uint64 {
+	if x != nil {
+		return x.EquipmentActualGoldSpent
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetWantedOrderId() uint64 {
+	if x != nil {
+		return x.WantedOrderId
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetWantedOrderGold() uint64 {
+	if x != nil {
+		return x.WantedOrderGold
 	}
 	return 0
 }
@@ -738,7 +770,7 @@ var File_proto_common_component_client_request_ledger_comp_proto protoreflect.Fi
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\xf7\x0e\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\xcf\x10\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -777,7 +809,11 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x1bequip_loadout_spent_diamond\x18\" \x01(\x04R\x18equipLoadoutSpentDiamond\x129\n" +
 	"\x19rewarded_ad_currency_type\x18# \x01(\rR\x16rewardedAdCurrencyType\x12,\n" +
 	"\x12rewarded_ad_amount\x18$ \x01(\x04R\x10rewardedAdAmount\x12-\n" +
-	"\x13sealed_book_item_id\x18% \x01(\x04R\x10sealedBookItemId\"\xfe\x03\n" +
+	"\x13sealed_book_item_id\x18% \x01(\x04R\x10sealedBookItemId\x12C\n" +
+	"\x1eequipment_polish_attempts_used\x18& \x01(\rR\x1bequipmentPolishAttemptsUsed\x12=\n" +
+	"\x1bequipment_actual_gold_spent\x18' \x01(\x04R\x18equipmentActualGoldSpent\x12&\n" +
+	"\x0fwanted_order_id\x18( \x01(\x04R\rwantedOrderId\x12*\n" +
+	"\x11wanted_order_gold\x18) \x01(\x04R\x0fwantedOrderGold\"\xfe\x03\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +

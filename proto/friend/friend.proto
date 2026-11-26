@@ -268,4 +268,18 @@ service ClientPlayerFriend {
   // 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
   // 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
   rpc NotifyFriendEvent (FriendEventS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // 内部只读批量关系检查(供 match 生死状校验双队两两拉黑与好友关系;客户端不可调用)。
+  rpc BatchCheckSocialRelations (BatchCheckSocialRelationsRequest) returns (BatchCheckSocialRelationsResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
+}
+
+message BatchCheckSocialRelationsRequest {
+  repeated uint64 side_a_player_ids = 1;
+  repeated uint64 side_b_player_ids = 2;
+}
+
+message BatchCheckSocialRelationsResponse {
+  TipInfoMessage error_message = 1;
+  bool has_any_block = 2;   // true = 两队成员间存在任意单向或双向拉黑
+  bool all_are_friends = 3; // true = 双方队长及全体跨队成员均为有效好友（允许绕过闭关免战）
 }

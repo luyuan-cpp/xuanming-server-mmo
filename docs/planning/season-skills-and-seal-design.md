@@ -218,3 +218,57 @@
 3. 同步 `mmorpg-client` 产物，落地结算进度条、一键推荐流派、周词缀 HUD/面板展示与永久荣誉展示，跑编译与 NUnit 测试。
 4. 在 `xuanming-server-mmo` 执行 `ContractSync`，完成 Java 持久台账与 Scene/Battle 对齐实现，跑 Maven 编译、单测与 `PARITY.md` 登记。
 5. 交付纯 `D:\work\image\designs\` 口径的 Codex 纪念徽章美术任务单。
+
+---
+
+## 10. 赛季玩法 V3 扩展方案（技印共鸣 + 战后「本场赛季印功劳」复盘句）
+
+### 10.1 需求分析
+1. **局内决策联动缺口**：V1/V2 中「4 招本季免费限定技能（`15001..15004`）」与「4 选 1 单槽赛季印（`101..104`）」彼此独立，玩家缺乏“看场面选印 + 抓时机出赛季技”的配合爽点。
+2. **战后实感正反馈缺口**：玩家佩戴赛季印参战时仅有一闪而过的飘字，战后结算无法看到本场赛季印实际削盾/护阵/回蓝了多少、触发了几次技印共鸣，换印策略的正反馈不够直觉。
+3. **硬约束（不肝不重不氪不画新图）**：严禁新增养成槽位/洗练/日常打卡/付费点/速度或控制属性；严禁新增 RPC 消息号与 DB 表/台账迁移；全部 UI 复用既有面板与控件，**零新美术需求**。
+
+### 10.2 设计分析
+1. **S1「破阵之季」四组「技印共鸣」（纯战术时机联动，限次防滚雪球）**：
+   - 仅当角色当前生效单槽赛季印属于 S1（`season_id == 1`）且与对应 S1 免费赛季技在常规直接施放（`Direct`）中配合时触发；绝不泄漏至永久法宝或非本季技能：
+     1. **`101 破阵锐印` × `15001 破阵裂锋`（碎盾返蓝）**：施放 `15001` 触发 `101` 额外破盾且目标常规护盾被彻底击碎（削盾后无剩余常规护盾）时，立刻返还本次实际耗蓝的 **`30%`**（向上取整，按法力缺口封顶；每回合至多 1 次）。
+     2. **`102 破阵玄印` × `15002 破阵灵雷`（破盾延防）**：施放 `15002` 命中有护盾主目标并触发 `102` 额外破盾时，本次 `15002` 为该主目标施加的减防减益（`150021`）持续回合额外 **`+1`**（`2 → 3` 回合；仅作用于 `Modifier` 减益，绝不延长任何控制类异常；每回合至多 1 次）。
+     3. **`103 固阵守印` × `15003 固阵灵障`（顶伤反盾）**：本场触发 `103` 前两回合直伤减免后，在**下一回合**（`round == triggerRound + 1`）施放 `15003` 时，全队所获护盾量额外 **`+10%`**（独立乘区，每场至多 1 次，整次施法共享并消耗窗，额外增盾总量计入本场功劳）。
+     4. **`104 聚息援印` × `15004 破阵蓄势`（守息省蓝）**：上一回合普通防御触发 `104` 回蓝后，本回合（`round == triggerRound + 1`）施放 `15004` **法力消耗减半**（`cost / 2`，节省 `cost - cost / 2`，校验与扣蓝同口径；施放即消耗本窗并将节省法力计入本场功劳）。
+   - **战内飘字事件复用**：复用 `BATTLE_EVENT_ARTIFACT`（`artifact_item_id = 0`、`season_seal_id = seal.seal_id`），以 `artifact_effect_id = 101 / 102 / 103 / 104` 区分四类技印共鸣，零新事件枚举，客户端 `BattlePresenter` 与 `SeasonModels.FormatSeasonSealTriggerText` 自动播报。
+2. **战后「本场赛季印功劳」（零新 RPC、零 DB 迁移）**：
+   - 在 `BattleSettlementData` 追加 3 个只读战果摘要字段（`52..54`）：
+     - `uint64 season_seal_contribution_value = 52`（单一口径无混算：`101/102` 累计额外削盾量、`103` 累计首波减伤 + 共鸣额外增盾量、`104` 累计防御回蓝 + 共鸣省蓝量）
+     - `uint32 season_seal_trigger_count = 53`（本场赛季印基础效果触发次数）
+     - `uint32 season_seal_resonance_count = 54`（本场技印共鸣触发次数）
+   - 同步将 `BattleSettlementData.final_season_seal_id`（既有字段 `47`）扩展为**所有佩戴赛季印的对局（含正规排位 PVP 与首领试炼 PVE）**均回填，不再仅限排位局。
+   - 双服务端（C++ `player_battle.cpp` / Java `PlayerBattleService`）原本就将 `BattleSettlementData` 原样透传至 `BattleEndS2C.settlement`，因此**零场景服改动、零持久化台账升级**。
+3. **客户端最小完备展示（零新美术）**：
+   - 战斗内：`SeasonModels.FormatSeasonSealTriggerText` 补齐 `101..104` 技印共鸣飘字文案。
+   - 战后结算：`CoreSettlementRewardSection` 在赛季进度块下方/内嵌展示本场赛季印实际贡献句（如「本场破阵锐印削盾 1,420 · 技印共鸣 ×1」；即便玩家已 12/12 满级或非加分局，只要本场触发过赛季印也可直接看到功劳反馈）。
+   - 赛季印主面板：`SeasonSealPanel` 在每枚 S1 赛季印说明下方附 1 行「技印共鸣」短提示，让玩家一目了然 4 组连招。
+
+### 10.3 思想分析
+- **纯逻辑规则同源**：全部常量与公式（`ResonanceShieldShatterManaRefund`、`ResonanceHalfManaCost`、`ResonanceGuardShieldBonusPct`、`101..104` 事件编号）沉淀在 C++ `season_rules.h` 与 Java `SeasonRules.java`，战斗引擎内只维护轻量 `SeasonSealRuntimeState`，开局与战前 15 秒易印时统一清空重置。
+- **不混单位、不污染存档**：每枚印的 `contribution_value` 保持单一语义单位（削盾 / 护阵血量 / 法力），不把不同量纲硬相加；结算功劳随 `BattleEndS2C.settlement` 即时透传，不膨胀数据库表。
+
+### 10.4 漏洞分析与防线
+1. **战前 15 秒易印残留状态风险**：`FinalizeBattlePrep` 换印时必须清空该玩家 `SeasonSealRuntimeState`，防止换印后错误继承旧印状态。
+2. **`15002` 减防延长时间点错位风险**：`15002` 的效果序为先 `150020`（伤害+破盾）后 `150021`（减防 Modifier）；因此在 `EquipmentBreakShields` 仅立本目标瞬态标记，在紧接着的 `150021` 施加点原子 `+1` 回合并在目标循环结束必清标记，既保证首放生效也绝不泄漏到下一目标或非减防控制 Buff。
+3. **混用镜像复制（`CopyTargetSkill`）或混淆出手风险**：除 `104×15004` 扣蓝路径与常规检验对齐外，破盾返蓝、延防、次轮增盾均严格限定 `Direct` 正常施放，镜像复制（`Mirror`）绝不白嫖共鸣。
+4. **`104×15004` 校验与扣蓝脱节风险**：将半价耗蓝直接放入共享 `SkillManaCost` / `BattleEquipment.manaCost`，确保校验蓝量门槛、AI 评估与实际扣蓝三处口径一致，且施放后立即消费本回合聚息窗防同回合重入。
+5. **非 S1 / 永久法宝越界风险**：全部 4 条共鸣硬校验 `seal.season_id() == 1` 与精确 `(seal_id, skill_id)` 配对，永久法宝（`artifact_item_id != 0`）与 S2 赛季印均零干扰。
+
+### 10.5 步骤分析
+1. 更新设计文档与 `proto/battle/battle_data.proto`（`BattleSettlementData` 字段 `52..54`），用仓库 `libprotoc 35.1` 执行 `dev.bat proto`。
+2. 落地 C++ 战斗引擎（`season_rules.h`、`turn_battle_engine.{h,cpp}`、`equipment_battle_effects.cpp`、`configured_battle_effects.cpp`）与 `season_battle_test.cpp` 完整回归。
+3. 同步 Java 契约并落地 Java `game-battle-engine`（`SeasonRules`、`BattleContext`、`BattleEquipment`、`ConfiguredBattle`、`ConfiguredEffects`、`TurnBattleEngine`、`SeasonBattleEngineTest`），更新 `PARITY.md`。
+4. 同步 Unity 客户端协议并落地 `SeasonModels`、`CoreSettlementRewardSection`、`SeasonSealPanel` 与 `SeasonClientTests`。
+5. 三仓执行编译、静态门禁与全量目标单元测试验收。
+
+### 10.6 执行步骤
+1. 修改 `docs/planning/season-skills-and-seal-design.md` 与 `proto/battle/battle_data.proto`，执行 `dev.bat proto`。
+2. 实现 C++ 技印共鸣与功劳统计并补齐 4 组共鸣 + 结算功劳 + 换印清零单测。
+3. 执行 `ContractSync`（仅对齐 `battle_data.proto` 变更或全量检查）并实现 Java 同构逻辑与单测，登记 `PARITY.md`。
+4. 同步客户端 proto 并完成结算功劳句、战斗共鸣飘字、面板共鸣提示与 `SeasonClientTests`。
+5. 复跑 C++ 静态门禁 + `SeasonBattleTest.*`、Java `SeasonBattleEngineTest` + `SeasonFeatureAndServiceTest`、Unity `client_compile_check` + `SeasonClientTests`。

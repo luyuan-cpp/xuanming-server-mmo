@@ -1510,8 +1510,19 @@ type SkillCraftingStateSnapshot struct {
 	ProxyForgeFeeGold      uint64                             `protobuf:"varint,12,opt,name=proxy_forge_fee_gold,json=proxyForgeFeeGold,proto3" json:"proxy_forge_fee_gold,omitempty"`
 	ProxyScrollFeeGold     uint64                             `protobuf:"varint,13,opt,name=proxy_scroll_fee_gold,json=proxyScrollFeeGold,proto3" json:"proxy_scroll_fee_gold,omitempty"`
 	CraftUnlockGateEnabled bool                               `protobuf:"varint,14,opt,name=craft_unlock_gate_enabled,json=craftUnlockGateEnabled,proto3" json:"craft_unlock_gate_enabled,omitempty"` // true = 当前环境已开启“须制书解锁”门槛。
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// ── V2 名匠江湖口碑与零属性雅号 ──
+	ProxyOrdersCompleted  uint32   `protobuf:"varint,15,opt,name=proxy_orders_completed,json=proxyOrdersCompleted,proto3" json:"proxy_orders_completed,omitempty"`
+	SupremeForgedCount    uint32   `protobuf:"varint,16,opt,name=supreme_forged_count,json=supremeForgedCount,proto3" json:"supreme_forged_count,omitempty"`
+	RareBooksCraftedCount uint32   `protobuf:"varint,17,opt,name=rare_books_crafted_count,json=rareBooksCraftedCount,proto3" json:"rare_books_crafted_count,omitempty"`
+	MasterShowcaseTag     uint32   `protobuf:"varint,18,opt,name=master_showcase_tag,json=masterShowcaseTag,proto3" json:"master_showcase_tag,omitempty"`
+	EquippedCraftTitleId  uint32   `protobuf:"varint,19,opt,name=equipped_craft_title_id,json=equippedCraftTitleId,proto3" json:"equipped_craft_title_id,omitempty"`
+	UnlockedCraftTitleIds []uint32 `protobuf:"varint,20,rep,packed,name=unlocked_craft_title_ids,json=unlockedCraftTitleIds,proto3" json:"unlocked_craft_title_ids,omitempty"`
+	// ── V4/V5 藏经阁里程碑位图、情义免税代打与本人悬赏求书单 ──
+	TeamFreeProxy              bool                        `protobuf:"varint,21,opt,name=team_free_proxy,json=teamFreeProxy,proto3" json:"team_free_proxy,omitempty"`
+	ClaimedScrollMilestoneBits []byte                      `protobuf:"bytes,22,opt,name=claimed_scroll_milestone_bits,json=claimedScrollMilestoneBits,proto3" json:"claimed_scroll_milestone_bits,omitempty"`
+	MyWantedOrders             []*SkillBookWantedOrderInfo `protobuf:"bytes,23,rep,name=my_wanted_orders,json=myWantedOrders,proto3" json:"my_wanted_orders,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *SkillCraftingStateSnapshot) Reset() {
@@ -1640,6 +1651,69 @@ func (x *SkillCraftingStateSnapshot) GetCraftUnlockGateEnabled() bool {
 		return x.CraftUnlockGateEnabled
 	}
 	return false
+}
+
+func (x *SkillCraftingStateSnapshot) GetProxyOrdersCompleted() uint32 {
+	if x != nil {
+		return x.ProxyOrdersCompleted
+	}
+	return 0
+}
+
+func (x *SkillCraftingStateSnapshot) GetSupremeForgedCount() uint32 {
+	if x != nil {
+		return x.SupremeForgedCount
+	}
+	return 0
+}
+
+func (x *SkillCraftingStateSnapshot) GetRareBooksCraftedCount() uint32 {
+	if x != nil {
+		return x.RareBooksCraftedCount
+	}
+	return 0
+}
+
+func (x *SkillCraftingStateSnapshot) GetMasterShowcaseTag() uint32 {
+	if x != nil {
+		return x.MasterShowcaseTag
+	}
+	return 0
+}
+
+func (x *SkillCraftingStateSnapshot) GetEquippedCraftTitleId() uint32 {
+	if x != nil {
+		return x.EquippedCraftTitleId
+	}
+	return 0
+}
+
+func (x *SkillCraftingStateSnapshot) GetUnlockedCraftTitleIds() []uint32 {
+	if x != nil {
+		return x.UnlockedCraftTitleIds
+	}
+	return nil
+}
+
+func (x *SkillCraftingStateSnapshot) GetTeamFreeProxy() bool {
+	if x != nil {
+		return x.TeamFreeProxy
+	}
+	return false
+}
+
+func (x *SkillCraftingStateSnapshot) GetClaimedScrollMilestoneBits() []byte {
+	if x != nil {
+		return x.ClaimedScrollMilestoneBits
+	}
+	return nil
+}
+
+func (x *SkillCraftingStateSnapshot) GetMyWantedOrders() []*SkillBookWantedOrderInfo {
+	if x != nil {
+		return x.MyWantedOrders
+	}
+	return nil
 }
 
 type GetSkillCraftingStateRequest struct {
@@ -2461,12 +2535,15 @@ func (x *UnsealSkillBookResponse) GetState() *SkillCraftingStateSnapshot {
 }
 
 type SetCraftProxyStallRequest struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Open               bool                   `protobuf:"varint,1,opt,name=open,proto3" json:"open,omitempty"`
-	ProxyForgeFeeGold  uint64                 `protobuf:"varint,2,opt,name=proxy_forge_fee_gold,json=proxyForgeFeeGold,proto3" json:"proxy_forge_fee_gold,omitempty"`    // 合法范围 50..100 银两（关摊时可填 0）。
-	ProxyScrollFeeGold uint64                 `protobuf:"varint,3,opt,name=proxy_scroll_fee_gold,json=proxyScrollFeeGold,proto3" json:"proxy_scroll_fee_gold,omitempty"` // 合法范围 50..100 银两（关摊时可填 0）。
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Open                 bool                   `protobuf:"varint,1,opt,name=open,proto3" json:"open,omitempty"`
+	ProxyForgeFeeGold    uint64                 `protobuf:"varint,2,opt,name=proxy_forge_fee_gold,json=proxyForgeFeeGold,proto3" json:"proxy_forge_fee_gold,omitempty"`          // 合法范围 50..100 银两（关摊时可填 0）。
+	ProxyScrollFeeGold   uint64                 `protobuf:"varint,3,opt,name=proxy_scroll_fee_gold,json=proxyScrollFeeGold,proto3" json:"proxy_scroll_fee_gold,omitempty"`       // 合法范围 50..100 银两（关摊时可填 0）。
+	MasterShowcaseTag    uint32                 `protobuf:"varint,4,opt,name=master_showcase_tag,json=masterShowcaseTag,proto3" json:"master_showcase_tag,omitempty"`            // V2 预设安全招牌枚举（0..4）。
+	EquippedCraftTitleId uint32                 `protobuf:"varint,5,opt,name=equipped_craft_title_id,json=equippedCraftTitleId,proto3" json:"equipped_craft_title_id,omitempty"` // V2 佩戴的已解锁零属性宗师雅号 ID（0..6）。
+	TeamFreeProxy        bool                   `protobuf:"varint,6,opt,name=team_free_proxy,json=teamFreeProxy,proto3" json:"team_free_proxy,omitempty"`                        // V5 true = 对同队玩家实行情义 0 费原子代打/代制。
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *SetCraftProxyStallRequest) Reset() {
@@ -2518,6 +2595,27 @@ func (x *SetCraftProxyStallRequest) GetProxyScrollFeeGold() uint64 {
 		return x.ProxyScrollFeeGold
 	}
 	return 0
+}
+
+func (x *SetCraftProxyStallRequest) GetMasterShowcaseTag() uint32 {
+	if x != nil {
+		return x.MasterShowcaseTag
+	}
+	return 0
+}
+
+func (x *SetCraftProxyStallRequest) GetEquippedCraftTitleId() uint32 {
+	if x != nil {
+		return x.EquippedCraftTitleId
+	}
+	return 0
+}
+
+func (x *SetCraftProxyStallRequest) GetTeamFreeProxy() bool {
+	if x != nil {
+		return x.TeamFreeProxy
+	}
+	return false
 }
 
 type SetCraftProxyStallResponse struct {
@@ -2582,8 +2680,17 @@ type CraftProxyStallInfo struct {
 	ScrollBonusRateBps uint32                 `protobuf:"varint,6,opt,name=scroll_bonus_rate_bps,json=scrollBonusRateBps,proto3" json:"scroll_bonus_rate_bps,omitempty"`
 	ProxyForgeFeeGold  uint64                 `protobuf:"varint,7,opt,name=proxy_forge_fee_gold,json=proxyForgeFeeGold,proto3" json:"proxy_forge_fee_gold,omitempty"`
 	ProxyScrollFeeGold uint64                 `protobuf:"varint,8,opt,name=proxy_scroll_fee_gold,json=proxyScrollFeeGold,proto3" json:"proxy_scroll_fee_gold,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// ── V2 名匠江湖口碑与雅号 ──
+	ProxyOrdersCompleted  uint32 `protobuf:"varint,9,opt,name=proxy_orders_completed,json=proxyOrdersCompleted,proto3" json:"proxy_orders_completed,omitempty"`
+	SupremeForgedCount    uint32 `protobuf:"varint,10,opt,name=supreme_forged_count,json=supremeForgedCount,proto3" json:"supreme_forged_count,omitempty"`
+	RareBooksCraftedCount uint32 `protobuf:"varint,11,opt,name=rare_books_crafted_count,json=rareBooksCraftedCount,proto3" json:"rare_books_crafted_count,omitempty"`
+	MasterShowcaseTag     uint32 `protobuf:"varint,12,opt,name=master_showcase_tag,json=masterShowcaseTag,proto3" json:"master_showcase_tag,omitempty"`
+	EquippedCraftTitleId  uint32 `protobuf:"varint,13,opt,name=equipped_craft_title_id,json=equippedCraftTitleId,proto3" json:"equipped_craft_title_id,omitempty"`
+	// ── V5 同队情义零费代打 ──
+	TeamFreeProxy       bool `protobuf:"varint,14,opt,name=team_free_proxy,json=teamFreeProxy,proto3" json:"team_free_proxy,omitempty"`
+	ViewerGetsFreeProxy bool `protobuf:"varint,15,opt,name=viewer_gets_free_proxy,json=viewerGetsFreeProxy,proto3" json:"viewer_gets_free_proxy,omitempty"` // true = 当前查询者与该宗师同队且可享受 0 银两情义代打。
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CraftProxyStallInfo) Reset() {
@@ -2670,6 +2777,55 @@ func (x *CraftProxyStallInfo) GetProxyScrollFeeGold() uint64 {
 		return x.ProxyScrollFeeGold
 	}
 	return 0
+}
+
+func (x *CraftProxyStallInfo) GetProxyOrdersCompleted() uint32 {
+	if x != nil {
+		return x.ProxyOrdersCompleted
+	}
+	return 0
+}
+
+func (x *CraftProxyStallInfo) GetSupremeForgedCount() uint32 {
+	if x != nil {
+		return x.SupremeForgedCount
+	}
+	return 0
+}
+
+func (x *CraftProxyStallInfo) GetRareBooksCraftedCount() uint32 {
+	if x != nil {
+		return x.RareBooksCraftedCount
+	}
+	return 0
+}
+
+func (x *CraftProxyStallInfo) GetMasterShowcaseTag() uint32 {
+	if x != nil {
+		return x.MasterShowcaseTag
+	}
+	return 0
+}
+
+func (x *CraftProxyStallInfo) GetEquippedCraftTitleId() uint32 {
+	if x != nil {
+		return x.EquippedCraftTitleId
+	}
+	return 0
+}
+
+func (x *CraftProxyStallInfo) GetTeamFreeProxy() bool {
+	if x != nil {
+		return x.TeamFreeProxy
+	}
+	return false
+}
+
+func (x *CraftProxyStallInfo) GetViewerGetsFreeProxy() bool {
+	if x != nil {
+		return x.ViewerGetsFreeProxy
+	}
+	return false
 }
 
 type ListCraftProxyStallsRequest struct {
@@ -2760,6 +2916,981 @@ func (x *ListCraftProxyStallsResponse) GetStalls() []*CraftProxyStallInfo {
 	return nil
 }
 
+// ── V4 典籍藏经阁：卷宗收集里程碑（小成 >=50% 领 20 绑定残页；圆满 100% 领 40 绑定残页） ──
+type ClaimScrollCollectionMilestoneRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ScrollId         uint32                 `protobuf:"varint,1,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`
+	MilestoneTier    uint32                 `protobuf:"varint,2,opt,name=milestone_tier,json=milestoneTier,proto3" json:"milestone_tier,omitempty"` // 1 = 小成(>=50%)，2 = 圆满(100%)。
+	ExpectedRevision uint64                 `protobuf:"varint,3,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	ClientRequestId  uint64                 `protobuf:"varint,4,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ClaimScrollCollectionMilestoneRequest) Reset() {
+	*x = ClaimScrollCollectionMilestoneRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimScrollCollectionMilestoneRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimScrollCollectionMilestoneRequest) ProtoMessage() {}
+
+func (x *ClaimScrollCollectionMilestoneRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimScrollCollectionMilestoneRequest.ProtoReflect.Descriptor instead.
+func (*ClaimScrollCollectionMilestoneRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ClaimScrollCollectionMilestoneRequest) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *ClaimScrollCollectionMilestoneRequest) GetMilestoneTier() uint32 {
+	if x != nil {
+		return x.MilestoneTier
+	}
+	return 0
+}
+
+func (x *ClaimScrollCollectionMilestoneRequest) GetExpectedRevision() uint64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *ClaimScrollCollectionMilestoneRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type ClaimScrollCollectionMilestoneResponse struct {
+	state             protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage      *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId   uint64                      `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Replayed          bool                        `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	RewardedFragments uint32                      `protobuf:"varint,4,opt,name=rewarded_fragments,json=rewardedFragments,proto3" json:"rewarded_fragments,omitempty"` // 实际发放的绑定 3406 悟道残页数（20 或 40）。
+	State             *SkillCraftingStateSnapshot `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) Reset() {
+	*x = ClaimScrollCollectionMilestoneResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimScrollCollectionMilestoneResponse) ProtoMessage() {}
+
+func (x *ClaimScrollCollectionMilestoneResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimScrollCollectionMilestoneResponse.ProtoReflect.Descriptor instead.
+func (*ClaimScrollCollectionMilestoneResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) GetRewardedFragments() uint32 {
+	if x != nil {
+		return x.RewardedFragments
+	}
+	return 0
+}
+
+func (x *ClaimScrollCollectionMilestoneResponse) GetState() *SkillCraftingStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+// ── V4 批量安全拆页：一次拆解 1..20 本未学常规书（严禁稀世绝学），一次性返还绑定残页 ──
+type BatchDismantleSkillBooksRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BookIds          []uint64               `protobuf:"varint,1,rep,packed,name=book_ids,json=bookIds,proto3" json:"book_ids,omitempty"`
+	ExpectedRevision uint64                 `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	ClientRequestId  uint64                 `protobuf:"varint,3,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *BatchDismantleSkillBooksRequest) Reset() {
+	*x = BatchDismantleSkillBooksRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchDismantleSkillBooksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchDismantleSkillBooksRequest) ProtoMessage() {}
+
+func (x *BatchDismantleSkillBooksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchDismantleSkillBooksRequest.ProtoReflect.Descriptor instead.
+func (*BatchDismantleSkillBooksRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *BatchDismantleSkillBooksRequest) GetBookIds() []uint64 {
+	if x != nil {
+		return x.BookIds
+	}
+	return nil
+}
+
+func (x *BatchDismantleSkillBooksRequest) GetExpectedRevision() uint64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *BatchDismantleSkillBooksRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type BatchDismantleSkillBooksResponse struct {
+	state             protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage      *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId   uint64                      `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Replayed          bool                        `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	DismantledCount   uint32                      `protobuf:"varint,4,opt,name=dismantled_count,json=dismantledCount,proto3" json:"dismantled_count,omitempty"`
+	RefundedFragments uint32                      `protobuf:"varint,5,opt,name=refunded_fragments,json=refundedFragments,proto3" json:"refunded_fragments,omitempty"`
+	State             *SkillCraftingStateSnapshot `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BatchDismantleSkillBooksResponse) Reset() {
+	*x = BatchDismantleSkillBooksResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchDismantleSkillBooksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchDismantleSkillBooksResponse) ProtoMessage() {}
+
+func (x *BatchDismantleSkillBooksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchDismantleSkillBooksResponse.ProtoReflect.Descriptor instead.
+func (*BatchDismantleSkillBooksResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *BatchDismantleSkillBooksResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *BatchDismantleSkillBooksResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *BatchDismantleSkillBooksResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *BatchDismantleSkillBooksResponse) GetDismantledCount() uint32 {
+	if x != nil {
+		return x.DismantledCount
+	}
+	return 0
+}
+
+func (x *BatchDismantleSkillBooksResponse) GetRefundedFragments() uint32 {
+	if x != nil {
+		return x.RefundedFragments
+	}
+	return 0
+}
+
+func (x *BatchDismantleSkillBooksResponse) GetState() *SkillCraftingStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+// ── V5 西市常规技能书悬赏求购板（原子托管非绑银两，零骗局交卷扣 5% 集市税） ──
+type SkillBookWantedOrderInfo struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	OrderId                uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	PosterPlayerId         uint64                 `protobuf:"varint,2,opt,name=poster_player_id,json=posterPlayerId,proto3" json:"poster_player_id,omitempty"`
+	PosterName             string                 `protobuf:"bytes,3,opt,name=poster_name,json=posterName,proto3" json:"poster_name,omitempty"`
+	SkillTableId           uint32                 `protobuf:"varint,4,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
+	SkillName              string                 `protobuf:"bytes,5,opt,name=skill_name,json=skillName,proto3" json:"skill_name,omitempty"`
+	ScrollId               uint32                 `protobuf:"varint,6,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`
+	ScrollName             string                 `protobuf:"bytes,7,opt,name=scroll_name,json=scrollName,proto3" json:"scroll_name,omitempty"`
+	RequireMasterSignature bool                   `protobuf:"varint,8,opt,name=require_master_signature,json=requireMasterSignature,proto3" json:"require_master_signature,omitempty"`
+	RewardGold             uint64                 `protobuf:"varint,9,opt,name=reward_gold,json=rewardGold,proto3" json:"reward_gold,omitempty"`
+	SellerNetGold          uint64                 `protobuf:"varint,10,opt,name=seller_net_gold,json=sellerNetGold,proto3" json:"seller_net_gold,omitempty"` // 扣 5% 集市银两税后揭榜卖家实得净银两。
+	CreatedAtSec           uint64                 `protobuf:"varint,11,opt,name=created_at_sec,json=createdAtSec,proto3" json:"created_at_sec,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *SkillBookWantedOrderInfo) Reset() {
+	*x = SkillBookWantedOrderInfo{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillBookWantedOrderInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillBookWantedOrderInfo) ProtoMessage() {}
+
+func (x *SkillBookWantedOrderInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillBookWantedOrderInfo.ProtoReflect.Descriptor instead.
+func (*SkillBookWantedOrderInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *SkillBookWantedOrderInfo) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrderInfo) GetPosterPlayerId() uint64 {
+	if x != nil {
+		return x.PosterPlayerId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrderInfo) GetPosterName() string {
+	if x != nil {
+		return x.PosterName
+	}
+	return ""
+}
+
+func (x *SkillBookWantedOrderInfo) GetSkillTableId() uint32 {
+	if x != nil {
+		return x.SkillTableId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrderInfo) GetSkillName() string {
+	if x != nil {
+		return x.SkillName
+	}
+	return ""
+}
+
+func (x *SkillBookWantedOrderInfo) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrderInfo) GetScrollName() string {
+	if x != nil {
+		return x.ScrollName
+	}
+	return ""
+}
+
+func (x *SkillBookWantedOrderInfo) GetRequireMasterSignature() bool {
+	if x != nil {
+		return x.RequireMasterSignature
+	}
+	return false
+}
+
+func (x *SkillBookWantedOrderInfo) GetRewardGold() uint64 {
+	if x != nil {
+		return x.RewardGold
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrderInfo) GetSellerNetGold() uint64 {
+	if x != nil {
+		return x.SellerNetGold
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrderInfo) GetCreatedAtSec() uint64 {
+	if x != nil {
+		return x.CreatedAtSec
+	}
+	return 0
+}
+
+type PostSkillBookWantedOrderRequest struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	SkillTableId           uint32                 `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
+	RequireMasterSignature bool                   `protobuf:"varint,2,opt,name=require_master_signature,json=requireMasterSignature,proto3" json:"require_master_signature,omitempty"`
+	RewardGold             uint64                 `protobuf:"varint,3,opt,name=reward_gold,json=rewardGold,proto3" json:"reward_gold,omitempty"` // 100..50000 非绑定银两。
+	ExpectedRevision       uint64                 `protobuf:"varint,4,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	ClientRequestId        uint64                 `protobuf:"varint,5,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *PostSkillBookWantedOrderRequest) Reset() {
+	*x = PostSkillBookWantedOrderRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PostSkillBookWantedOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PostSkillBookWantedOrderRequest) ProtoMessage() {}
+
+func (x *PostSkillBookWantedOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PostSkillBookWantedOrderRequest.ProtoReflect.Descriptor instead.
+func (*PostSkillBookWantedOrderRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *PostSkillBookWantedOrderRequest) GetSkillTableId() uint32 {
+	if x != nil {
+		return x.SkillTableId
+	}
+	return 0
+}
+
+func (x *PostSkillBookWantedOrderRequest) GetRequireMasterSignature() bool {
+	if x != nil {
+		return x.RequireMasterSignature
+	}
+	return false
+}
+
+func (x *PostSkillBookWantedOrderRequest) GetRewardGold() uint64 {
+	if x != nil {
+		return x.RewardGold
+	}
+	return 0
+}
+
+func (x *PostSkillBookWantedOrderRequest) GetExpectedRevision() uint64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *PostSkillBookWantedOrderRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type PostSkillBookWantedOrderResponse struct {
+	state           protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId uint64                      `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Replayed        bool                        `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	Order           *SkillBookWantedOrderInfo   `protobuf:"bytes,4,opt,name=order,proto3" json:"order,omitempty"`
+	State           *SkillCraftingStateSnapshot `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PostSkillBookWantedOrderResponse) Reset() {
+	*x = PostSkillBookWantedOrderResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PostSkillBookWantedOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PostSkillBookWantedOrderResponse) ProtoMessage() {}
+
+func (x *PostSkillBookWantedOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PostSkillBookWantedOrderResponse.ProtoReflect.Descriptor instead.
+func (*PostSkillBookWantedOrderResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *PostSkillBookWantedOrderResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PostSkillBookWantedOrderResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *PostSkillBookWantedOrderResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *PostSkillBookWantedOrderResponse) GetOrder() *SkillBookWantedOrderInfo {
+	if x != nil {
+		return x.Order
+	}
+	return nil
+}
+
+func (x *PostSkillBookWantedOrderResponse) GetState() *SkillCraftingStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type CancelSkillBookWantedOrderRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	OrderId          uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	ExpectedRevision uint64                 `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	ClientRequestId  uint64                 `protobuf:"varint,3,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CancelSkillBookWantedOrderRequest) Reset() {
+	*x = CancelSkillBookWantedOrderRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelSkillBookWantedOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelSkillBookWantedOrderRequest) ProtoMessage() {}
+
+func (x *CancelSkillBookWantedOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelSkillBookWantedOrderRequest.ProtoReflect.Descriptor instead.
+func (*CancelSkillBookWantedOrderRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *CancelSkillBookWantedOrderRequest) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *CancelSkillBookWantedOrderRequest) GetExpectedRevision() uint64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *CancelSkillBookWantedOrderRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type CancelSkillBookWantedOrderResponse struct {
+	state           protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId uint64                      `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Replayed        bool                        `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	RefundedGold    uint64                      `protobuf:"varint,4,opt,name=refunded_gold,json=refundedGold,proto3" json:"refunded_gold,omitempty"`
+	State           *SkillCraftingStateSnapshot `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CancelSkillBookWantedOrderResponse) Reset() {
+	*x = CancelSkillBookWantedOrderResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelSkillBookWantedOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelSkillBookWantedOrderResponse) ProtoMessage() {}
+
+func (x *CancelSkillBookWantedOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelSkillBookWantedOrderResponse.ProtoReflect.Descriptor instead.
+func (*CancelSkillBookWantedOrderResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *CancelSkillBookWantedOrderResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *CancelSkillBookWantedOrderResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *CancelSkillBookWantedOrderResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *CancelSkillBookWantedOrderResponse) GetRefundedGold() uint64 {
+	if x != nil {
+		return x.RefundedGold
+	}
+	return 0
+}
+
+func (x *CancelSkillBookWantedOrderResponse) GetState() *SkillCraftingStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type ListSkillBookWantedOrdersRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	FilterSkillTableId uint32                 `protobuf:"varint,1,opt,name=filter_skill_table_id,json=filterSkillTableId,proto3" json:"filter_skill_table_id,omitempty"` // 0 = 全部常规技能；非 0 = 仅看该技能求购。
+	OnlyMine           bool                   `protobuf:"varint,2,opt,name=only_mine,json=onlyMine,proto3" json:"only_mine,omitempty"`                                   // true = 仅看本人悬赏单。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ListSkillBookWantedOrdersRequest) Reset() {
+	*x = ListSkillBookWantedOrdersRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSkillBookWantedOrdersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSkillBookWantedOrdersRequest) ProtoMessage() {}
+
+func (x *ListSkillBookWantedOrdersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSkillBookWantedOrdersRequest.ProtoReflect.Descriptor instead.
+func (*ListSkillBookWantedOrdersRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ListSkillBookWantedOrdersRequest) GetFilterSkillTableId() uint32 {
+	if x != nil {
+		return x.FilterSkillTableId
+	}
+	return 0
+}
+
+func (x *ListSkillBookWantedOrdersRequest) GetOnlyMine() bool {
+	if x != nil {
+		return x.OnlyMine
+	}
+	return false
+}
+
+type ListSkillBookWantedOrdersResponse struct {
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Orders        []*SkillBookWantedOrderInfo `protobuf:"bytes,2,rep,name=orders,proto3" json:"orders,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSkillBookWantedOrdersResponse) Reset() {
+	*x = ListSkillBookWantedOrdersResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSkillBookWantedOrdersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSkillBookWantedOrdersResponse) ProtoMessage() {}
+
+func (x *ListSkillBookWantedOrdersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSkillBookWantedOrdersResponse.ProtoReflect.Descriptor instead.
+func (*ListSkillBookWantedOrdersResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *ListSkillBookWantedOrdersResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ListSkillBookWantedOrdersResponse) GetOrders() []*SkillBookWantedOrderInfo {
+	if x != nil {
+		return x.Orders
+	}
+	return nil
+}
+
+type FulfillSkillBookWantedOrderRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PosterPlayerId   uint64                 `protobuf:"varint,1,opt,name=poster_player_id,json=posterPlayerId,proto3" json:"poster_player_id,omitempty"`
+	OrderId          uint64                 `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	SealedItemId     uint64                 `protobuf:"varint,3,opt,name=sealed_item_id,json=sealedItemId,proto3" json:"sealed_item_id,omitempty"`          // 二选一：背包中匹配的未绑定 3414 封卷道籍实例 ID。
+	BookshelfBookId  uint64                 `protobuf:"varint,4,opt,name=bookshelf_book_id,json=bookshelfBookId,proto3" json:"bookshelf_book_id,omitempty"` // 二选一：书架中匹配的未绑定常规技能书 book_id。
+	ExpectedRevision uint64                 `protobuf:"varint,5,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
+	ClientRequestId  uint64                 `protobuf:"varint,6,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) Reset() {
+	*x = FulfillSkillBookWantedOrderRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FulfillSkillBookWantedOrderRequest) ProtoMessage() {}
+
+func (x *FulfillSkillBookWantedOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FulfillSkillBookWantedOrderRequest.ProtoReflect.Descriptor instead.
+func (*FulfillSkillBookWantedOrderRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) GetPosterPlayerId() uint64 {
+	if x != nil {
+		return x.PosterPlayerId
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) GetSealedItemId() uint64 {
+	if x != nil {
+		return x.SealedItemId
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) GetBookshelfBookId() uint64 {
+	if x != nil {
+		return x.BookshelfBookId
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) GetExpectedRevision() uint64 {
+	if x != nil {
+		return x.ExpectedRevision
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type FulfillSkillBookWantedOrderResponse struct {
+	state           protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId uint64                      `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Replayed        bool                        `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	OrderId         uint64                      `protobuf:"varint,4,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	SellerNetGold   uint64                      `protobuf:"varint,5,opt,name=seller_net_gold,json=sellerNetGold,proto3" json:"seller_net_gold,omitempty"`
+	State           *SkillCraftingStateSnapshot `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) Reset() {
+	*x = FulfillSkillBookWantedOrderResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FulfillSkillBookWantedOrderResponse) ProtoMessage() {}
+
+func (x *FulfillSkillBookWantedOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FulfillSkillBookWantedOrderResponse.ProtoReflect.Descriptor instead.
+func (*FulfillSkillBookWantedOrderResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) GetSellerNetGold() uint64 {
+	if x != nil {
+		return x.SellerNetGold
+	}
+	return 0
+}
+
+func (x *FulfillSkillBookWantedOrderResponse) GetState() *SkillCraftingStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
 type UpgradeSkillRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2773,7 +3904,7 @@ type UpgradeSkillRequest struct {
 
 func (x *UpgradeSkillRequest) Reset() {
 	*x = UpgradeSkillRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[33]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2785,7 +3916,7 @@ func (x *UpgradeSkillRequest) String() string {
 func (*UpgradeSkillRequest) ProtoMessage() {}
 
 func (x *UpgradeSkillRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[33]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2798,7 +3929,7 @@ func (x *UpgradeSkillRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeSkillRequest.ProtoReflect.Descriptor instead.
 func (*UpgradeSkillRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{33}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *UpgradeSkillRequest) GetSkillTableId() uint32 {
@@ -2841,7 +3972,7 @@ type UpgradeSkillResponse struct {
 
 func (x *UpgradeSkillResponse) Reset() {
 	*x = UpgradeSkillResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[34]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2853,7 +3984,7 @@ func (x *UpgradeSkillResponse) String() string {
 func (*UpgradeSkillResponse) ProtoMessage() {}
 
 func (x *UpgradeSkillResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[34]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2866,7 +3997,7 @@ func (x *UpgradeSkillResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeSkillResponse.ProtoReflect.Descriptor instead.
 func (*UpgradeSkillResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{34}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *UpgradeSkillResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3043,7 +4174,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x10rare_ink_item_id\x18\r \x01(\rR\rrareInkItemId\x12$\n" +
 	"\x0erare_ink_count\x18\x0e \x01(\rR\frareInkCount\x12$\n" +
 	"\x0erare_gold_cost\x18\x0f \x01(\x04R\frareGoldCost\x12&\n" +
-	"\x0fskill_table_ids\x18\x10 \x03(\rR\rskillTableIds\"\xdc\x05\n" +
+	"\x0fskill_table_ids\x18\x10 \x03(\rR\rskillTableIds\"\xcd\t\n" +
 	"\x1aSkillCraftingStateSnapshot\x122\n" +
 	"\x15scroll_craft_revision\x18\x01 \x01(\x04R\x13scrollCraftRevision\x12?\n" +
 	"\rforge_mastery\x18\x02 \x01(\v2\x1a.SkillCraftMasterySnapshotR\fforgeMastery\x12A\n" +
@@ -3060,7 +4191,16 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x10proxy_stall_open\x18\v \x01(\bR\x0eproxyStallOpen\x12/\n" +
 	"\x14proxy_forge_fee_gold\x18\f \x01(\x04R\x11proxyForgeFeeGold\x121\n" +
 	"\x15proxy_scroll_fee_gold\x18\r \x01(\x04R\x12proxyScrollFeeGold\x129\n" +
-	"\x19craft_unlock_gate_enabled\x18\x0e \x01(\bR\x16craftUnlockGateEnabled\"\x1e\n" +
+	"\x19craft_unlock_gate_enabled\x18\x0e \x01(\bR\x16craftUnlockGateEnabled\x124\n" +
+	"\x16proxy_orders_completed\x18\x0f \x01(\rR\x14proxyOrdersCompleted\x120\n" +
+	"\x14supreme_forged_count\x18\x10 \x01(\rR\x12supremeForgedCount\x127\n" +
+	"\x18rare_books_crafted_count\x18\x11 \x01(\rR\x15rareBooksCraftedCount\x12.\n" +
+	"\x13master_showcase_tag\x18\x12 \x01(\rR\x11masterShowcaseTag\x125\n" +
+	"\x17equipped_craft_title_id\x18\x13 \x01(\rR\x14equippedCraftTitleId\x127\n" +
+	"\x18unlocked_craft_title_ids\x18\x14 \x03(\rR\x15unlockedCraftTitleIds\x12&\n" +
+	"\x0fteam_free_proxy\x18\x15 \x01(\bR\rteamFreeProxy\x12A\n" +
+	"\x1dclaimed_scroll_milestone_bits\x18\x16 \x01(\fR\x1aclaimedScrollMilestoneBits\x12C\n" +
+	"\x10my_wanted_orders\x18\x17 \x03(\v2\x19.SkillBookWantedOrderInfoR\x0emyWantedOrders\"\x1e\n" +
 	"\x1cGetSkillCraftingStateRequest\"\x88\x01\n" +
 	"\x1dGetSkillCraftingStateResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
@@ -3125,14 +4265,17 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
 	"\breplayed\x18\x03 \x01(\bR\breplayed\x12;\n" +
 	"\runsealed_book\x18\x04 \x01(\v2\x16.CraftedSkillBookEntryR\funsealedBook\x121\n" +
-	"\x05state\x18\x05 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\x93\x01\n" +
+	"\x05state\x18\x05 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\xa2\x02\n" +
 	"\x19SetCraftProxyStallRequest\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12/\n" +
 	"\x14proxy_forge_fee_gold\x18\x02 \x01(\x04R\x11proxyForgeFeeGold\x121\n" +
-	"\x15proxy_scroll_fee_gold\x18\x03 \x01(\x04R\x12proxyScrollFeeGold\"\x85\x01\n" +
+	"\x15proxy_scroll_fee_gold\x18\x03 \x01(\x04R\x12proxyScrollFeeGold\x12.\n" +
+	"\x13master_showcase_tag\x18\x04 \x01(\rR\x11masterShowcaseTag\x125\n" +
+	"\x17equipped_craft_title_id\x18\x05 \x01(\rR\x14equippedCraftTitleId\x12&\n" +
+	"\x0fteam_free_proxy\x18\x06 \x01(\bR\rteamFreeProxy\"\x85\x01\n" +
 	"\x1aSetCraftProxyStallResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
-	"\x05state\x18\x02 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\x86\x03\n" +
+	"\x05state\x18\x02 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\xeb\x05\n" +
 	"\x13CraftProxyStallInfo\x12(\n" +
 	"\x10master_player_id\x18\x01 \x01(\x04R\x0emasterPlayerId\x12\x1f\n" +
 	"\vmaster_name\x18\x02 \x01(\tR\n" +
@@ -3142,11 +4285,101 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x14top_quality_rate_bps\x18\x05 \x01(\rR\x11topQualityRateBps\x121\n" +
 	"\x15scroll_bonus_rate_bps\x18\x06 \x01(\rR\x12scrollBonusRateBps\x12/\n" +
 	"\x14proxy_forge_fee_gold\x18\a \x01(\x04R\x11proxyForgeFeeGold\x121\n" +
-	"\x15proxy_scroll_fee_gold\x18\b \x01(\x04R\x12proxyScrollFeeGold\"\x1d\n" +
+	"\x15proxy_scroll_fee_gold\x18\b \x01(\x04R\x12proxyScrollFeeGold\x124\n" +
+	"\x16proxy_orders_completed\x18\t \x01(\rR\x14proxyOrdersCompleted\x120\n" +
+	"\x14supreme_forged_count\x18\n" +
+	" \x01(\rR\x12supremeForgedCount\x127\n" +
+	"\x18rare_books_crafted_count\x18\v \x01(\rR\x15rareBooksCraftedCount\x12.\n" +
+	"\x13master_showcase_tag\x18\f \x01(\rR\x11masterShowcaseTag\x125\n" +
+	"\x17equipped_craft_title_id\x18\r \x01(\rR\x14equippedCraftTitleId\x12&\n" +
+	"\x0fteam_free_proxy\x18\x0e \x01(\bR\rteamFreeProxy\x123\n" +
+	"\x16viewer_gets_free_proxy\x18\x0f \x01(\bR\x13viewerGetsFreeProxy\"\x1d\n" +
 	"\x1bListCraftProxyStallsRequest\"\x82\x01\n" +
 	"\x1cListCraftProxyStallsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12,\n" +
-	"\x06stalls\x18\x02 \x03(\v2\x14.CraftProxyStallInfoR\x06stalls\"\x8d\x01\n" +
+	"\x06stalls\x18\x02 \x03(\v2\x14.CraftProxyStallInfoR\x06stalls\"\xc4\x01\n" +
+	"%ClaimScrollCollectionMilestoneRequest\x12\x1b\n" +
+	"\tscroll_id\x18\x01 \x01(\rR\bscrollId\x12%\n" +
+	"\x0emilestone_tier\x18\x02 \x01(\rR\rmilestoneTier\x12+\n" +
+	"\x11expected_revision\x18\x03 \x01(\x04R\x10expectedRevision\x12*\n" +
+	"\x11client_request_id\x18\x04 \x01(\x04R\x0fclientRequestId\"\x88\x02\n" +
+	"&ClaimScrollCollectionMilestoneResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12-\n" +
+	"\x12rewarded_fragments\x18\x04 \x01(\rR\x11rewardedFragments\x121\n" +
+	"\x05state\x18\x05 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\x95\x01\n" +
+	"\x1fBatchDismantleSkillBooksRequest\x12\x19\n" +
+	"\bbook_ids\x18\x01 \x03(\x04R\abookIds\x12+\n" +
+	"\x11expected_revision\x18\x02 \x01(\x04R\x10expectedRevision\x12*\n" +
+	"\x11client_request_id\x18\x03 \x01(\x04R\x0fclientRequestId\"\xad\x02\n" +
+	" BatchDismantleSkillBooksResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12)\n" +
+	"\x10dismantled_count\x18\x04 \x01(\rR\x0fdismantledCount\x12-\n" +
+	"\x12refunded_fragments\x18\x05 \x01(\rR\x11refundedFragments\x121\n" +
+	"\x05state\x18\x06 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\xac\x03\n" +
+	"\x18SkillBookWantedOrderInfo\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x04R\aorderId\x12(\n" +
+	"\x10poster_player_id\x18\x02 \x01(\x04R\x0eposterPlayerId\x12\x1f\n" +
+	"\vposter_name\x18\x03 \x01(\tR\n" +
+	"posterName\x12$\n" +
+	"\x0eskill_table_id\x18\x04 \x01(\rR\fskillTableId\x12\x1d\n" +
+	"\n" +
+	"skill_name\x18\x05 \x01(\tR\tskillName\x12\x1b\n" +
+	"\tscroll_id\x18\x06 \x01(\rR\bscrollId\x12\x1f\n" +
+	"\vscroll_name\x18\a \x01(\tR\n" +
+	"scrollName\x128\n" +
+	"\x18require_master_signature\x18\b \x01(\bR\x16requireMasterSignature\x12\x1f\n" +
+	"\vreward_gold\x18\t \x01(\x04R\n" +
+	"rewardGold\x12&\n" +
+	"\x0fseller_net_gold\x18\n" +
+	" \x01(\x04R\rsellerNetGold\x12$\n" +
+	"\x0ecreated_at_sec\x18\v \x01(\x04R\fcreatedAtSec\"\xfb\x01\n" +
+	"\x1fPostSkillBookWantedOrderRequest\x12$\n" +
+	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x128\n" +
+	"\x18require_master_signature\x18\x02 \x01(\bR\x16requireMasterSignature\x12\x1f\n" +
+	"\vreward_gold\x18\x03 \x01(\x04R\n" +
+	"rewardGold\x12+\n" +
+	"\x11expected_revision\x18\x04 \x01(\x04R\x10expectedRevision\x12*\n" +
+	"\x11client_request_id\x18\x05 \x01(\x04R\x0fclientRequestId\"\x84\x02\n" +
+	" PostSkillBookWantedOrderResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12/\n" +
+	"\x05order\x18\x04 \x01(\v2\x19.SkillBookWantedOrderInfoR\x05order\x121\n" +
+	"\x05state\x18\x05 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\x97\x01\n" +
+	"!CancelSkillBookWantedOrderRequest\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x04R\aorderId\x12+\n" +
+	"\x11expected_revision\x18\x02 \x01(\x04R\x10expectedRevision\x12*\n" +
+	"\x11client_request_id\x18\x03 \x01(\x04R\x0fclientRequestId\"\xfa\x01\n" +
+	"\"CancelSkillBookWantedOrderResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12#\n" +
+	"\rrefunded_gold\x18\x04 \x01(\x04R\frefundedGold\x121\n" +
+	"\x05state\x18\x05 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"r\n" +
+	" ListSkillBookWantedOrdersRequest\x121\n" +
+	"\x15filter_skill_table_id\x18\x01 \x01(\rR\x12filterSkillTableId\x12\x1b\n" +
+	"\tonly_mine\x18\x02 \x01(\bR\bonlyMine\"\x8c\x01\n" +
+	"!ListSkillBookWantedOrdersResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\x06orders\x18\x02 \x03(\v2\x19.SkillBookWantedOrderInfoR\x06orders\"\x94\x02\n" +
+	"\"FulfillSkillBookWantedOrderRequest\x12(\n" +
+	"\x10poster_player_id\x18\x01 \x01(\x04R\x0eposterPlayerId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\x04R\aorderId\x12$\n" +
+	"\x0esealed_item_id\x18\x03 \x01(\x04R\fsealedItemId\x12*\n" +
+	"\x11bookshelf_book_id\x18\x04 \x01(\x04R\x0fbookshelfBookId\x12+\n" +
+	"\x11expected_revision\x18\x05 \x01(\x04R\x10expectedRevision\x12*\n" +
+	"\x11client_request_id\x18\x06 \x01(\x04R\x0fclientRequestId\"\x99\x02\n" +
+	"#FulfillSkillBookWantedOrderResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12\x19\n" +
+	"\border_id\x18\x04 \x01(\x04R\aorderId\x12&\n" +
+	"\x0fseller_net_gold\x18\x05 \x01(\x04R\rsellerNetGold\x121\n" +
+	"\x05state\x18\x06 \x01(\v2\x1b.SkillCraftingStateSnapshotR\x05state\"\x8d\x01\n" +
 	"\x13UpgradeSkillRequest\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12#\n" +
 	"\rexpected_rank\x18\x02 \x01(\rR\fexpectedRank\x12\x14\n" +
@@ -3156,7 +4389,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
 	"\x05state\x18\x02 \x01(\v2\x13.ListSkillsResponseR\x05state\x12%\n" +
 	"\x0eupgraded_count\x18\x03 \x01(\rR\rupgradedCount\x12\x1e\n" +
-	"\vstop_tip_id\x18\x04 \x01(\rR\tstopTipId2\xb4\b\n" +
+	"\vstop_tip_id\x18\x04 \x01(\rR\tstopTipId2\x9e\r\n" +
 	"\x16SceneSkillClientPlayer\x12;\n" +
 	"\fReleaseSkill\x12\x14.ReleaseSkillRequest\x1a\x15.ReleaseSkillResponse\x12/\n" +
 	"\x0fNotifySkillUsed\x12\r.SkillUsedS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12=\n" +
@@ -3173,7 +4406,13 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x10SaveSkillLoadout\x12\x18.SaveSkillLoadoutRequest\x1a\x19.SaveSkillLoadoutResponse\x12M\n" +
 	"\x12SwitchSkillLoadout\x12\x1a.SwitchSkillLoadoutRequest\x1a\x1b.SwitchSkillLoadoutResponse\x12>\n" +
 	"\rSealSkillBook\x12\x15.SealSkillBookRequest\x1a\x16.SealSkillBookResponse\x12D\n" +
-	"\x0fUnsealSkillBook\x12\x17.UnsealSkillBookRequest\x1a\x18.UnsealSkillBookResponse\x1a\n" +
+	"\x0fUnsealSkillBook\x12\x17.UnsealSkillBookRequest\x1a\x18.UnsealSkillBookResponse\x12q\n" +
+	"\x1eClaimScrollCollectionMilestone\x12&.ClaimScrollCollectionMilestoneRequest\x1a'.ClaimScrollCollectionMilestoneResponse\x12_\n" +
+	"\x18BatchDismantleSkillBooks\x12 .BatchDismantleSkillBooksRequest\x1a!.BatchDismantleSkillBooksResponse\x12_\n" +
+	"\x18PostSkillBookWantedOrder\x12 .PostSkillBookWantedOrderRequest\x1a!.PostSkillBookWantedOrderResponse\x12e\n" +
+	"\x1aCancelSkillBookWantedOrder\x12\".CancelSkillBookWantedOrderRequest\x1a#.CancelSkillBookWantedOrderResponse\x12b\n" +
+	"\x19ListSkillBookWantedOrders\x12!.ListSkillBookWantedOrdersRequest\x1a\".ListSkillBookWantedOrdersResponse\x12h\n" +
+	"\x1bFulfillSkillBookWantedOrder\x12#.FulfillSkillBookWantedOrderRequest\x1a$.FulfillSkillBookWantedOrderResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -3189,127 +4428,166 @@ func file_proto_scene_player_skill_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_player_skill_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_scene_player_skill_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_proto_scene_player_skill_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
 var file_proto_scene_player_skill_proto_goTypes = []any{
-	(CraftSkillBookRequest_CraftMode)(0),    // 0: CraftSkillBookRequest.CraftMode
-	(*ReleaseSkillRequest)(nil),             // 1: ReleaseSkillRequest
-	(*ReleaseSkillResponse)(nil),            // 2: ReleaseSkillResponse
-	(*SkillInterruptedS2C)(nil),             // 3: SkillInterruptedS2C
-	(*SkillUsedS2C)(nil),                    // 4: SkillUsedS2C
-	(*ListSkillsRequest)(nil),               // 5: ListSkillsRequest
-	(*ListSkillsResponse)(nil),              // 6: ListSkillsResponse
-	(*SkillCatalogEntry)(nil),               // 7: SkillCatalogEntry
-	(*SkillLoadoutSchemeInfo)(nil),          // 8: SkillLoadoutSchemeInfo
-	(*SkillLoadoutSnapshot)(nil),            // 9: SkillLoadoutSnapshot
-	(*SaveSkillLoadoutRequest)(nil),         // 10: SaveSkillLoadoutRequest
-	(*SaveSkillLoadoutResponse)(nil),        // 11: SaveSkillLoadoutResponse
-	(*SwitchSkillLoadoutRequest)(nil),       // 12: SwitchSkillLoadoutRequest
-	(*SwitchSkillLoadoutResponse)(nil),      // 13: SwitchSkillLoadoutResponse
-	(*SkillCraftMasterySnapshot)(nil),       // 14: SkillCraftMasterySnapshot
-	(*SkillScrollCatalogInfo)(nil),          // 15: SkillScrollCatalogInfo
-	(*SkillCraftingStateSnapshot)(nil),      // 16: SkillCraftingStateSnapshot
-	(*GetSkillCraftingStateRequest)(nil),    // 17: GetSkillCraftingStateRequest
-	(*GetSkillCraftingStateResponse)(nil),   // 18: GetSkillCraftingStateResponse
-	(*CraftSkillBookRequest)(nil),           // 19: CraftSkillBookRequest
-	(*CraftSkillBookResponse)(nil),          // 20: CraftSkillBookResponse
-	(*LearnSkillBookRequest)(nil),           // 21: LearnSkillBookRequest
-	(*LearnSkillBookResponse)(nil),          // 22: LearnSkillBookResponse
-	(*DismantleSkillBookRequest)(nil),       // 23: DismantleSkillBookRequest
-	(*DismantleSkillBookResponse)(nil),      // 24: DismantleSkillBookResponse
-	(*SealSkillBookRequest)(nil),            // 25: SealSkillBookRequest
-	(*SealSkillBookResponse)(nil),           // 26: SealSkillBookResponse
-	(*UnsealSkillBookRequest)(nil),          // 27: UnsealSkillBookRequest
-	(*UnsealSkillBookResponse)(nil),         // 28: UnsealSkillBookResponse
-	(*SetCraftProxyStallRequest)(nil),       // 29: SetCraftProxyStallRequest
-	(*SetCraftProxyStallResponse)(nil),      // 30: SetCraftProxyStallResponse
-	(*CraftProxyStallInfo)(nil),             // 31: CraftProxyStallInfo
-	(*ListCraftProxyStallsRequest)(nil),     // 32: ListCraftProxyStallsRequest
-	(*ListCraftProxyStallsResponse)(nil),    // 33: ListCraftProxyStallsResponse
-	(*UpgradeSkillRequest)(nil),             // 34: UpgradeSkillRequest
-	(*UpgradeSkillResponse)(nil),            // 35: UpgradeSkillResponse
-	(*component.Vector3)(nil),               // 36: Vector3
-	(*component.Rotation)(nil),              // 37: Rotation
-	(*base.TipInfoMessage)(nil),             // 38: TipInfoMessage
-	(*component.PlayerSkillListComp)(nil),   // 39: PlayerSkillListComp
-	(*component.SupportSkillPreview)(nil),   // 40: SupportSkillPreview
-	(*component.CraftedSkillBookEntry)(nil), // 41: CraftedSkillBookEntry
-	(*base.Empty)(nil),                      // 42: Empty
+	(CraftSkillBookRequest_CraftMode)(0),           // 0: CraftSkillBookRequest.CraftMode
+	(*ReleaseSkillRequest)(nil),                    // 1: ReleaseSkillRequest
+	(*ReleaseSkillResponse)(nil),                   // 2: ReleaseSkillResponse
+	(*SkillInterruptedS2C)(nil),                    // 3: SkillInterruptedS2C
+	(*SkillUsedS2C)(nil),                           // 4: SkillUsedS2C
+	(*ListSkillsRequest)(nil),                      // 5: ListSkillsRequest
+	(*ListSkillsResponse)(nil),                     // 6: ListSkillsResponse
+	(*SkillCatalogEntry)(nil),                      // 7: SkillCatalogEntry
+	(*SkillLoadoutSchemeInfo)(nil),                 // 8: SkillLoadoutSchemeInfo
+	(*SkillLoadoutSnapshot)(nil),                   // 9: SkillLoadoutSnapshot
+	(*SaveSkillLoadoutRequest)(nil),                // 10: SaveSkillLoadoutRequest
+	(*SaveSkillLoadoutResponse)(nil),               // 11: SaveSkillLoadoutResponse
+	(*SwitchSkillLoadoutRequest)(nil),              // 12: SwitchSkillLoadoutRequest
+	(*SwitchSkillLoadoutResponse)(nil),             // 13: SwitchSkillLoadoutResponse
+	(*SkillCraftMasterySnapshot)(nil),              // 14: SkillCraftMasterySnapshot
+	(*SkillScrollCatalogInfo)(nil),                 // 15: SkillScrollCatalogInfo
+	(*SkillCraftingStateSnapshot)(nil),             // 16: SkillCraftingStateSnapshot
+	(*GetSkillCraftingStateRequest)(nil),           // 17: GetSkillCraftingStateRequest
+	(*GetSkillCraftingStateResponse)(nil),          // 18: GetSkillCraftingStateResponse
+	(*CraftSkillBookRequest)(nil),                  // 19: CraftSkillBookRequest
+	(*CraftSkillBookResponse)(nil),                 // 20: CraftSkillBookResponse
+	(*LearnSkillBookRequest)(nil),                  // 21: LearnSkillBookRequest
+	(*LearnSkillBookResponse)(nil),                 // 22: LearnSkillBookResponse
+	(*DismantleSkillBookRequest)(nil),              // 23: DismantleSkillBookRequest
+	(*DismantleSkillBookResponse)(nil),             // 24: DismantleSkillBookResponse
+	(*SealSkillBookRequest)(nil),                   // 25: SealSkillBookRequest
+	(*SealSkillBookResponse)(nil),                  // 26: SealSkillBookResponse
+	(*UnsealSkillBookRequest)(nil),                 // 27: UnsealSkillBookRequest
+	(*UnsealSkillBookResponse)(nil),                // 28: UnsealSkillBookResponse
+	(*SetCraftProxyStallRequest)(nil),              // 29: SetCraftProxyStallRequest
+	(*SetCraftProxyStallResponse)(nil),             // 30: SetCraftProxyStallResponse
+	(*CraftProxyStallInfo)(nil),                    // 31: CraftProxyStallInfo
+	(*ListCraftProxyStallsRequest)(nil),            // 32: ListCraftProxyStallsRequest
+	(*ListCraftProxyStallsResponse)(nil),           // 33: ListCraftProxyStallsResponse
+	(*ClaimScrollCollectionMilestoneRequest)(nil),  // 34: ClaimScrollCollectionMilestoneRequest
+	(*ClaimScrollCollectionMilestoneResponse)(nil), // 35: ClaimScrollCollectionMilestoneResponse
+	(*BatchDismantleSkillBooksRequest)(nil),        // 36: BatchDismantleSkillBooksRequest
+	(*BatchDismantleSkillBooksResponse)(nil),       // 37: BatchDismantleSkillBooksResponse
+	(*SkillBookWantedOrderInfo)(nil),               // 38: SkillBookWantedOrderInfo
+	(*PostSkillBookWantedOrderRequest)(nil),        // 39: PostSkillBookWantedOrderRequest
+	(*PostSkillBookWantedOrderResponse)(nil),       // 40: PostSkillBookWantedOrderResponse
+	(*CancelSkillBookWantedOrderRequest)(nil),      // 41: CancelSkillBookWantedOrderRequest
+	(*CancelSkillBookWantedOrderResponse)(nil),     // 42: CancelSkillBookWantedOrderResponse
+	(*ListSkillBookWantedOrdersRequest)(nil),       // 43: ListSkillBookWantedOrdersRequest
+	(*ListSkillBookWantedOrdersResponse)(nil),      // 44: ListSkillBookWantedOrdersResponse
+	(*FulfillSkillBookWantedOrderRequest)(nil),     // 45: FulfillSkillBookWantedOrderRequest
+	(*FulfillSkillBookWantedOrderResponse)(nil),    // 46: FulfillSkillBookWantedOrderResponse
+	(*UpgradeSkillRequest)(nil),                    // 47: UpgradeSkillRequest
+	(*UpgradeSkillResponse)(nil),                   // 48: UpgradeSkillResponse
+	(*component.Vector3)(nil),                      // 49: Vector3
+	(*component.Rotation)(nil),                     // 50: Rotation
+	(*base.TipInfoMessage)(nil),                    // 51: TipInfoMessage
+	(*component.PlayerSkillListComp)(nil),          // 52: PlayerSkillListComp
+	(*component.SupportSkillPreview)(nil),          // 53: SupportSkillPreview
+	(*component.CraftedSkillBookEntry)(nil),        // 54: CraftedSkillBookEntry
+	(*base.Empty)(nil),                             // 55: Empty
 }
 var file_proto_scene_player_skill_proto_depIdxs = []int32{
-	36, // 0: ReleaseSkillRequest.position:type_name -> Vector3
-	37, // 1: ReleaseSkillRequest.rotation:type_name -> Rotation
-	38, // 2: ReleaseSkillResponse.error_message:type_name -> TipInfoMessage
-	36, // 3: SkillUsedS2C.position:type_name -> Vector3
-	38, // 4: ListSkillsResponse.error_message:type_name -> TipInfoMessage
-	39, // 5: ListSkillsResponse.skill_list:type_name -> PlayerSkillListComp
+	49, // 0: ReleaseSkillRequest.position:type_name -> Vector3
+	50, // 1: ReleaseSkillRequest.rotation:type_name -> Rotation
+	51, // 2: ReleaseSkillResponse.error_message:type_name -> TipInfoMessage
+	49, // 3: SkillUsedS2C.position:type_name -> Vector3
+	51, // 4: ListSkillsResponse.error_message:type_name -> TipInfoMessage
+	52, // 5: ListSkillsResponse.skill_list:type_name -> PlayerSkillListComp
 	7,  // 6: ListSkillsResponse.catalog:type_name -> SkillCatalogEntry
 	9,  // 7: ListSkillsResponse.loadout:type_name -> SkillLoadoutSnapshot
-	40, // 8: SkillCatalogEntry.support_preview:type_name -> SupportSkillPreview
+	53, // 8: SkillCatalogEntry.support_preview:type_name -> SupportSkillPreview
 	8,  // 9: SkillLoadoutSnapshot.schemes:type_name -> SkillLoadoutSchemeInfo
-	38, // 10: SaveSkillLoadoutResponse.error_message:type_name -> TipInfoMessage
+	51, // 10: SaveSkillLoadoutResponse.error_message:type_name -> TipInfoMessage
 	6,  // 11: SaveSkillLoadoutResponse.state:type_name -> ListSkillsResponse
-	38, // 12: SwitchSkillLoadoutResponse.error_message:type_name -> TipInfoMessage
+	51, // 12: SwitchSkillLoadoutResponse.error_message:type_name -> TipInfoMessage
 	6,  // 13: SwitchSkillLoadoutResponse.state:type_name -> ListSkillsResponse
 	14, // 14: SkillCraftingStateSnapshot.forge_mastery:type_name -> SkillCraftMasterySnapshot
 	14, // 15: SkillCraftingStateSnapshot.scroll_mastery:type_name -> SkillCraftMasterySnapshot
 	15, // 16: SkillCraftingStateSnapshot.scrolls:type_name -> SkillScrollCatalogInfo
-	41, // 17: SkillCraftingStateSnapshot.skill_books:type_name -> CraftedSkillBookEntry
-	38, // 18: GetSkillCraftingStateResponse.error_message:type_name -> TipInfoMessage
-	16, // 19: GetSkillCraftingStateResponse.state:type_name -> SkillCraftingStateSnapshot
-	0,  // 20: CraftSkillBookRequest.mode:type_name -> CraftSkillBookRequest.CraftMode
-	38, // 21: CraftSkillBookResponse.error_message:type_name -> TipInfoMessage
-	41, // 22: CraftSkillBookResponse.crafted_book:type_name -> CraftedSkillBookEntry
-	16, // 23: CraftSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	38, // 24: LearnSkillBookResponse.error_message:type_name -> TipInfoMessage
-	16, // 25: LearnSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	38, // 26: DismantleSkillBookResponse.error_message:type_name -> TipInfoMessage
-	16, // 27: DismantleSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	38, // 28: SealSkillBookResponse.error_message:type_name -> TipInfoMessage
-	16, // 29: SealSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	38, // 30: UnsealSkillBookResponse.error_message:type_name -> TipInfoMessage
-	41, // 31: UnsealSkillBookResponse.unsealed_book:type_name -> CraftedSkillBookEntry
-	16, // 32: UnsealSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	38, // 33: SetCraftProxyStallResponse.error_message:type_name -> TipInfoMessage
-	16, // 34: SetCraftProxyStallResponse.state:type_name -> SkillCraftingStateSnapshot
-	38, // 35: ListCraftProxyStallsResponse.error_message:type_name -> TipInfoMessage
-	31, // 36: ListCraftProxyStallsResponse.stalls:type_name -> CraftProxyStallInfo
-	38, // 37: UpgradeSkillResponse.error_message:type_name -> TipInfoMessage
-	6,  // 38: UpgradeSkillResponse.state:type_name -> ListSkillsResponse
-	1,  // 39: SceneSkillClientPlayer.ReleaseSkill:input_type -> ReleaseSkillRequest
-	4,  // 40: SceneSkillClientPlayer.NotifySkillUsed:input_type -> SkillUsedS2C
-	3,  // 41: SceneSkillClientPlayer.NotifySkillInterrupted:input_type -> SkillInterruptedS2C
-	5,  // 42: SceneSkillClientPlayer.ListSkills:input_type -> ListSkillsRequest
-	34, // 43: SceneSkillClientPlayer.UpgradeSkill:input_type -> UpgradeSkillRequest
-	17, // 44: SceneSkillClientPlayer.GetSkillCraftingState:input_type -> GetSkillCraftingStateRequest
-	19, // 45: SceneSkillClientPlayer.CraftSkillBook:input_type -> CraftSkillBookRequest
-	21, // 46: SceneSkillClientPlayer.LearnSkillBook:input_type -> LearnSkillBookRequest
-	23, // 47: SceneSkillClientPlayer.DismantleSkillBook:input_type -> DismantleSkillBookRequest
-	29, // 48: SceneSkillClientPlayer.SetCraftProxyStall:input_type -> SetCraftProxyStallRequest
-	32, // 49: SceneSkillClientPlayer.ListCraftProxyStalls:input_type -> ListCraftProxyStallsRequest
-	10, // 50: SceneSkillClientPlayer.SaveSkillLoadout:input_type -> SaveSkillLoadoutRequest
-	12, // 51: SceneSkillClientPlayer.SwitchSkillLoadout:input_type -> SwitchSkillLoadoutRequest
-	25, // 52: SceneSkillClientPlayer.SealSkillBook:input_type -> SealSkillBookRequest
-	27, // 53: SceneSkillClientPlayer.UnsealSkillBook:input_type -> UnsealSkillBookRequest
-	2,  // 54: SceneSkillClientPlayer.ReleaseSkill:output_type -> ReleaseSkillResponse
-	42, // 55: SceneSkillClientPlayer.NotifySkillUsed:output_type -> Empty
-	42, // 56: SceneSkillClientPlayer.NotifySkillInterrupted:output_type -> Empty
-	6,  // 57: SceneSkillClientPlayer.ListSkills:output_type -> ListSkillsResponse
-	35, // 58: SceneSkillClientPlayer.UpgradeSkill:output_type -> UpgradeSkillResponse
-	18, // 59: SceneSkillClientPlayer.GetSkillCraftingState:output_type -> GetSkillCraftingStateResponse
-	20, // 60: SceneSkillClientPlayer.CraftSkillBook:output_type -> CraftSkillBookResponse
-	22, // 61: SceneSkillClientPlayer.LearnSkillBook:output_type -> LearnSkillBookResponse
-	24, // 62: SceneSkillClientPlayer.DismantleSkillBook:output_type -> DismantleSkillBookResponse
-	30, // 63: SceneSkillClientPlayer.SetCraftProxyStall:output_type -> SetCraftProxyStallResponse
-	33, // 64: SceneSkillClientPlayer.ListCraftProxyStalls:output_type -> ListCraftProxyStallsResponse
-	11, // 65: SceneSkillClientPlayer.SaveSkillLoadout:output_type -> SaveSkillLoadoutResponse
-	13, // 66: SceneSkillClientPlayer.SwitchSkillLoadout:output_type -> SwitchSkillLoadoutResponse
-	26, // 67: SceneSkillClientPlayer.SealSkillBook:output_type -> SealSkillBookResponse
-	28, // 68: SceneSkillClientPlayer.UnsealSkillBook:output_type -> UnsealSkillBookResponse
-	54, // [54:69] is the sub-list for method output_type
-	39, // [39:54] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	54, // 17: SkillCraftingStateSnapshot.skill_books:type_name -> CraftedSkillBookEntry
+	38, // 18: SkillCraftingStateSnapshot.my_wanted_orders:type_name -> SkillBookWantedOrderInfo
+	51, // 19: GetSkillCraftingStateResponse.error_message:type_name -> TipInfoMessage
+	16, // 20: GetSkillCraftingStateResponse.state:type_name -> SkillCraftingStateSnapshot
+	0,  // 21: CraftSkillBookRequest.mode:type_name -> CraftSkillBookRequest.CraftMode
+	51, // 22: CraftSkillBookResponse.error_message:type_name -> TipInfoMessage
+	54, // 23: CraftSkillBookResponse.crafted_book:type_name -> CraftedSkillBookEntry
+	16, // 24: CraftSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 25: LearnSkillBookResponse.error_message:type_name -> TipInfoMessage
+	16, // 26: LearnSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 27: DismantleSkillBookResponse.error_message:type_name -> TipInfoMessage
+	16, // 28: DismantleSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 29: SealSkillBookResponse.error_message:type_name -> TipInfoMessage
+	16, // 30: SealSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 31: UnsealSkillBookResponse.error_message:type_name -> TipInfoMessage
+	54, // 32: UnsealSkillBookResponse.unsealed_book:type_name -> CraftedSkillBookEntry
+	16, // 33: UnsealSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 34: SetCraftProxyStallResponse.error_message:type_name -> TipInfoMessage
+	16, // 35: SetCraftProxyStallResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 36: ListCraftProxyStallsResponse.error_message:type_name -> TipInfoMessage
+	31, // 37: ListCraftProxyStallsResponse.stalls:type_name -> CraftProxyStallInfo
+	51, // 38: ClaimScrollCollectionMilestoneResponse.error_message:type_name -> TipInfoMessage
+	16, // 39: ClaimScrollCollectionMilestoneResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 40: BatchDismantleSkillBooksResponse.error_message:type_name -> TipInfoMessage
+	16, // 41: BatchDismantleSkillBooksResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 42: PostSkillBookWantedOrderResponse.error_message:type_name -> TipInfoMessage
+	38, // 43: PostSkillBookWantedOrderResponse.order:type_name -> SkillBookWantedOrderInfo
+	16, // 44: PostSkillBookWantedOrderResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 45: CancelSkillBookWantedOrderResponse.error_message:type_name -> TipInfoMessage
+	16, // 46: CancelSkillBookWantedOrderResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 47: ListSkillBookWantedOrdersResponse.error_message:type_name -> TipInfoMessage
+	38, // 48: ListSkillBookWantedOrdersResponse.orders:type_name -> SkillBookWantedOrderInfo
+	51, // 49: FulfillSkillBookWantedOrderResponse.error_message:type_name -> TipInfoMessage
+	16, // 50: FulfillSkillBookWantedOrderResponse.state:type_name -> SkillCraftingStateSnapshot
+	51, // 51: UpgradeSkillResponse.error_message:type_name -> TipInfoMessage
+	6,  // 52: UpgradeSkillResponse.state:type_name -> ListSkillsResponse
+	1,  // 53: SceneSkillClientPlayer.ReleaseSkill:input_type -> ReleaseSkillRequest
+	4,  // 54: SceneSkillClientPlayer.NotifySkillUsed:input_type -> SkillUsedS2C
+	3,  // 55: SceneSkillClientPlayer.NotifySkillInterrupted:input_type -> SkillInterruptedS2C
+	5,  // 56: SceneSkillClientPlayer.ListSkills:input_type -> ListSkillsRequest
+	47, // 57: SceneSkillClientPlayer.UpgradeSkill:input_type -> UpgradeSkillRequest
+	17, // 58: SceneSkillClientPlayer.GetSkillCraftingState:input_type -> GetSkillCraftingStateRequest
+	19, // 59: SceneSkillClientPlayer.CraftSkillBook:input_type -> CraftSkillBookRequest
+	21, // 60: SceneSkillClientPlayer.LearnSkillBook:input_type -> LearnSkillBookRequest
+	23, // 61: SceneSkillClientPlayer.DismantleSkillBook:input_type -> DismantleSkillBookRequest
+	29, // 62: SceneSkillClientPlayer.SetCraftProxyStall:input_type -> SetCraftProxyStallRequest
+	32, // 63: SceneSkillClientPlayer.ListCraftProxyStalls:input_type -> ListCraftProxyStallsRequest
+	10, // 64: SceneSkillClientPlayer.SaveSkillLoadout:input_type -> SaveSkillLoadoutRequest
+	12, // 65: SceneSkillClientPlayer.SwitchSkillLoadout:input_type -> SwitchSkillLoadoutRequest
+	25, // 66: SceneSkillClientPlayer.SealSkillBook:input_type -> SealSkillBookRequest
+	27, // 67: SceneSkillClientPlayer.UnsealSkillBook:input_type -> UnsealSkillBookRequest
+	34, // 68: SceneSkillClientPlayer.ClaimScrollCollectionMilestone:input_type -> ClaimScrollCollectionMilestoneRequest
+	36, // 69: SceneSkillClientPlayer.BatchDismantleSkillBooks:input_type -> BatchDismantleSkillBooksRequest
+	39, // 70: SceneSkillClientPlayer.PostSkillBookWantedOrder:input_type -> PostSkillBookWantedOrderRequest
+	41, // 71: SceneSkillClientPlayer.CancelSkillBookWantedOrder:input_type -> CancelSkillBookWantedOrderRequest
+	43, // 72: SceneSkillClientPlayer.ListSkillBookWantedOrders:input_type -> ListSkillBookWantedOrdersRequest
+	45, // 73: SceneSkillClientPlayer.FulfillSkillBookWantedOrder:input_type -> FulfillSkillBookWantedOrderRequest
+	2,  // 74: SceneSkillClientPlayer.ReleaseSkill:output_type -> ReleaseSkillResponse
+	55, // 75: SceneSkillClientPlayer.NotifySkillUsed:output_type -> Empty
+	55, // 76: SceneSkillClientPlayer.NotifySkillInterrupted:output_type -> Empty
+	6,  // 77: SceneSkillClientPlayer.ListSkills:output_type -> ListSkillsResponse
+	48, // 78: SceneSkillClientPlayer.UpgradeSkill:output_type -> UpgradeSkillResponse
+	18, // 79: SceneSkillClientPlayer.GetSkillCraftingState:output_type -> GetSkillCraftingStateResponse
+	20, // 80: SceneSkillClientPlayer.CraftSkillBook:output_type -> CraftSkillBookResponse
+	22, // 81: SceneSkillClientPlayer.LearnSkillBook:output_type -> LearnSkillBookResponse
+	24, // 82: SceneSkillClientPlayer.DismantleSkillBook:output_type -> DismantleSkillBookResponse
+	30, // 83: SceneSkillClientPlayer.SetCraftProxyStall:output_type -> SetCraftProxyStallResponse
+	33, // 84: SceneSkillClientPlayer.ListCraftProxyStalls:output_type -> ListCraftProxyStallsResponse
+	11, // 85: SceneSkillClientPlayer.SaveSkillLoadout:output_type -> SaveSkillLoadoutResponse
+	13, // 86: SceneSkillClientPlayer.SwitchSkillLoadout:output_type -> SwitchSkillLoadoutResponse
+	26, // 87: SceneSkillClientPlayer.SealSkillBook:output_type -> SealSkillBookResponse
+	28, // 88: SceneSkillClientPlayer.UnsealSkillBook:output_type -> UnsealSkillBookResponse
+	35, // 89: SceneSkillClientPlayer.ClaimScrollCollectionMilestone:output_type -> ClaimScrollCollectionMilestoneResponse
+	37, // 90: SceneSkillClientPlayer.BatchDismantleSkillBooks:output_type -> BatchDismantleSkillBooksResponse
+	40, // 91: SceneSkillClientPlayer.PostSkillBookWantedOrder:output_type -> PostSkillBookWantedOrderResponse
+	42, // 92: SceneSkillClientPlayer.CancelSkillBookWantedOrder:output_type -> CancelSkillBookWantedOrderResponse
+	44, // 93: SceneSkillClientPlayer.ListSkillBookWantedOrders:output_type -> ListSkillBookWantedOrdersResponse
+	46, // 94: SceneSkillClientPlayer.FulfillSkillBookWantedOrder:output_type -> FulfillSkillBookWantedOrderResponse
+	74, // [74:95] is the sub-list for method output_type
+	53, // [53:74] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_skill_proto_init() }
@@ -3323,7 +4601,7 @@ func file_proto_scene_player_skill_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_skill_proto_rawDesc), len(file_proto_scene_player_skill_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   35,
+			NumMessages:   48,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

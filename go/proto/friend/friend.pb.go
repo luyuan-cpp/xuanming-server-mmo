@@ -1517,6 +1517,118 @@ func (x *FriendEventS2C) GetTsMs() int64 {
 	return 0
 }
 
+type BatchCheckSocialRelationsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SideAPlayerIds []uint64               `protobuf:"varint,1,rep,packed,name=side_a_player_ids,json=sideAPlayerIds,proto3" json:"side_a_player_ids,omitempty"`
+	SideBPlayerIds []uint64               `protobuf:"varint,2,rep,packed,name=side_b_player_ids,json=sideBPlayerIds,proto3" json:"side_b_player_ids,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BatchCheckSocialRelationsRequest) Reset() {
+	*x = BatchCheckSocialRelationsRequest{}
+	mi := &file_proto_friend_friend_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchCheckSocialRelationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchCheckSocialRelationsRequest) ProtoMessage() {}
+
+func (x *BatchCheckSocialRelationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_friend_friend_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchCheckSocialRelationsRequest.ProtoReflect.Descriptor instead.
+func (*BatchCheckSocialRelationsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_friend_friend_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *BatchCheckSocialRelationsRequest) GetSideAPlayerIds() []uint64 {
+	if x != nil {
+		return x.SideAPlayerIds
+	}
+	return nil
+}
+
+func (x *BatchCheckSocialRelationsRequest) GetSideBPlayerIds() []uint64 {
+	if x != nil {
+		return x.SideBPlayerIds
+	}
+	return nil
+}
+
+type BatchCheckSocialRelationsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	HasAnyBlock   bool                   `protobuf:"varint,2,opt,name=has_any_block,json=hasAnyBlock,proto3" json:"has_any_block,omitempty"`       // true = 两队成员间存在任意单向或双向拉黑
+	AllAreFriends bool                   `protobuf:"varint,3,opt,name=all_are_friends,json=allAreFriends,proto3" json:"all_are_friends,omitempty"` // true = 双方队长及全体跨队成员均为有效好友（允许绕过闭关免战）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchCheckSocialRelationsResponse) Reset() {
+	*x = BatchCheckSocialRelationsResponse{}
+	mi := &file_proto_friend_friend_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchCheckSocialRelationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchCheckSocialRelationsResponse) ProtoMessage() {}
+
+func (x *BatchCheckSocialRelationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_friend_friend_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchCheckSocialRelationsResponse.ProtoReflect.Descriptor instead.
+func (*BatchCheckSocialRelationsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_friend_friend_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *BatchCheckSocialRelationsResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *BatchCheckSocialRelationsResponse) GetHasAnyBlock() bool {
+	if x != nil {
+		return x.HasAnyBlock
+	}
+	return false
+}
+
+func (x *BatchCheckSocialRelationsResponse) GetAllAreFriends() bool {
+	if x != nil {
+		return x.AllAreFriends
+	}
+	return false
+}
+
 var File_proto_friend_friend_proto protoreflect.FileDescriptor
 
 const file_proto_friend_friend_proto_rawDesc = "" +
@@ -1619,7 +1731,14 @@ const file_proto_friend_friend_proto_rawDesc = "" +
 	"\x06reason\x18\x01 \x01(\x0e2\x1b.friendpb.FriendEventReasonR\x06reason\x12 \n" +
 	"\fby_player_id\x18\x02 \x01(\x04R\n" +
 	"byPlayerId\x12\x13\n" +
-	"\x05ts_ms\x18\x03 \x01(\x03R\x04tsMs*\x87\x01\n" +
+	"\x05ts_ms\x18\x03 \x01(\x03R\x04tsMs\"x\n" +
+	" BatchCheckSocialRelationsRequest\x12)\n" +
+	"\x11side_a_player_ids\x18\x01 \x03(\x04R\x0esideAPlayerIds\x12)\n" +
+	"\x11side_b_player_ids\x18\x02 \x03(\x04R\x0esideBPlayerIds\"\xa5\x01\n" +
+	"!BatchCheckSocialRelationsResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
+	"\rhas_any_block\x18\x02 \x01(\bR\vhasAnyBlock\x12&\n" +
+	"\x0fall_are_friends\x18\x03 \x01(\bR\rallAreFriends*\x87\x01\n" +
 	"\x13FriendRequestStatus\x12\x1a\n" +
 	"\x16FRIEND_REQUEST_UNKNOWN\x10\x00\x12\x1a\n" +
 	"\x16FRIEND_REQUEST_PENDING\x10\x01\x12\x1b\n" +
@@ -1628,7 +1747,7 @@ const file_proto_friend_friend_proto_rawDesc = "" +
 	"\x11FriendEventReason\x12#\n" +
 	"\x1fFRIEND_EVENT_REASON_UNSPECIFIED\x10\x00\x12(\n" +
 	"$FRIEND_EVENT_REASON_REQUEST_RECEIVED\x10\x01\x12(\n" +
-	"$FRIEND_EVENT_REASON_REQUEST_ACCEPTED\x10\x022\xdd\x06\n" +
+	"$FRIEND_EVENT_REASON_REQUEST_ACCEPTED\x10\x022\xda\a\n" +
 	"\x12ClientPlayerFriend\x12D\n" +
 	"\tAddFriend\x12\x1a.friendpb.AddFriendRequest\x1a\x1b.friendpb.AddFriendResponse\x12M\n" +
 	"\fAcceptFriend\x12\x1d.friendpb.AcceptFriendRequest\x1a\x1e.friendpb.AcceptFriendResponse\x12M\n" +
@@ -1641,7 +1760,8 @@ const file_proto_friend_friend_proto_rawDesc = "" +
 	"\n" +
 	"ListBlocks\x12\x1b.friendpb.ListBlocksRequest\x1a\x1c.friendpb.ListBlocksResponse\x12Y\n" +
 	"\x10RecommendFriends\x12!.friendpb.RecommendFriendsRequest\x1a\".friendpb.RecommendFriendsResponse\x12<\n" +
-	"\x11NotifyFriendEvent\x12\x18.friendpb.FriendEventS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\x05\x88\xa8\xc3\x01\x01B\x0eZ\fproto/friendb\x06proto3"
+	"\x11NotifyFriendEvent\x12\x18.friendpb.FriendEventS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12{\n" +
+	"\x19BatchCheckSocialRelations\x12*.friendpb.BatchCheckSocialRelationsRequest\x1a+.friendpb.BatchCheckSocialRelationsResponse\"\x05\x88\x99\xc8\x01\x03\x1a\x05\x88\xa8\xc3\x01\x01B\x0eZ\fproto/friendb\x06proto3"
 
 var (
 	file_proto_friend_friend_proto_rawDescOnce sync.Once
@@ -1656,82 +1776,87 @@ func file_proto_friend_friend_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_friend_friend_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_friend_friend_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_proto_friend_friend_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_proto_friend_friend_proto_goTypes = []any{
-	(FriendRequestStatus)(0),           // 0: friendpb.FriendRequestStatus
-	(FriendEventReason)(0),             // 1: friendpb.FriendEventReason
-	(*FriendEntry)(nil),                // 2: friendpb.FriendEntry
-	(*FriendRequest)(nil),              // 3: friendpb.FriendRequest
-	(*AddFriendRequest)(nil),           // 4: friendpb.AddFriendRequest
-	(*AddFriendResponse)(nil),          // 5: friendpb.AddFriendResponse
-	(*AcceptFriendRequest)(nil),        // 6: friendpb.AcceptFriendRequest
-	(*AcceptFriendResponse)(nil),       // 7: friendpb.AcceptFriendResponse
-	(*RejectFriendRequest)(nil),        // 8: friendpb.RejectFriendRequest
-	(*RejectFriendResponse)(nil),       // 9: friendpb.RejectFriendResponse
-	(*RemoveFriendRequest)(nil),        // 10: friendpb.RemoveFriendRequest
-	(*RemoveFriendResponse)(nil),       // 11: friendpb.RemoveFriendResponse
-	(*GetFriendListRequest)(nil),       // 12: friendpb.GetFriendListRequest
-	(*GetFriendListResponse)(nil),      // 13: friendpb.GetFriendListResponse
-	(*GetPendingRequestsRequest)(nil),  // 14: friendpb.GetPendingRequestsRequest
-	(*GetPendingRequestsResponse)(nil), // 15: friendpb.GetPendingRequestsResponse
-	(*BlockRequest)(nil),               // 16: friendpb.BlockRequest
-	(*BlockResponse)(nil),              // 17: friendpb.BlockResponse
-	(*UnblockRequest)(nil),             // 18: friendpb.UnblockRequest
-	(*UnblockResponse)(nil),            // 19: friendpb.UnblockResponse
-	(*ListBlocksRequest)(nil),          // 20: friendpb.ListBlocksRequest
-	(*BlockEntry)(nil),                 // 21: friendpb.BlockEntry
-	(*ListBlocksResponse)(nil),         // 22: friendpb.ListBlocksResponse
-	(*RecommendFriendsRequest)(nil),    // 23: friendpb.RecommendFriendsRequest
-	(*RecommendEntry)(nil),             // 24: friendpb.RecommendEntry
-	(*RecommendFriendsResponse)(nil),   // 25: friendpb.RecommendFriendsResponse
-	(*FriendEventS2C)(nil),             // 26: friendpb.FriendEventS2C
-	(*base.TipInfoMessage)(nil),        // 27: TipInfoMessage
-	(*base.Empty)(nil),                 // 28: Empty
+	(FriendRequestStatus)(0),                  // 0: friendpb.FriendRequestStatus
+	(FriendEventReason)(0),                    // 1: friendpb.FriendEventReason
+	(*FriendEntry)(nil),                       // 2: friendpb.FriendEntry
+	(*FriendRequest)(nil),                     // 3: friendpb.FriendRequest
+	(*AddFriendRequest)(nil),                  // 4: friendpb.AddFriendRequest
+	(*AddFriendResponse)(nil),                 // 5: friendpb.AddFriendResponse
+	(*AcceptFriendRequest)(nil),               // 6: friendpb.AcceptFriendRequest
+	(*AcceptFriendResponse)(nil),              // 7: friendpb.AcceptFriendResponse
+	(*RejectFriendRequest)(nil),               // 8: friendpb.RejectFriendRequest
+	(*RejectFriendResponse)(nil),              // 9: friendpb.RejectFriendResponse
+	(*RemoveFriendRequest)(nil),               // 10: friendpb.RemoveFriendRequest
+	(*RemoveFriendResponse)(nil),              // 11: friendpb.RemoveFriendResponse
+	(*GetFriendListRequest)(nil),              // 12: friendpb.GetFriendListRequest
+	(*GetFriendListResponse)(nil),             // 13: friendpb.GetFriendListResponse
+	(*GetPendingRequestsRequest)(nil),         // 14: friendpb.GetPendingRequestsRequest
+	(*GetPendingRequestsResponse)(nil),        // 15: friendpb.GetPendingRequestsResponse
+	(*BlockRequest)(nil),                      // 16: friendpb.BlockRequest
+	(*BlockResponse)(nil),                     // 17: friendpb.BlockResponse
+	(*UnblockRequest)(nil),                    // 18: friendpb.UnblockRequest
+	(*UnblockResponse)(nil),                   // 19: friendpb.UnblockResponse
+	(*ListBlocksRequest)(nil),                 // 20: friendpb.ListBlocksRequest
+	(*BlockEntry)(nil),                        // 21: friendpb.BlockEntry
+	(*ListBlocksResponse)(nil),                // 22: friendpb.ListBlocksResponse
+	(*RecommendFriendsRequest)(nil),           // 23: friendpb.RecommendFriendsRequest
+	(*RecommendEntry)(nil),                    // 24: friendpb.RecommendEntry
+	(*RecommendFriendsResponse)(nil),          // 25: friendpb.RecommendFriendsResponse
+	(*FriendEventS2C)(nil),                    // 26: friendpb.FriendEventS2C
+	(*BatchCheckSocialRelationsRequest)(nil),  // 27: friendpb.BatchCheckSocialRelationsRequest
+	(*BatchCheckSocialRelationsResponse)(nil), // 28: friendpb.BatchCheckSocialRelationsResponse
+	(*base.TipInfoMessage)(nil),               // 29: TipInfoMessage
+	(*base.Empty)(nil),                        // 30: Empty
 }
 var file_proto_friend_friend_proto_depIdxs = []int32{
 	0,  // 0: friendpb.FriendRequest.status:type_name -> friendpb.FriendRequestStatus
-	27, // 1: friendpb.AddFriendResponse.error_message:type_name -> TipInfoMessage
-	27, // 2: friendpb.AcceptFriendResponse.error_message:type_name -> TipInfoMessage
-	27, // 3: friendpb.RejectFriendResponse.error_message:type_name -> TipInfoMessage
-	27, // 4: friendpb.RemoveFriendResponse.error_message:type_name -> TipInfoMessage
-	27, // 5: friendpb.GetFriendListResponse.error_message:type_name -> TipInfoMessage
+	29, // 1: friendpb.AddFriendResponse.error_message:type_name -> TipInfoMessage
+	29, // 2: friendpb.AcceptFriendResponse.error_message:type_name -> TipInfoMessage
+	29, // 3: friendpb.RejectFriendResponse.error_message:type_name -> TipInfoMessage
+	29, // 4: friendpb.RemoveFriendResponse.error_message:type_name -> TipInfoMessage
+	29, // 5: friendpb.GetFriendListResponse.error_message:type_name -> TipInfoMessage
 	2,  // 6: friendpb.GetFriendListResponse.friends:type_name -> friendpb.FriendEntry
-	27, // 7: friendpb.GetPendingRequestsResponse.error_message:type_name -> TipInfoMessage
+	29, // 7: friendpb.GetPendingRequestsResponse.error_message:type_name -> TipInfoMessage
 	3,  // 8: friendpb.GetPendingRequestsResponse.requests:type_name -> friendpb.FriendRequest
-	27, // 9: friendpb.BlockResponse.error_message:type_name -> TipInfoMessage
-	27, // 10: friendpb.UnblockResponse.error_message:type_name -> TipInfoMessage
-	27, // 11: friendpb.ListBlocksResponse.error_message:type_name -> TipInfoMessage
+	29, // 9: friendpb.BlockResponse.error_message:type_name -> TipInfoMessage
+	29, // 10: friendpb.UnblockResponse.error_message:type_name -> TipInfoMessage
+	29, // 11: friendpb.ListBlocksResponse.error_message:type_name -> TipInfoMessage
 	21, // 12: friendpb.ListBlocksResponse.blocks:type_name -> friendpb.BlockEntry
-	27, // 13: friendpb.RecommendFriendsResponse.error_message:type_name -> TipInfoMessage
+	29, // 13: friendpb.RecommendFriendsResponse.error_message:type_name -> TipInfoMessage
 	24, // 14: friendpb.RecommendFriendsResponse.candidates:type_name -> friendpb.RecommendEntry
 	1,  // 15: friendpb.FriendEventS2C.reason:type_name -> friendpb.FriendEventReason
-	4,  // 16: friendpb.ClientPlayerFriend.AddFriend:input_type -> friendpb.AddFriendRequest
-	6,  // 17: friendpb.ClientPlayerFriend.AcceptFriend:input_type -> friendpb.AcceptFriendRequest
-	8,  // 18: friendpb.ClientPlayerFriend.RejectFriend:input_type -> friendpb.RejectFriendRequest
-	10, // 19: friendpb.ClientPlayerFriend.RemoveFriend:input_type -> friendpb.RemoveFriendRequest
-	12, // 20: friendpb.ClientPlayerFriend.GetFriendList:input_type -> friendpb.GetFriendListRequest
-	14, // 21: friendpb.ClientPlayerFriend.GetPendingRequests:input_type -> friendpb.GetPendingRequestsRequest
-	16, // 22: friendpb.ClientPlayerFriend.Block:input_type -> friendpb.BlockRequest
-	18, // 23: friendpb.ClientPlayerFriend.Unblock:input_type -> friendpb.UnblockRequest
-	20, // 24: friendpb.ClientPlayerFriend.ListBlocks:input_type -> friendpb.ListBlocksRequest
-	23, // 25: friendpb.ClientPlayerFriend.RecommendFriends:input_type -> friendpb.RecommendFriendsRequest
-	26, // 26: friendpb.ClientPlayerFriend.NotifyFriendEvent:input_type -> friendpb.FriendEventS2C
-	5,  // 27: friendpb.ClientPlayerFriend.AddFriend:output_type -> friendpb.AddFriendResponse
-	7,  // 28: friendpb.ClientPlayerFriend.AcceptFriend:output_type -> friendpb.AcceptFriendResponse
-	9,  // 29: friendpb.ClientPlayerFriend.RejectFriend:output_type -> friendpb.RejectFriendResponse
-	11, // 30: friendpb.ClientPlayerFriend.RemoveFriend:output_type -> friendpb.RemoveFriendResponse
-	13, // 31: friendpb.ClientPlayerFriend.GetFriendList:output_type -> friendpb.GetFriendListResponse
-	15, // 32: friendpb.ClientPlayerFriend.GetPendingRequests:output_type -> friendpb.GetPendingRequestsResponse
-	17, // 33: friendpb.ClientPlayerFriend.Block:output_type -> friendpb.BlockResponse
-	19, // 34: friendpb.ClientPlayerFriend.Unblock:output_type -> friendpb.UnblockResponse
-	22, // 35: friendpb.ClientPlayerFriend.ListBlocks:output_type -> friendpb.ListBlocksResponse
-	25, // 36: friendpb.ClientPlayerFriend.RecommendFriends:output_type -> friendpb.RecommendFriendsResponse
-	28, // 37: friendpb.ClientPlayerFriend.NotifyFriendEvent:output_type -> Empty
-	27, // [27:38] is the sub-list for method output_type
-	16, // [16:27] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	29, // 16: friendpb.BatchCheckSocialRelationsResponse.error_message:type_name -> TipInfoMessage
+	4,  // 17: friendpb.ClientPlayerFriend.AddFriend:input_type -> friendpb.AddFriendRequest
+	6,  // 18: friendpb.ClientPlayerFriend.AcceptFriend:input_type -> friendpb.AcceptFriendRequest
+	8,  // 19: friendpb.ClientPlayerFriend.RejectFriend:input_type -> friendpb.RejectFriendRequest
+	10, // 20: friendpb.ClientPlayerFriend.RemoveFriend:input_type -> friendpb.RemoveFriendRequest
+	12, // 21: friendpb.ClientPlayerFriend.GetFriendList:input_type -> friendpb.GetFriendListRequest
+	14, // 22: friendpb.ClientPlayerFriend.GetPendingRequests:input_type -> friendpb.GetPendingRequestsRequest
+	16, // 23: friendpb.ClientPlayerFriend.Block:input_type -> friendpb.BlockRequest
+	18, // 24: friendpb.ClientPlayerFriend.Unblock:input_type -> friendpb.UnblockRequest
+	20, // 25: friendpb.ClientPlayerFriend.ListBlocks:input_type -> friendpb.ListBlocksRequest
+	23, // 26: friendpb.ClientPlayerFriend.RecommendFriends:input_type -> friendpb.RecommendFriendsRequest
+	26, // 27: friendpb.ClientPlayerFriend.NotifyFriendEvent:input_type -> friendpb.FriendEventS2C
+	27, // 28: friendpb.ClientPlayerFriend.BatchCheckSocialRelations:input_type -> friendpb.BatchCheckSocialRelationsRequest
+	5,  // 29: friendpb.ClientPlayerFriend.AddFriend:output_type -> friendpb.AddFriendResponse
+	7,  // 30: friendpb.ClientPlayerFriend.AcceptFriend:output_type -> friendpb.AcceptFriendResponse
+	9,  // 31: friendpb.ClientPlayerFriend.RejectFriend:output_type -> friendpb.RejectFriendResponse
+	11, // 32: friendpb.ClientPlayerFriend.RemoveFriend:output_type -> friendpb.RemoveFriendResponse
+	13, // 33: friendpb.ClientPlayerFriend.GetFriendList:output_type -> friendpb.GetFriendListResponse
+	15, // 34: friendpb.ClientPlayerFriend.GetPendingRequests:output_type -> friendpb.GetPendingRequestsResponse
+	17, // 35: friendpb.ClientPlayerFriend.Block:output_type -> friendpb.BlockResponse
+	19, // 36: friendpb.ClientPlayerFriend.Unblock:output_type -> friendpb.UnblockResponse
+	22, // 37: friendpb.ClientPlayerFriend.ListBlocks:output_type -> friendpb.ListBlocksResponse
+	25, // 38: friendpb.ClientPlayerFriend.RecommendFriends:output_type -> friendpb.RecommendFriendsResponse
+	30, // 39: friendpb.ClientPlayerFriend.NotifyFriendEvent:output_type -> Empty
+	28, // 40: friendpb.ClientPlayerFriend.BatchCheckSocialRelations:output_type -> friendpb.BatchCheckSocialRelationsResponse
+	29, // [29:41] is the sub-list for method output_type
+	17, // [17:29] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_proto_friend_friend_proto_init() }
@@ -1745,7 +1870,7 @@ func file_proto_friend_friend_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_friend_friend_proto_rawDesc), len(file_proto_friend_friend_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

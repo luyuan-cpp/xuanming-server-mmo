@@ -101,6 +101,15 @@ service MatchService {
   // ---- 全服赛季战队锦标赛《群仙问道赛》V4(docs/planning/season-team-tournament-v4.md):请求只认会话本人 ----
   rpc BanTournamentLeyline(BanTournamentLeylineRequest) returns (BanTournamentLeylineResponse) {}
   rpc GetTournamentHighlights(GetTournamentHighlightsRequest) returns (GetTournamentHighlightsResponse) {}
+
+  // ---- 江湖恩怨与天墉生死状一期(docs/design/battle-jianghu-grudge-duel-bounty-v1.md):请求只认会话本人 ----
+  rpc CreateJianghuDuelInvite(CreateJianghuDuelInviteRequest) returns (CreateJianghuDuelInviteResponse) {}
+  rpc ConfirmJianghuDuelMember(ConfirmJianghuDuelMemberRequest) returns (ConfirmJianghuDuelMemberResponse) {}
+  rpc RespondJianghuDuelInvite(RespondJianghuDuelInviteRequest) returns (RespondJianghuDuelInviteResponse) {}
+  rpc ListJianghuGrudges(ListJianghuGrudgesRequest) returns (ListJianghuGrudgesResponse) {}
+  rpc DismissJianghuGrudge(DismissJianghuGrudgeRequest) returns (DismissJianghuGrudgeResponse) {}
+  rpc NotifyJianghuDuelInvite(JianghuDuelInviteS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+  rpc NotifyJianghuDuelStatus(JianghuDuelStatusS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }
 
 // ----- Match mode config -----
@@ -119,6 +128,7 @@ enum MatchMode {
   MATCH_MODE_GUILD_WAR_PVP = 9; // 帮会全天帮战 V2·真人直打(docs/design/guild-play-v2.md):无匹配池,本人真实养成,公开观战,录回放,胜15/合格负平10。
   MATCH_MODE_GUILD_WAR_SIEGE = 10; // 帮会全天帮战 V2·守旗阵踢馆/灵脉守卫(docs/design/guild-play-v2.md):无匹配池,守方 AI 快照托管,公开观战,胜10/负0。
   MATCH_MODE_SEASON_TOURNAMENT = 11; // 全服赛季战队锦标赛《群仙问道赛》:本人真实养成、公开 L2 观战、强制录回放、不进常规 Elo 榜。
+  MATCH_MODE_JIANGHU_DUEL = 12; // 江湖恩怨·天墉生死状(docs/design/battle-jianghu-grudge-duel-bounty-v1.md):1V1-5V5 真实养成,公开观战,录回放,0 材料,0 Elo。
 }
 
 // ----- Join queue -----
@@ -1175,4 +1185,130 @@ message GetTournamentHighlightsResponse {
   uint32 season_id = 2;
   repeated TournamentHighlightEntry highlights = 3;
   uint64 server_time_ms = 4;
+}
+
+// ---- 江湖恩怨与天墉生死状一期协议(docs/design/battle-jianghu-grudge-duel-bounty-v1.md) ----
+
+enum JianghuWritTier {
+  JIANGHU_WRIT_TIER_UNSPECIFIED = 0;
+  JIANGHU_WRIT_TIER_SILVER = 1;    // 普通战书：直接扣 500 银两
+  JIANGHU_WRIT_TIER_GOLD_ITEM = 2; // 金帖生死状：消耗 1 张 Item 3415（金框全服播报+战报金框）
+}
+
+enum JianghuDuelInviteState {
+  JIANGHU_DUEL_INVITE_STATE_UNSPECIFIED = 0;
+  JIANGHU_DUEL_INVITE_STATE_AWAITING_CHALLENGER_TEAM = 1; // 发起方 2-5 人小队等待本队全员确认
+  JIANGHU_DUEL_INVITE_STATE_PENDING_TARGET = 2;           // 已发送给目标队长，等待拒绝/应战
+  JIANGHU_DUEL_INVITE_STATE_AWAITING_TARGET_TEAM = 3;     // 目标队长已应战，等待目标队全员 30s 确认
+  JIANGHU_DUEL_INVITE_STATE_MATCHED = 4;                  // 已成局进入开战
+  JIANGHU_DUEL_INVITE_STATE_DECLINED = 5;                 // 目标拒绝
+  JIANGHU_DUEL_INVITE_STATE_ABORTED = 6;                  // 超时、队员变动或取消作废（0 扣费）
+}
+
+message JianghuDuelMemberView {
+  uint64 player_id = 1;
+  string name = 2;
+  bool confirmed = 3;
+}
+
+message JianghuDuelInviteView {
+  uint64 duel_invite_id = 1;
+  JianghuWritTier writ_tier = 2;
+  uint32 team_size = 3;
+  JianghuDuelInviteState state = 4;
+  uint64 challenger_captain_id = 5;
+  string challenger_captain_name = 6;
+  uint64 target_captain_id = 7;
+  string target_captain_name = 8;
+  uint64 side_a_guild_id = 9;
+  string side_a_guild_name = 10;
+  uint64 side_b_guild_id = 11;
+  string side_b_guild_name = 12;
+  repeated JianghuDuelMemberView challenger_members = 13;
+  repeated JianghuDuelMemberView target_members = 14;
+  uint64 created_at_ms = 15;
+  uint64 expires_at_ms = 16;
+  uint64 confirm_deadline_ms = 17;
+  uint64 battle_id = 18;
+  uint64 server_time_ms = 19;
+}
+
+message CreateJianghuDuelInviteRequest {
+  uint64 target_player_id = 1;             // 目标单人或目标小队队长
+  JianghuWritTier writ_tier = 2;           // 1 = 500 银两普通战书, 2 = Item 3415 金帖生死状
+  repeated uint64 challenger_member_ids = 3; // 可选：小队约战时发起方成员 ID（含本人，服务端按权威队伍核验）
+  repeated uint64 target_member_ids = 4;     // 可选：小队约战时目标方成员 ID（含目标队长，须与发起方等人数）
+}
+
+message CreateJianghuDuelInviteResponse {
+  TipInfoMessage error_message = 1;
+  JianghuDuelInviteView invite = 2;
+}
+
+message ConfirmJianghuDuelMemberRequest {
+  uint64 duel_invite_id = 1;
+  bool agree = 2; // true = 本人同意参战, false = 本人退出导致整单作废
+}
+
+message ConfirmJianghuDuelMemberResponse {
+  TipInfoMessage error_message = 1;
+  JianghuDuelInviteView invite = 2;
+}
+
+message RespondJianghuDuelInviteRequest {
+  uint64 duel_invite_id = 1;
+  bool accept = 2; // true = 应战（1V1 直接成局；2-5 人启动目标队 30s 全员确认）, false = 拒战
+}
+
+message RespondJianghuDuelInviteResponse {
+  TipInfoMessage error_message = 1;
+  JianghuDuelInviteView invite = 2;
+}
+
+message JianghuGrudgeBattleLogEntry {
+  uint64 battle_id = 1;
+  uint32 outcome_for_self = 2; // 1 = 胜, 2 = 负, 3 = 平
+  uint32 total_rounds = 3;
+  JianghuWritTier writ_tier = 4;
+  uint32 team_size = 5;
+  uint64 finished_at_ms = 6;
+}
+
+message JianghuGrudgeEntry {
+  uint64 peer_player_id = 1;
+  string peer_name = 2;
+  uint32 wins = 3;
+  uint32 losses = 4;
+  uint32 draws = 5;
+  uint32 win_streak = 6;   // 当前对阵该宿敌连胜场次（>=3 触发高光）
+  uint32 lose_streak = 7;  // 当前对阵该宿敌连败场次（>0 显示「待雪耻」）
+  uint64 last_battle_ms = 8;
+  bool peer_online = 9;    // 仅展示是否在线，绝不泄露和平玩家野外地图/坐标
+  repeated JianghuGrudgeBattleLogEntry recent_logs = 10; // 最近 20 场交手战报摘要
+}
+
+message ListJianghuGrudgesRequest {}
+
+message ListJianghuGrudgesResponse {
+  TipInfoMessage error_message = 1;
+  repeated JianghuGrudgeEntry grudges = 2;
+  repeated JianghuDuelInviteView active_invites = 3; // 与本人相关的在途生死状（方便重连恢复）
+  uint64 server_time_ms = 4;
+}
+
+message DismissJianghuGrudgeRequest {
+  uint64 peer_player_id = 1;
+}
+
+message DismissJianghuGrudgeResponse {
+  TipInfoMessage error_message = 1;
+}
+
+message JianghuDuelInviteS2C {
+  JianghuDuelInviteView invite = 1;
+}
+
+message JianghuDuelStatusS2C {
+  JianghuDuelInviteView invite = 1;
+  string reason_code = 2; // "matched" / "declined" / "expired" / "member_declined" / "team_changed"
 }

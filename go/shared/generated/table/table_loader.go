@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "8f1aa7cb914ec44f"
+const SchemaDigest = "8a767b1f823342bd"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -26,6 +26,7 @@ var hotReloadableTables = map[string]bool{
 	"GuildShop": true,
 	"GuildWarMilestone": true,
 	"GuildWarRule": true,
+	"JianghuRule": true,
 	"MessageLimiter": true,
 	"Monster": true,
 	"MysteryMerchantGoods": true,
@@ -91,6 +92,7 @@ var allTableNames = []string{
 	"GuildWarMilestone",
 	"GuildWarRule",
 	"Item",
+	"JianghuRule",
 	"MessageLimiter",
 	"Mirror",
 	"Mission",
@@ -199,6 +201,7 @@ type TableSet struct {
 	GuildWarMilestone *GuildWarMilestoneTableManager
 	GuildWarRule *GuildWarRuleTableManager
 	Item *ItemTableManager
+	JianghuRule *JianghuRuleTableManager
 	MessageLimiter *MessageLimiterTableManager
 	Mirror *MirrorTableManager
 	Mission *MissionTableManager
@@ -303,6 +306,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		GuildWarMilestone: NewGuildWarMilestoneTableManager(),
 		GuildWarRule: NewGuildWarRuleTableManager(),
 		Item: NewItemTableManager(),
+		JianghuRule: NewJianghuRuleTableManager(),
 		MessageLimiter: NewMessageLimiterTableManager(),
 		Mirror: NewMirrorTableManager(),
 		Mission: NewMissionTableManager(),
@@ -473,6 +477,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.Item.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Item table failed: %w", err)
+	}
+	if err := ts.JianghuRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare JianghuRule table failed: %w", err)
 	}
 	if err := ts.MessageLimiter.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare MessageLimiter table failed: %w", err)
@@ -730,6 +737,9 @@ func Commit(ts *TableSet) {
 	if ts.Item != nil {
 		ItemTableManagerInstance.swapSnapshot(ts.Item.snap.Load())
 	}
+	if ts.JianghuRule != nil {
+		JianghuRuleTableManagerInstance.swapSnapshot(ts.JianghuRule.snap.Load())
+	}
 	if ts.MessageLimiter != nil {
 		MessageLimiterTableManagerInstance.swapSnapshot(ts.MessageLimiter.snap.Load())
 	}
@@ -932,6 +942,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		GuildWarMilestone: NewGuildWarMilestoneTableManager(),
 		GuildWarRule: NewGuildWarRuleTableManager(),
 		Item: NewItemTableManager(),
+		JianghuRule: NewJianghuRuleTableManager(),
 		MessageLimiter: NewMessageLimiterTableManager(),
 		Mirror: NewMirrorTableManager(),
 		Mission: NewMissionTableManager(),
@@ -972,7 +983,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(82)
+	wg.Add(83)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1235,6 +1246,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.Item.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load Item table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.JianghuRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load JianghuRule table: %v", err)
 		}
 	}()
 	go func() {

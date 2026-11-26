@@ -20,17 +20,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClientPlayerFriend_AddFriend_FullMethodName          = "/friendpb.ClientPlayerFriend/AddFriend"
-	ClientPlayerFriend_AcceptFriend_FullMethodName       = "/friendpb.ClientPlayerFriend/AcceptFriend"
-	ClientPlayerFriend_RejectFriend_FullMethodName       = "/friendpb.ClientPlayerFriend/RejectFriend"
-	ClientPlayerFriend_RemoveFriend_FullMethodName       = "/friendpb.ClientPlayerFriend/RemoveFriend"
-	ClientPlayerFriend_GetFriendList_FullMethodName      = "/friendpb.ClientPlayerFriend/GetFriendList"
-	ClientPlayerFriend_GetPendingRequests_FullMethodName = "/friendpb.ClientPlayerFriend/GetPendingRequests"
-	ClientPlayerFriend_Block_FullMethodName              = "/friendpb.ClientPlayerFriend/Block"
-	ClientPlayerFriend_Unblock_FullMethodName            = "/friendpb.ClientPlayerFriend/Unblock"
-	ClientPlayerFriend_ListBlocks_FullMethodName         = "/friendpb.ClientPlayerFriend/ListBlocks"
-	ClientPlayerFriend_RecommendFriends_FullMethodName   = "/friendpb.ClientPlayerFriend/RecommendFriends"
-	ClientPlayerFriend_NotifyFriendEvent_FullMethodName  = "/friendpb.ClientPlayerFriend/NotifyFriendEvent"
+	ClientPlayerFriend_AddFriend_FullMethodName                 = "/friendpb.ClientPlayerFriend/AddFriend"
+	ClientPlayerFriend_AcceptFriend_FullMethodName              = "/friendpb.ClientPlayerFriend/AcceptFriend"
+	ClientPlayerFriend_RejectFriend_FullMethodName              = "/friendpb.ClientPlayerFriend/RejectFriend"
+	ClientPlayerFriend_RemoveFriend_FullMethodName              = "/friendpb.ClientPlayerFriend/RemoveFriend"
+	ClientPlayerFriend_GetFriendList_FullMethodName             = "/friendpb.ClientPlayerFriend/GetFriendList"
+	ClientPlayerFriend_GetPendingRequests_FullMethodName        = "/friendpb.ClientPlayerFriend/GetPendingRequests"
+	ClientPlayerFriend_Block_FullMethodName                     = "/friendpb.ClientPlayerFriend/Block"
+	ClientPlayerFriend_Unblock_FullMethodName                   = "/friendpb.ClientPlayerFriend/Unblock"
+	ClientPlayerFriend_ListBlocks_FullMethodName                = "/friendpb.ClientPlayerFriend/ListBlocks"
+	ClientPlayerFriend_RecommendFriends_FullMethodName          = "/friendpb.ClientPlayerFriend/RecommendFriends"
+	ClientPlayerFriend_NotifyFriendEvent_FullMethodName         = "/friendpb.ClientPlayerFriend/NotifyFriendEvent"
+	ClientPlayerFriend_BatchCheckSocialRelations_FullMethodName = "/friendpb.ClientPlayerFriend/BatchCheckSocialRelations"
 )
 
 // ClientPlayerFriendClient is the client API for ClientPlayerFriend service.
@@ -59,6 +60,8 @@ type ClientPlayerFriendClient interface {
 	// 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
 	// 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
 	NotifyFriendEvent(ctx context.Context, in *FriendEventS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// 内部只读批量关系检查(供 match 生死状校验双队两两拉黑与好友关系;客户端不可调用)。
+	BatchCheckSocialRelations(ctx context.Context, in *BatchCheckSocialRelationsRequest, opts ...grpc.CallOption) (*BatchCheckSocialRelationsResponse, error)
 }
 
 type clientPlayerFriendClient struct {
@@ -179,6 +182,16 @@ func (c *clientPlayerFriendClient) NotifyFriendEvent(ctx context.Context, in *Fr
 	return out, nil
 }
 
+func (c *clientPlayerFriendClient) BatchCheckSocialRelations(ctx context.Context, in *BatchCheckSocialRelationsRequest, opts ...grpc.CallOption) (*BatchCheckSocialRelationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchCheckSocialRelationsResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_BatchCheckSocialRelations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerFriendServer is the server API for ClientPlayerFriend service.
 // All implementations must embed UnimplementedClientPlayerFriendServer
 // for forward compatibility.
@@ -205,6 +218,8 @@ type ClientPlayerFriendServer interface {
 	// 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
 	// 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
 	NotifyFriendEvent(context.Context, *FriendEventS2C) (*base.Empty, error)
+	// 内部只读批量关系检查(供 match 生死状校验双队两两拉黑与好友关系;客户端不可调用)。
+	BatchCheckSocialRelations(context.Context, *BatchCheckSocialRelationsRequest) (*BatchCheckSocialRelationsResponse, error)
 	mustEmbedUnimplementedClientPlayerFriendServer()
 }
 
@@ -247,6 +262,9 @@ func (UnimplementedClientPlayerFriendServer) RecommendFriends(context.Context, *
 }
 func (UnimplementedClientPlayerFriendServer) NotifyFriendEvent(context.Context, *FriendEventS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyFriendEvent not implemented")
+}
+func (UnimplementedClientPlayerFriendServer) BatchCheckSocialRelations(context.Context, *BatchCheckSocialRelationsRequest) (*BatchCheckSocialRelationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchCheckSocialRelations not implemented")
 }
 func (UnimplementedClientPlayerFriendServer) mustEmbedUnimplementedClientPlayerFriendServer() {}
 func (UnimplementedClientPlayerFriendServer) testEmbeddedByValue()                            {}
@@ -467,6 +485,24 @@ func _ClientPlayerFriend_NotifyFriendEvent_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerFriend_BatchCheckSocialRelations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchCheckSocialRelationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerFriendServer).BatchCheckSocialRelations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerFriend_BatchCheckSocialRelations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerFriendServer).BatchCheckSocialRelations(ctx, req.(*BatchCheckSocialRelationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerFriend_ServiceDesc is the grpc.ServiceDesc for ClientPlayerFriend service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -517,6 +553,10 @@ var ClientPlayerFriend_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyFriendEvent",
 			Handler:    _ClientPlayerFriend_NotifyFriendEvent_Handler,
+		},
+		{
+			MethodName: "BatchCheckSocialRelations",
+			Handler:    _ClientPlayerFriend_BatchCheckSocialRelations_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

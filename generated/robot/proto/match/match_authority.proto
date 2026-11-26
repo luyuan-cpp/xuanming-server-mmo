@@ -246,6 +246,8 @@ message MatchFormationRecord {
   bytes custom_duel_rules = 27;
   // true = 五行幻境周常爬塔开战（PrepareBattle 注入权威层数与已选符印）。
   bool is_wuxing_tower = 28;
+  // 天墉生死状在成局提交点冻结的 JianghuDuelBattleContext 字节载荷（非生死状为空）。
+  bytes jianghu_duel_context = 29;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -822,4 +824,109 @@ message MatchTournamentPredictionRecord {
   uint32 earned_points = 9;
   uint64 created_ms = 10;
   uint64 updated_ms = 11;
+}
+
+// ---- 江湖恩怨与天墉生死状一期权威表(docs/design/battle-jianghu-grudge-duel-bounty-v1.md) ----
+
+message MatchJianghuDuelInvitationRecord {
+  option (OptionTableName) = "match_jianghu_duel_invitation";
+  option (OptionPrimaryKey) = "duel_invite_id";
+  option (OptionIndex) = "target_captain_id,state,expires_ms,duel_invite_id;challenger_captain_id,state,expires_ms,duel_invite_id";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 duel_invite_id = 1;
+  uint32 writ_tier = 2;             // JianghuWritTier
+  uint32 team_size = 3;             // 1..5
+  uint32 state = 4;                 // JianghuDuelInviteState
+  uint64 challenger_captain_id = 5;
+  uint64 target_captain_id = 6;
+  string challenger_account = 7;
+  uint64 challenger_revision = 8;
+  string target_account = 9;
+  uint64 target_revision = 10;
+  uint32 zone_id = 11;
+  uint64 side_a_guild_id = 12;
+  string side_a_guild_name = 13;
+  uint64 side_b_guild_id = 14;
+  string side_b_guild_name = 15;
+  bytes members_payload = 16;       // 确定性序列化双队成员与确认态快照(JianghuDuelInviteView.challenger/target_members)
+  uint64 created_ms = 17;
+  uint64 expires_ms = 18;
+  uint64 confirm_deadline_ms = 19;
+  uint64 battle_id = 20;
+  uint64 updated_ms = 21;
+}
+
+message MatchJianghuDuelCooldownRecord {
+  option (OptionTableName) = "match_jianghu_duel_cooldown";
+  option (OptionPrimaryKey) = "challenger_player_id,target_player_id";
+  option (OptionIndex) = "challenger_player_id,day_key";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 challenger_player_id = 1;
+  uint64 target_player_id = 2;      // 0 = 角色每日未成局总次数计数行；非 0 = 同目标 5 分钟冷却行
+  uint64 cooldown_until_ms = 3;
+  uint32 day_key = 4;               // UTC+8 05:00 游戏日 YYYYMMDD
+  uint32 daily_unmatched_count = 5;
+  uint64 updated_ms = 6;
+}
+
+message MatchGrudgeRelationRecord {
+  option (OptionTableName) = "match_grudge_relation";
+  option (OptionPrimaryKey) = "player_id,owner_revision,peer_player_id";
+  option (OptionIndex) = "player_id,owner_revision,last_battle_ms";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 owner_revision = 2;        // 过户换人递增后旧持有者恩怨自动隔离清空
+  uint64 peer_player_id = 3;
+  string peer_name = 4;
+  uint32 wins = 5;
+  uint32 losses = 6;
+  uint32 draws = 7;
+  uint32 win_streak = 8;
+  uint32 lose_streak = 9;
+  uint64 last_battle_ms = 10;
+  bool dismissed = 11;              // 单向一笔勾销（再交手时自动重新显现）
+}
+
+message MatchGrudgeLogRecord {
+  option (OptionTableName) = "match_grudge_log";
+  option (OptionPrimaryKey) = "player_id,owner_revision,peer_player_id,battle_id";
+  option (OptionIndex) = "player_id,owner_revision,peer_player_id,finished_ms";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 owner_revision = 2;
+  uint64 peer_player_id = 3;
+  uint64 battle_id = 4;
+  uint32 outcome_for_self = 5;      // 1=胜, 2=负, 3=平
+  uint32 total_rounds = 6;
+  uint32 writ_tier = 7;
+  uint32 team_size = 8;
+  uint64 finished_ms = 9;
+}
+
+message MatchJianghuRefundRecord {
+  option (OptionTableName) = "match_jianghu_refund";
+  option (OptionPrimaryKey) = "duel_invite_id";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 duel_invite_id = 1;
+  uint64 battle_id = 2;
+  uint64 payer_player_id = 3;
+  uint32 writ_tier = 4;
+  uint64 refund_mail_id = 5;
+  string reason = 6;
+  uint64 created_ms = 7;
 }

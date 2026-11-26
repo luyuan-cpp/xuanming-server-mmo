@@ -640,6 +640,9 @@ service GuildService {
   rpc GetGuildWarBattleResult (GetGuildWarBattleResultRequest) returns (GetGuildWarBattleResultResponse);
   rpc NotifyGuildWarAlert (GuildWarAlertS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc InspectFieldWarTargets (InspectFieldWarTargetsRequest) returns (InspectFieldWarTargetsResponse);
+
+  // 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
+  rpc GetGuildJianghuGrudgeWall (GetGuildJianghuGrudgeWallRequest) returns (GetGuildJianghuGrudgeWallResponse);
 }
 
 // ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ─────────────────────────────
@@ -1016,4 +1019,37 @@ message InspectFieldWarTargetsRequest {
 message InspectFieldWarTargetsResponse {
   TipInfoMessage error_message = 1;
   repeated FieldWarTargetBrief targets = 2;
+}
+
+// ── 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md) ──
+
+message GuildJianghuRivalSummaryView {
+  uint64 rival_guild_id = 1;
+  string rival_guild_name = 2;
+  uint32 wins = 3;
+  uint32 losses = 4;
+  uint32 draws = 5;
+  uint64 last_battle_ms = 6;
+}
+
+message GuildJianghuGrudgeRecordView {
+  uint64 battle_id = 1;
+  uint64 rival_guild_id = 2;
+  string rival_guild_name = 3;
+  uint32 outcome_for_guild = 4; // 1=胜, 2=负, 3=平
+  uint32 writ_tier = 5;         // 1=普通战书, 2=金帖生死状
+  uint32 team_size = 6;
+  uint32 total_rounds = 7;
+  string our_captain_name = 8;
+  string rival_captain_name = 9;
+  uint64 finished_ms = 10;
+}
+
+message GetGuildJianghuGrudgeWallRequest {}
+
+message GetGuildJianghuGrudgeWallResponse {
+  TipInfoMessage error_message = 1;
+  uint64 guild_id = 2;
+  repeated GuildJianghuRivalSummaryView rivals = 3;
+  repeated GuildJianghuGrudgeRecordView recent_records = 4;
 }

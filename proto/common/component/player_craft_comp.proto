@@ -9,8 +9,20 @@ message CraftedSkillBookEntry {
   uint32 scroll_id = 3;          // 产出所属卷宗 SkillScrollCraft.id。
   uint32 rarity_tier = 4;        // 0 常规 / 1 稀世绝学。
   bool bound = 5;                // true = 仅自用绑定（消耗绑定残页或绑定天工秘墨产物强制绑定，防洗白）。
-  string crafter_name = 6;       // 宗师署名（非空时展示「宗师 XXX 亲手撰」）。
+  string crafter_name = 6;       // 宗师署名（非空时展示「宗师 XXX 亲手撰」或佩戴雅号印款）。
   uint64 crafter_player_id = 7;  // 宗师玩家 ID（仅追溯，0 = 非宗师出品）。
+}
+
+// 西市常规技能书悬赏求购单（V5：发榜时原子扣托管非绑银两，撤单全退，揭榜交卷扣 5% 银两税销毁）。
+message SkillBookWantedOrder {
+  uint64 order_id = 1;               // 买家维度单调悬赏号（>= 1）。
+  uint64 poster_player_id = 2;       // 发榜买家 player_id。
+  string poster_name = 3;            // 发榜买家角色名。
+  uint32 skill_table_id = 4;         // 求购的常规永久技能 SkillTable.id（必须 rarity_tier == 0）。
+  uint32 scroll_id = 5;              // 所属卷宗 SkillScrollCraft.id。
+  bool require_master_signature = 6; // true = 仅收带宗师署名的可交易书/封卷。
+  uint64 reward_gold = 7;            // 已托管的非绑定悬赏银两（100..50000）。
+  uint64 created_at_sec = 8;         // 发榜 Unix 秒。
 }
 
 // 玩家轻量化手艺熟练度、未学技能书架、已通过书解锁的永久技能及主城原子代打配置。
@@ -18,11 +30,24 @@ message CraftedSkillBookEntry {
 message PlayerCraftComp {
   uint32 forge_mastery_exp = 1;           // 铸器熟练度经验（只增不减；学徒 0..19 / 巧匠 20..59 / 宗师 60+）。
   uint32 scroll_mastery_exp = 2;          // 制卷熟练度经验（只增不减；学徒 0..19 / 巧匠 20..59 / 宗师 60+）。
-  uint64 scroll_craft_revision = 3;       // 技能制书/研习/拆页的持久防重水位，每次成功 +1。
+  uint64 scroll_craft_revision = 3;       // 技能制书/研习/拆页/里程碑/悬赏的持久防重水位，每次成功 +1。
   uint64 next_book_seq = 4;               // 下一本未学技能书的本地单调 ID（0 视为 1）。
   repeated CraftedSkillBookEntry skill_books = 5; // 玩家当前持有的未学技能书（无序，按 book_id 索引）。
   bool proxy_stall_open = 6;              // 宗师是否在主城西市开启原子代打/代制服务摊位。
   uint64 proxy_forge_fee_gold = 7;        // 装备代打/代打磨固定银两手工费（合法区间 50..100）。
   uint64 proxy_scroll_fee_gold = 8;       // 技能制书代制固定银两手工费（合法区间 50..100）。
   repeated uint32 book_unlocked_skill_ids = 9; // 已通过研习技能书永久解锁的 SkillTable.id（永久保值、不重置）。
+  // ── V2 名匠江湖口碑与零属性雅号印款 ──
+  uint32 proxy_orders_completed = 10;     // 累计作为宗师完成的原子代打/代制订单数。
+  uint32 supreme_forged_count = 11;       // 累计亲手或代工产出的 5 档金标极品（非豁免词条）次数。
+  uint32 rare_books_crafted_count = 12;   // 累计亲手或代工撰出的稀世绝学书次数。
+  uint32 master_showcase_tag = 13;        // 预设安全招牌枚举（0..4，无自由文本 UGC 风险）。
+  uint32 equipped_craft_title_id = 14;    // 当前佩戴的零属性名匠雅号印款 ID（0=默认宗师前缀，1..6=里程碑雅号）。
+  // ── V4 典籍藏经阁卷宗收集里程碑位图（docs/rules/bit-storage-and-table-ids.md） ──
+  // bit[(scroll_id - 1) * 2 + 0] = 小成(>=50%)已领，bit[(scroll_id - 1) * 2 + 1] = 圆满(100%)已领；低位在前、去尾0、高位未知bit透传。
+  bytes claimed_scroll_milestone_bits = 15;
+  // ── V5 江湖工坊社交闭环：封卷悬赏求书单与同队情义免税代打 ──
+  repeated SkillBookWantedOrder wanted_orders = 16; // 本人当前挂出的悬赏求书单（最多 3 条，无序按 order_id 索引）。
+  uint64 next_wanted_order_seq = 17;      // 下一条悬赏求书单本地单调 ID（0 视为 1）。
+  bool team_free_proxy = 18;              // true = 对同队（TeamId 相同且非 0）玩家实行情义 0 手工费原子代打/代制。
 }

@@ -74,6 +74,22 @@ extern const ::google::protobuf::internal::ClassDataFull CancelBattlePrepareRequ
 #else
 extern const CancelBattlePrepareRequestGlobalsTypeInternal CancelBattlePrepareRequest_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class CheckJianghuDuelEligibilityRequest;
+struct CheckJianghuDuelEligibilityRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CheckJianghuDuelEligibilityRequestGlobalsTypeInternal CheckJianghuDuelEligibilityRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CheckJianghuDuelEligibilityRequest_class_data_;
+#else
+extern const CheckJianghuDuelEligibilityRequestGlobalsTypeInternal CheckJianghuDuelEligibilityRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CheckJianghuDuelEligibilityResponse;
+struct CheckJianghuDuelEligibilityResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CheckJianghuDuelEligibilityResponseGlobalsTypeInternal CheckJianghuDuelEligibilityResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CheckJianghuDuelEligibilityResponse_class_data_;
+#else
+extern const CheckJianghuDuelEligibilityResponseGlobalsTypeInternal CheckJianghuDuelEligibilityResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class CreateSceneRequest;
 struct CreateSceneRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -105,6 +121,22 @@ extern GameNodeConnectRequestGlobalsTypeInternal GameNodeConnectRequest_globals_
 extern const ::google::protobuf::internal::ClassDataFull GameNodeConnectRequest_class_data_;
 #else
 extern const GameNodeConnectRequestGlobalsTypeInternal GameNodeConnectRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class JianghuDuelPrepareFee;
+struct JianghuDuelPrepareFeeGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern JianghuDuelPrepareFeeGlobalsTypeInternal JianghuDuelPrepareFee_globals_;
+extern const ::google::protobuf::internal::ClassDataFull JianghuDuelPrepareFee_class_data_;
+#else
+extern const JianghuDuelPrepareFeeGlobalsTypeInternal JianghuDuelPrepareFee_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class JianghuPlayerEligibilityEntry;
+struct JianghuPlayerEligibilityEntryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern JianghuPlayerEligibilityEntryGlobalsTypeInternal JianghuPlayerEligibilityEntry_globals_;
+extern const ::google::protobuf::internal::ClassDataFull JianghuPlayerEligibilityEntry_class_data_;
+#else
+extern const JianghuPlayerEligibilityEntryGlobalsTypeInternal JianghuPlayerEligibilityEntry_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerEnterGameNodeRequest;
 struct PlayerEnterGameNodeRequestGlobalsTypeInternal;
@@ -925,6 +957,468 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerEnterGameNodeRequest final : 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JianghuPlayerEligibilityEntry final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:JianghuPlayerEligibilityEntry) */ {
+ public:
+  inline JianghuPlayerEligibilityEntry() : JianghuPlayerEligibilityEntry(nullptr) {}
+  ~JianghuPlayerEligibilityEntry() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JianghuPlayerEligibilityEntry));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr JianghuPlayerEligibilityEntry(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline JianghuPlayerEligibilityEntry(const JianghuPlayerEligibilityEntry& from) : JianghuPlayerEligibilityEntry(nullptr, from) {}
+  inline JianghuPlayerEligibilityEntry(JianghuPlayerEligibilityEntry&& from) noexcept : JianghuPlayerEligibilityEntry(nullptr, ::std::move(from)) {}
+  inline JianghuPlayerEligibilityEntry& operator=(const JianghuPlayerEligibilityEntry& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JianghuPlayerEligibilityEntry& operator=(JianghuPlayerEligibilityEntry&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const JianghuPlayerEligibilityEntry& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<JianghuPlayerEligibilityEntry>(&JianghuPlayerEligibilityEntry_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(JianghuPlayerEligibilityEntry& a, JianghuPlayerEligibilityEntry& b) { a.Swap(&b); }
+  inline void Swap(JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<JianghuPlayerEligibilityEntry>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const JianghuPlayerEligibilityEntry& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const JianghuPlayerEligibilityEntry& from) { JianghuPlayerEligibilityEntry::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "JianghuPlayerEligibilityEntry"; }
+
+  explicit JianghuPlayerEligibilityEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  JianghuPlayerEligibilityEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JianghuPlayerEligibilityEntry& from);
+  JianghuPlayerEligibilityEntry(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, JianghuPlayerEligibilityEntry&& from) noexcept
+      : JianghuPlayerEligibilityEntry(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kOnlineOnNodeFieldNumber = 2,
+    kDuelRefuseStrangersFieldNumber = 3,
+  };
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // bool online_on_node = 2;
+  void clear_online_on_node() ;
+  [[nodiscard]] bool online_on_node() const;
+  void set_online_on_node(bool value);
+
+  private:
+  bool _internal_online_on_node() const;
+  void _internal_set_online_on_node(bool value);
+
+  public:
+  // bool duel_refuse_strangers = 3;
+  void clear_duel_refuse_strangers() ;
+  [[nodiscard]] bool duel_refuse_strangers() const;
+  void set_duel_refuse_strangers(bool value);
+
+  private:
+  bool _internal_duel_refuse_strangers() const;
+  void _internal_set_duel_refuse_strangers(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:JianghuPlayerEligibilityEntry)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const JianghuPlayerEligibilityEntry& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    bool online_on_node_;
+    bool duel_refuse_strangers_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JianghuDuelPrepareFee final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:JianghuDuelPrepareFee) */ {
+ public:
+  inline JianghuDuelPrepareFee() : JianghuDuelPrepareFee(nullptr) {}
+  ~JianghuDuelPrepareFee() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JianghuDuelPrepareFee* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JianghuDuelPrepareFee));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr JianghuDuelPrepareFee(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline JianghuDuelPrepareFee(const JianghuDuelPrepareFee& from) : JianghuDuelPrepareFee(nullptr, from) {}
+  inline JianghuDuelPrepareFee(JianghuDuelPrepareFee&& from) noexcept : JianghuDuelPrepareFee(nullptr, ::std::move(from)) {}
+  inline JianghuDuelPrepareFee& operator=(const JianghuDuelPrepareFee& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JianghuDuelPrepareFee& operator=(JianghuDuelPrepareFee&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const JianghuDuelPrepareFee& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<JianghuDuelPrepareFee>(&JianghuDuelPrepareFee_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(JianghuDuelPrepareFee& a, JianghuDuelPrepareFee& b) { a.Swap(&b); }
+  inline void Swap(JianghuDuelPrepareFee* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JianghuDuelPrepareFee* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] JianghuDuelPrepareFee* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<JianghuDuelPrepareFee>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const JianghuDuelPrepareFee& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const JianghuDuelPrepareFee& from) { JianghuDuelPrepareFee::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(JianghuDuelPrepareFee* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "JianghuDuelPrepareFee"; }
+
+  explicit JianghuDuelPrepareFee(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  JianghuDuelPrepareFee(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JianghuDuelPrepareFee& from);
+  JianghuDuelPrepareFee(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, JianghuDuelPrepareFee&& from) noexcept
+      : JianghuDuelPrepareFee(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDuelInviteIdFieldNumber = 1,
+    kWritTierFieldNumber = 2,
+    kItemConfigIdFieldNumber = 3,
+    kSilverCostFieldNumber = 4,
+  };
+  // uint64 duel_invite_id = 1;
+  void clear_duel_invite_id() ;
+  [[nodiscard]] ::uint64_t duel_invite_id() const;
+  void set_duel_invite_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_duel_invite_id() const;
+  void _internal_set_duel_invite_id(::uint64_t value);
+
+  public:
+  // uint32 writ_tier = 2;
+  void clear_writ_tier() ;
+  [[nodiscard]] ::uint32_t writ_tier() const;
+  void set_writ_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_writ_tier() const;
+  void _internal_set_writ_tier(::uint32_t value);
+
+  public:
+  // uint32 item_config_id = 3;
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // uint64 silver_cost = 4;
+  void clear_silver_cost() ;
+  [[nodiscard]] ::uint64_t silver_cost() const;
+  void set_silver_cost(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_silver_cost() const;
+  void _internal_set_silver_cost(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:JianghuDuelPrepareFee)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const JianghuDuelPrepareFee& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t duel_invite_id_;
+    ::uint32_t writ_tier_;
+    ::uint32_t item_config_id_;
+    ::uint64_t silver_cost_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DestroySceneRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:DestroySceneRequest) */ {
  public:
@@ -1422,6 +1916,266 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckJianghuDuelEligibilityRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:CheckJianghuDuelEligibilityRequest) */ {
+ public:
+  inline CheckJianghuDuelEligibilityRequest() : CheckJianghuDuelEligibilityRequest(nullptr) {}
+  ~CheckJianghuDuelEligibilityRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CheckJianghuDuelEligibilityRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CheckJianghuDuelEligibilityRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CheckJianghuDuelEligibilityRequest(const CheckJianghuDuelEligibilityRequest& from) : CheckJianghuDuelEligibilityRequest(nullptr, from) {}
+  inline CheckJianghuDuelEligibilityRequest(CheckJianghuDuelEligibilityRequest&& from) noexcept : CheckJianghuDuelEligibilityRequest(nullptr, ::std::move(from)) {}
+  inline CheckJianghuDuelEligibilityRequest& operator=(const CheckJianghuDuelEligibilityRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CheckJianghuDuelEligibilityRequest& operator=(CheckJianghuDuelEligibilityRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CheckJianghuDuelEligibilityRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheckJianghuDuelEligibilityRequest>(&CheckJianghuDuelEligibilityRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(CheckJianghuDuelEligibilityRequest& a, CheckJianghuDuelEligibilityRequest& b) { a.Swap(&b); }
+  inline void Swap(CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CheckJianghuDuelEligibilityRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CheckJianghuDuelEligibilityRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CheckJianghuDuelEligibilityRequest& from) { CheckJianghuDuelEligibilityRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "CheckJianghuDuelEligibilityRequest"; }
+
+  explicit CheckJianghuDuelEligibilityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CheckJianghuDuelEligibilityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CheckJianghuDuelEligibilityRequest& from);
+  CheckJianghuDuelEligibilityRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CheckJianghuDuelEligibilityRequest&& from) noexcept
+      : CheckJianghuDuelEligibilityRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 1,
+    kPayerPlayerIdFieldNumber = 2,
+    kWritTierFieldNumber = 3,
+    kItemConfigIdFieldNumber = 4,
+    kSilverCostFieldNumber = 5,
+  };
+  // repeated uint64 player_ids = 1;
+  [[nodiscard]] int player_ids_size()
+      const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  [[nodiscard]] ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
+
+  public:
+  // uint64 payer_player_id = 2;
+  void clear_payer_player_id() ;
+  [[nodiscard]] ::uint64_t payer_player_id() const;
+  void set_payer_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_payer_player_id() const;
+  void _internal_set_payer_player_id(::uint64_t value);
+
+  public:
+  // uint32 writ_tier = 3;
+  void clear_writ_tier() ;
+  [[nodiscard]] ::uint32_t writ_tier() const;
+  void set_writ_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_writ_tier() const;
+  void _internal_set_writ_tier(::uint32_t value);
+
+  public:
+  // uint32 item_config_id = 4;
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // uint64 silver_cost = 5;
+  void clear_silver_cost() ;
+  [[nodiscard]] ::uint64_t silver_cost() const;
+  void set_silver_cost(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_silver_cost() const;
+  void _internal_set_silver_cost(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:CheckJianghuDuelEligibilityRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CheckJianghuDuelEligibilityRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::uint64_t payer_player_id_;
+    ::uint32_t writ_tier_;
+    ::uint32_t item_config_id_;
+    ::uint64_t silver_cost_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelBattlePrepareRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:CancelBattlePrepareRequest) */ {
  public:
@@ -1478,7 +2232,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelBattlePrepareRequest final : 
   [[nodiscard]] static const CancelBattlePrepareRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelBattlePrepareRequest>(&CancelBattlePrepareRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(CancelBattlePrepareRequest& a, CancelBattlePrepareRequest& b) { a.Swap(&b); }
   inline void Swap(CancelBattlePrepareRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1691,7 +2445,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SealAccountRoleTradeRequest final :
   [[nodiscard]] static const SealAccountRoleTradeRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SealAccountRoleTradeRequest>(&SealAccountRoleTradeRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(SealAccountRoleTradeRequest& a, SealAccountRoleTradeRequest& b) { a.Swap(&b); }
   inline void Swap(SealAccountRoleTradeRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2072,6 +2826,248 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameNodeConnectRequest final : publ
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::NetworkAddress* PROTOBUF_NULLABLE rpc_client_;
     ::uint32_t gate_node_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckJianghuDuelEligibilityResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:CheckJianghuDuelEligibilityResponse) */ {
+ public:
+  inline CheckJianghuDuelEligibilityResponse() : CheckJianghuDuelEligibilityResponse(nullptr) {}
+  ~CheckJianghuDuelEligibilityResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CheckJianghuDuelEligibilityResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CheckJianghuDuelEligibilityResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CheckJianghuDuelEligibilityResponse(const CheckJianghuDuelEligibilityResponse& from) : CheckJianghuDuelEligibilityResponse(nullptr, from) {}
+  inline CheckJianghuDuelEligibilityResponse(CheckJianghuDuelEligibilityResponse&& from) noexcept : CheckJianghuDuelEligibilityResponse(nullptr, ::std::move(from)) {}
+  inline CheckJianghuDuelEligibilityResponse& operator=(const CheckJianghuDuelEligibilityResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CheckJianghuDuelEligibilityResponse& operator=(CheckJianghuDuelEligibilityResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CheckJianghuDuelEligibilityResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheckJianghuDuelEligibilityResponse>(&CheckJianghuDuelEligibilityResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(CheckJianghuDuelEligibilityResponse& a, CheckJianghuDuelEligibilityResponse& b) { a.Swap(&b); }
+  inline void Swap(CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CheckJianghuDuelEligibilityResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CheckJianghuDuelEligibilityResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CheckJianghuDuelEligibilityResponse& from) { CheckJianghuDuelEligibilityResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "CheckJianghuDuelEligibilityResponse"; }
+
+  explicit CheckJianghuDuelEligibilityResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CheckJianghuDuelEligibilityResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CheckJianghuDuelEligibilityResponse& from);
+  CheckJianghuDuelEligibilityResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CheckJianghuDuelEligibilityResponse&& from) noexcept
+      : CheckJianghuDuelEligibilityResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayersFieldNumber = 2,
+    kErrorMessageFieldNumber = 1,
+    kPayerHasSufficientFeeFieldNumber = 3,
+  };
+  // repeated .JianghuPlayerEligibilityEntry players = 2;
+  [[nodiscard]] int players_size()
+      const;
+  private:
+  int _internal_players_size() const;
+
+  public:
+  void clear_players() ;
+  [[nodiscard]] const ::JianghuPlayerEligibilityEntry& players(int index) const;
+  [[nodiscard]] ::JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL mutable_players(int index);
+  ::JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL add_players();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>&
+  players() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>* PROTOBUF_NONNULL
+  mutable_players();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>& _internal_players() const;
+  ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>* PROTOBUF_NONNULL _internal_mutable_players();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // bool payer_has_sufficient_fee = 3;
+  void clear_payer_has_sufficient_fee() ;
+  [[nodiscard]] bool payer_has_sufficient_fee() const;
+  void set_payer_has_sufficient_fee(bool value);
+
+  private:
+  bool _internal_payer_has_sufficient_fee() const;
+  void _internal_set_payer_has_sufficient_fee(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:CheckJianghuDuelEligibilityResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CheckJianghuDuelEligibilityResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::JianghuPlayerEligibilityEntry > players_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    bool payer_has_sufficient_fee_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2911,6 +3907,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
     kRankedContextFieldNumber = 6,
     kActivityContextFieldNumber = 9,
     kCustomDuelRulesFieldNumber = 11,
+    kJianghuDuelFeeFieldNumber = 12,
     kPlayerIdFieldNumber = 1,
     kBattleIdFieldNumber = 2,
     kDeadlineMsFieldNumber = 4,
@@ -2966,6 +3963,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
   private:
   const ::CustomDuelRules& _internal_custom_duel_rules() const;
   ::CustomDuelRules* PROTOBUF_NONNULL _internal_mutable_custom_duel_rules();
+
+  public:
+  // .JianghuDuelPrepareFee jianghu_duel_fee = 12;
+  [[nodiscard]] bool has_jianghu_duel_fee()
+      const;
+  void clear_jianghu_duel_fee() ;
+  [[nodiscard]] const ::JianghuDuelPrepareFee& jianghu_duel_fee() const;
+  [[nodiscard]] ::JianghuDuelPrepareFee* PROTOBUF_NULLABLE release_jianghu_duel_fee();
+  ::JianghuDuelPrepareFee* PROTOBUF_NONNULL mutable_jianghu_duel_fee();
+  void set_allocated_jianghu_duel_fee(::JianghuDuelPrepareFee* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_jianghu_duel_fee(::JianghuDuelPrepareFee* PROTOBUF_NULLABLE value);
+  ::JianghuDuelPrepareFee* PROTOBUF_NULLABLE unsafe_arena_release_jianghu_duel_fee();
+
+  private:
+  const ::JianghuDuelPrepareFee& _internal_jianghu_duel_fee() const;
+  ::JianghuDuelPrepareFee* PROTOBUF_NONNULL _internal_mutable_jianghu_duel_fee();
 
   public:
   // uint64 player_id = 1;
@@ -3052,8 +4065,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
-                          3, 0,
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3084,6 +4097,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
     ::RankedMatchContext* PROTOBUF_NULLABLE ranked_context_;
     ::BattleActivityContext* PROTOBUF_NULLABLE activity_context_;
     ::CustomDuelRules* PROTOBUF_NULLABLE custom_duel_rules_;
+    ::JianghuDuelPrepareFee* PROTOBUF_NULLABLE jianghu_duel_fee_;
     ::uint64_t player_id_;
     ::uint64_t battle_id_;
     ::uint64_t deadline_ms_;
@@ -3155,7 +4169,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
   [[nodiscard]] static const PrepareBattleResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PrepareBattleResponse>(&PrepareBattleResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(PrepareBattleResponse& a, PrepareBattleResponse& b) { a.Swap(&b); }
   inline void Swap(PrepareBattleResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3391,6 +4405,10 @@ class Scene : public ::google::protobuf::Service {
                         const ::NodeHandshakeRequest* PROTOBUF_NONNULL request,
                         ::NodeHandshakeResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void CheckJianghuDuelEligibility(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL request,
+                        ::CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -3454,6 +4472,10 @@ class Scene_Stub final : public Scene {
   void NodeHandshake(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::NodeHandshakeRequest* PROTOBUF_NONNULL request,
                         ::NodeHandshakeResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void CheckJianghuDuelEligibility(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL request,
+                        ::CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -4538,7 +5560,7 @@ inline void DestroySceneRequest::_internal_set_placement_generation(::uint64_t v
 inline void PrepareBattleRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t PrepareBattleRequest::player_id() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.player_id)
@@ -4546,7 +5568,7 @@ inline ::uint64_t PrepareBattleRequest::player_id() const {
 }
 inline void PrepareBattleRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.player_id)
 }
 inline ::uint64_t PrepareBattleRequest::_internal_player_id() const {
@@ -4562,7 +5584,7 @@ inline void PrepareBattleRequest::_internal_set_player_id(::uint64_t value) {
 inline void PrepareBattleRequest::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t PrepareBattleRequest::battle_id() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.battle_id)
@@ -4570,7 +5592,7 @@ inline ::uint64_t PrepareBattleRequest::battle_id() const {
 }
 inline void PrepareBattleRequest::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.battle_id)
 }
 inline ::uint64_t PrepareBattleRequest::_internal_battle_id() const {
@@ -4586,7 +5608,7 @@ inline void PrepareBattleRequest::_internal_set_battle_id(::uint64_t value) {
 inline void PrepareBattleRequest::clear_battle_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t PrepareBattleRequest::battle_node_id() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.battle_node_id)
@@ -4594,7 +5616,7 @@ inline ::uint32_t PrepareBattleRequest::battle_node_id() const {
 }
 inline void PrepareBattleRequest::set_battle_node_id(::uint32_t value) {
   _internal_set_battle_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.battle_node_id)
 }
 inline ::uint32_t PrepareBattleRequest::_internal_battle_node_id() const {
@@ -4610,7 +5632,7 @@ inline void PrepareBattleRequest::_internal_set_battle_node_id(::uint32_t value)
 inline void PrepareBattleRequest::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t PrepareBattleRequest::deadline_ms() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.deadline_ms)
@@ -4618,7 +5640,7 @@ inline ::uint64_t PrepareBattleRequest::deadline_ms() const {
 }
 inline void PrepareBattleRequest::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.deadline_ms)
 }
 inline ::uint64_t PrepareBattleRequest::_internal_deadline_ms() const {
@@ -4634,7 +5656,7 @@ inline void PrepareBattleRequest::_internal_set_deadline_ms(::uint64_t value) {
 inline void PrepareBattleRequest::clear_prepare_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.prepare_deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PrepareBattleRequest::prepare_deadline_ms() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.prepare_deadline_ms)
@@ -4642,7 +5664,7 @@ inline ::uint64_t PrepareBattleRequest::prepare_deadline_ms() const {
 }
 inline void PrepareBattleRequest::set_prepare_deadline_ms(::uint64_t value) {
   _internal_set_prepare_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.prepare_deadline_ms)
 }
 inline ::uint64_t PrepareBattleRequest::_internal_prepare_deadline_ms() const {
@@ -4751,7 +5773,7 @@ inline void PrepareBattleRequest::set_allocated_ranked_context(::RankedMatchCont
 inline void PrepareBattleRequest::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t PrepareBattleRequest::battle_config_id() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.battle_config_id)
@@ -4759,7 +5781,7 @@ inline ::uint32_t PrepareBattleRequest::battle_config_id() const {
 }
 inline void PrepareBattleRequest::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.battle_config_id)
 }
 inline ::uint32_t PrepareBattleRequest::_internal_battle_config_id() const {
@@ -4775,7 +5797,7 @@ inline void PrepareBattleRequest::_internal_set_battle_config_id(::uint32_t valu
 inline void PrepareBattleRequest::clear_match_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t PrepareBattleRequest::match_mode() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.match_mode)
@@ -4783,7 +5805,7 @@ inline ::uint32_t PrepareBattleRequest::match_mode() const {
 }
 inline void PrepareBattleRequest::set_match_mode(::uint32_t value) {
   _internal_set_match_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.match_mode)
 }
 inline ::uint32_t PrepareBattleRequest::_internal_match_mode() const {
@@ -4892,7 +5914,7 @@ inline void PrepareBattleRequest::set_allocated_activity_context(::BattleActivit
 inline void PrepareBattleRequest::clear_is_wuxing_tower() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_wuxing_tower_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline bool PrepareBattleRequest::is_wuxing_tower() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.is_wuxing_tower)
@@ -4900,7 +5922,7 @@ inline bool PrepareBattleRequest::is_wuxing_tower() const {
 }
 inline void PrepareBattleRequest::set_is_wuxing_tower(bool value) {
   _internal_set_is_wuxing_tower(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.is_wuxing_tower)
 }
 inline bool PrepareBattleRequest::_internal_is_wuxing_tower() const {
@@ -5003,6 +6025,607 @@ inline void PrepareBattleRequest::set_allocated_custom_duel_rules(::CustomDuelRu
 
   _impl_.custom_duel_rules_ = reinterpret_cast<::CustomDuelRules*>(value);
   // @@protoc_insertion_point(field_set_allocated:PrepareBattleRequest.custom_duel_rules)
+}
+
+// .JianghuDuelPrepareFee jianghu_duel_fee = 12;
+inline bool PrepareBattleRequest::has_jianghu_duel_fee() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.jianghu_duel_fee_ != nullptr);
+  return value;
+}
+inline void PrepareBattleRequest::clear_jianghu_duel_fee() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.jianghu_duel_fee_ != nullptr) _impl_.jianghu_duel_fee_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::JianghuDuelPrepareFee& PrepareBattleRequest::_internal_jianghu_duel_fee() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::JianghuDuelPrepareFee* p = _impl_.jianghu_duel_fee_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::JianghuDuelPrepareFee>(&::JianghuDuelPrepareFee_globals_);
+}
+inline const ::JianghuDuelPrepareFee& PrepareBattleRequest::jianghu_duel_fee() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PrepareBattleRequest.jianghu_duel_fee)
+  return _internal_jianghu_duel_fee();
+}
+inline void PrepareBattleRequest::unsafe_arena_set_allocated_jianghu_duel_fee(
+    ::JianghuDuelPrepareFee* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.jianghu_duel_fee_);
+  }
+  _impl_.jianghu_duel_fee_ = reinterpret_cast<::JianghuDuelPrepareFee*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PrepareBattleRequest.jianghu_duel_fee)
+}
+inline ::JianghuDuelPrepareFee* PROTOBUF_NULLABLE PrepareBattleRequest::release_jianghu_duel_fee() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::JianghuDuelPrepareFee* released = _impl_.jianghu_duel_fee_;
+  _impl_.jianghu_duel_fee_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::JianghuDuelPrepareFee* PROTOBUF_NULLABLE PrepareBattleRequest::unsafe_arena_release_jianghu_duel_fee() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PrepareBattleRequest.jianghu_duel_fee)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::JianghuDuelPrepareFee* temp = _impl_.jianghu_duel_fee_;
+  _impl_.jianghu_duel_fee_ = nullptr;
+  return temp;
+}
+inline ::JianghuDuelPrepareFee* PROTOBUF_NONNULL PrepareBattleRequest::_internal_mutable_jianghu_duel_fee() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.jianghu_duel_fee_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::JianghuDuelPrepareFee>(GetArena());
+    _impl_.jianghu_duel_fee_ = reinterpret_cast<::JianghuDuelPrepareFee*>(p);
+  }
+  return _impl_.jianghu_duel_fee_;
+}
+inline ::JianghuDuelPrepareFee* PROTOBUF_NONNULL PrepareBattleRequest::mutable_jianghu_duel_fee()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::JianghuDuelPrepareFee* _msg = _internal_mutable_jianghu_duel_fee();
+  // @@protoc_insertion_point(field_mutable:PrepareBattleRequest.jianghu_duel_fee)
+  return _msg;
+}
+inline void PrepareBattleRequest::set_allocated_jianghu_duel_fee(::JianghuDuelPrepareFee* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.jianghu_duel_fee_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.jianghu_duel_fee_ = reinterpret_cast<::JianghuDuelPrepareFee*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PrepareBattleRequest.jianghu_duel_fee)
+}
+
+// -------------------------------------------------------------------
+
+// JianghuDuelPrepareFee
+
+// uint64 duel_invite_id = 1;
+inline void JianghuDuelPrepareFee::clear_duel_invite_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duel_invite_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t JianghuDuelPrepareFee::duel_invite_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelPrepareFee.duel_invite_id)
+  return _internal_duel_invite_id();
+}
+inline void JianghuDuelPrepareFee::set_duel_invite_id(::uint64_t value) {
+  _internal_set_duel_invite_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:JianghuDuelPrepareFee.duel_invite_id)
+}
+inline ::uint64_t JianghuDuelPrepareFee::_internal_duel_invite_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.duel_invite_id_;
+}
+inline void JianghuDuelPrepareFee::_internal_set_duel_invite_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duel_invite_id_ = value;
+}
+
+// uint32 writ_tier = 2;
+inline void JianghuDuelPrepareFee::clear_writ_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writ_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t JianghuDuelPrepareFee::writ_tier() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelPrepareFee.writ_tier)
+  return _internal_writ_tier();
+}
+inline void JianghuDuelPrepareFee::set_writ_tier(::uint32_t value) {
+  _internal_set_writ_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:JianghuDuelPrepareFee.writ_tier)
+}
+inline ::uint32_t JianghuDuelPrepareFee::_internal_writ_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.writ_tier_;
+}
+inline void JianghuDuelPrepareFee::_internal_set_writ_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writ_tier_ = value;
+}
+
+// uint32 item_config_id = 3;
+inline void JianghuDuelPrepareFee::clear_item_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t JianghuDuelPrepareFee::item_config_id() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelPrepareFee.item_config_id)
+  return _internal_item_config_id();
+}
+inline void JianghuDuelPrepareFee::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:JianghuDuelPrepareFee.item_config_id)
+}
+inline ::uint32_t JianghuDuelPrepareFee::_internal_item_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_config_id_;
+}
+inline void JianghuDuelPrepareFee::_internal_set_item_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = value;
+}
+
+// uint64 silver_cost = 4;
+inline void JianghuDuelPrepareFee::clear_silver_cost() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_cost_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t JianghuDuelPrepareFee::silver_cost() const {
+  // @@protoc_insertion_point(field_get:JianghuDuelPrepareFee.silver_cost)
+  return _internal_silver_cost();
+}
+inline void JianghuDuelPrepareFee::set_silver_cost(::uint64_t value) {
+  _internal_set_silver_cost(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:JianghuDuelPrepareFee.silver_cost)
+}
+inline ::uint64_t JianghuDuelPrepareFee::_internal_silver_cost() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.silver_cost_;
+}
+inline void JianghuDuelPrepareFee::_internal_set_silver_cost(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_cost_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CheckJianghuDuelEligibilityRequest
+
+// repeated uint64 player_ids = 1;
+inline int CheckJianghuDuelEligibilityRequest::_internal_player_ids_size() const {
+  return _internal_player_ids().size();
+}
+inline int CheckJianghuDuelEligibilityRequest::player_ids_size() const {
+  return _internal_player_ids_size();
+}
+inline void CheckJianghuDuelEligibilityRequest::clear_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t CheckJianghuDuelEligibilityRequest::player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityRequest.player_ids)
+  return _internal_player_ids().Get(index);
+}
+inline void CheckJianghuDuelEligibilityRequest::set_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityRequest.player_ids)
+}
+inline void CheckJianghuDuelEligibilityRequest::add_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:CheckJianghuDuelEligibilityRequest.player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& CheckJianghuDuelEligibilityRequest::player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:CheckJianghuDuelEligibilityRequest.player_ids)
+  return _internal_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL CheckJianghuDuelEligibilityRequest::mutable_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:CheckJianghuDuelEligibilityRequest.player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+CheckJianghuDuelEligibilityRequest::_internal_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityRequest::_internal_mutable_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_ids_;
+}
+
+// uint64 payer_player_id = 2;
+inline void CheckJianghuDuelEligibilityRequest::clear_payer_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payer_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t CheckJianghuDuelEligibilityRequest::payer_player_id() const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityRequest.payer_player_id)
+  return _internal_payer_player_id();
+}
+inline void CheckJianghuDuelEligibilityRequest::set_payer_player_id(::uint64_t value) {
+  _internal_set_payer_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityRequest.payer_player_id)
+}
+inline ::uint64_t CheckJianghuDuelEligibilityRequest::_internal_payer_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.payer_player_id_;
+}
+inline void CheckJianghuDuelEligibilityRequest::_internal_set_payer_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payer_player_id_ = value;
+}
+
+// uint32 writ_tier = 3;
+inline void CheckJianghuDuelEligibilityRequest::clear_writ_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writ_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t CheckJianghuDuelEligibilityRequest::writ_tier() const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityRequest.writ_tier)
+  return _internal_writ_tier();
+}
+inline void CheckJianghuDuelEligibilityRequest::set_writ_tier(::uint32_t value) {
+  _internal_set_writ_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityRequest.writ_tier)
+}
+inline ::uint32_t CheckJianghuDuelEligibilityRequest::_internal_writ_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.writ_tier_;
+}
+inline void CheckJianghuDuelEligibilityRequest::_internal_set_writ_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writ_tier_ = value;
+}
+
+// uint32 item_config_id = 4;
+inline void CheckJianghuDuelEligibilityRequest::clear_item_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t CheckJianghuDuelEligibilityRequest::item_config_id() const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityRequest.item_config_id)
+  return _internal_item_config_id();
+}
+inline void CheckJianghuDuelEligibilityRequest::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityRequest.item_config_id)
+}
+inline ::uint32_t CheckJianghuDuelEligibilityRequest::_internal_item_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_config_id_;
+}
+inline void CheckJianghuDuelEligibilityRequest::_internal_set_item_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = value;
+}
+
+// uint64 silver_cost = 5;
+inline void CheckJianghuDuelEligibilityRequest::clear_silver_cost() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_cost_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t CheckJianghuDuelEligibilityRequest::silver_cost() const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityRequest.silver_cost)
+  return _internal_silver_cost();
+}
+inline void CheckJianghuDuelEligibilityRequest::set_silver_cost(::uint64_t value) {
+  _internal_set_silver_cost(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityRequest.silver_cost)
+}
+inline ::uint64_t CheckJianghuDuelEligibilityRequest::_internal_silver_cost() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.silver_cost_;
+}
+inline void CheckJianghuDuelEligibilityRequest::_internal_set_silver_cost(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_cost_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// JianghuPlayerEligibilityEntry
+
+// uint64 player_id = 1;
+inline void JianghuPlayerEligibilityEntry::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t JianghuPlayerEligibilityEntry::player_id() const {
+  // @@protoc_insertion_point(field_get:JianghuPlayerEligibilityEntry.player_id)
+  return _internal_player_id();
+}
+inline void JianghuPlayerEligibilityEntry::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:JianghuPlayerEligibilityEntry.player_id)
+}
+inline ::uint64_t JianghuPlayerEligibilityEntry::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void JianghuPlayerEligibilityEntry::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// bool online_on_node = 2;
+inline void JianghuPlayerEligibilityEntry::clear_online_on_node() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.online_on_node_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool JianghuPlayerEligibilityEntry::online_on_node() const {
+  // @@protoc_insertion_point(field_get:JianghuPlayerEligibilityEntry.online_on_node)
+  return _internal_online_on_node();
+}
+inline void JianghuPlayerEligibilityEntry::set_online_on_node(bool value) {
+  _internal_set_online_on_node(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:JianghuPlayerEligibilityEntry.online_on_node)
+}
+inline bool JianghuPlayerEligibilityEntry::_internal_online_on_node() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.online_on_node_;
+}
+inline void JianghuPlayerEligibilityEntry::_internal_set_online_on_node(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.online_on_node_ = value;
+}
+
+// bool duel_refuse_strangers = 3;
+inline void JianghuPlayerEligibilityEntry::clear_duel_refuse_strangers() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duel_refuse_strangers_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool JianghuPlayerEligibilityEntry::duel_refuse_strangers() const {
+  // @@protoc_insertion_point(field_get:JianghuPlayerEligibilityEntry.duel_refuse_strangers)
+  return _internal_duel_refuse_strangers();
+}
+inline void JianghuPlayerEligibilityEntry::set_duel_refuse_strangers(bool value) {
+  _internal_set_duel_refuse_strangers(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:JianghuPlayerEligibilityEntry.duel_refuse_strangers)
+}
+inline bool JianghuPlayerEligibilityEntry::_internal_duel_refuse_strangers() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.duel_refuse_strangers_;
+}
+inline void JianghuPlayerEligibilityEntry::_internal_set_duel_refuse_strangers(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duel_refuse_strangers_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CheckJianghuDuelEligibilityResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool CheckJianghuDuelEligibilityResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& CheckJianghuDuelEligibilityResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& CheckJianghuDuelEligibilityResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityResponse.error_message)
+  return _internal_error_message();
+}
+inline void CheckJianghuDuelEligibilityResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:CheckJianghuDuelEligibilityResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE CheckJianghuDuelEligibilityResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE CheckJianghuDuelEligibilityResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CheckJianghuDuelEligibilityResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:CheckJianghuDuelEligibilityResponse.error_message)
+  return _msg;
+}
+inline void CheckJianghuDuelEligibilityResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:CheckJianghuDuelEligibilityResponse.error_message)
+}
+
+// repeated .JianghuPlayerEligibilityEntry players = 2;
+inline int CheckJianghuDuelEligibilityResponse::_internal_players_size() const {
+  return _internal_players().size();
+}
+inline int CheckJianghuDuelEligibilityResponse::players_size() const {
+  return _internal_players_size();
+}
+inline void CheckJianghuDuelEligibilityResponse::clear_players() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.players_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::JianghuPlayerEligibilityEntry& CheckJianghuDuelEligibilityResponse::players(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityResponse.players)
+  return _internal_players().Get(index);
+}
+inline ::JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::mutable_players(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:CheckJianghuDuelEligibilityResponse.players)
+  return _internal_mutable_players()->Mutable(index);
+}
+inline ::JianghuPlayerEligibilityEntry* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::add_players()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::JianghuPlayerEligibilityEntry* _add =
+      _internal_mutable_players()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:CheckJianghuDuelEligibilityResponse.players)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>& CheckJianghuDuelEligibilityResponse::players() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:CheckJianghuDuelEligibilityResponse.players)
+  return _internal_players();
+}
+inline ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityResponse::mutable_players() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:CheckJianghuDuelEligibilityResponse.players)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_players();
+}
+inline const ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>&
+CheckJianghuDuelEligibilityResponse::_internal_players() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.players_;
+}
+inline ::google::protobuf::RepeatedPtrField<::JianghuPlayerEligibilityEntry>* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityResponse::_internal_mutable_players() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.players_;
+}
+
+// bool payer_has_sufficient_fee = 3;
+inline void CheckJianghuDuelEligibilityResponse::clear_payer_has_sufficient_fee() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payer_has_sufficient_fee_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool CheckJianghuDuelEligibilityResponse::payer_has_sufficient_fee() const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityResponse.payer_has_sufficient_fee)
+  return _internal_payer_has_sufficient_fee();
+}
+inline void CheckJianghuDuelEligibilityResponse::set_payer_has_sufficient_fee(bool value) {
+  _internal_set_payer_has_sufficient_fee(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityResponse.payer_has_sufficient_fee)
+}
+inline bool CheckJianghuDuelEligibilityResponse::_internal_payer_has_sufficient_fee() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.payer_has_sufficient_fee_;
+}
+inline void CheckJianghuDuelEligibilityResponse::_internal_set_payer_has_sufficient_fee(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payer_has_sufficient_fee_ = value;
 }
 
 // -------------------------------------------------------------------

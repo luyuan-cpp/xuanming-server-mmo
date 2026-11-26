@@ -34,6 +34,7 @@
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
 #include "proto/scene/player_currency.pb.h"
+#include "proto/scene/player_jianghu.pb.h"
 #include "proto/scene/player_lifecycle.pb.h"
 #include "proto/scene/player_mission.pb.h"
 #include "proto/scene/player_movement.pb.h"
@@ -88,6 +89,7 @@
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_battle_result_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
+#include "rpc/service_metadata/player_jianghu_service_metadata.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
 #include "rpc/service_metadata/player_mission_service_metadata.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
@@ -149,6 +151,7 @@ namespace chatpb{void SendClientPlayerChatSendChatErased(entt::registry& , entt:
 namespace chatpb{void SendClientPlayerChatPullChatHistoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatReportChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatRetractWorldChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace chatpb{void SendClientPlayerChatPublishSystemWorldNoticeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatNotifyWorldChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatNotifyWorldChatRetractedErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace client_rpc_router{void SendClientRpcRouterForwardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -224,6 +227,7 @@ namespace friendpb{void SendClientPlayerFriendUnblockErased(entt::registry& , en
 namespace friendpb{void SendClientPlayerFriendListBlocksErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace friendpb{void SendClientPlayerFriendRecommendFriendsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace friendpb{void SendClientPlayerFriendNotifyFriendEventErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace friendpb{void SendClientPlayerFriendBatchCheckSocialRelationsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceCreateGuildErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceGetGuildErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceGetPlayerGuildErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -264,6 +268,7 @@ namespace guildpb{void SendGuildServiceTrackGuildWarBountyErased(entt::registry&
 namespace guildpb{void SendGuildServiceGetGuildWarBattleResultErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceNotifyGuildWarAlertErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceInspectFieldWarTargetsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceGetGuildJianghuGrudgeWallErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildInternalListAppliedAssetOpsSinceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginLoginErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginCreatePlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -348,6 +353,13 @@ namespace match{void SendMatchServicePredictTournamentMatchErased(entt::registry
 namespace match{void SendMatchServiceGetTournamentPredictionBoardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceBanTournamentLeylineErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetTournamentHighlightsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceCreateJianghuDuelInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceConfirmJianghuDuelMemberErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceRespondJianghuDuelInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceListJianghuGrudgesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceDismissJianghuGrudgeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceNotifyJianghuDuelInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceNotifyJianghuDuelStatusErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -461,7 +473,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 545,
+static_assert(kMaxRpcMethodCount == 565,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -627,6 +639,11 @@ void InitMessageInfo()
         std::make_unique<::chatpb::RetractWorldChatRequest>(),
         std::make_unique<::chatpb::RetractWorldChatResponse>(),
         1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatRetractWorldChatErased, "/chatpb.ClientPlayerChat/RetractWorldChat"};
+    gRpcMethodRegistry[ClientPlayerChatPublishSystemWorldNoticeMessageId] = RpcMethodMeta{
+        "ClientPlayerChat", "PublishSystemWorldNotice",
+        std::make_unique<::chatpb::PublishSystemWorldNoticeRequest>(),
+        std::make_unique<::chatpb::PublishSystemWorldNoticeResponse>(),
+        1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatPublishSystemWorldNoticeErased, "/chatpb.ClientPlayerChat/PublishSystemWorldNotice"};
     gRpcMethodRegistry[ClientPlayerChatNotifyWorldChatMessageId] = RpcMethodMeta{
         "ClientPlayerChat", "NotifyWorldChat",
         std::make_unique<::chatpb::ChatMessage>(),
@@ -1026,6 +1043,11 @@ void InitMessageInfo()
         std::make_unique<::friendpb::FriendEventS2C>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendNotifyFriendEventErased, "/friendpb.ClientPlayerFriend/NotifyFriendEvent"};
+    gRpcMethodRegistry[ClientPlayerFriendBatchCheckSocialRelationsMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "BatchCheckSocialRelations",
+        std::make_unique<::friendpb::BatchCheckSocialRelationsRequest>(),
+        std::make_unique<::friendpb::BatchCheckSocialRelationsResponse>(),
+        1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendBatchCheckSocialRelationsErased, "/friendpb.ClientPlayerFriend/BatchCheckSocialRelations"};
 
     // --- GateClientSpectate ---
     gRpcMethodRegistry[GateClientSpectateSubscribeSpectateMessageId] = RpcMethodMeta{
@@ -1272,6 +1294,11 @@ void InitMessageInfo()
         std::make_unique<::guildpb::InspectFieldWarTargetsRequest>(),
         std::make_unique<::guildpb::InspectFieldWarTargetsResponse>(),
         1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceInspectFieldWarTargetsErased, "/guildpb.GuildService/InspectFieldWarTargets"};
+    gRpcMethodRegistry[GuildServiceGetGuildJianghuGrudgeWallMessageId] = RpcMethodMeta{
+        "GuildService", "GetGuildJianghuGrudgeWall",
+        std::make_unique<::guildpb::GetGuildJianghuGrudgeWallRequest>(),
+        std::make_unique<::guildpb::GetGuildJianghuGrudgeWallResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildJianghuGrudgeWallErased, "/guildpb.GuildService/GetGuildJianghuGrudgeWall"};
 
     // --- GuildInternal ---
     gRpcMethodRegistry[GuildInternalListAppliedAssetOpsSinceMessageId] = RpcMethodMeta{
@@ -1708,6 +1735,41 @@ void InitMessageInfo()
         std::make_unique<::match::GetTournamentHighlightsRequest>(),
         std::make_unique<::match::GetTournamentHighlightsResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTournamentHighlightsErased, "/match.MatchService/GetTournamentHighlights"};
+    gRpcMethodRegistry[MatchServiceCreateJianghuDuelInviteMessageId] = RpcMethodMeta{
+        "MatchService", "CreateJianghuDuelInvite",
+        std::make_unique<::match::CreateJianghuDuelInviteRequest>(),
+        std::make_unique<::match::CreateJianghuDuelInviteResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceCreateJianghuDuelInviteErased, "/match.MatchService/CreateJianghuDuelInvite"};
+    gRpcMethodRegistry[MatchServiceConfirmJianghuDuelMemberMessageId] = RpcMethodMeta{
+        "MatchService", "ConfirmJianghuDuelMember",
+        std::make_unique<::match::ConfirmJianghuDuelMemberRequest>(),
+        std::make_unique<::match::ConfirmJianghuDuelMemberResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceConfirmJianghuDuelMemberErased, "/match.MatchService/ConfirmJianghuDuelMember"};
+    gRpcMethodRegistry[MatchServiceRespondJianghuDuelInviteMessageId] = RpcMethodMeta{
+        "MatchService", "RespondJianghuDuelInvite",
+        std::make_unique<::match::RespondJianghuDuelInviteRequest>(),
+        std::make_unique<::match::RespondJianghuDuelInviteResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceRespondJianghuDuelInviteErased, "/match.MatchService/RespondJianghuDuelInvite"};
+    gRpcMethodRegistry[MatchServiceListJianghuGrudgesMessageId] = RpcMethodMeta{
+        "MatchService", "ListJianghuGrudges",
+        std::make_unique<::match::ListJianghuGrudgesRequest>(),
+        std::make_unique<::match::ListJianghuGrudgesResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListJianghuGrudgesErased, "/match.MatchService/ListJianghuGrudges"};
+    gRpcMethodRegistry[MatchServiceDismissJianghuGrudgeMessageId] = RpcMethodMeta{
+        "MatchService", "DismissJianghuGrudge",
+        std::make_unique<::match::DismissJianghuGrudgeRequest>(),
+        std::make_unique<::match::DismissJianghuGrudgeResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceDismissJianghuGrudgeErased, "/match.MatchService/DismissJianghuGrudge"};
+    gRpcMethodRegistry[MatchServiceNotifyJianghuDuelInviteMessageId] = RpcMethodMeta{
+        "MatchService", "NotifyJianghuDuelInvite",
+        std::make_unique<::match::JianghuDuelInviteS2C>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceNotifyJianghuDuelInviteErased, "/match.MatchService/NotifyJianghuDuelInvite"};
+    gRpcMethodRegistry[MatchServiceNotifyJianghuDuelStatusMessageId] = RpcMethodMeta{
+        "MatchService", "NotifyJianghuDuelStatus",
+        std::make_unique<::match::JianghuDuelStatusS2C>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceNotifyJianghuDuelStatusErased, "/match.MatchService/NotifyJianghuDuelStatus"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -2204,6 +2266,23 @@ void InitMessageInfo()
         std::make_unique<::GmUnblockCurrencyResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneJianghuClientPlayer ---
+    gRpcMethodRegistry[SceneJianghuClientPlayerGetJianghuProfileMessageId] = RpcMethodMeta{
+        "SceneJianghuClientPlayer", "GetJianghuProfile",
+        std::make_unique<::GetJianghuProfileRequest>(),
+        std::make_unique<::GetJianghuProfileResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneJianghuClientPlayerSetJianghuRefuseStrangersMessageId] = RpcMethodMeta{
+        "SceneJianghuClientPlayer", "SetJianghuRefuseStrangers",
+        std::make_unique<::SetJianghuRefuseStrangersRequest>(),
+        std::make_unique<::SetJianghuRefuseStrangersResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneJianghuClientPlayerClearJianghuDefeatMarkMessageId] = RpcMethodMeta{
+        "SceneJianghuClientPlayer", "ClearJianghuDefeatMark",
+        std::make_unique<::ClearJianghuDefeatMarkRequest>(),
+        std::make_unique<::ClearJianghuDefeatMarkResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
     // --- ScenePlayer ---
     gRpcMethodRegistry[ScenePlayerGateLoginNotifyMessageId] = RpcMethodMeta{
         "ScenePlayer", "GateLoginNotify",
@@ -2586,6 +2665,36 @@ void InitMessageInfo()
         std::make_unique<::UnsealSkillBookRequest>(),
         std::make_unique<::UnsealSkillBookResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerClaimScrollCollectionMilestoneMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "ClaimScrollCollectionMilestone",
+        std::make_unique<::ClaimScrollCollectionMilestoneRequest>(),
+        std::make_unique<::ClaimScrollCollectionMilestoneResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerBatchDismantleSkillBooksMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "BatchDismantleSkillBooks",
+        std::make_unique<::BatchDismantleSkillBooksRequest>(),
+        std::make_unique<::BatchDismantleSkillBooksResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerPostSkillBookWantedOrderMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "PostSkillBookWantedOrder",
+        std::make_unique<::PostSkillBookWantedOrderRequest>(),
+        std::make_unique<::PostSkillBookWantedOrderResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "CancelSkillBookWantedOrder",
+        std::make_unique<::CancelSkillBookWantedOrderRequest>(),
+        std::make_unique<::CancelSkillBookWantedOrderResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerListSkillBookWantedOrdersMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "ListSkillBookWantedOrders",
+        std::make_unique<::ListSkillBookWantedOrdersRequest>(),
+        std::make_unique<::ListSkillBookWantedOrdersResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "FulfillSkillBookWantedOrder",
+        std::make_unique<::FulfillSkillBookWantedOrderRequest>(),
+        std::make_unique<::FulfillSkillBookWantedOrderResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSpiritShopClientPlayer ---
     gRpcMethodRegistry[SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId] = RpcMethodMeta{
@@ -2705,6 +2814,11 @@ void InitMessageInfo()
         "Scene", "NodeHandshake",
         std::make_unique<::NodeHandshakeRequest>(),
         std::make_unique<::NodeHandshakeResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneCheckJianghuDuelEligibilityMessageId] = RpcMethodMeta{
+        "Scene", "CheckJianghuDuelEligibility",
+        std::make_unique<::CheckJianghuDuelEligibilityRequest>(),
+        std::make_unique<::CheckJianghuDuelEligibilityResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneScene ---
@@ -3189,6 +3303,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceTrackGuildWarBountyMessageId:
 	case GuildServiceGetGuildWarBattleResultMessageId:
 	case GuildServiceInspectFieldWarTargetsMessageId:
+	case GuildServiceGetGuildJianghuGrudgeWallMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:
@@ -3239,6 +3354,11 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceGetTournamentPredictionBoardMessageId:
 	case MatchServiceBanTournamentLeylineMessageId:
 	case MatchServiceGetTournamentHighlightsMessageId:
+	case MatchServiceCreateJianghuDuelInviteMessageId:
+	case MatchServiceConfirmJianghuDuelMemberMessageId:
+	case MatchServiceRespondJianghuDuelInviteMessageId:
+	case MatchServiceListJianghuGrudgesMessageId:
+	case MatchServiceDismissJianghuGrudgeMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -3299,6 +3419,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneCurrencyClientPlayerGetCurrencyListMessageId:
 	case SceneCurrencyClientPlayerGmBlockCurrencyMessageId:
 	case SceneCurrencyClientPlayerGmUnblockCurrencyMessageId:
+	case SceneJianghuClientPlayerGetJianghuProfileMessageId:
+	case SceneJianghuClientPlayerSetJianghuRefuseStrangersMessageId:
+	case SceneJianghuClientPlayerClearJianghuDefeatMarkMessageId:
 	case SceneMissionClientPlayerGetMissionListMessageId:
 	case SceneMissionClientPlayerAcceptMissionMessageId:
 	case SceneMissionClientPlayerClaimMissionRewardMessageId:
@@ -3354,6 +3477,12 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerSwitchSkillLoadoutMessageId:
 	case SceneSkillClientPlayerSealSkillBookMessageId:
 	case SceneSkillClientPlayerUnsealSkillBookMessageId:
+	case SceneSkillClientPlayerClaimScrollCollectionMilestoneMessageId:
+	case SceneSkillClientPlayerBatchDismantleSkillBooksMessageId:
+	case SceneSkillClientPlayerPostSkillBookWantedOrderMessageId:
+	case SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId:
+	case SceneSkillClientPlayerListSkillBookWantedOrdersMessageId:
+	case SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId:
 	case SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId:
 	case SceneSpiritShopClientPlayerBuySpiritShopGoodsMessageId:
 	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:

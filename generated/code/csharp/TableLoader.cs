@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 82;
+        public const int TableCount = 83;
 
         private static Action s_loadSuccessCallback;
 
@@ -82,6 +82,7 @@ namespace MmorpgClient.Table
                 GuildWarMilestoneTableManager.FileName(useBinary),
                 GuildWarRuleTableManager.FileName(useBinary),
                 ItemTableManager.FileName(useBinary),
+                JianghuRuleTableManager.FileName(useBinary),
                 MessageLimiterTableManager.FileName(useBinary),
                 MirrorTableManager.FileName(useBinary),
                 MissionTableManager.FileName(useBinary),
@@ -171,6 +172,7 @@ namespace MmorpgClient.Table
             GuildWarMilestoneTableManager.Instance.Load(configDir, useBinary);
             GuildWarRuleTableManager.Instance.Load(configDir, useBinary);
             ItemTableManager.Instance.Load(configDir, useBinary);
+            JianghuRuleTableManager.Instance.Load(configDir, useBinary);
             MessageLimiterTableManager.Instance.Load(configDir, useBinary);
             MirrorTableManager.Instance.Load(configDir, useBinary);
             MissionTableManager.Instance.Load(configDir, useBinary);
@@ -321,6 +323,8 @@ namespace MmorpgClient.Table
                 GuildWarRuleTableManager.Instance.LoadFromBytes, GuildWarRuleTableManager.Instance.LoadFromJson);
             LoadOne(ItemTableManager.FileName(useBinary), byteProvider, useBinary,
                 ItemTableManager.Instance.LoadFromBytes, ItemTableManager.Instance.LoadFromJson);
+            LoadOne(JianghuRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                JianghuRuleTableManager.Instance.LoadFromBytes, JianghuRuleTableManager.Instance.LoadFromJson);
             LoadOne(MessageLimiterTableManager.FileName(useBinary), byteProvider, useBinary,
                 MessageLimiterTableManager.Instance.LoadFromBytes, MessageLimiterTableManager.Instance.LoadFromJson);
             LoadOne(MirrorTableManager.FileName(useBinary), byteProvider, useBinary,

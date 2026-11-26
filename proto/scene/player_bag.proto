@@ -350,6 +350,15 @@ message EquipmentCraftChoice {
   uint64 proxy_master_player_id = 8;   // 主城宗师原子代打摊位摊主ID（0=本人打造）。
   optional uint32 expected_polish_pity_count = 9; // POLISH_AFFIX可选乐观保底计数校验，配合client_request_id防重放。
   uint64 source_item_id = 10;          // INHERIT_ENHANCE源装备实例ID（须与item_id同部位同等级段且强化等级更高）。
+  uint32 target_quality_tier = 11;     // V3 POLISH_AFFIX可选：智能定档连磨目标品相（0=单次打磨，2..5=达标或保底即停）。
+  uint32 max_polish_attempts = 12;     // V3 POLISH_AFFIX可选：智能连磨最多手数（0/1=单次，2..8=封顶至8次硬保底）。
+}
+message PolishStepTrace {
+  uint32 attempt_index = 1;    // 本次连磨的第几手（从 1 开始）。
+  uint32 rolled_tier = 2;      // 该手实际掷出的品相档位（1..5）。
+  uint32 tier_before = 3;      // 该手前的词条品相档位（1..5）。
+  uint32 tier_after = 4;       // 该手后的词条品相档位（只升不降，1..5）。
+  bool guaranteed_by_pity = 5; // true = 该手由 8 次硬保底或定星保底符直出极品。
 }
 message EquipmentCraftMaterial {
   uint32 config_id = 1;
@@ -387,6 +396,10 @@ message EquipmentCraftPreview {
   uint64 proxy_fee_gold = 10;                // 主城宗师代打手工费（银两）。
   string proxy_master_name = 11;             // 代打宗师名。
   bool will_bind_item = 12;                  // true = 本次混用绑定材料将使原可交易装备变为仅自用。
+  uint32 max_polish_attempts = 13;           // V3 智能连磨预计最多手数（受保底余量与当前材料上限封顶）。
+  uint32 max_polish_sand_cost = 14;          // V3 智能连磨最坏情况下消耗的重铸砂总数。
+  uint64 max_polish_gold_cost = 15;          // V3 智能连磨最坏情况下消耗的总银两（基础+代打费）。
+  bool team_free_proxy_applied = 16;         // V5 true = 同队情义零费原子代打生效（代打费为 0）。
 }
 message PreviewEquipmentCraftRequest { EquipmentCraftChoice choice = 1; }
 message PreviewEquipmentCraftResponse {
@@ -420,6 +433,9 @@ message CommitEquipmentCraftResponse {
   uint32 result_polish_pity_count = 12;   // 打磨后的单条保底计数（出极品归0）。
   bool guaranteed_by_pity = 13;           // true = 本次由8次硬保底或定星保底符保底出极品。
   CraftMasteryInfo forge_mastery = 14;    // 操作后的最新铸器熟练度。
+  uint32 polish_attempts_used = 15;       // V3 实际执行打磨手数（单磨为 1，连磨为 1..8）。
+  repeated PolishStepTrace polish_steps = 16; // V3 逐手掷骰明细（首次执行返回）。
+  uint64 actual_gold_spent = 17;          // V3 本次实际扣除银两总量（含代打费）。
 }
 
 // 额度由权威战斗结算产生。PVE/PVP共享游戏日上限，未领取余额跨日保留。

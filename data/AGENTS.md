@@ -199,8 +199,9 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 17 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **GuildWarMilestone** | `GuildWarMilestone.xlsx` | `guildwarmilestone_table.proto` | 9 | 9 | 4 | — | — | `reward_item1_id` `reward_item2_id` | `reward_item1_id→Item.id` `reward_item2_id→Item.id` | — | — | — |
 | **GuildWarRule** | `GuildWarRule.xlsx` | `guildwarrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
-| **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 146 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 120 | — | — | — | — | — | — | — |
+| **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 148 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
+| **JianghuRule** | `JianghuRule.xlsx` | `jianghurule_table.proto` | 18 | 18 | 1 | — | — | `gold_writ_item_id` `clear_item_id` | `gold_writ_item_id→Item.id` `clear_item_id→Item.id` | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 126 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 57 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
@@ -212,7 +213,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **PetEntry** | `PetEntry.xlsx` | `petentry_table.proto` | 10 | 10 | 21 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 9 | 9 | 5 | — | — | — | — | — | — | — |
-| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 42 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
+| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 43 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **PlayerLevelExp** | `PlayerLevelExp.xlsx` | `playerlevelexp_table.proto` | 2 | 2 | 85 | — | — | — | — | — | — | — |
 | **RankedPreset** | `RankedPreset.xlsx` | `rankedpreset_table.proto` | 20 | 15 | 6 | — | — | `pet_table_id` | `pet_table_id→Pet.id` `skill_ids→Skill.id` `pet_entry_ids→PetEntry.id` | — | — | — |
 | **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 25 | 25 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
@@ -225,7 +226,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **SkillScrollCraft** | `SkillScrollCraft.xlsx` | `skillscrollcraft_table.proto` | 16 | 16 | 7 | — | — | `fragment_item_id` | `fragment_item_id→Item.id` | — | — | — |
 | **SkillVfxCosmetic** | `SkillVfxCosmetic.xlsx` | `skillvfxcosmetic_table.proto` | 16 | 16 | 3 | — | — | `skill_table_id` | `skill_table_id→Skill.id` | `id` | — | — |
-| **SpiritShopGoods** | `SpiritShopGoods.xlsx` | `spiritshopgoods_table.proto` | 33 | 33 | 11 | — | — | `item_id_1` | `item_id_1→Item.id` | — | — | — |
+| **SpiritShopGoods** | `SpiritShopGoods.xlsx` | `spiritshopgoods_table.proto` | 33 | 33 | 13 | — | — | `item_id_1` | `item_id_1→Item.id` | — | — | — |
 | **SpiritShopLimitGroup** | `SpiritShopLimitGroup.xlsx` | `spiritshoplimitgroup_table.proto` | 4 | 4 | 1 | — | — | — | — | — | — | — |
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
@@ -239,6 +240,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **82** 张表、**1054** 个物理列、**901** 个进产物的字段。
+合计 **83** 张表、**1072** 个物理列、**919** 个进产物的字段。
 
 <!-- END GENERATED -->

@@ -95,6 +95,14 @@ void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::ent
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendClientPlayerFriendNotifyFriendEventErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region ClientPlayerFriendBatchCheckSocialRelations
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerFriendBatchCheckSocialRelationsGrpcPath = "/friendpb.ClientPlayerFriend/BatchCheckSocialRelations";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerFriendBatchCheckSocialRelations(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::BatchCheckSocialRelationsRequest& request, GrpcDone<::friendpb::BatchCheckSocialRelationsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerFriendBatchCheckSocialRelationsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetFriendCallDeadline(std::chrono::milliseconds deadline);
 

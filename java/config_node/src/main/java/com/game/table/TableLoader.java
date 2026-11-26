@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "8f1aa7cb914ec44f";
+    public static final String SCHEMA_DIGEST = "8a767b1f823342bd";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -27,6 +27,7 @@ public class TableLoader {
             "GuildShop",
             "GuildWarMilestone",
             "GuildWarRule",
+            "JianghuRule",
             "MessageLimiter",
             "Monster",
             "MysteryMerchantGoods",
@@ -147,6 +148,8 @@ public class TableLoader {
 
         ItemTableManager.getInstance().load(configDir, useBinary);
 
+        JianghuRuleTableManager.getInstance().load(configDir, useBinary);
+
         MessageLimiterTableManager.getInstance().load(configDir, useBinary);
 
         MirrorTableManager.getInstance().load(configDir, useBinary);
@@ -238,7 +241,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(82);
+        CountDownLatch latch = new CountDownLatch(83);
 
         new Thread(() -> {
             try {
@@ -675,6 +678,16 @@ public class TableLoader {
                 ItemTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Item table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                JianghuRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load JianghuRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -1167,6 +1180,8 @@ public class TableLoader {
         GuildWarRuleTableManager.getInstance().load(configDir, useBinary);
 
         ItemTableManager.getInstance().load(configDir, useBinary);
+
+        JianghuRuleTableManager.getInstance().load(configDir, useBinary);
 
         MessageLimiterTableManager.getInstance().load(configDir, useBinary);
 

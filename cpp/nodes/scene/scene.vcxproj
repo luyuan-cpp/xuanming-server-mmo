@@ -271,6 +271,8 @@
     <ClInclude Include="handler\rpc\player\player_trial_journal_handler.h" />
     <ClCompile Include="handler\rpc\player\player_battle_result_handler.cpp" />
     <ClInclude Include="handler\rpc\player\player_battle_result_handler.h" />
+    <ClCompile Include="handler\rpc\player\player_jianghu_handler.cpp" />
+    <ClInclude Include="handler\rpc\player\player_jianghu_handler.h" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

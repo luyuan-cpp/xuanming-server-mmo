@@ -679,8 +679,10 @@ type PrepareBattleRequest struct {
 	IsWuxingTower bool `protobuf:"varint,10,opt,name=is_wuxing_tower,json=isWuxingTower,proto3" json:"is_wuxing_tower,omitempty"`
 	// 道友切磋坊自定义规则（仅切磋局透传，供 scene 决定满血蓝隔离等准备策略）。
 	CustomDuelRules *battle.CustomDuelRules `protobuf:"bytes,11,opt,name=custom_duel_rules,json=customDuelRules,proto3" json:"custom_duel_rules,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 天墉生死状发起方队长备战资费冻结单（仅对 MATCH_MODE_JIANGHU_DUEL 的发起方队长填写，其余成员留空）。
+	JianghuDuelFee *JianghuDuelPrepareFee `protobuf:"bytes,12,opt,name=jianghu_duel_fee,json=jianghuDuelFee,proto3" json:"jianghu_duel_fee,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PrepareBattleRequest) Reset() {
@@ -790,6 +792,277 @@ func (x *PrepareBattleRequest) GetCustomDuelRules() *battle.CustomDuelRules {
 	return nil
 }
 
+func (x *PrepareBattleRequest) GetJianghuDuelFee() *JianghuDuelPrepareFee {
+	if x != nil {
+		return x.JianghuDuelFee
+	}
+	return nil
+}
+
+type JianghuDuelPrepareFee struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DuelInviteId  uint64                 `protobuf:"varint,1,opt,name=duel_invite_id,json=duelInviteId,proto3" json:"duel_invite_id,omitempty"` // 发号器永久 ID（兼作幂等预扣键）
+	WritTier      uint32                 `protobuf:"varint,2,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`               // 1 = 普通 500 银两战书, 2 = 金帖生死状(Item 3415)
+	ItemConfigId  uint32                 `protobuf:"varint,3,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"` // writ_tier == 2 时为 3415
+	SilverCost    uint64                 `protobuf:"varint,4,opt,name=silver_cost,json=silverCost,proto3" json:"silver_cost,omitempty"`         // writ_tier == 1 时为 500
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JianghuDuelPrepareFee) Reset() {
+	*x = JianghuDuelPrepareFee{}
+	mi := &file_proto_scene_scene_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JianghuDuelPrepareFee) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JianghuDuelPrepareFee) ProtoMessage() {}
+
+func (x *JianghuDuelPrepareFee) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_scene_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JianghuDuelPrepareFee.ProtoReflect.Descriptor instead.
+func (*JianghuDuelPrepareFee) Descriptor() ([]byte, []int) {
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *JianghuDuelPrepareFee) GetDuelInviteId() uint64 {
+	if x != nil {
+		return x.DuelInviteId
+	}
+	return 0
+}
+
+func (x *JianghuDuelPrepareFee) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *JianghuDuelPrepareFee) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *JianghuDuelPrepareFee) GetSilverCost() uint64 {
+	if x != nil {
+		return x.SilverCost
+	}
+	return 0
+}
+
+type CheckJianghuDuelEligibilityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerIds     []uint64               `protobuf:"varint,1,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`        // 待检查闭关免战开关的成员（最多 10 人）
+	PayerPlayerId uint64                 `protobuf:"varint,2,opt,name=payer_player_id,json=payerPlayerId,proto3" json:"payer_player_id,omitempty"` // 发起方队长（0 = 不做资费预检）
+	WritTier      uint32                 `protobuf:"varint,3,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`                  // 1 = 普通银两, 2 = 金帖道具
+	ItemConfigId  uint32                 `protobuf:"varint,4,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`    // writ_tier == 2 时为 3415
+	SilverCost    uint64                 `protobuf:"varint,5,opt,name=silver_cost,json=silverCost,proto3" json:"silver_cost,omitempty"`            // writ_tier == 1 时为 500
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) Reset() {
+	*x = CheckJianghuDuelEligibilityRequest{}
+	mi := &file_proto_scene_scene_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckJianghuDuelEligibilityRequest) ProtoMessage() {}
+
+func (x *CheckJianghuDuelEligibilityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_scene_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckJianghuDuelEligibilityRequest.ProtoReflect.Descriptor instead.
+func (*CheckJianghuDuelEligibilityRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) GetPlayerIds() []uint64 {
+	if x != nil {
+		return x.PlayerIds
+	}
+	return nil
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) GetPayerPlayerId() uint64 {
+	if x != nil {
+		return x.PayerPlayerId
+	}
+	return 0
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *CheckJianghuDuelEligibilityRequest) GetSilverCost() uint64 {
+	if x != nil {
+		return x.SilverCost
+	}
+	return 0
+}
+
+type JianghuPlayerEligibilityEntry struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OnlineOnNode        bool                   `protobuf:"varint,2,opt,name=online_on_node,json=onlineOnNode,proto3" json:"online_on_node,omitempty"`
+	DuelRefuseStrangers bool                   `protobuf:"varint,3,opt,name=duel_refuse_strangers,json=duelRefuseStrangers,proto3" json:"duel_refuse_strangers,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *JianghuPlayerEligibilityEntry) Reset() {
+	*x = JianghuPlayerEligibilityEntry{}
+	mi := &file_proto_scene_scene_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JianghuPlayerEligibilityEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JianghuPlayerEligibilityEntry) ProtoMessage() {}
+
+func (x *JianghuPlayerEligibilityEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_scene_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JianghuPlayerEligibilityEntry.ProtoReflect.Descriptor instead.
+func (*JianghuPlayerEligibilityEntry) Descriptor() ([]byte, []int) {
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *JianghuPlayerEligibilityEntry) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *JianghuPlayerEligibilityEntry) GetOnlineOnNode() bool {
+	if x != nil {
+		return x.OnlineOnNode
+	}
+	return false
+}
+
+func (x *JianghuPlayerEligibilityEntry) GetDuelRefuseStrangers() bool {
+	if x != nil {
+		return x.DuelRefuseStrangers
+	}
+	return false
+}
+
+type CheckJianghuDuelEligibilityResponse struct {
+	state                 protoimpl.MessageState           `protogen:"open.v1"`
+	ErrorMessage          *base.TipInfoMessage             `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Players               []*JianghuPlayerEligibilityEntry `protobuf:"bytes,2,rep,name=players,proto3" json:"players,omitempty"`
+	PayerHasSufficientFee bool                             `protobuf:"varint,3,opt,name=payer_has_sufficient_fee,json=payerHasSufficientFee,proto3" json:"payer_has_sufficient_fee,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *CheckJianghuDuelEligibilityResponse) Reset() {
+	*x = CheckJianghuDuelEligibilityResponse{}
+	mi := &file_proto_scene_scene_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckJianghuDuelEligibilityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckJianghuDuelEligibilityResponse) ProtoMessage() {}
+
+func (x *CheckJianghuDuelEligibilityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_scene_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckJianghuDuelEligibilityResponse.ProtoReflect.Descriptor instead.
+func (*CheckJianghuDuelEligibilityResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CheckJianghuDuelEligibilityResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *CheckJianghuDuelEligibilityResponse) GetPlayers() []*JianghuPlayerEligibilityEntry {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
+func (x *CheckJianghuDuelEligibilityResponse) GetPayerHasSufficientFee() bool {
+	if x != nil {
+		return x.PayerHasSufficientFee
+	}
+	return false
+}
+
 type PrepareBattleResponse struct {
 	state            protoimpl.MessageState       `protogen:"open.v1"`
 	ErrorMessage     *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`             // 玩家不在/已在战斗等拒绝原因
@@ -801,7 +1074,7 @@ type PrepareBattleResponse struct {
 
 func (x *PrepareBattleResponse) Reset() {
 	*x = PrepareBattleResponse{}
-	mi := &file_proto_scene_scene_proto_msgTypes[10]
+	mi := &file_proto_scene_scene_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -813,7 +1086,7 @@ func (x *PrepareBattleResponse) String() string {
 func (*PrepareBattleResponse) ProtoMessage() {}
 
 func (x *PrepareBattleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_scene_proto_msgTypes[10]
+	mi := &file_proto_scene_scene_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -826,7 +1099,7 @@ func (x *PrepareBattleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareBattleResponse.ProtoReflect.Descriptor instead.
 func (*PrepareBattleResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_scene_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PrepareBattleResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -860,7 +1133,7 @@ type CancelBattlePrepareRequest struct {
 
 func (x *CancelBattlePrepareRequest) Reset() {
 	*x = CancelBattlePrepareRequest{}
-	mi := &file_proto_scene_scene_proto_msgTypes[11]
+	mi := &file_proto_scene_scene_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +1145,7 @@ func (x *CancelBattlePrepareRequest) String() string {
 func (*CancelBattlePrepareRequest) ProtoMessage() {}
 
 func (x *CancelBattlePrepareRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_scene_proto_msgTypes[11]
+	mi := &file_proto_scene_scene_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +1158,7 @@ func (x *CancelBattlePrepareRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelBattlePrepareRequest.ProtoReflect.Descriptor instead.
 func (*CancelBattlePrepareRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_scene_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CancelBattlePrepareRequest) GetPlayerId() uint64 {
@@ -913,7 +1186,7 @@ type SealAccountRoleTradeRequest struct {
 
 func (x *SealAccountRoleTradeRequest) Reset() {
 	*x = SealAccountRoleTradeRequest{}
-	mi := &file_proto_scene_scene_proto_msgTypes[12]
+	mi := &file_proto_scene_scene_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -925,7 +1198,7 @@ func (x *SealAccountRoleTradeRequest) String() string {
 func (*SealAccountRoleTradeRequest) ProtoMessage() {}
 
 func (x *SealAccountRoleTradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_scene_proto_msgTypes[12]
+	mi := &file_proto_scene_scene_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -938,7 +1211,7 @@ func (x *SealAccountRoleTradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SealAccountRoleTradeRequest.ProtoReflect.Descriptor instead.
 func (*SealAccountRoleTradeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_scene_proto_rawDescGZIP(), []int{12}
+	return file_proto_scene_scene_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SealAccountRoleTradeRequest) GetSeal() *base.RoleTradeSeal {
@@ -1008,7 +1281,7 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"c\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x121\n" +
-	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\xf5\x03\n" +
+	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\xb7\x04\n" +
 	"\x14PrepareBattleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12$\n" +
@@ -1023,7 +1296,30 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x10activity_context\x18\t \x01(\v2\x16.BattleActivityContextR\x0factivityContext\x12&\n" +
 	"\x0fis_wuxing_tower\x18\n" +
 	" \x01(\bR\risWuxingTower\x12<\n" +
-	"\x11custom_duel_rules\x18\v \x01(\v2\x10.CustomDuelRulesR\x0fcustomDuelRules\"\xad\x01\n" +
+	"\x11custom_duel_rules\x18\v \x01(\v2\x10.CustomDuelRulesR\x0fcustomDuelRules\x12@\n" +
+	"\x10jianghu_duel_fee\x18\f \x01(\v2\x16.JianghuDuelPrepareFeeR\x0ejianghuDuelFee\"\xa1\x01\n" +
+	"\x15JianghuDuelPrepareFee\x12$\n" +
+	"\x0eduel_invite_id\x18\x01 \x01(\x04R\fduelInviteId\x12\x1b\n" +
+	"\twrit_tier\x18\x02 \x01(\rR\bwritTier\x12$\n" +
+	"\x0eitem_config_id\x18\x03 \x01(\rR\fitemConfigId\x12\x1f\n" +
+	"\vsilver_cost\x18\x04 \x01(\x04R\n" +
+	"silverCost\"\xcf\x01\n" +
+	"\"CheckJianghuDuelEligibilityRequest\x12\x1d\n" +
+	"\n" +
+	"player_ids\x18\x01 \x03(\x04R\tplayerIds\x12&\n" +
+	"\x0fpayer_player_id\x18\x02 \x01(\x04R\rpayerPlayerId\x12\x1b\n" +
+	"\twrit_tier\x18\x03 \x01(\rR\bwritTier\x12$\n" +
+	"\x0eitem_config_id\x18\x04 \x01(\rR\fitemConfigId\x12\x1f\n" +
+	"\vsilver_cost\x18\x05 \x01(\x04R\n" +
+	"silverCost\"\x96\x01\n" +
+	"\x1dJianghuPlayerEligibilityEntry\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
+	"\x0eonline_on_node\x18\x02 \x01(\bR\fonlineOnNode\x122\n" +
+	"\x15duel_refuse_strangers\x18\x03 \x01(\bR\x13duelRefuseStrangers\"\xce\x01\n" +
+	"#CheckJianghuDuelEligibilityResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
+	"\aplayers\x18\x02 \x03(\v2\x1e.JianghuPlayerEligibilityEntryR\aplayers\x127\n" +
+	"\x18payer_has_sufficient_fee\x18\x03 \x01(\bR\x15payerHasSufficientFee\"\xad\x01\n" +
 	"\x15PrepareBattleResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\x12+\n" +
@@ -1036,7 +1332,7 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth*\x80\x01\n" +
 	"\x1cClientMessageDispatchVerdict\x12/\n" +
 	"+CLIENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIED\x10\x00\x12/\n" +
-	"+CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER\x10\x012\x8c\x04\n" +
+	"+CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_LATER\x10\x012\xf6\x04\n" +
 	"\x05Scene\x12:\n" +
 	"\x13PlayerEnterGameNode\x12\x1b.PlayerEnterGameNodeRequest\x1a\x06.Empty\x12e\n" +
 	"\x1aProcessClientPlayerMessage\x12\".ProcessClientPlayerMessageRequest\x1a#.ProcessClientPlayerMessageResponse\x12<\n" +
@@ -1045,7 +1341,8 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\fDestroyScene\x12\x14.DestroySceneRequest\x1a\x06.Empty\x12>\n" +
 	"\rPrepareBattle\x12\x15.PrepareBattleRequest\x1a\x16.PrepareBattleResponse\x12:\n" +
 	"\x13CancelBattlePrepare\x12\x1b.CancelBattlePrepareRequest\x1a\x06.Empty\x12>\n" +
-	"\rNodeHandshake\x12\x15.NodeHandshakeRequest\x1a\x16.NodeHandshakeResponseB\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
+	"\rNodeHandshake\x12\x15.NodeHandshakeRequest\x1a\x16.NodeHandshakeResponse\x12h\n" +
+	"\x1bCheckJianghuDuelEligibility\x12#.CheckJianghuDuelEligibilityRequest\x1a$.CheckJianghuDuelEligibilityResponseB\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
 	file_proto_scene_scene_proto_rawDescOnce sync.Once
@@ -1060,70 +1357,79 @@ func file_proto_scene_scene_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_scene_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_scene_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_proto_scene_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_proto_scene_scene_proto_goTypes = []any{
-	(ClientMessageDispatchVerdict)(0),          // 0: ClientMessageDispatchVerdict
-	(*PlayerEnterGameNodeRequest)(nil),         // 1: PlayerEnterGameNodeRequest
-	(*ProcessClientPlayerMessageRequest)(nil),  // 2: ProcessClientPlayerMessageRequest
-	(*ProcessClientPlayerMessageResponse)(nil), // 3: ProcessClientPlayerMessageResponse
-	(*SessionDisconnectRequest)(nil),           // 4: SessionDisconnectRequest
-	(*GameNodeConnectRequest)(nil),             // 5: GameNodeConnectRequest
-	(*RegisterPlayerSessionRequest)(nil),       // 6: RegisterPlayerSessionRequest
-	(*CreateSceneRequest)(nil),                 // 7: CreateSceneRequest
-	(*CreateSceneResponse)(nil),                // 8: CreateSceneResponse
-	(*DestroySceneRequest)(nil),                // 9: DestroySceneRequest
-	(*PrepareBattleRequest)(nil),               // 10: PrepareBattleRequest
-	(*PrepareBattleResponse)(nil),              // 11: PrepareBattleResponse
-	(*CancelBattlePrepareRequest)(nil),         // 12: CancelBattlePrepareRequest
-	(*SealAccountRoleTradeRequest)(nil),        // 13: SealAccountRoleTradeRequest
-	(*base.MessageContent)(nil),                // 14: MessageContent
-	(*base.NetworkAddress)(nil),                // 15: NetworkAddress
-	(*SceneInfoComp)(nil),                      // 16: SceneInfoComp
-	(*battle.RankedMatchContext)(nil),          // 17: RankedMatchContext
-	(*battle.BattleActivityContext)(nil),       // 18: BattleActivityContext
-	(*battle.CustomDuelRules)(nil),             // 19: CustomDuelRules
-	(*base.TipInfoMessage)(nil),                // 20: TipInfoMessage
-	(*battle.BattlePlayerSnapshot)(nil),        // 21: BattlePlayerSnapshot
-	(*base.RoleTradeSeal)(nil),                 // 22: common.base.RoleTradeSeal
-	(*base.ServiceCallAuth)(nil),               // 23: common.base.ServiceCallAuth
-	(*base.NodeHandshakeRequest)(nil),          // 24: NodeHandshakeRequest
-	(*base.Empty)(nil),                         // 25: Empty
-	(*base.NodeHandshakeResponse)(nil),         // 26: NodeHandshakeResponse
+	(ClientMessageDispatchVerdict)(0),           // 0: ClientMessageDispatchVerdict
+	(*PlayerEnterGameNodeRequest)(nil),          // 1: PlayerEnterGameNodeRequest
+	(*ProcessClientPlayerMessageRequest)(nil),   // 2: ProcessClientPlayerMessageRequest
+	(*ProcessClientPlayerMessageResponse)(nil),  // 3: ProcessClientPlayerMessageResponse
+	(*SessionDisconnectRequest)(nil),            // 4: SessionDisconnectRequest
+	(*GameNodeConnectRequest)(nil),              // 5: GameNodeConnectRequest
+	(*RegisterPlayerSessionRequest)(nil),        // 6: RegisterPlayerSessionRequest
+	(*CreateSceneRequest)(nil),                  // 7: CreateSceneRequest
+	(*CreateSceneResponse)(nil),                 // 8: CreateSceneResponse
+	(*DestroySceneRequest)(nil),                 // 9: DestroySceneRequest
+	(*PrepareBattleRequest)(nil),                // 10: PrepareBattleRequest
+	(*JianghuDuelPrepareFee)(nil),               // 11: JianghuDuelPrepareFee
+	(*CheckJianghuDuelEligibilityRequest)(nil),  // 12: CheckJianghuDuelEligibilityRequest
+	(*JianghuPlayerEligibilityEntry)(nil),       // 13: JianghuPlayerEligibilityEntry
+	(*CheckJianghuDuelEligibilityResponse)(nil), // 14: CheckJianghuDuelEligibilityResponse
+	(*PrepareBattleResponse)(nil),               // 15: PrepareBattleResponse
+	(*CancelBattlePrepareRequest)(nil),          // 16: CancelBattlePrepareRequest
+	(*SealAccountRoleTradeRequest)(nil),         // 17: SealAccountRoleTradeRequest
+	(*base.MessageContent)(nil),                 // 18: MessageContent
+	(*base.NetworkAddress)(nil),                 // 19: NetworkAddress
+	(*SceneInfoComp)(nil),                       // 20: SceneInfoComp
+	(*battle.RankedMatchContext)(nil),           // 21: RankedMatchContext
+	(*battle.BattleActivityContext)(nil),        // 22: BattleActivityContext
+	(*battle.CustomDuelRules)(nil),              // 23: CustomDuelRules
+	(*base.TipInfoMessage)(nil),                 // 24: TipInfoMessage
+	(*battle.BattlePlayerSnapshot)(nil),         // 25: BattlePlayerSnapshot
+	(*base.RoleTradeSeal)(nil),                  // 26: common.base.RoleTradeSeal
+	(*base.ServiceCallAuth)(nil),                // 27: common.base.ServiceCallAuth
+	(*base.NodeHandshakeRequest)(nil),           // 28: NodeHandshakeRequest
+	(*base.Empty)(nil),                          // 29: Empty
+	(*base.NodeHandshakeResponse)(nil),          // 30: NodeHandshakeResponse
 }
 var file_proto_scene_scene_proto_depIdxs = []int32{
-	14, // 0: ProcessClientPlayerMessageRequest.message_content:type_name -> MessageContent
-	14, // 1: ProcessClientPlayerMessageResponse.message_content:type_name -> MessageContent
+	18, // 0: ProcessClientPlayerMessageRequest.message_content:type_name -> MessageContent
+	18, // 1: ProcessClientPlayerMessageResponse.message_content:type_name -> MessageContent
 	0,  // 2: ProcessClientPlayerMessageResponse.dispatch_verdict:type_name -> ClientMessageDispatchVerdict
-	15, // 3: GameNodeConnectRequest.rpc_client:type_name -> NetworkAddress
-	16, // 4: CreateSceneResponse.scene_info:type_name -> SceneInfoComp
-	17, // 5: PrepareBattleRequest.ranked_context:type_name -> RankedMatchContext
-	18, // 6: PrepareBattleRequest.activity_context:type_name -> BattleActivityContext
-	19, // 7: PrepareBattleRequest.custom_duel_rules:type_name -> CustomDuelRules
-	20, // 8: PrepareBattleResponse.error_message:type_name -> TipInfoMessage
-	21, // 9: PrepareBattleResponse.snapshot:type_name -> BattlePlayerSnapshot
-	22, // 10: SealAccountRoleTradeRequest.seal:type_name -> common.base.RoleTradeSeal
-	23, // 11: SealAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
-	1,  // 12: Scene.PlayerEnterGameNode:input_type -> PlayerEnterGameNodeRequest
-	2,  // 13: Scene.ProcessClientPlayerMessage:input_type -> ProcessClientPlayerMessageRequest
-	6,  // 14: Scene.UpdateSessionDetail:input_type -> RegisterPlayerSessionRequest
-	7,  // 15: Scene.CreateScene:input_type -> CreateSceneRequest
-	9,  // 16: Scene.DestroyScene:input_type -> DestroySceneRequest
-	10, // 17: Scene.PrepareBattle:input_type -> PrepareBattleRequest
-	12, // 18: Scene.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
-	24, // 19: Scene.NodeHandshake:input_type -> NodeHandshakeRequest
-	25, // 20: Scene.PlayerEnterGameNode:output_type -> Empty
-	3,  // 21: Scene.ProcessClientPlayerMessage:output_type -> ProcessClientPlayerMessageResponse
-	25, // 22: Scene.UpdateSessionDetail:output_type -> Empty
-	8,  // 23: Scene.CreateScene:output_type -> CreateSceneResponse
-	25, // 24: Scene.DestroyScene:output_type -> Empty
-	11, // 25: Scene.PrepareBattle:output_type -> PrepareBattleResponse
-	25, // 26: Scene.CancelBattlePrepare:output_type -> Empty
-	26, // 27: Scene.NodeHandshake:output_type -> NodeHandshakeResponse
-	20, // [20:28] is the sub-list for method output_type
-	12, // [12:20] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	19, // 3: GameNodeConnectRequest.rpc_client:type_name -> NetworkAddress
+	20, // 4: CreateSceneResponse.scene_info:type_name -> SceneInfoComp
+	21, // 5: PrepareBattleRequest.ranked_context:type_name -> RankedMatchContext
+	22, // 6: PrepareBattleRequest.activity_context:type_name -> BattleActivityContext
+	23, // 7: PrepareBattleRequest.custom_duel_rules:type_name -> CustomDuelRules
+	11, // 8: PrepareBattleRequest.jianghu_duel_fee:type_name -> JianghuDuelPrepareFee
+	24, // 9: CheckJianghuDuelEligibilityResponse.error_message:type_name -> TipInfoMessage
+	13, // 10: CheckJianghuDuelEligibilityResponse.players:type_name -> JianghuPlayerEligibilityEntry
+	24, // 11: PrepareBattleResponse.error_message:type_name -> TipInfoMessage
+	25, // 12: PrepareBattleResponse.snapshot:type_name -> BattlePlayerSnapshot
+	26, // 13: SealAccountRoleTradeRequest.seal:type_name -> common.base.RoleTradeSeal
+	27, // 14: SealAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
+	1,  // 15: Scene.PlayerEnterGameNode:input_type -> PlayerEnterGameNodeRequest
+	2,  // 16: Scene.ProcessClientPlayerMessage:input_type -> ProcessClientPlayerMessageRequest
+	6,  // 17: Scene.UpdateSessionDetail:input_type -> RegisterPlayerSessionRequest
+	7,  // 18: Scene.CreateScene:input_type -> CreateSceneRequest
+	9,  // 19: Scene.DestroyScene:input_type -> DestroySceneRequest
+	10, // 20: Scene.PrepareBattle:input_type -> PrepareBattleRequest
+	16, // 21: Scene.CancelBattlePrepare:input_type -> CancelBattlePrepareRequest
+	28, // 22: Scene.NodeHandshake:input_type -> NodeHandshakeRequest
+	12, // 23: Scene.CheckJianghuDuelEligibility:input_type -> CheckJianghuDuelEligibilityRequest
+	29, // 24: Scene.PlayerEnterGameNode:output_type -> Empty
+	3,  // 25: Scene.ProcessClientPlayerMessage:output_type -> ProcessClientPlayerMessageResponse
+	29, // 26: Scene.UpdateSessionDetail:output_type -> Empty
+	8,  // 27: Scene.CreateScene:output_type -> CreateSceneResponse
+	29, // 28: Scene.DestroyScene:output_type -> Empty
+	15, // 29: Scene.PrepareBattle:output_type -> PrepareBattleResponse
+	29, // 30: Scene.CancelBattlePrepare:output_type -> Empty
+	30, // 31: Scene.NodeHandshake:output_type -> NodeHandshakeResponse
+	14, // 32: Scene.CheckJianghuDuelEligibility:output_type -> CheckJianghuDuelEligibilityResponse
+	24, // [24:33] is the sub-list for method output_type
+	15, // [15:24] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_scene_proto_init() }
@@ -1138,7 +1444,7 @@ func file_proto_scene_scene_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_scene_proto_rawDesc), len(file_proto_scene_scene_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

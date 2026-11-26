@@ -63,6 +63,13 @@ const (
 	MatchService_GetTournamentPredictionBoard_FullMethodName = "/match.MatchService/GetTournamentPredictionBoard"
 	MatchService_BanTournamentLeyline_FullMethodName         = "/match.MatchService/BanTournamentLeyline"
 	MatchService_GetTournamentHighlights_FullMethodName      = "/match.MatchService/GetTournamentHighlights"
+	MatchService_CreateJianghuDuelInvite_FullMethodName      = "/match.MatchService/CreateJianghuDuelInvite"
+	MatchService_ConfirmJianghuDuelMember_FullMethodName     = "/match.MatchService/ConfirmJianghuDuelMember"
+	MatchService_RespondJianghuDuelInvite_FullMethodName     = "/match.MatchService/RespondJianghuDuelInvite"
+	MatchService_ListJianghuGrudges_FullMethodName           = "/match.MatchService/ListJianghuGrudges"
+	MatchService_DismissJianghuGrudge_FullMethodName         = "/match.MatchService/DismissJianghuGrudge"
+	MatchService_NotifyJianghuDuelInvite_FullMethodName      = "/match.MatchService/NotifyJianghuDuelInvite"
+	MatchService_NotifyJianghuDuelStatus_FullMethodName      = "/match.MatchService/NotifyJianghuDuelStatus"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -143,6 +150,14 @@ type MatchServiceClient interface {
 	// ---- 全服赛季战队锦标赛《群仙问道赛》V4(docs/planning/season-team-tournament-v4.md):请求只认会话本人 ----
 	BanTournamentLeyline(ctx context.Context, in *BanTournamentLeylineRequest, opts ...grpc.CallOption) (*BanTournamentLeylineResponse, error)
 	GetTournamentHighlights(ctx context.Context, in *GetTournamentHighlightsRequest, opts ...grpc.CallOption) (*GetTournamentHighlightsResponse, error)
+	// ---- 江湖恩怨与天墉生死状一期(docs/design/battle-jianghu-grudge-duel-bounty-v1.md):请求只认会话本人 ----
+	CreateJianghuDuelInvite(ctx context.Context, in *CreateJianghuDuelInviteRequest, opts ...grpc.CallOption) (*CreateJianghuDuelInviteResponse, error)
+	ConfirmJianghuDuelMember(ctx context.Context, in *ConfirmJianghuDuelMemberRequest, opts ...grpc.CallOption) (*ConfirmJianghuDuelMemberResponse, error)
+	RespondJianghuDuelInvite(ctx context.Context, in *RespondJianghuDuelInviteRequest, opts ...grpc.CallOption) (*RespondJianghuDuelInviteResponse, error)
+	ListJianghuGrudges(ctx context.Context, in *ListJianghuGrudgesRequest, opts ...grpc.CallOption) (*ListJianghuGrudgesResponse, error)
+	DismissJianghuGrudge(ctx context.Context, in *DismissJianghuGrudgeRequest, opts ...grpc.CallOption) (*DismissJianghuGrudgeResponse, error)
+	NotifyJianghuDuelInvite(ctx context.Context, in *JianghuDuelInviteS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	NotifyJianghuDuelStatus(ctx context.Context, in *JianghuDuelStatusS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type matchServiceClient struct {
@@ -573,6 +588,76 @@ func (c *matchServiceClient) GetTournamentHighlights(ctx context.Context, in *Ge
 	return out, nil
 }
 
+func (c *matchServiceClient) CreateJianghuDuelInvite(ctx context.Context, in *CreateJianghuDuelInviteRequest, opts ...grpc.CallOption) (*CreateJianghuDuelInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateJianghuDuelInviteResponse)
+	err := c.cc.Invoke(ctx, MatchService_CreateJianghuDuelInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) ConfirmJianghuDuelMember(ctx context.Context, in *ConfirmJianghuDuelMemberRequest, opts ...grpc.CallOption) (*ConfirmJianghuDuelMemberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmJianghuDuelMemberResponse)
+	err := c.cc.Invoke(ctx, MatchService_ConfirmJianghuDuelMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) RespondJianghuDuelInvite(ctx context.Context, in *RespondJianghuDuelInviteRequest, opts ...grpc.CallOption) (*RespondJianghuDuelInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RespondJianghuDuelInviteResponse)
+	err := c.cc.Invoke(ctx, MatchService_RespondJianghuDuelInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) ListJianghuGrudges(ctx context.Context, in *ListJianghuGrudgesRequest, opts ...grpc.CallOption) (*ListJianghuGrudgesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListJianghuGrudgesResponse)
+	err := c.cc.Invoke(ctx, MatchService_ListJianghuGrudges_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) DismissJianghuGrudge(ctx context.Context, in *DismissJianghuGrudgeRequest, opts ...grpc.CallOption) (*DismissJianghuGrudgeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DismissJianghuGrudgeResponse)
+	err := c.cc.Invoke(ctx, MatchService_DismissJianghuGrudge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) NotifyJianghuDuelInvite(ctx context.Context, in *JianghuDuelInviteS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, MatchService_NotifyJianghuDuelInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) NotifyJianghuDuelStatus(ctx context.Context, in *JianghuDuelStatusS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, MatchService_NotifyJianghuDuelStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -651,6 +736,14 @@ type MatchServiceServer interface {
 	// ---- 全服赛季战队锦标赛《群仙问道赛》V4(docs/planning/season-team-tournament-v4.md):请求只认会话本人 ----
 	BanTournamentLeyline(context.Context, *BanTournamentLeylineRequest) (*BanTournamentLeylineResponse, error)
 	GetTournamentHighlights(context.Context, *GetTournamentHighlightsRequest) (*GetTournamentHighlightsResponse, error)
+	// ---- 江湖恩怨与天墉生死状一期(docs/design/battle-jianghu-grudge-duel-bounty-v1.md):请求只认会话本人 ----
+	CreateJianghuDuelInvite(context.Context, *CreateJianghuDuelInviteRequest) (*CreateJianghuDuelInviteResponse, error)
+	ConfirmJianghuDuelMember(context.Context, *ConfirmJianghuDuelMemberRequest) (*ConfirmJianghuDuelMemberResponse, error)
+	RespondJianghuDuelInvite(context.Context, *RespondJianghuDuelInviteRequest) (*RespondJianghuDuelInviteResponse, error)
+	ListJianghuGrudges(context.Context, *ListJianghuGrudgesRequest) (*ListJianghuGrudgesResponse, error)
+	DismissJianghuGrudge(context.Context, *DismissJianghuGrudgeRequest) (*DismissJianghuGrudgeResponse, error)
+	NotifyJianghuDuelInvite(context.Context, *JianghuDuelInviteS2C) (*base.Empty, error)
+	NotifyJianghuDuelStatus(context.Context, *JianghuDuelStatusS2C) (*base.Empty, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -786,6 +879,27 @@ func (UnimplementedMatchServiceServer) BanTournamentLeyline(context.Context, *Ba
 }
 func (UnimplementedMatchServiceServer) GetTournamentHighlights(context.Context, *GetTournamentHighlightsRequest) (*GetTournamentHighlightsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTournamentHighlights not implemented")
+}
+func (UnimplementedMatchServiceServer) CreateJianghuDuelInvite(context.Context, *CreateJianghuDuelInviteRequest) (*CreateJianghuDuelInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateJianghuDuelInvite not implemented")
+}
+func (UnimplementedMatchServiceServer) ConfirmJianghuDuelMember(context.Context, *ConfirmJianghuDuelMemberRequest) (*ConfirmJianghuDuelMemberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmJianghuDuelMember not implemented")
+}
+func (UnimplementedMatchServiceServer) RespondJianghuDuelInvite(context.Context, *RespondJianghuDuelInviteRequest) (*RespondJianghuDuelInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RespondJianghuDuelInvite not implemented")
+}
+func (UnimplementedMatchServiceServer) ListJianghuGrudges(context.Context, *ListJianghuGrudgesRequest) (*ListJianghuGrudgesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListJianghuGrudges not implemented")
+}
+func (UnimplementedMatchServiceServer) DismissJianghuGrudge(context.Context, *DismissJianghuGrudgeRequest) (*DismissJianghuGrudgeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DismissJianghuGrudge not implemented")
+}
+func (UnimplementedMatchServiceServer) NotifyJianghuDuelInvite(context.Context, *JianghuDuelInviteS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyJianghuDuelInvite not implemented")
+}
+func (UnimplementedMatchServiceServer) NotifyJianghuDuelStatus(context.Context, *JianghuDuelStatusS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyJianghuDuelStatus not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -1564,6 +1678,132 @@ func _MatchService_GetTournamentHighlights_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_CreateJianghuDuelInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateJianghuDuelInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).CreateJianghuDuelInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_CreateJianghuDuelInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).CreateJianghuDuelInvite(ctx, req.(*CreateJianghuDuelInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_ConfirmJianghuDuelMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmJianghuDuelMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ConfirmJianghuDuelMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ConfirmJianghuDuelMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ConfirmJianghuDuelMember(ctx, req.(*ConfirmJianghuDuelMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_RespondJianghuDuelInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RespondJianghuDuelInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).RespondJianghuDuelInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_RespondJianghuDuelInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).RespondJianghuDuelInvite(ctx, req.(*RespondJianghuDuelInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_ListJianghuGrudges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListJianghuGrudgesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ListJianghuGrudges(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ListJianghuGrudges_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ListJianghuGrudges(ctx, req.(*ListJianghuGrudgesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_DismissJianghuGrudge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DismissJianghuGrudgeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).DismissJianghuGrudge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_DismissJianghuGrudge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).DismissJianghuGrudge(ctx, req.(*DismissJianghuGrudgeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_NotifyJianghuDuelInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JianghuDuelInviteS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).NotifyJianghuDuelInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_NotifyJianghuDuelInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).NotifyJianghuDuelInvite(ctx, req.(*JianghuDuelInviteS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_NotifyJianghuDuelStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JianghuDuelStatusS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).NotifyJianghuDuelStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_NotifyJianghuDuelStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).NotifyJianghuDuelStatus(ctx, req.(*JianghuDuelStatusS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1738,6 +1978,34 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTournamentHighlights",
 			Handler:    _MatchService_GetTournamentHighlights_Handler,
+		},
+		{
+			MethodName: "CreateJianghuDuelInvite",
+			Handler:    _MatchService_CreateJianghuDuelInvite_Handler,
+		},
+		{
+			MethodName: "ConfirmJianghuDuelMember",
+			Handler:    _MatchService_ConfirmJianghuDuelMember_Handler,
+		},
+		{
+			MethodName: "RespondJianghuDuelInvite",
+			Handler:    _MatchService_RespondJianghuDuelInvite_Handler,
+		},
+		{
+			MethodName: "ListJianghuGrudges",
+			Handler:    _MatchService_ListJianghuGrudges_Handler,
+		},
+		{
+			MethodName: "DismissJianghuGrudge",
+			Handler:    _MatchService_DismissJianghuGrudge_Handler,
+		},
+		{
+			MethodName: "NotifyJianghuDuelInvite",
+			Handler:    _MatchService_NotifyJianghuDuelInvite_Handler,
+		},
+		{
+			MethodName: "NotifyJianghuDuelStatus",
+			Handler:    _MatchService_NotifyJianghuDuelStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

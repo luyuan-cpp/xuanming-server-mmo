@@ -441,6 +441,10 @@ type TrialJournalMilestoneView struct {
 	Reached                   bool                   `protobuf:"varint,17,opt,name=reached,proto3" json:"reached,omitempty"`
 	Claimed                   bool                   `protobuf:"varint,18,opt,name=claimed,proto3" json:"claimed,omitempty"`
 	Claimable                 bool                   `protobuf:"varint,19,opt,name=claimable,proto3" json:"claimable,omitempty"` // reached && !claimed && 当前角色可操作
+	GrantPetCosmeticId        uint32                 `protobuf:"varint,20,opt,name=grant_pet_cosmetic_id,json=grantPetCosmeticId,proto3" json:"grant_pet_cosmetic_id,omitempty"`
+	GrantPetCosmeticName      string                 `protobuf:"bytes,21,opt,name=grant_pet_cosmetic_name,json=grantPetCosmeticName,proto3" json:"grant_pet_cosmetic_name,omitempty"`
+	GrantSkillVfxId           uint32                 `protobuf:"varint,22,opt,name=grant_skill_vfx_id,json=grantSkillVfxId,proto3" json:"grant_skill_vfx_id,omitempty"`
+	GrantSkillVfxName         string                 `protobuf:"bytes,23,opt,name=grant_skill_vfx_name,json=grantSkillVfxName,proto3" json:"grant_skill_vfx_name,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -606,6 +610,34 @@ func (x *TrialJournalMilestoneView) GetClaimable() bool {
 		return x.Claimable
 	}
 	return false
+}
+
+func (x *TrialJournalMilestoneView) GetGrantPetCosmeticId() uint32 {
+	if x != nil {
+		return x.GrantPetCosmeticId
+	}
+	return 0
+}
+
+func (x *TrialJournalMilestoneView) GetGrantPetCosmeticName() string {
+	if x != nil {
+		return x.GrantPetCosmeticName
+	}
+	return ""
+}
+
+func (x *TrialJournalMilestoneView) GetGrantSkillVfxId() uint32 {
+	if x != nil {
+		return x.GrantSkillVfxId
+	}
+	return 0
+}
+
+func (x *TrialJournalMilestoneView) GetGrantSkillVfxName() string {
+	if x != nil {
+		return x.GrantSkillVfxName
+	}
+	return ""
 }
 
 type TrialRedeemableArtifactOption struct {
@@ -983,15 +1015,17 @@ func (x *ClaimTrialJournalMilestoneRequest) GetMilestoneId() uint32 {
 }
 
 type ClaimTrialJournalMilestoneResponse struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage        *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	Snapshot            *TrialJournalSnapshot  `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
-	Replayed            bool                   `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
-	GrantedSandCount    uint32                 `protobuf:"varint,4,opt,name=granted_sand_count,json=grantedSandCount,proto3" json:"granted_sand_count,omitempty"`
-	GrantedVoucherCount uint32                 `protobuf:"varint,5,opt,name=granted_voucher_count,json=grantedVoucherCount,proto3" json:"granted_voucher_count,omitempty"`
-	GrantedAppearanceId string                 `protobuf:"bytes,6,opt,name=granted_appearance_id,json=grantedAppearanceId,proto3" json:"granted_appearance_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage         *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Snapshot             *TrialJournalSnapshot  `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	Replayed             bool                   `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	GrantedSandCount     uint32                 `protobuf:"varint,4,opt,name=granted_sand_count,json=grantedSandCount,proto3" json:"granted_sand_count,omitempty"`
+	GrantedVoucherCount  uint32                 `protobuf:"varint,5,opt,name=granted_voucher_count,json=grantedVoucherCount,proto3" json:"granted_voucher_count,omitempty"`
+	GrantedAppearanceId  string                 `protobuf:"bytes,6,opt,name=granted_appearance_id,json=grantedAppearanceId,proto3" json:"granted_appearance_id,omitempty"`
+	GrantedPetCosmeticId uint32                 `protobuf:"varint,7,opt,name=granted_pet_cosmetic_id,json=grantedPetCosmeticId,proto3" json:"granted_pet_cosmetic_id,omitempty"`
+	GrantedSkillVfxId    uint32                 `protobuf:"varint,8,opt,name=granted_skill_vfx_id,json=grantedSkillVfxId,proto3" json:"granted_skill_vfx_id,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ClaimTrialJournalMilestoneResponse) Reset() {
@@ -1064,6 +1098,20 @@ func (x *ClaimTrialJournalMilestoneResponse) GetGrantedAppearanceId() string {
 		return x.GrantedAppearanceId
 	}
 	return ""
+}
+
+func (x *ClaimTrialJournalMilestoneResponse) GetGrantedPetCosmeticId() uint32 {
+	if x != nil {
+		return x.GrantedPetCosmeticId
+	}
+	return 0
+}
+
+func (x *ClaimTrialJournalMilestoneResponse) GetGrantedSkillVfxId() uint32 {
+	if x != nil {
+		return x.GrantedSkillVfxId
+	}
+	return 0
 }
 
 // 消耗 1 张「自用法宝拓印」(Item 3404)，指定兑换 8 件 V1 法宝中的任意 1 件（产出仅自用实例，允许同名第二件）。
@@ -1247,7 +1295,7 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\fchapter_name\x18\x03 \x01(\tR\vchapterName\x12$\n" +
 	"\x0elit_seal_count\x18\x04 \x01(\rR\flitSealCount\x12(\n" +
 	"\x10total_seal_count\x18\x05 \x01(\rR\x0etotalSealCount\x120\n" +
-	"\aentries\x18\x06 \x03(\v2\x16.TrialJournalEntryViewR\aentries\"\xd3\x05\n" +
+	"\aentries\x18\x06 \x03(\v2\x16.TrialJournalEntryViewR\aentries\"\x9b\a\n" +
 	"\x19TrialJournalMilestoneView\x12!\n" +
 	"\fmilestone_id\x18\x01 \x01(\rR\vmilestoneId\x12(\n" +
 	"\x10scope_chapter_id\x18\x02 \x01(\rR\x0escopeChapterId\x12\x1b\n" +
@@ -1269,7 +1317,11 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\x15grant_appearance_name\x18\x10 \x01(\tR\x13grantAppearanceName\x12\x18\n" +
 	"\areached\x18\x11 \x01(\bR\areached\x12\x18\n" +
 	"\aclaimed\x18\x12 \x01(\bR\aclaimed\x12\x1c\n" +
-	"\tclaimable\x18\x13 \x01(\bR\tclaimable\"\xe5\x01\n" +
+	"\tclaimable\x18\x13 \x01(\bR\tclaimable\x121\n" +
+	"\x15grant_pet_cosmetic_id\x18\x14 \x01(\rR\x12grantPetCosmeticId\x125\n" +
+	"\x17grant_pet_cosmetic_name\x18\x15 \x01(\tR\x14grantPetCosmeticName\x12+\n" +
+	"\x12grant_skill_vfx_id\x18\x16 \x01(\rR\x0fgrantSkillVfxId\x12/\n" +
+	"\x14grant_skill_vfx_name\x18\x17 \x01(\tR\x11grantSkillVfxName\"\xe5\x01\n" +
 	"\x1dTrialRedeemableArtifactOption\x12$\n" +
 	"\x0eitem_config_id\x18\x01 \x01(\rR\fitemConfigId\x12,\n" +
 	"\x12artifact_effect_id\x18\x02 \x01(\rR\x10artifactEffectId\x12\x12\n" +
@@ -1303,14 +1355,16 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.TrialJournalSnapshotR\bsnapshot\"r\n" +
 	"!ClaimTrialJournalMilestoneRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12!\n" +
-	"\fmilestone_id\x18\x02 \x01(\rR\vmilestoneId\"\xbf\x02\n" +
+	"\fmilestone_id\x18\x02 \x01(\rR\vmilestoneId\"\xa7\x03\n" +
 	"\"ClaimTrialJournalMilestoneResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.TrialJournalSnapshotR\bsnapshot\x12\x1a\n" +
 	"\breplayed\x18\x03 \x01(\bR\breplayed\x12,\n" +
 	"\x12granted_sand_count\x18\x04 \x01(\rR\x10grantedSandCount\x122\n" +
 	"\x15granted_voucher_count\x18\x05 \x01(\rR\x13grantedVoucherCount\x122\n" +
-	"\x15granted_appearance_id\x18\x06 \x01(\tR\x13grantedAppearanceId\"\x86\x01\n" +
+	"\x15granted_appearance_id\x18\x06 \x01(\tR\x13grantedAppearanceId\x125\n" +
+	"\x17granted_pet_cosmetic_id\x18\a \x01(\rR\x14grantedPetCosmeticId\x12/\n" +
+	"\x14granted_skill_vfx_id\x18\b \x01(\rR\x11grantedSkillVfxId\"\x86\x01\n" +
 	"!RedeemBoundArtifactVoucherRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x125\n" +
 	"\x17artifact_item_config_id\x18\x02 \x01(\rR\x14artifactItemConfigId\"\x88\x02\n" +

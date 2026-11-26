@@ -342,6 +342,10 @@ private:
     bool SeasonSealAvailable(const BattleActorState& actor, uint32_t effect) const;
     void UseSeasonSeal(BattleActorState& actor, uint64_t targetId, uint64_t value,
                        TurnResultS2C& result);
+    bool HasAnyRegularShield(const BattleActorState& target) const;
+    bool IsDefendBreathResonanceReady(const BattleActorState& actor, uint32_t skillId) const;
+    void EmitSeasonResonanceEvent(BattleActorState& actor, uint64_t targetId,
+                                  uint32_t resonanceEffectId, uint64_t value, TurnResultS2C& result);
     void EquipmentDefend(BattleActorState& actor, TurnResultS2C& result);
     uint64_t EquipmentReduceDamage(BattleActorState& source, BattleActorState& target,
                                     uint64_t damage, const EffectContext& context, TurnResultS2C& result);
@@ -857,6 +861,19 @@ private:
     bool wuxingSynergyActiveThisRound = false;
     std::set<uint64_t> wuxingSynergyActorIds;
     uint32_t activeSeasonWeeklyAffixId = 0; // 赛季全员对称周环境词缀（开局由全体快照一致冻结，0=无/禁用）
+    struct SeasonSealRuntimeState {
+        uint32_t guardResonanceReadyRound = 0;   // 103 守印触发减伤后的下一回合号（触发设为 round+1，消费清 0）
+        bool guardResonanceConsumed = false;     // 103×15003 每场至多触发 1 次
+        uint32_t defendResonanceReadyRound = 0;  // 104 援印防御回蓝后的下一回合号（触发设为 round+1，消费清 0）
+        uint64_t contributionValue = 0;          // 本场主贡献值（101/102 削盾、103 减伤+增盾、104 回蓝+省蓝）
+        uint32_t triggerCount = 0;               // 本场赛季印基础触发次数
+        uint32_t resonanceCount = 0;             // 本场技印共鸣触发次数
+    };
+    std::unordered_map<uint64_t, SeasonSealRuntimeState> seasonSealRuntimeByActor;
+    uint64_t pendingMysticExtendCasterId = 0;
+    uint64_t pendingMysticExtendTargetId = 0;
+    uint64_t activeGuardShieldResonanceCasterId = 0;
+    uint64_t activeGuardShieldResonanceExtra = 0;
     std::set<uint64_t> aiControlledPlayers; // 守旗阵 AI 托管守擂玩家：全程自动出手、不阻塞回合、不回写个人资产。
 
     bool HasAnyActiveShield(const BattleActorState& target) const;

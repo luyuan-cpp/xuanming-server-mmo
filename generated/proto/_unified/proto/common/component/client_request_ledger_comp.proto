@@ -60,6 +60,10 @@ message ClientRequestRecord {
   uint32 rewarded_ad_currency_type = 35;        // 激励视频领奖：首次实际发放币种（默认 3 = 绑定银两）。
   uint64 rewarded_ad_amount = 36;               // 激励视频领奖：首次实际发放金额。
   uint64 sealed_book_item_id = 37;              // 技能书封卷入包：首次产出的 3414 封卷道籍背包实例 ID。
+  uint32 equipment_polish_attempts_used = 38;   // V3 装备智能定档连磨：首次实际消耗打磨手数（1..8）。
+  uint64 equipment_actual_gold_spent = 39;      // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
+  uint64 wanted_order_id = 40;                  // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
+  uint64 wanted_order_gold = 41;                // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。

@@ -522,6 +522,12 @@ message BattleSettlementData {
   uint32 starter_pet_table_id = 48;       // 本局最终首发出战灵宠表 ID（含 V3 战前换宠结果，无宠为 0）
   repeated uint32 core_skill_ids = 49;    // 主角本局携带的核心主动技能 ID（最多 4 个，用于问道名局流派汇总）
   string player_display_name = 50;        // 主角展示名（供问道名局与宿敌账本展示）
+  // 天墉生死状冻结上下文回传（供 scene 在结算时挂载 30 分钟败者印记或复仇清标，非生死状留空）。
+  JianghuDuelBattleContext jianghu_duel = 51;
+  // 赛季玩法 V3：本场单槽赛季印实战功劳摘要（零经济/零持久化扩展，随 BattleEndS2C.settlement 即时展示）。
+  uint64 season_seal_contribution_value = 52; // 主贡献累计值（101/102 削盾量、103 减伤+共鸣增盾量、104 回蓝+共鸣省蓝量）
+  uint32 season_seal_trigger_count = 53;      // 本场赛季印基础效果触发次数
+  uint32 season_seal_resonance_count = 54;    // 本场「技印共鸣」触发次数
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -766,4 +772,21 @@ message BattleActorBuildSummary {
   repeated uint32 skill_table_ids = 12;
   repeated uint32 wuxing_sigil_ids = 13;
   bool used_free_preset = 14;
+}
+
+// ---- 江湖恩怨·天墉生死状开局冻结上下文(docs/design/battle-jianghu-grudge-duel-bounty-v1.md) ----
+// 由 match 在成局提交点冻结，透传至 CreateBattleRequest / 战斗房间 / BattleSettlementData / BattleResultEvent。
+message JianghuDuelBattleContext {
+  uint64 duel_invite_id = 1;           // 发号器永久 ID（兼作幂等扣费与退费键）
+  uint32 writ_tier = 2;                // 1=普通 500 银两战书, 2=金帖生死状(Item 3415)
+  uint64 challenger_captain_id = 3;    // A 方（发起方）队长 player_id
+  string challenger_captain_name = 4;  // A 方队长展示名
+  uint64 target_captain_id = 5;        // B 方（应战方）队长 player_id
+  string target_captain_name = 6;      // B 方队长展示名
+  uint64 side_a_guild_id = 7;          // 若 A 方全员同帮则为该帮 guild_id，否则 0
+  string side_a_guild_name = 8;
+  uint64 side_b_guild_id = 9;          // 若 B 方全员同帮则为该帮 guild_id，否则 0
+  string side_b_guild_name = 10;
+  uint32 round_limit_override = 11;    // 冻结的生死状回合上限（默认 30，打满双方存活权威判平）
+  uint32 team_size = 12;               // 每侧人数（1..5）
 }

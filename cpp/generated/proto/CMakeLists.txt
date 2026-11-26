@@ -194,6 +194,8 @@ set(SOURCE_FILES
     common/component/player_travel_pass_comp.pb.cc
     common/component/player_equip_loadout_comp.pb.cc
     scene/player_rewarded_ad.pb.cc
+    common/component/player_jianghu_comp.pb.cc
+    scene/player_jianghu.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

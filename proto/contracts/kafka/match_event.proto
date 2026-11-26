@@ -41,5 +41,7 @@ message BattleResultEvent {
   RankedMatchContext ranked_context = 14;
   // 玩家本局有效参与事实(按 player_id 升序),battle 在提交终局前冻结,重放不重算。
   repeated BattleParticipationFact participation_facts = 15;
+  // 天墉生死状冻结上下文原样回显（非生死状留空；供 match 恩怨录与 guild 帮派恩怨墙消费）。
+  JianghuDuelBattleContext jianghu_duel_context = 16;
 }
 

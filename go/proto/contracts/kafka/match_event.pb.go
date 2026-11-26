@@ -107,6 +107,8 @@ type BattleResultEvent struct {
 	RankedContext *battle.RankedMatchContext `protobuf:"bytes,14,opt,name=ranked_context,json=rankedContext,proto3" json:"ranked_context,omitempty"`
 	// 玩家本局有效参与事实(按 player_id 升序),battle 在提交终局前冻结,重放不重算。
 	ParticipationFacts []*battle.BattleParticipationFact `protobuf:"bytes,15,rep,name=participation_facts,json=participationFacts,proto3" json:"participation_facts,omitempty"`
+	// 天墉生死状冻结上下文原样回显（非生死状留空；供 match 恩怨录与 guild 帮派恩怨墙消费）。
+	JianghuDuelContext *battle.JianghuDuelBattleContext `protobuf:"bytes,16,opt,name=jianghu_duel_context,json=jianghuDuelContext,proto3" json:"jianghu_duel_context,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -246,6 +248,13 @@ func (x *BattleResultEvent) GetParticipationFacts() []*battle.BattleParticipatio
 	return nil
 }
 
+func (x *BattleResultEvent) GetJianghuDuelContext() *battle.JianghuDuelBattleContext {
+	if x != nil {
+		return x.JianghuDuelContext
+	}
+	return nil
+}
+
 var File_proto_contracts_kafka_match_event_proto protoreflect.FileDescriptor
 
 const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
@@ -255,7 +264,7 @@ const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
 	"\n" +
 	"team_index\x18\x01 \x01(\rR\tteamIndex\x12\x1d\n" +
 	"\n" +
-	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\xe1\x05\n" +
+	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\xae\x06\n" +
 	"\x11BattleResultEvent\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
 	"\n" +
@@ -273,7 +282,8 @@ const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
 	"\vsettlements\x18\f \x03(\v2\x15.BattleSettlementDataR\vsettlements\x12:\n" +
 	"\x19settlement_format_version\x18\r \x01(\rR\x17settlementFormatVersion\x12:\n" +
 	"\x0eranked_context\x18\x0e \x01(\v2\x13.RankedMatchContextR\rrankedContext\x12I\n" +
-	"\x13participation_facts\x18\x0f \x03(\v2\x18.BattleParticipationFactR\x12participationFactsB\x17Z\x15proto/contracts/kafkab\x06proto3"
+	"\x13participation_facts\x18\x0f \x03(\v2\x18.BattleParticipationFactR\x12participationFacts\x12K\n" +
+	"\x14jianghu_duel_context\x18\x10 \x01(\v2\x19.JianghuDuelBattleContextR\x12jianghuDuelContextB\x17Z\x15proto/contracts/kafkab\x06proto3"
 
 var (
 	file_proto_contracts_kafka_match_event_proto_rawDescOnce sync.Once
@@ -289,13 +299,14 @@ func file_proto_contracts_kafka_match_event_proto_rawDescGZIP() []byte {
 
 var file_proto_contracts_kafka_match_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_contracts_kafka_match_event_proto_goTypes = []any{
-	(*BattleResultTeam)(nil),               // 0: contracts.kafka.BattleResultTeam
-	(*BattleResultEvent)(nil),              // 1: contracts.kafka.BattleResultEvent
-	(battle.EBattleOutcome)(0),             // 2: eBattleOutcome
-	(*battle.BattleActivityContext)(nil),   // 3: BattleActivityContext
-	(*battle.BattleSettlementData)(nil),    // 4: BattleSettlementData
-	(*battle.RankedMatchContext)(nil),      // 5: RankedMatchContext
-	(*battle.BattleParticipationFact)(nil), // 6: BattleParticipationFact
+	(*BattleResultTeam)(nil),                // 0: contracts.kafka.BattleResultTeam
+	(*BattleResultEvent)(nil),               // 1: contracts.kafka.BattleResultEvent
+	(battle.EBattleOutcome)(0),              // 2: eBattleOutcome
+	(*battle.BattleActivityContext)(nil),    // 3: BattleActivityContext
+	(*battle.BattleSettlementData)(nil),     // 4: BattleSettlementData
+	(*battle.RankedMatchContext)(nil),       // 5: RankedMatchContext
+	(*battle.BattleParticipationFact)(nil),  // 6: BattleParticipationFact
+	(*battle.JianghuDuelBattleContext)(nil), // 7: JianghuDuelBattleContext
 }
 var file_proto_contracts_kafka_match_event_proto_depIdxs = []int32{
 	2, // 0: contracts.kafka.BattleResultEvent.outcome:type_name -> eBattleOutcome
@@ -304,11 +315,12 @@ var file_proto_contracts_kafka_match_event_proto_depIdxs = []int32{
 	4, // 3: contracts.kafka.BattleResultEvent.settlements:type_name -> BattleSettlementData
 	5, // 4: contracts.kafka.BattleResultEvent.ranked_context:type_name -> RankedMatchContext
 	6, // 5: contracts.kafka.BattleResultEvent.participation_facts:type_name -> BattleParticipationFact
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7, // 6: contracts.kafka.BattleResultEvent.jianghu_duel_context:type_name -> JianghuDuelBattleContext
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_contracts_kafka_match_event_proto_init() }

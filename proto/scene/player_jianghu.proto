@@ -1,0 +1,76 @@
+syntax = "proto3";
+option go_package = "scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/scene/player_bag.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 江湖恩怨与天墉生死状 · 玩家场景侧协议（docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2 / §2.5）。
+// 管理本人「闭关免战」开关、30 分钟战败社交印记展示及「洗尘符 / 1000 银两」幂等清除。
+
+enum JianghuClearMarkMode {
+  JIANGHU_CLEAR_MARK_MODE_UNSPECIFIED = 0;
+  JIANGHU_CLEAR_MARK_MODE_SILVER = 1;       // 消耗 JianghuRule.silver_clear_cost（默认 1000 银两）普通清除
+  JIANGHU_CLEAR_MARK_MODE_ITEM_CHARM = 2;   // 消耗 1 张 Item 3416「清风洗尘符」清除并附赠 30 分钟洒脱徽记
+}
+
+message JianghuProfileView {
+  uint64 server_time_ms = 1;
+  bool duel_refuse_strangers = 2;
+  bool has_active_defeat_mark = 3;
+  uint64 defeat_mark_expires_at_ms = 4;
+  uint64 defeat_mark_winner_id = 5;
+  string defeat_mark_winner_name = 6;
+  uint32 defeat_mark_style_id = 7;
+  bool defeat_mark_is_guild_name = 8;
+  uint64 defeat_mark_battle_id = 9;
+  bool has_active_clear_badge = 10;
+  uint64 clear_badge_expires_at_ms = 11;
+  uint32 clear_badge_style_id = 12;
+  uint64 silver_balance = 13;               // 当前银两余额（供界面展示 500 战书 / 1000 洗尘门槛）
+  uint32 gold_writ_item_count = 14;         // 背包内 Item 3415「金帖生死状」持有数
+  uint32 clear_charm_item_count = 15;       // 背包内 Item 3416「清风洗尘符」持有数
+  uint64 silver_writ_cost = 16;             // JianghuRule.silver_writ_cost
+  uint64 silver_clear_cost = 17;            // JianghuRule.silver_clear_cost
+}
+
+message GetJianghuProfileRequest {}
+
+message GetJianghuProfileResponse {
+  TipInfoMessage error_message = 1;
+  JianghuProfileView profile = 2;
+}
+
+message SetJianghuRefuseStrangersRequest {
+  bool refuse_strangers = 1;
+}
+
+message SetJianghuRefuseStrangersResponse {
+  TipInfoMessage error_message = 1;
+  JianghuProfileView profile = 2;
+}
+
+message ClearJianghuDefeatMarkRequest {
+  uint64 client_request_id = 1; // 必填非 0 客户端幂等键，防连点重扣银两或清风洗尘符
+  JianghuClearMarkMode mode = 2;
+}
+
+message ClearJianghuDefeatMarkResponse {
+  TipInfoMessage error_message = 1;
+  JianghuProfileView profile = 2;
+  BagInfo bag = 3;              // 消耗物品成功（含重放）时返回最新全量背包
+  bool replayed = 4;            // true = 幂等重放命中首次成功记录，未重复扣费
+}
+
+service SceneJianghuClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  rpc GetJianghuProfile (GetJianghuProfileRequest) returns (GetJianghuProfileResponse);
+  rpc SetJianghuRefuseStrangers (SetJianghuRefuseStrangersRequest) returns (SetJianghuRefuseStrangersResponse);
+  rpc ClearJianghuDefeatMark (ClearJianghuDefeatMarkRequest) returns (ClearJianghuDefeatMarkResponse);
+  // ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+}

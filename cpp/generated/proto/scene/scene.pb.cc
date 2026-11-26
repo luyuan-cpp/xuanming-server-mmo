@@ -49,6 +49,14 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
         // ::PrepareBattleRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
+        // ::JianghuDuelPrepareFee
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
+        // ::CheckJianghuDuelEligibilityRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
+        // ::JianghuPlayerEligibilityEntry
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
+        // ::CheckJianghuDuelEligibilityResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
         // ::PrepareBattleResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fscene_2eproto, /* tracker*/ nullptr,},
         // ::CancelBattlePrepareRequest
@@ -545,6 +553,324 @@ const ::_pbi::ClassData* PlayerEnterGameNodeRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuPlayerEligibilityEntry::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuPlayerEligibilityEntry>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_._has_bits_);
+};
+
+constexpr JianghuPlayerEligibilityEntry::ParseTableT_ JianghuPlayerEligibilityEntry::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::JianghuPlayerEligibilityEntry>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuPlayerEligibilityEntry, _impl_.player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.player_id_)}},
+      // bool online_on_node = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(JianghuPlayerEligibilityEntry, _impl_.online_on_node_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.online_on_node_)}},
+      // bool duel_refuse_strangers = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(JianghuPlayerEligibilityEntry, _impl_.duel_refuse_strangers_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.duel_refuse_strangers_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool online_on_node = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.online_on_node_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool duel_refuse_strangers = 3;
+      {PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.duel_refuse_strangers_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr JianghuPlayerEligibilityEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_id_{::uint64_t{0u}},
+        online_on_node_{false},
+        duel_refuse_strangers_{false} {}
+
+template <typename>
+constexpr JianghuPlayerEligibilityEntry::JianghuPlayerEligibilityEntry(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuPlayerEligibilityEntry::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuPlayerEligibilityEntry(arena);
+}
+constexpr auto JianghuPlayerEligibilityEntry::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(JianghuPlayerEligibilityEntry), alignof(JianghuPlayerEligibilityEntry));
+}
+constexpr auto JianghuPlayerEligibilityEntry::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuPlayerEligibilityEntry::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuPlayerEligibilityEntry>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuPlayerEligibilityEntry::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuPlayerEligibilityEntry>(), &JianghuPlayerEligibilityEntry::ByteSizeLong,
+              &JianghuPlayerEligibilityEntry::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[12],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuPlayerEligibilityEntryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuPlayerEligibilityEntryGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuPlayerEligibilityEntry_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuPlayerEligibilityEntry::InternalGenerateClassData_(
+            _default, &JianghuPlayerEligibilityEntry_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuPlayerEligibilityEntry>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuPlayerEligibilityEntryGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuPlayerEligibilityEntry _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuPlayerEligibilityEntry>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntryGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuPlayerEligibilityEntryGlobalsTypeInternal JianghuPlayerEligibilityEntry_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuPlayerEligibilityEntry_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuPlayerEligibilityEntry_globals_.GetClassData();
+#else
+  return JianghuPlayerEligibilityEntry_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class JianghuDuelPrepareFee::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<JianghuDuelPrepareFee>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_._has_bits_);
+};
+
+constexpr JianghuDuelPrepareFee::ParseTableT_ JianghuDuelPrepareFee::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::JianghuDuelPrepareFee>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 silver_cost = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelPrepareFee, _impl_.silver_cost_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.silver_cost_)}},
+      // uint64 duel_invite_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JianghuDuelPrepareFee, _impl_.duel_invite_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.duel_invite_id_)}},
+      // uint32 writ_tier = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuDuelPrepareFee, _impl_.writ_tier_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.writ_tier_)}},
+      // uint32 item_config_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JianghuDuelPrepareFee, _impl_.item_config_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.item_config_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 duel_invite_id = 1;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.duel_invite_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 writ_tier = 2;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.writ_tier_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_config_id = 3;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.item_config_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 silver_cost = 4;
+      {PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.silver_cost_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr JianghuDuelPrepareFee::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        duel_invite_id_{::uint64_t{0u}},
+        writ_tier_{0u},
+        item_config_id_{0u},
+        silver_cost_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr JianghuDuelPrepareFee::JianghuDuelPrepareFee(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL JianghuDuelPrepareFee::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) JianghuDuelPrepareFee(arena);
+}
+constexpr auto JianghuDuelPrepareFee::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(JianghuDuelPrepareFee), alignof(JianghuDuelPrepareFee));
+}
+constexpr auto JianghuDuelPrepareFee::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &JianghuDuelPrepareFee::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<JianghuDuelPrepareFee>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &JianghuDuelPrepareFee::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<JianghuDuelPrepareFee>(), &JianghuDuelPrepareFee::ByteSizeLong,
+              &JianghuDuelPrepareFee::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct JianghuDuelPrepareFeeGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr JianghuDuelPrepareFeeGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 JianghuDuelPrepareFee_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(JianghuDuelPrepareFee::InternalGenerateClassData_(
+            _default, &JianghuDuelPrepareFee_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelPrepareFee>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~JianghuDuelPrepareFeeGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) JianghuDuelPrepareFee _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<JianghuDuelPrepareFee>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFeeGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST JianghuDuelPrepareFeeGlobalsTypeInternal JianghuDuelPrepareFee_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* JianghuDuelPrepareFee_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return JianghuDuelPrepareFee_globals_.GetClassData();
+#else
+  return JianghuDuelPrepareFee_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class DestroySceneRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<DestroySceneRequest>()._impl_._has_bits_);
@@ -882,6 +1208,183 @@ const ::_pbi::ClassData* CreateSceneRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class CheckJianghuDuelEligibilityRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CheckJianghuDuelEligibilityRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_._has_bits_);
+};
+
+constexpr CheckJianghuDuelEligibilityRequest::ParseTableT_ CheckJianghuDuelEligibilityRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CheckJianghuDuelEligibilityRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // repeated uint64 player_ids = 1;
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.player_ids_)}},
+      // uint64 payer_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckJianghuDuelEligibilityRequest, _impl_.payer_player_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.payer_player_id_)}},
+      // uint32 writ_tier = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckJianghuDuelEligibilityRequest, _impl_.writ_tier_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.writ_tier_)}},
+      // uint32 item_config_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckJianghuDuelEligibilityRequest, _impl_.item_config_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.item_config_id_)}},
+      // uint64 silver_cost = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckJianghuDuelEligibilityRequest, _impl_.silver_cost_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.silver_cost_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 player_ids = 1;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // uint64 payer_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.payer_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 writ_tier = 3;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.writ_tier_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_config_id = 4;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.item_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 silver_cost = 5;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.silver_cost_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CheckJianghuDuelEligibilityRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::CheckJianghuDuelEligibilityRequest,
+            PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0},
+        payer_player_id_{::uint64_t{0u}},
+        writ_tier_{0u},
+        item_config_id_{0u},
+        silver_cost_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr CheckJianghuDuelEligibilityRequest::CheckJianghuDuelEligibilityRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CheckJianghuDuelEligibilityRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CheckJianghuDuelEligibilityRequest(arena);
+}
+constexpr auto CheckJianghuDuelEligibilityRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CheckJianghuDuelEligibilityRequest), alignof(CheckJianghuDuelEligibilityRequest));
+}
+constexpr auto CheckJianghuDuelEligibilityRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CheckJianghuDuelEligibilityRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CheckJianghuDuelEligibilityRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CheckJianghuDuelEligibilityRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CheckJianghuDuelEligibilityRequest>(), &CheckJianghuDuelEligibilityRequest::ByteSizeLong,
+              &CheckJianghuDuelEligibilityRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[11],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CheckJianghuDuelEligibilityRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CheckJianghuDuelEligibilityRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CheckJianghuDuelEligibilityRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CheckJianghuDuelEligibilityRequest::InternalGenerateClassData_(
+            _default, &CheckJianghuDuelEligibilityRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CheckJianghuDuelEligibilityRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CheckJianghuDuelEligibilityRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CheckJianghuDuelEligibilityRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CheckJianghuDuelEligibilityRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CheckJianghuDuelEligibilityRequestGlobalsTypeInternal CheckJianghuDuelEligibilityRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CheckJianghuDuelEligibilityRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CheckJianghuDuelEligibilityRequest_globals_.GetClassData();
+#else
+  return CheckJianghuDuelEligibilityRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class CancelBattlePrepareRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<CancelBattlePrepareRequest>()._impl_._has_bits_);
@@ -979,7 +1482,7 @@ constexpr auto CancelBattlePrepareRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fscene_2eproto,
@@ -1138,7 +1641,7 @@ constexpr auto SealAccountRoleTradeRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fscene_2eproto,
@@ -1339,6 +1842,177 @@ const ::_pbi::ClassData* GameNodeConnectRequest_get_class_data() {
   return GameNodeConnectRequest_globals_.GetClassData();
 #else
   return GameNodeConnectRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CheckJianghuDuelEligibilityResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CheckJianghuDuelEligibilityResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_._has_bits_);
+};
+
+constexpr CheckJianghuDuelEligibilityResponse::ParseTableT_ CheckJianghuDuelEligibilityResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CheckJianghuDuelEligibilityResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.error_message_)}},
+      // repeated .JianghuPlayerEligibilityEntry players = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 1,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.players_)}},
+      // bool payer_has_sufficient_fee = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .JianghuPlayerEligibilityEntry players = 2;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.players_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool payer_has_sufficient_fee = 3;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::JianghuPlayerEligibilityEntry>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::JianghuPlayerEligibilityEntry_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CheckJianghuDuelEligibilityResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        players_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::CheckJianghuDuelEligibilityResponse,
+            PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.players_)>()
+         }
+        ,
+        error_message_{nullptr},
+        payer_has_sufficient_fee_{false} {}
+
+template <typename>
+constexpr CheckJianghuDuelEligibilityResponse::CheckJianghuDuelEligibilityResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CheckJianghuDuelEligibilityResponse(arena);
+}
+constexpr auto CheckJianghuDuelEligibilityResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CheckJianghuDuelEligibilityResponse), alignof(CheckJianghuDuelEligibilityResponse));
+}
+constexpr auto CheckJianghuDuelEligibilityResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CheckJianghuDuelEligibilityResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CheckJianghuDuelEligibilityResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CheckJianghuDuelEligibilityResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CheckJianghuDuelEligibilityResponse>(), &CheckJianghuDuelEligibilityResponse::ByteSizeLong,
+              &CheckJianghuDuelEligibilityResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[13],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CheckJianghuDuelEligibilityResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CheckJianghuDuelEligibilityResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CheckJianghuDuelEligibilityResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CheckJianghuDuelEligibilityResponse::InternalGenerateClassData_(
+            _default, &CheckJianghuDuelEligibilityResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CheckJianghuDuelEligibilityResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CheckJianghuDuelEligibilityResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CheckJianghuDuelEligibilityResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CheckJianghuDuelEligibilityResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CheckJianghuDuelEligibilityResponseGlobalsTypeInternal CheckJianghuDuelEligibilityResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CheckJianghuDuelEligibilityResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CheckJianghuDuelEligibilityResponse_globals_.GetClassData();
+#else
+  return CheckJianghuDuelEligibilityResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1832,12 +2506,12 @@ constexpr PrepareBattleRequest::ParseTableT_ PrepareBattleRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
-      3,  // num_aux_entries
+      12,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1848,50 +2522,53 @@ constexpr PrepareBattleRequest::ParseTableT_ PrepareBattleRequest::InternalGener
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.player_id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.player_id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.player_id_)}},
       // uint64 battle_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.battle_id_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.battle_id_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_id_)}},
       // uint32 battle_node_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PrepareBattleRequest, _impl_.battle_node_id_), 7>(),
-       {24, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PrepareBattleRequest, _impl_.battle_node_id_), 8>(),
+       {24, 8, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_node_id_)}},
       // uint64 deadline_ms = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.deadline_ms_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.deadline_ms_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.deadline_ms_)}},
       // uint64 prepare_deadline_ms = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.prepare_deadline_ms_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PrepareBattleRequest, _impl_.prepare_deadline_ms_), 7>(),
+       {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.prepare_deadline_ms_)}},
       // .RankedMatchContext ranked_context = 6;
       {::_pbi::TcParser::FastMtS1,
        {50, 0, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.ranked_context_)}},
       // uint32 battle_config_id = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PrepareBattleRequest, _impl_.battle_config_id_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PrepareBattleRequest, _impl_.battle_config_id_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_config_id_)}},
       // uint32 match_mode = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PrepareBattleRequest, _impl_.match_mode_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PrepareBattleRequest, _impl_.match_mode_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.match_mode_)}},
       // .BattleActivityContext activity_context = 9;
       {::_pbi::TcParser::FastMtS1,
        {74, 1, 1,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.activity_context_)}},
       // bool is_wuxing_tower = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PrepareBattleRequest, _impl_.is_wuxing_tower_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PrepareBattleRequest, _impl_.is_wuxing_tower_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.is_wuxing_tower_)}},
       // .CustomDuelRules custom_duel_rules = 11;
       {::_pbi::TcParser::FastMtS1,
        {90, 2, 2,
         PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.custom_duel_rules_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .JianghuDuelPrepareFee jianghu_duel_fee = 12;
+      {::_pbi::TcParser::FastMtS1,
+       {98, 3, 3,
+        PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.jianghu_duel_fee_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1899,27 +2576,29 @@ constexpr PrepareBattleRequest::ParseTableT_ PrepareBattleRequest::InternalGener
       65535, 65535
     }}, {{
       // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 battle_id = 2;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 battle_node_id = 3;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_node_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_node_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 deadline_ms = 4;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 prepare_deadline_ms = 5;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.prepare_deadline_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.prepare_deadline_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .RankedMatchContext ranked_context = 6;
       {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.ranked_context_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 battle_config_id = 7;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 match_mode = 8;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.match_mode_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.match_mode_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .BattleActivityContext activity_context = 9;
       {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.activity_context_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool is_wuxing_tower = 10;
-      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.is_wuxing_tower_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.is_wuxing_tower_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .CustomDuelRules custom_duel_rules = 11;
       {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.custom_duel_rules_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .JianghuDuelPrepareFee jianghu_duel_fee = 12;
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleRequest, _impl_.jianghu_duel_fee_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1937,6 +2616,11 @@ constexpr PrepareBattleRequest::ParseTableT_ PrepareBattleRequest::InternalGener
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::CustomDuelRules_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::JianghuDuelPrepareFee>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::JianghuDuelPrepareFee_globals_},
+        #endif
     }},
     {{
     }},
@@ -1951,6 +2635,7 @@ inline constexpr PrepareBattleRequest::Impl_::Impl_(
         ranked_context_{nullptr},
         activity_context_{nullptr},
         custom_duel_rules_{nullptr},
+        jianghu_duel_fee_{nullptr},
         player_id_{::uint64_t{0u}},
         battle_id_{::uint64_t{0u}},
         deadline_ms_{::uint64_t{0u}},
@@ -2173,7 +2858,7 @@ constexpr auto PrepareBattleResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fscene_2eproto,
@@ -2320,7 +3005,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_._has_bits_),
-        14, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.battle_node_id_),
@@ -2332,16 +3017,60 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.activity_context_),
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.is_wuxing_tower_),
         PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.custom_duel_rules_),
+        PROTOBUF_FIELD_OFFSET(::PrepareBattleRequest, _impl_.jianghu_duel_fee_),
+        4,
+        5,
+        8,
+        6,
+        7,
+        0,
+        9,
+        10,
+        1,
+        11,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::JianghuDuelPrepareFee, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::JianghuDuelPrepareFee, _impl_.duel_invite_id_),
+        PROTOBUF_FIELD_OFFSET(::JianghuDuelPrepareFee, _impl_.writ_tier_),
+        PROTOBUF_FIELD_OFFSET(::JianghuDuelPrepareFee, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::JianghuDuelPrepareFee, _impl_.silver_cost_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.player_ids_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.payer_player_id_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.writ_tier_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.silver_cost_),
+        0,
+        1,
+        2,
         3,
         4,
-        7,
-        5,
-        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::JianghuPlayerEligibilityEntry, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::JianghuPlayerEligibilityEntry, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::JianghuPlayerEligibilityEntry, _impl_.online_on_node_),
+        PROTOBUF_FIELD_OFFSET(::JianghuPlayerEligibilityEntry, _impl_.duel_refuse_strangers_),
         0,
-        8,
-        9,
         1,
-        10,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.players_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_),
+        1,
+        0,
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_._has_bits_),
@@ -2380,9 +3109,13 @@ static const ::_pbi::MigrationSchema
         {75, sizeof(::CreateSceneResponse)},
         {80, sizeof(::DestroySceneRequest)},
         {87, sizeof(::PrepareBattleRequest)},
-        {112, sizeof(::PrepareBattleResponse)},
-        {121, sizeof(::CancelBattlePrepareRequest)},
-        {128, sizeof(::SealAccountRoleTradeRequest)},
+        {114, sizeof(::JianghuDuelPrepareFee)},
+        {125, sizeof(::CheckJianghuDuelEligibilityRequest)},
+        {138, sizeof(::JianghuPlayerEligibilityEntry)},
+        {147, sizeof(::CheckJianghuDuelEligibilityResponse)},
+        {156, sizeof(::PrepareBattleResponse)},
+        {165, sizeof(::CancelBattlePrepareRequest)},
+        {172, sizeof(::SealAccountRoleTradeRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2396,6 +3129,10 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::CreateSceneResponse_globals_,
         &::DestroySceneRequest_globals_,
         &::PrepareBattleRequest_globals_,
+        &::JianghuDuelPrepareFee_globals_,
+        &::CheckJianghuDuelEligibilityRequest_globals_,
+        &::JianghuPlayerEligibilityEntry_globals_,
+        &::CheckJianghuDuelEligibilityResponse_globals_,
         &::PrepareBattleResponse_globals_,
         &::CancelBattlePrepareRequest_globals_,
         &::SealAccountRoleTradeRequest_globals_,
@@ -2436,7 +3173,7 @@ const char descriptor_table_protodef_proto_2fscene_2fscene_2eproto[] ABSL_ATTRIB
     "eSceneResponse\022\"\n\nscene_info\030\001 \001(\0132\016.Sce"
     "neInfoComp\"E\n\023DestroySceneRequest\022\020\n\010sce"
     "ne_id\030\001 \001(\004\022\034\n\024placement_generation\030\002 \001("
-    "\004\"\331\002\n\024PrepareBattleRequest\022\021\n\tplayer_id\030"
+    "\004\"\213\003\n\024PrepareBattleRequest\022\021\n\tplayer_id\030"
     "\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\026\n\016battle_node_"
     "id\030\003 \001(\r\022\023\n\013deadline_ms\030\004 \001(\004\022\033\n\023prepare"
     "_deadline_ms\030\005 \001(\004\022+\n\016ranked_context\030\006 \001"
@@ -2444,32 +3181,49 @@ const char descriptor_table_protodef_proto_2fscene_2fscene_2eproto[] ABSL_ATTRIB
     "_id\030\007 \001(\r\022\022\n\nmatch_mode\030\010 \001(\r\0220\n\020activit"
     "y_context\030\t \001(\0132\026.BattleActivityContext\022"
     "\027\n\017is_wuxing_tower\030\n \001(\010\022+\n\021custom_duel_"
-    "rules\030\013 \001(\0132\020.CustomDuelRules\"\203\001\n\025Prepar"
-    "eBattleResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022\'\n\010snapshot\030\002 \001(\0132\025.Batt"
-    "lePlayerSnapshot\022\031\n\021table_fingerprint\030\003 "
-    "\001(\t\"B\n\032CancelBattlePrepareRequest\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\"s\n\033SealA"
-    "ccountRoleTradeRequest\022(\n\004seal\030\001 \001(\0132\032.c"
-    "ommon.base.RoleTradeSeal\022*\n\004auth\030\002 \001(\0132\034"
-    ".common.base.ServiceCallAuth*\200\001\n\034ClientM"
-    "essageDispatchVerdict\022/\n+CLIENT_MESSAGE_"
-    "DISPATCH_VERDICT_UNSPECIFIED\020\000\022/\n+CLIENT"
-    "_MESSAGE_DISPATCH_VERDICT_RETRY_LATER\020\0012"
-    "\214\004\n\005Scene\022:\n\023PlayerEnterGameNode\022\033.Playe"
-    "rEnterGameNodeRequest\032\006.Empty\022e\n\032Process"
-    "ClientPlayerMessage\022\".ProcessClientPlaye"
-    "rMessageRequest\032#.ProcessClientPlayerMes"
-    "sageResponse\022<\n\023UpdateSessionDetail\022\035.Re"
-    "gisterPlayerSessionRequest\032\006.Empty\0228\n\013Cr"
-    "eateScene\022\023.CreateSceneRequest\032\024.CreateS"
-    "ceneResponse\022,\n\014DestroyScene\022\024.DestroySc"
-    "eneRequest\032\006.Empty\022>\n\rPrepareBattle\022\025.Pr"
-    "epareBattleRequest\032\026.PrepareBattleRespon"
-    "se\022:\n\023CancelBattlePrepare\022\033.CancelBattle"
-    "PrepareRequest\032\006.Empty\022>\n\rNodeHandshake\022"
-    "\025.NodeHandshakeRequest\032\026.NodeHandshakeRe"
-    "sponseB\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "rules\030\013 \001(\0132\020.CustomDuelRules\0220\n\020jianghu"
+    "_duel_fee\030\014 \001(\0132\026.JianghuDuelPrepareFee\""
+    "o\n\025JianghuDuelPrepareFee\022\026\n\016duel_invite_"
+    "id\030\001 \001(\004\022\021\n\twrit_tier\030\002 \001(\r\022\026\n\016item_conf"
+    "ig_id\030\003 \001(\r\022\023\n\013silver_cost\030\004 \001(\004\"\221\001\n\"Che"
+    "ckJianghuDuelEligibilityRequest\022\022\n\nplaye"
+    "r_ids\030\001 \003(\004\022\027\n\017payer_player_id\030\002 \001(\004\022\021\n\t"
+    "writ_tier\030\003 \001(\r\022\026\n\016item_config_id\030\004 \001(\r\022"
+    "\023\n\013silver_cost\030\005 \001(\004\"i\n\035JianghuPlayerEli"
+    "gibilityEntry\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016onli"
+    "ne_on_node\030\002 \001(\010\022\035\n\025duel_refuse_stranger"
+    "s\030\003 \001(\010\"\240\001\n#CheckJianghuDuelEligibilityR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022/\n\007players\030\002 \003(\0132\036.JianghuPlayer"
+    "EligibilityEntry\022 \n\030payer_has_sufficient"
+    "_fee\030\003 \001(\010\"\203\001\n\025PrepareBattleResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010"
+    "snapshot\030\002 \001(\0132\025.BattlePlayerSnapshot\022\031\n"
+    "\021table_fingerprint\030\003 \001(\t\"B\n\032CancelBattle"
+    "PrepareRequest\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbat"
+    "tle_id\030\002 \001(\004\"s\n\033SealAccountRoleTradeRequ"
+    "est\022(\n\004seal\030\001 \001(\0132\032.common.base.RoleTrad"
+    "eSeal\022*\n\004auth\030\002 \001(\0132\034.common.base.Servic"
+    "eCallAuth*\200\001\n\034ClientMessageDispatchVerdi"
+    "ct\022/\n+CLIENT_MESSAGE_DISPATCH_VERDICT_UN"
+    "SPECIFIED\020\000\022/\n+CLIENT_MESSAGE_DISPATCH_V"
+    "ERDICT_RETRY_LATER\020\0012\366\004\n\005Scene\022:\n\023Player"
+    "EnterGameNode\022\033.PlayerEnterGameNodeReque"
+    "st\032\006.Empty\022e\n\032ProcessClientPlayerMessage"
+    "\022\".ProcessClientPlayerMessageRequest\032#.P"
+    "rocessClientPlayerMessageResponse\022<\n\023Upd"
+    "ateSessionDetail\022\035.RegisterPlayerSession"
+    "Request\032\006.Empty\0228\n\013CreateScene\022\023.CreateS"
+    "ceneRequest\032\024.CreateSceneResponse\022,\n\014Des"
+    "troyScene\022\024.DestroySceneRequest\032\006.Empty\022"
+    ">\n\rPrepareBattle\022\025.PrepareBattleRequest\032"
+    "\026.PrepareBattleResponse\022:\n\023CancelBattleP"
+    "repare\022\033.CancelBattlePrepareRequest\032\006.Em"
+    "pty\022>\n\rNodeHandshake\022\025.NodeHandshakeRequ"
+    "est\032\026.NodeHandshakeResponse\022h\n\033CheckJian"
+    "ghuDuelEligibility\022#.CheckJianghuDuelEli"
+    "gibilityRequest\032$.CheckJianghuDuelEligib"
+    "ilityResponseB\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fscene_2eproto_deps[9] = {
@@ -2487,13 +3241,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fscene_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fscene_2eproto = {
     false,
     false,
-    2710,
+    3397,
     descriptor_table_protodef_proto_2fscene_2fscene_2eproto,
     "proto/scene/scene.proto",
     &descriptor_table_proto_2fscene_2fscene_2eproto_once,
     descriptor_table_proto_2fscene_2fscene_2eproto_deps,
     9,
-    13,
+    17,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fscene_2eproto::offsets,
@@ -4988,6 +5742,9 @@ PrepareBattleRequest::PrepareBattleRequest(
   _impl_.custom_duel_rules_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.custom_duel_rules_)
                 : nullptr;
+  _impl_.jianghu_duel_fee_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.jianghu_duel_fee_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -5026,6 +5783,7 @@ inline void PrepareBattleRequest::SharedDtor(MessageLite& self) {
   delete this_._impl_.ranked_context_;
   delete this_._impl_.activity_context_;
   delete this_._impl_.custom_duel_rules_;
+  delete this_._impl_.jianghu_duel_fee_;
   this_._impl_.~Impl_();
 }
 
@@ -5063,7 +5821,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(_impl_.ranked_context_ != nullptr);
       _impl_.ranked_context_->Clear();
@@ -5076,16 +5834,20 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
       ABSL_DCHECK(_impl_.custom_duel_rules_ != nullptr);
       _impl_.custom_duel_rules_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.jianghu_duel_fee_ != nullptr);
+      _impl_.jianghu_duel_fee_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.battle_node_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.battle_node_id_));
+        reinterpret_cast<char*>(&_impl_.prepare_deadline_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.prepare_deadline_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    ::memset(&_impl_.battle_config_id_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.battle_node_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.is_wuxing_tower_) -
-        reinterpret_cast<char*>(&_impl_.battle_config_id_)) + sizeof(_impl_.is_wuxing_tower_));
+        reinterpret_cast<char*>(&_impl_.battle_node_id_)) + sizeof(_impl_.is_wuxing_tower_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5111,7 +5873,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5120,7 +5882,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // uint64 battle_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5129,7 +5891,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // uint32 battle_node_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_battle_node_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5138,7 +5900,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // uint64 deadline_ms = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_deadline_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5147,7 +5909,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // uint64 prepare_deadline_ms = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_prepare_deadline_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5163,7 +5925,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // uint32 battle_config_id = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_battle_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5172,7 +5934,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // uint32 match_mode = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_match_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5188,7 +5950,7 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   }
 
   // bool is_wuxing_tower = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_is_wuxing_tower() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -5200,6 +5962,13 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         11, *this_._impl_.custom_duel_rules_, this_._impl_.custom_duel_rules_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .JianghuDuelPrepareFee jianghu_duel_fee = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        12, *this_._impl_.jianghu_duel_fee_, this_._impl_.jianghu_duel_fee_->GetCachedSize(), target,
         stream);
   }
 
@@ -5244,59 +6013,64 @@ PROTOBUF_NOINLINE void PrepareBattleRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.custom_duel_rules_);
     }
-    // uint64 player_id = 1;
+    // .JianghuDuelPrepareFee jianghu_duel_fee = 12;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.jianghu_duel_fee_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint64 battle_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
     // uint64 deadline_ms = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_deadline_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_deadline_ms());
       }
     }
     // uint64 prepare_deadline_ms = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_prepare_deadline_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_prepare_deadline_ms());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint32 battle_node_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_battle_node_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_node_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 battle_config_id = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_battle_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_config_id());
       }
     }
     // uint32 match_mode = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_match_mode() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_match_mode());
       }
     }
     // bool is_wuxing_tower = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_is_wuxing_tower() != 0) {
         total_size += 2;
       }
@@ -5346,43 +6120,51 @@ void PrepareBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.jianghu_duel_fee_ != nullptr);
+      if (_this->_impl_.jianghu_duel_fee_ == nullptr) {
+        _this->_impl_.jianghu_duel_fee_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.jianghu_duel_fee_);
+      } else {
+        _this->_impl_.jianghu_duel_fee_->MergeFrom(*from._impl_.jianghu_duel_fee_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_deadline_ms() != 0) {
         _this->_impl_.deadline_ms_ = from._impl_.deadline_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_prepare_deadline_ms() != 0) {
         _this->_impl_.prepare_deadline_ms_ = from._impl_.prepare_deadline_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_battle_node_id() != 0) {
         _this->_impl_.battle_node_id_ = from._impl_.battle_node_id_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_battle_config_id() != 0) {
         _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_match_mode() != 0) {
         _this->_impl_.match_mode_ = from._impl_.match_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_is_wuxing_tower() != 0) {
         _this->_impl_.is_wuxing_tower_ = from._impl_.is_wuxing_tower_;
       }
@@ -5414,6 +6196,1146 @@ void PrepareBattleRequest::InternalSwap(PrepareBattleRequest* PROTOBUF_RESTRICT 
 }
 
 ::google::protobuf::Metadata PrepareBattleRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuDuelPrepareFee::JianghuDuelPrepareFee(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelPrepareFee_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:JianghuDuelPrepareFee)
+}
+JianghuDuelPrepareFee::JianghuDuelPrepareFee(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JianghuDuelPrepareFee& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuDuelPrepareFee_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE JianghuDuelPrepareFee::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void JianghuDuelPrepareFee::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, duel_invite_id_),
+           0,
+           offsetof(Impl_, silver_cost_) -
+               offsetof(Impl_, duel_invite_id_) +
+               sizeof(Impl_::silver_cost_));
+}
+JianghuDuelPrepareFee::~JianghuDuelPrepareFee() {
+  // @@protoc_insertion_point(destructor:JianghuDuelPrepareFee)
+  SharedDtor(*this);
+}
+inline void JianghuDuelPrepareFee::SharedDtor(MessageLite& self) {
+  JianghuDuelPrepareFee& this_ = static_cast<JianghuDuelPrepareFee&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuDuelPrepareFee_class_data_ =
+        JianghuDuelPrepareFee::InternalGenerateClassData_(JianghuDuelPrepareFee_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelPrepareFee::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelPrepareFee_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuDuelPrepareFee_class_data_.tc_table);
+  return JianghuDuelPrepareFee_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuDuelPrepareFee::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuDuelPrepareFee_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuDuelPrepareFee_globals_));
+  return JianghuDuelPrepareFee_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuDuelPrepareFee::ParseTableT_
+    JianghuDuelPrepareFee::_table_ =
+        JianghuDuelPrepareFee::InternalGenerateParseTable_(JianghuDuelPrepareFee_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuDuelPrepareFee::Clear() {
+// @@protoc_insertion_point(message_clear_start:JianghuDuelPrepareFee)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.duel_invite_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.silver_cost_) -
+        reinterpret_cast<char*>(&_impl_.duel_invite_id_)) + sizeof(_impl_.silver_cost_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuDuelPrepareFee::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuDuelPrepareFee& this_ = static_cast<const JianghuDuelPrepareFee&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuDuelPrepareFee::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuDuelPrepareFee& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:JianghuDuelPrepareFee)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 duel_invite_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_duel_invite_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_duel_invite_id(), target);
+    }
+  }
+
+  // uint32 writ_tier = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_writ_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_writ_tier(), target);
+    }
+  }
+
+  // uint32 item_config_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint64 silver_cost = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_silver_cost() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_silver_cost(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:JianghuDuelPrepareFee)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuDuelPrepareFee::ByteSizeLong(const MessageLite& base) {
+  const JianghuDuelPrepareFee& this_ = static_cast<const JianghuDuelPrepareFee&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuDuelPrepareFee::ByteSizeLong() const {
+  const JianghuDuelPrepareFee& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:JianghuDuelPrepareFee)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 duel_invite_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_duel_invite_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_duel_invite_id());
+      }
+    }
+    // uint32 writ_tier = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_writ_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_writ_tier());
+      }
+    }
+    // uint32 item_config_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint64 silver_cost = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_silver_cost() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_silver_cost());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuDuelPrepareFee::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuDuelPrepareFee*>(&to_msg);
+  auto& from = static_cast<const JianghuDuelPrepareFee&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:JianghuDuelPrepareFee)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_duel_invite_id() != 0) {
+        _this->_impl_.duel_invite_id_ = from._impl_.duel_invite_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_writ_tier() != 0) {
+        _this->_impl_.writ_tier_ = from._impl_.writ_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_silver_cost() != 0) {
+        _this->_impl_.silver_cost_ = from._impl_.silver_cost_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuDuelPrepareFee::CopyFrom(const JianghuDuelPrepareFee& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:JianghuDuelPrepareFee)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuDuelPrepareFee::InternalSwap(JianghuDuelPrepareFee* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.silver_cost_)
+      + sizeof(JianghuDuelPrepareFee::_impl_.silver_cost_)
+      - PROTOBUF_FIELD_OFFSET(JianghuDuelPrepareFee, _impl_.duel_invite_id_)>(
+          reinterpret_cast<char*>(&_impl_.duel_invite_id_),
+          reinterpret_cast<char*>(&other->_impl_.duel_invite_id_));
+}
+
+::google::protobuf::Metadata JianghuDuelPrepareFee::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CheckJianghuDuelEligibilityRequest::CheckJianghuDuelEligibilityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CheckJianghuDuelEligibilityRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:CheckJianghuDuelEligibilityRequest)
+}
+PROTOBUF_NDEBUG_INLINE CheckJianghuDuelEligibilityRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::CheckJianghuDuelEligibilityRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::CheckJianghuDuelEligibilityRequest,
+              PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.player_ids_)>()
+          , from.player_ids_
+        }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+CheckJianghuDuelEligibilityRequest::CheckJianghuDuelEligibilityRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CheckJianghuDuelEligibilityRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CheckJianghuDuelEligibilityRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CheckJianghuDuelEligibilityRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, payer_player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, payer_player_id_),
+           offsetof(Impl_, silver_cost_) -
+               offsetof(Impl_, payer_player_id_) +
+               sizeof(Impl_::silver_cost_));
+
+  // @@protoc_insertion_point(copy_constructor:CheckJianghuDuelEligibilityRequest)
+}
+PROTOBUF_NDEBUG_INLINE CheckJianghuDuelEligibilityRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::CheckJianghuDuelEligibilityRequest,
+            PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+inline void CheckJianghuDuelEligibilityRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, payer_player_id_),
+           0,
+           offsetof(Impl_, silver_cost_) -
+               offsetof(Impl_, payer_player_id_) +
+               sizeof(Impl_::silver_cost_));
+}
+CheckJianghuDuelEligibilityRequest::~CheckJianghuDuelEligibilityRequest() {
+  // @@protoc_insertion_point(destructor:CheckJianghuDuelEligibilityRequest)
+  SharedDtor(*this);
+}
+inline void CheckJianghuDuelEligibilityRequest::SharedDtor(MessageLite& self) {
+  CheckJianghuDuelEligibilityRequest& this_ = static_cast<CheckJianghuDuelEligibilityRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CheckJianghuDuelEligibilityRequest_class_data_ =
+        CheckJianghuDuelEligibilityRequest::InternalGenerateClassData_(CheckJianghuDuelEligibilityRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CheckJianghuDuelEligibilityRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CheckJianghuDuelEligibilityRequest_class_data_.tc_table);
+  return CheckJianghuDuelEligibilityRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CheckJianghuDuelEligibilityRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CheckJianghuDuelEligibilityRequest_globals_));
+  return CheckJianghuDuelEligibilityRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CheckJianghuDuelEligibilityRequest::ParseTableT_
+    CheckJianghuDuelEligibilityRequest::_table_ =
+        CheckJianghuDuelEligibilityRequest::InternalGenerateParseTable_(CheckJianghuDuelEligibilityRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CheckJianghuDuelEligibilityRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:CheckJianghuDuelEligibilityRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.player_ids_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.payer_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.silver_cost_) -
+        reinterpret_cast<char*>(&_impl_.payer_player_id_)) + sizeof(_impl_.silver_cost_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CheckJianghuDuelEligibilityRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CheckJianghuDuelEligibilityRequest& this_ = static_cast<const CheckJianghuDuelEligibilityRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CheckJianghuDuelEligibilityRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CheckJianghuDuelEligibilityRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:CheckJianghuDuelEligibilityRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 player_ids = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // uint64 payer_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_payer_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_payer_player_id(), target);
+    }
+  }
+
+  // uint32 writ_tier = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_writ_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_writ_tier(), target);
+    }
+  }
+
+  // uint32 item_config_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint64 silver_cost = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_silver_cost() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_silver_cost(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:CheckJianghuDuelEligibilityRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CheckJianghuDuelEligibilityRequest::ByteSizeLong(const MessageLite& base) {
+  const CheckJianghuDuelEligibilityRequest& this_ = static_cast<const CheckJianghuDuelEligibilityRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CheckJianghuDuelEligibilityRequest::ByteSizeLong() const {
+  const CheckJianghuDuelEligibilityRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:CheckJianghuDuelEligibilityRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // repeated uint64 player_ids = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
+    // uint64 payer_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_payer_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_payer_player_id());
+      }
+    }
+    // uint32 writ_tier = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_writ_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_writ_tier());
+      }
+    }
+    // uint32 item_config_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint64 silver_cost = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_silver_cost() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_silver_cost());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CheckJianghuDuelEligibilityRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CheckJianghuDuelEligibilityRequest*>(&to_msg);
+  auto& from = static_cast<const CheckJianghuDuelEligibilityRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:CheckJianghuDuelEligibilityRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_payer_player_id() != 0) {
+        _this->_impl_.payer_player_id_ = from._impl_.payer_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_writ_tier() != 0) {
+        _this->_impl_.writ_tier_ = from._impl_.writ_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_silver_cost() != 0) {
+        _this->_impl_.silver_cost_ = from._impl_.silver_cost_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CheckJianghuDuelEligibilityRequest::CopyFrom(const CheckJianghuDuelEligibilityRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:CheckJianghuDuelEligibilityRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CheckJianghuDuelEligibilityRequest::InternalSwap(CheckJianghuDuelEligibilityRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.silver_cost_)
+      + sizeof(CheckJianghuDuelEligibilityRequest::_impl_.silver_cost_)
+      - PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityRequest, _impl_.payer_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.payer_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.payer_player_id_));
+}
+
+::google::protobuf::Metadata CheckJianghuDuelEligibilityRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+JianghuPlayerEligibilityEntry::JianghuPlayerEligibilityEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuPlayerEligibilityEntry_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:JianghuPlayerEligibilityEntry)
+}
+JianghuPlayerEligibilityEntry::JianghuPlayerEligibilityEntry(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JianghuPlayerEligibilityEntry& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, JianghuPlayerEligibilityEntry_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE JianghuPlayerEligibilityEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void JianghuPlayerEligibilityEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, duel_refuse_strangers_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::duel_refuse_strangers_));
+}
+JianghuPlayerEligibilityEntry::~JianghuPlayerEligibilityEntry() {
+  // @@protoc_insertion_point(destructor:JianghuPlayerEligibilityEntry)
+  SharedDtor(*this);
+}
+inline void JianghuPlayerEligibilityEntry::SharedDtor(MessageLite& self) {
+  JianghuPlayerEligibilityEntry& this_ = static_cast<JianghuPlayerEligibilityEntry&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull JianghuPlayerEligibilityEntry_class_data_ =
+        JianghuPlayerEligibilityEntry::InternalGenerateClassData_(JianghuPlayerEligibilityEntry_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuPlayerEligibilityEntry::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuPlayerEligibilityEntry_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(JianghuPlayerEligibilityEntry_class_data_.tc_table);
+  return JianghuPlayerEligibilityEntry_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+JianghuPlayerEligibilityEntry::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&JianghuPlayerEligibilityEntry_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&JianghuPlayerEligibilityEntry_globals_));
+  return JianghuPlayerEligibilityEntry_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const JianghuPlayerEligibilityEntry::ParseTableT_
+    JianghuPlayerEligibilityEntry::_table_ =
+        JianghuPlayerEligibilityEntry::InternalGenerateParseTable_(JianghuPlayerEligibilityEntry_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void JianghuPlayerEligibilityEntry::Clear() {
+// @@protoc_insertion_point(message_clear_start:JianghuPlayerEligibilityEntry)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.duel_refuse_strangers_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.duel_refuse_strangers_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL JianghuPlayerEligibilityEntry::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const JianghuPlayerEligibilityEntry& this_ = static_cast<const JianghuPlayerEligibilityEntry&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL JianghuPlayerEligibilityEntry::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const JianghuPlayerEligibilityEntry& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:JianghuPlayerEligibilityEntry)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // bool online_on_node = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_online_on_node() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_online_on_node(), target);
+    }
+  }
+
+  // bool duel_refuse_strangers = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_duel_refuse_strangers() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_duel_refuse_strangers(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:JianghuPlayerEligibilityEntry)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t JianghuPlayerEligibilityEntry::ByteSizeLong(const MessageLite& base) {
+  const JianghuPlayerEligibilityEntry& this_ = static_cast<const JianghuPlayerEligibilityEntry&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t JianghuPlayerEligibilityEntry::ByteSizeLong() const {
+  const JianghuPlayerEligibilityEntry& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:JianghuPlayerEligibilityEntry)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // bool online_on_node = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_online_on_node() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool duel_refuse_strangers = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_duel_refuse_strangers() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void JianghuPlayerEligibilityEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<JianghuPlayerEligibilityEntry*>(&to_msg);
+  auto& from = static_cast<const JianghuPlayerEligibilityEntry&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:JianghuPlayerEligibilityEntry)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_online_on_node() != 0) {
+        _this->_impl_.online_on_node_ = from._impl_.online_on_node_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_duel_refuse_strangers() != 0) {
+        _this->_impl_.duel_refuse_strangers_ = from._impl_.duel_refuse_strangers_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void JianghuPlayerEligibilityEntry::CopyFrom(const JianghuPlayerEligibilityEntry& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:JianghuPlayerEligibilityEntry)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JianghuPlayerEligibilityEntry::InternalSwap(JianghuPlayerEligibilityEntry* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.duel_refuse_strangers_)
+      + sizeof(JianghuPlayerEligibilityEntry::_impl_.duel_refuse_strangers_)
+      - PROTOBUF_FIELD_OFFSET(JianghuPlayerEligibilityEntry, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata JianghuPlayerEligibilityEntry::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void CheckJianghuDuelEligibilityResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+CheckJianghuDuelEligibilityResponse::CheckJianghuDuelEligibilityResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CheckJianghuDuelEligibilityResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:CheckJianghuDuelEligibilityResponse)
+}
+PROTOBUF_NDEBUG_INLINE CheckJianghuDuelEligibilityResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::CheckJianghuDuelEligibilityResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        players_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::CheckJianghuDuelEligibilityResponse,
+              PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.players_)>()
+          , from.players_
+        }
+     {}
+
+CheckJianghuDuelEligibilityResponse::CheckJianghuDuelEligibilityResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CheckJianghuDuelEligibilityResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CheckJianghuDuelEligibilityResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CheckJianghuDuelEligibilityResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.payer_has_sufficient_fee_ = from._impl_.payer_has_sufficient_fee_;
+
+  // @@protoc_insertion_point(copy_constructor:CheckJianghuDuelEligibilityResponse)
+}
+PROTOBUF_NDEBUG_INLINE CheckJianghuDuelEligibilityResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        players_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::CheckJianghuDuelEligibilityResponse,
+            PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.players_)>()
+         }
+     {}
+
+inline void CheckJianghuDuelEligibilityResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, payer_has_sufficient_fee_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::payer_has_sufficient_fee_));
+}
+CheckJianghuDuelEligibilityResponse::~CheckJianghuDuelEligibilityResponse() {
+  // @@protoc_insertion_point(destructor:CheckJianghuDuelEligibilityResponse)
+  SharedDtor(*this);
+}
+inline void CheckJianghuDuelEligibilityResponse::SharedDtor(MessageLite& self) {
+  CheckJianghuDuelEligibilityResponse& this_ = static_cast<CheckJianghuDuelEligibilityResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CheckJianghuDuelEligibilityResponse_class_data_ =
+        CheckJianghuDuelEligibilityResponse::InternalGenerateClassData_(CheckJianghuDuelEligibilityResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CheckJianghuDuelEligibilityResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CheckJianghuDuelEligibilityResponse_class_data_.tc_table);
+  return CheckJianghuDuelEligibilityResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CheckJianghuDuelEligibilityResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CheckJianghuDuelEligibilityResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CheckJianghuDuelEligibilityResponse_globals_));
+  return CheckJianghuDuelEligibilityResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CheckJianghuDuelEligibilityResponse::ParseTableT_
+    CheckJianghuDuelEligibilityResponse::_table_ =
+        CheckJianghuDuelEligibilityResponse::InternalGenerateParseTable_(CheckJianghuDuelEligibilityResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CheckJianghuDuelEligibilityResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:CheckJianghuDuelEligibilityResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.players_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  _impl_.payer_has_sufficient_fee_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CheckJianghuDuelEligibilityResponse& this_ = static_cast<const CheckJianghuDuelEligibilityResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CheckJianghuDuelEligibilityResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CheckJianghuDuelEligibilityResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:CheckJianghuDuelEligibilityResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .JianghuPlayerEligibilityEntry players = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_players_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_players().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // bool payer_has_sufficient_fee = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_payer_has_sufficient_fee() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_payer_has_sufficient_fee(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:CheckJianghuDuelEligibilityResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CheckJianghuDuelEligibilityResponse::ByteSizeLong(const MessageLite& base) {
+  const CheckJianghuDuelEligibilityResponse& this_ = static_cast<const CheckJianghuDuelEligibilityResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CheckJianghuDuelEligibilityResponse::ByteSizeLong() const {
+  const CheckJianghuDuelEligibilityResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:CheckJianghuDuelEligibilityResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated .JianghuPlayerEligibilityEntry players = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_players_size();
+      for (const auto& msg : this_._internal_players()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // bool payer_has_sufficient_fee = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_payer_has_sufficient_fee() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CheckJianghuDuelEligibilityResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CheckJianghuDuelEligibilityResponse*>(&to_msg);
+  auto& from = static_cast<const CheckJianghuDuelEligibilityResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:CheckJianghuDuelEligibilityResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_players()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_players());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_payer_has_sufficient_fee() != 0) {
+        _this->_impl_.payer_has_sufficient_fee_ = from._impl_.payer_has_sufficient_fee_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CheckJianghuDuelEligibilityResponse::CopyFrom(const CheckJianghuDuelEligibilityResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:CheckJianghuDuelEligibilityResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CheckJianghuDuelEligibilityResponse::InternalSwap(CheckJianghuDuelEligibilityResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.players_.InternalSwap(&other->_impl_.players_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_)
+      + sizeof(CheckJianghuDuelEligibilityResponse::_impl_.payer_has_sufficient_fee_)
+      - PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata CheckJianghuDuelEligibilityResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -6274,6 +8196,13 @@ void Scene::NodeHandshake(::google::protobuf::RpcController* PROTOBUF_NULLABLE c
   controller->SetFailed("Method NodeHandshake() not implemented.");
   done->Run();
 }
+void Scene::CheckJianghuDuelEligibility(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL,
+                         ::CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method CheckJianghuDuelEligibility() not implemented.");
+  done->Run();
+}
 
 void Scene::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -6314,6 +8243,10 @@ void Scene::CallMethod(
       this->NodeHandshake(controller, ::google::protobuf::DownCastMessage<::NodeHandshakeRequest>(request),
                    ::google::protobuf::DownCastMessage<::NodeHandshakeResponse>(response), done);
       break;
+    case 8:
+      this->CheckJianghuDuelEligibility(controller, ::google::protobuf::DownCastMessage<::CheckJianghuDuelEligibilityRequest>(request),
+                   ::google::protobuf::DownCastMessage<::CheckJianghuDuelEligibilityResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -6341,6 +8274,8 @@ const ::google::protobuf::Message& Scene::GetRequestPrototype(
       return ::CancelBattlePrepareRequest::default_instance();
     case 7:
       return ::NodeHandshakeRequest::default_instance();
+    case 8:
+      return ::CheckJianghuDuelEligibilityRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -6369,6 +8304,8 @@ const ::google::protobuf::Message& Scene::GetResponsePrototype(
       return ::Empty::default_instance();
     case 7:
       return ::NodeHandshakeResponse::default_instance();
+    case 8:
+      return ::CheckJianghuDuelEligibilityResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -6444,6 +8381,13 @@ void Scene_Stub::NodeHandshake(
     const ::NodeHandshakeRequest* PROTOBUF_NONNULL request, ::NodeHandshakeResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(7), controller,
+                       request, response, done);
+}
+void Scene_Stub::CheckJianghuDuelEligibility(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::CheckJianghuDuelEligibilityRequest* PROTOBUF_NONNULL request, ::CheckJianghuDuelEligibilityResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(8), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

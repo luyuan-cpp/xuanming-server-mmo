@@ -59,6 +59,24 @@ public:
     static void UnsealSkillBook(entt::entity player,
         const ::UnsealSkillBookRequest* request,
         ::UnsealSkillBookResponse* response);
+    static void ClaimScrollCollectionMilestone(entt::entity player,
+        const ::ClaimScrollCollectionMilestoneRequest* request,
+        ::ClaimScrollCollectionMilestoneResponse* response);
+    static void BatchDismantleSkillBooks(entt::entity player,
+        const ::BatchDismantleSkillBooksRequest* request,
+        ::BatchDismantleSkillBooksResponse* response);
+    static void PostSkillBookWantedOrder(entt::entity player,
+        const ::PostSkillBookWantedOrderRequest* request,
+        ::PostSkillBookWantedOrderResponse* response);
+    static void CancelSkillBookWantedOrder(entt::entity player,
+        const ::CancelSkillBookWantedOrderRequest* request,
+        ::CancelSkillBookWantedOrderResponse* response);
+    static void ListSkillBookWantedOrders(entt::entity player,
+        const ::ListSkillBookWantedOrdersRequest* request,
+        ::ListSkillBookWantedOrdersResponse* response);
+    static void FulfillSkillBookWantedOrder(entt::entity player,
+        const ::FulfillSkillBookWantedOrderRequest* request,
+        ::FulfillSkillBookWantedOrderResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -196,6 +214,60 @@ public:
             UnsealSkillBook(player,
                 static_cast<const ::UnsealSkillBookRequest*>(request),
                 static_cast<::UnsealSkillBookResponse*>(response));
+			}
+            break;
+        case 15:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ClaimScrollCollectionMilestoneResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ClaimScrollCollectionMilestone(player,
+                static_cast<const ::ClaimScrollCollectionMilestoneRequest*>(request),
+                static_cast<::ClaimScrollCollectionMilestoneResponse*>(response));
+			}
+            break;
+        case 16:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::BatchDismantleSkillBooksResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            BatchDismantleSkillBooks(player,
+                static_cast<const ::BatchDismantleSkillBooksRequest*>(request),
+                static_cast<::BatchDismantleSkillBooksResponse*>(response));
+			}
+            break;
+        case 17:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::PostSkillBookWantedOrderResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            PostSkillBookWantedOrder(player,
+                static_cast<const ::PostSkillBookWantedOrderRequest*>(request),
+                static_cast<::PostSkillBookWantedOrderResponse*>(response));
+			}
+            break;
+        case 18:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::CancelSkillBookWantedOrderResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            CancelSkillBookWantedOrder(player,
+                static_cast<const ::CancelSkillBookWantedOrderRequest*>(request),
+                static_cast<::CancelSkillBookWantedOrderResponse*>(response));
+			}
+            break;
+        case 19:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ListSkillBookWantedOrdersResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ListSkillBookWantedOrders(player,
+                static_cast<const ::ListSkillBookWantedOrdersRequest*>(request),
+                static_cast<::ListSkillBookWantedOrdersResponse*>(response));
+			}
+            break;
+        case 20:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::FulfillSkillBookWantedOrderResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            FulfillSkillBookWantedOrder(player,
+                static_cast<const ::FulfillSkillBookWantedOrderRequest*>(request),
+                static_cast<::FulfillSkillBookWantedOrderResponse*>(response));
 			}
             break;
         default:

@@ -62,3 +62,27 @@ constexpr uint32_t SceneSkillClientPlayerSealSkillBookIndex = 13;
 constexpr uint32_t SceneSkillClientPlayerUnsealSkillBookMessageId = 544;
 constexpr uint32_t SceneSkillClientPlayerUnsealSkillBookIndex = 14;
 #define SceneSkillClientPlayerUnsealSkillBookMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(14)
+
+constexpr uint32_t SceneSkillClientPlayerClaimScrollCollectionMilestoneMessageId = 558;
+constexpr uint32_t SceneSkillClientPlayerClaimScrollCollectionMilestoneIndex = 15;
+#define SceneSkillClientPlayerClaimScrollCollectionMilestoneMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(15)
+
+constexpr uint32_t SceneSkillClientPlayerBatchDismantleSkillBooksMessageId = 559;
+constexpr uint32_t SceneSkillClientPlayerBatchDismantleSkillBooksIndex = 16;
+#define SceneSkillClientPlayerBatchDismantleSkillBooksMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(16)
+
+constexpr uint32_t SceneSkillClientPlayerPostSkillBookWantedOrderMessageId = 560;
+constexpr uint32_t SceneSkillClientPlayerPostSkillBookWantedOrderIndex = 17;
+#define SceneSkillClientPlayerPostSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(17)
+
+constexpr uint32_t SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId = 561;
+constexpr uint32_t SceneSkillClientPlayerCancelSkillBookWantedOrderIndex = 18;
+#define SceneSkillClientPlayerCancelSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(18)
+
+constexpr uint32_t SceneSkillClientPlayerListSkillBookWantedOrdersMessageId = 562;
+constexpr uint32_t SceneSkillClientPlayerListSkillBookWantedOrdersIndex = 19;
+#define SceneSkillClientPlayerListSkillBookWantedOrdersMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(19)
+
+constexpr uint32_t SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId = 563;
+constexpr uint32_t SceneSkillClientPlayerFulfillSkillBookWantedOrderIndex = 20;
+#define SceneSkillClientPlayerFulfillSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(20)

@@ -4724,6 +4724,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     kTrialContextFieldNumber = 19,
     kTournamentContextFieldNumber = 20,
     kCustomDuelRulesFieldNumber = 21,
+    kJianghuDuelContextFieldNumber = 23,
     kBattleIdFieldNumber = 1,
     kBattleConfigIdFieldNumber = 2,
     kMatchModeFieldNumber = 5,
@@ -4904,6 +4905,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
   ::CustomDuelRules* PROTOBUF_NONNULL _internal_mutable_custom_duel_rules();
 
   public:
+  // .JianghuDuelBattleContext jianghu_duel_context = 23;
+  [[nodiscard]] bool has_jianghu_duel_context()
+      const;
+  void clear_jianghu_duel_context() ;
+  [[nodiscard]] const ::JianghuDuelBattleContext& jianghu_duel_context() const;
+  [[nodiscard]] ::JianghuDuelBattleContext* PROTOBUF_NULLABLE release_jianghu_duel_context();
+  ::JianghuDuelBattleContext* PROTOBUF_NONNULL mutable_jianghu_duel_context();
+  void set_allocated_jianghu_duel_context(::JianghuDuelBattleContext* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_jianghu_duel_context(::JianghuDuelBattleContext* PROTOBUF_NULLABLE value);
+  ::JianghuDuelBattleContext* PROTOBUF_NULLABLE unsafe_arena_release_jianghu_duel_context();
+
+  private:
+  const ::JianghuDuelBattleContext& _internal_jianghu_duel_context() const;
+  ::JianghuDuelBattleContext* PROTOBUF_NONNULL _internal_mutable_jianghu_duel_context();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -5028,8 +5045,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
-                          7, 101,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          8, 101,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5067,6 +5084,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     ::TrialBattleContext* PROTOBUF_NULLABLE trial_context_;
     ::TournamentBattleContext* PROTOBUF_NULLABLE tournament_context_;
     ::CustomDuelRules* PROTOBUF_NULLABLE custom_duel_rules_;
+    ::JianghuDuelBattleContext* PROTOBUF_NULLABLE jianghu_duel_context_;
     ::uint64_t battle_id_;
     ::uint32_t battle_config_id_;
     ::uint32_t match_mode_;
@@ -5623,7 +5641,7 @@ inline void ObserverExitOriginal::set_allocated_instance_id(::std::string* PROTO
 inline void CreateBattleRequest::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t CreateBattleRequest::battle_id() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.battle_id)
@@ -5631,7 +5649,7 @@ inline ::uint64_t CreateBattleRequest::battle_id() const {
 }
 inline void CreateBattleRequest::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.battle_id)
 }
 inline ::uint64_t CreateBattleRequest::_internal_battle_id() const {
@@ -5647,7 +5665,7 @@ inline void CreateBattleRequest::_internal_set_battle_id(::uint64_t value) {
 inline void CreateBattleRequest::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t CreateBattleRequest::battle_config_id() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.battle_config_id)
@@ -5655,7 +5673,7 @@ inline ::uint32_t CreateBattleRequest::battle_config_id() const {
 }
 inline void CreateBattleRequest::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.battle_config_id)
 }
 inline ::uint32_t CreateBattleRequest::_internal_battle_config_id() const {
@@ -5721,7 +5739,7 @@ CreateBattleRequest::_internal_mutable_players() {
 inline void CreateBattleRequest::clear_seed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seed_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t CreateBattleRequest::seed() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.seed)
@@ -5729,7 +5747,7 @@ inline ::uint64_t CreateBattleRequest::seed() const {
 }
 inline void CreateBattleRequest::set_seed(::uint64_t value) {
   _internal_set_seed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.seed)
 }
 inline ::uint64_t CreateBattleRequest::_internal_seed() const {
@@ -5745,7 +5763,7 @@ inline void CreateBattleRequest::_internal_set_seed(::uint64_t value) {
 inline void CreateBattleRequest::clear_match_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t CreateBattleRequest::match_mode() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.match_mode)
@@ -5753,7 +5771,7 @@ inline ::uint32_t CreateBattleRequest::match_mode() const {
 }
 inline void CreateBattleRequest::set_match_mode(::uint32_t value) {
   _internal_set_match_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.match_mode)
 }
 inline ::uint32_t CreateBattleRequest::_internal_match_mode() const {
@@ -5769,7 +5787,7 @@ inline void CreateBattleRequest::_internal_set_match_mode(::uint32_t value) {
 inline void CreateBattleRequest::clear_created_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t CreateBattleRequest::created_at_ms() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.created_at_ms)
@@ -5777,7 +5795,7 @@ inline ::uint64_t CreateBattleRequest::created_at_ms() const {
 }
 inline void CreateBattleRequest::set_created_at_ms(::uint64_t value) {
   _internal_set_created_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.created_at_ms)
 }
 inline ::uint64_t CreateBattleRequest::_internal_created_at_ms() const {
@@ -5793,7 +5811,7 @@ inline void CreateBattleRequest::_internal_set_created_at_ms(::uint64_t value) {
 inline void CreateBattleRequest::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t CreateBattleRequest::deadline_ms() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.deadline_ms)
@@ -5801,7 +5819,7 @@ inline ::uint64_t CreateBattleRequest::deadline_ms() const {
 }
 inline void CreateBattleRequest::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.deadline_ms)
 }
 inline ::uint64_t CreateBattleRequest::_internal_deadline_ms() const {
@@ -5974,7 +5992,7 @@ inline void CreateBattleRequest::set_allocated_activity_context(::BattleActivity
 inline void CreateBattleRequest::clear_required_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.required_physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t CreateBattleRequest::required_physical_region() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.required_physical_region)
@@ -5982,7 +6000,7 @@ inline ::uint32_t CreateBattleRequest::required_physical_region() const {
 }
 inline void CreateBattleRequest::set_required_physical_region(::uint32_t value) {
   _internal_set_required_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.required_physical_region)
 }
 inline ::uint32_t CreateBattleRequest::_internal_required_physical_region() const {
@@ -6126,7 +6144,7 @@ inline void CreateBattleRequest::set_allocated_target_instance_id(::std::string*
 inline void CreateBattleRequest::clear_admit_before_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.admit_before_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t CreateBattleRequest::admit_before_ms() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.admit_before_ms)
@@ -6134,7 +6152,7 @@ inline ::uint64_t CreateBattleRequest::admit_before_ms() const {
 }
 inline void CreateBattleRequest::set_admit_before_ms(::uint64_t value) {
   _internal_set_admit_before_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.admit_before_ms)
 }
 inline ::uint64_t CreateBattleRequest::_internal_admit_before_ms() const {
@@ -6150,7 +6168,7 @@ inline void CreateBattleRequest::_internal_set_admit_before_ms(::uint64_t value)
 inline void CreateBattleRequest::clear_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t CreateBattleRequest::outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.outcome_protocol_version)
@@ -6158,7 +6176,7 @@ inline ::uint32_t CreateBattleRequest::outcome_protocol_version() const {
 }
 inline void CreateBattleRequest::set_outcome_protocol_version(::uint32_t value) {
   _internal_set_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.outcome_protocol_version)
 }
 inline ::uint32_t CreateBattleRequest::_internal_outcome_protocol_version() const {
@@ -6174,7 +6192,7 @@ inline void CreateBattleRequest::_internal_set_outcome_protocol_version(::uint32
 inline void CreateBattleRequest::clear_spectate_visibility() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spectate_visibility_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::eSpectateVisibility CreateBattleRequest::spectate_visibility() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.spectate_visibility)
@@ -6182,7 +6200,7 @@ inline ::eSpectateVisibility CreateBattleRequest::spectate_visibility() const {
 }
 inline void CreateBattleRequest::set_spectate_visibility(::eSpectateVisibility value) {
   _internal_set_spectate_visibility(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.spectate_visibility)
 }
 inline ::eSpectateVisibility CreateBattleRequest::_internal_spectate_visibility() const {
@@ -6198,7 +6216,7 @@ inline void CreateBattleRequest::_internal_set_spectate_visibility(::eSpectateVi
 inline void CreateBattleRequest::clear_record_replay() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.record_replay_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool CreateBattleRequest::record_replay() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.record_replay)
@@ -6206,7 +6224,7 @@ inline bool CreateBattleRequest::record_replay() const {
 }
 inline void CreateBattleRequest::set_record_replay(bool value) {
   _internal_set_record_replay(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.record_replay)
 }
 inline bool CreateBattleRequest::_internal_record_replay() const {
@@ -6644,7 +6662,7 @@ inline void CreateBattleRequest::set_allocated_custom_duel_rules(::CustomDuelRul
 inline void CreateBattleRequest::clear_boss_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.boss_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t CreateBattleRequest::boss_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.boss_weekly_affix_id)
@@ -6652,7 +6670,7 @@ inline ::uint32_t CreateBattleRequest::boss_weekly_affix_id() const {
 }
 inline void CreateBattleRequest::set_boss_weekly_affix_id(::uint32_t value) {
   _internal_set_boss_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.boss_weekly_affix_id)
 }
 inline ::uint32_t CreateBattleRequest::_internal_boss_weekly_affix_id() const {
@@ -6662,6 +6680,99 @@ inline ::uint32_t CreateBattleRequest::_internal_boss_weekly_affix_id() const {
 inline void CreateBattleRequest::_internal_set_boss_weekly_affix_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.boss_weekly_affix_id_ = value;
+}
+
+// .JianghuDuelBattleContext jianghu_duel_context = 23;
+inline bool CreateBattleRequest::has_jianghu_duel_context() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  PROTOBUF_ASSUME(!value || _impl_.jianghu_duel_context_ != nullptr);
+  return value;
+}
+inline const ::JianghuDuelBattleContext& CreateBattleRequest::_internal_jianghu_duel_context() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::JianghuDuelBattleContext* p = _impl_.jianghu_duel_context_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::JianghuDuelBattleContext>(&::JianghuDuelBattleContext_globals_);
+}
+inline const ::JianghuDuelBattleContext& CreateBattleRequest::jianghu_duel_context() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CreateBattleRequest.jianghu_duel_context)
+  return _internal_jianghu_duel_context();
+}
+inline void CreateBattleRequest::unsafe_arena_set_allocated_jianghu_duel_context(
+    ::JianghuDuelBattleContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.jianghu_duel_context_);
+  }
+  _impl_.jianghu_duel_context_ = reinterpret_cast<::JianghuDuelBattleContext*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:CreateBattleRequest.jianghu_duel_context)
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NULLABLE CreateBattleRequest::release_jianghu_duel_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::JianghuDuelBattleContext* released = _impl_.jianghu_duel_context_;
+  _impl_.jianghu_duel_context_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NULLABLE CreateBattleRequest::unsafe_arena_release_jianghu_duel_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CreateBattleRequest.jianghu_duel_context)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::JianghuDuelBattleContext* temp = _impl_.jianghu_duel_context_;
+  _impl_.jianghu_duel_context_ = nullptr;
+  return temp;
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NONNULL CreateBattleRequest::_internal_mutable_jianghu_duel_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.jianghu_duel_context_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::JianghuDuelBattleContext>(GetArena());
+    _impl_.jianghu_duel_context_ = reinterpret_cast<::JianghuDuelBattleContext*>(p);
+  }
+  return _impl_.jianghu_duel_context_;
+}
+inline ::JianghuDuelBattleContext* PROTOBUF_NONNULL CreateBattleRequest::mutable_jianghu_duel_context()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::JianghuDuelBattleContext* _msg = _internal_mutable_jianghu_duel_context();
+  // @@protoc_insertion_point(field_mutable:CreateBattleRequest.jianghu_duel_context)
+  return _msg;
+}
+inline void CreateBattleRequest::set_allocated_jianghu_duel_context(::JianghuDuelBattleContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.jianghu_duel_context_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+
+  _impl_.jianghu_duel_context_ = reinterpret_cast<::JianghuDuelBattleContext*>(value);
+  // @@protoc_insertion_point(field_set_allocated:CreateBattleRequest.jianghu_duel_context)
 }
 
 // -------------------------------------------------------------------

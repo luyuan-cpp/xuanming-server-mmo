@@ -126,6 +126,43 @@ inline uint32_t SharpTempoUnshieldedDamageBonusPct(uint32_t affixId, bool target
     return (affixId == kWeeklyAffixSharpTempo && !targetHasShield) ? kWeeklyAffixSharpTempoBonusPct : 0u;
 }
 
+// 赛季玩法 V3：S1「破阵之季」四组「技印共鸣」（零面板属性、零速度控制，仅奖励局内抓时机配合）。
+inline constexpr uint32_t kSeason1Id = 1;
+inline constexpr uint32_t kSealPozhenRuiyin = 101;
+inline constexpr uint32_t kSealPozhenXuanyin = 102;
+inline constexpr uint32_t kSealGuzhenShouyin = 103;
+inline constexpr uint32_t kSealJuxiYuanyin = 104;
+
+inline constexpr uint32_t kSkillPozhenLiefeng = 15001;
+inline constexpr uint32_t kSkillPozhenLinglei = 15002;
+inline constexpr uint32_t kSkillGuzhenLingzhang = 15003;
+inline constexpr uint32_t kSkillPozhenXushi = 15004;
+
+// BATTLE_EVENT_ARTIFACT（artifact_item_id=0, season_seal_id>0）共鸣子事件号，与基础印效果 1/2/6/7 正交。
+inline constexpr uint32_t kResonanceEventSharpManaRefund = 101;
+inline constexpr uint32_t kResonanceEventMysticExtendDebuff = 102;
+inline constexpr uint32_t kResonanceEventGuardShieldBoost = 103;
+inline constexpr uint32_t kResonanceEventBreathHalfMana = 104;
+
+inline constexpr uint32_t kResonanceSharpShatterManaRefundPct = 30;
+inline constexpr uint32_t kResonanceMysticDebuffBonusRounds = 1;
+inline constexpr uint32_t kResonanceGuardShieldBonusPct = 10;
+
+// 向上取整百分比返蓝（溢出安全），与 Java SeasonRules.resonanceSharpManaRefund 逐位一致。
+inline uint64_t ResonanceSharpManaRefund(uint64_t paidMana) {
+    if (paidMana == 0) {
+        return 0;
+    }
+    const uint64_t q = paidMana / 100ULL;
+    const uint64_t r = paidMana % 100ULL;
+    return q * kResonanceSharpShatterManaRefundPct + (r * kResonanceSharpShatterManaRefundPct + 99ULL) / 100ULL;
+}
+
+// 聚息援印 × 破阵蓄势次轮半价耗蓝（向下取整，节省 cost - cost/2），与 Java 逐位一致。
+inline uint64_t ResonanceHalfManaCost(uint64_t baseCost) {
+    return baseCost / 2ULL;
+}
+
 inline bool IsWindowActive(uint64_t startsAtMs, uint64_t endsAtMs, bool enabled, uint64_t nowMs) {
     if (!enabled) {
         return false;

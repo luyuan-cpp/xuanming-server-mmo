@@ -817,6 +817,26 @@
         "RewardedAdFrozen": 39011,
         "RewardedAdSsvRequired": 39012
       }
+    },
+    "jianghu_error": {
+      "base": 40000,
+      "width": 1000,
+      "ids": {
+        "JianghuDuelDisabled": 40000,
+        "JianghuBlockedByPeer": 40001,
+        "JianghuTargetRefusesStrangers": 40002,
+        "JianghuSelfRefusesStrangers": 40003,
+        "JianghuSameTargetCooldown": 40004,
+        "JianghuDailyInviteLimitReached": 40005,
+        "JianghuTeamSizeMismatch": 40006,
+        "JianghuTeamChangedAborted": 40007,
+        "JianghuInsufficientWritOrSilver": 40008,
+        "JianghuInvitePendingOrExpired": 40009,
+        "JianghuNotInviteParticipant": 40010,
+        "JianghuNoActiveDefeatMark": 40011,
+        "JianghuGrudgeNotFound": 40012,
+        "JianghuServiceBusy": 40013
+      }
     }
   },
   "legacy_ids": {

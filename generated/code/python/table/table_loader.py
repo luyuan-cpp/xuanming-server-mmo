@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 82 张表全部读完，一张都没换；
+拆成了两步。这里先把 83 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -81,6 +81,7 @@ from .guildshop_table import GuildShopTableManager
 from .guildwarmilestone_table import GuildWarMilestoneTableManager
 from .guildwarrule_table import GuildWarRuleTableManager
 from .item_table import ItemTableManager
+from .jianghurule_table import JianghuRuleTableManager
 from .messagelimiter_table import MessageLimiterTableManager
 from .mirror_table import MirrorTableManager
 from .mission_table import MissionTableManager
@@ -175,6 +176,7 @@ MANAGERS: dict[str, TableManager] = {
     "GuildWarMilestone": GuildWarMilestoneTableManager.instance(),
     "GuildWarRule": GuildWarRuleTableManager.instance(),
     "Item": ItemTableManager.instance(),
+    "JianghuRule": JianghuRuleTableManager.instance(),
     "MessageLimiter": MessageLimiterTableManager.instance(),
     "Mirror": MirrorTableManager.instance(),
     "Mission": MissionTableManager.instance(),
@@ -232,7 +234,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 82 张表。
+    """串行加载全部 83 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

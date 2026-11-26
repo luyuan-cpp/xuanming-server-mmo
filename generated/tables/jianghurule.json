@@ -1,0 +1,24 @@
+{
+ "data": [
+  {
+   "clear_badge_duration_sec": 1800,
+   "clear_item_id": 3416,
+   "daily_unmatched_invite_limit": 20,
+   "defeat_mark_duration_sec": 1800,
+   "duel_round_limit": 30,
+   "duel_timeout_sec": 720,
+   "enabled": 1,
+   "gold_writ_item_id": 3415,
+   "grudge_max_logs_per_rival": 20,
+   "grudge_max_rivals": 50,
+   "guild_wall_max_records": 20,
+   "id": 1,
+   "invite_ttl_sec": 60,
+   "same_target_cooldown_sec": 300,
+   "silver_clear_cost": 1000,
+   "silver_writ_cost": 500,
+   "streak_highlight_threshold": 3,
+   "team_confirm_sec": 30
+  }
+ ]
+}

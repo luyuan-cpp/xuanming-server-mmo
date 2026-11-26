@@ -136,6 +136,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [growing-passive-skills-v2.md](planning/growing-passive-skills-v2.md) — 率土式叠加成长战法 V2 扩展设计（《兵法叠势卷》6 项永久成长被动）
 - [guiyuan-city-npcs-and-character-play-v1.md](planning/guiyuan-city-npcs-and-character-play-v1.md) — 《五行奇谈》归元城全仓去问道化、8 位原创场景 NPC 与人物系统联动玩法设计（V1）
 - [rewarded-ad-compliance-and-economy-v1.md](planning/rewarded-ad-compliance-and-economy-v1.md) — 《五行奇谈》零拒审激励视频广告与绑定银两（双银两）合规创收策划方案（V1）
+- [skill-build-loadout-7slots-v1.md](planning/skill-build-loadout-7slots-v1.md) — 7 套非永久「战法·加点」流派方案槽位系统完整设计方案（V1）
 
 #### 成套策划
 
@@ -163,6 +164,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [season-team-tournament-v1-ui-handoff.md](planning/ui-handoff/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
 - [season-team-tournament-v2-ui-handoff.md](planning/ui-handoff/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
 - [season-team-tournament-v3-ui-handoff.md](planning/ui-handoff/season-team-tournament-v3-ui-handoff.md) — 《群仙问道赛》V3+V4 增量 UI 需求清单（模块 D / E / F / G / H / I / J）
+- [skill-build-loadout-7slots-ui-handoff.md](planning/ui-handoff/skill-build-loadout-7slots-ui-handoff.md) — 7 套非永久「战法·加点」流派方案槽位 UI 纯功能作图交接单
 - [trial-journal-v2-ui-handoff.md](planning/ui-handoff/trial-journal-v2-ui-handoff.md) — 《五行试炼志 V2》UI 功能需求与作图清单
 - [wardrobe-cosmetic-vouchers-ui-handoff.md](planning/ui-handoff/wardrobe-cosmetic-vouchers-ui-handoff.md) — 衣柜外观解锁券（灵宠幻化符 / 技能特效卷）UI 纯功能作图交接清单
 - [wardrobe-cosmetics-assets-handoff.md](planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md) — 衣柜外观券、专属技能特效帧条与百宝阁切片纯功能作图交接清单
@@ -443,6 +445,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 #### 未分类
 
+- [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
 - [rewarded-ad-system.md](design/rewarded-ad-system.md) — 激励视频广告与绑定银两（`CURRENCY_TYPE_BIND_GOLD`）全端技术与零拒审工程设计
 
 #### 成套技术设计

@@ -271,6 +271,7 @@
     <ClInclude Include="proto\tip\spirit_shop_error_tip.pb.h" />
     <ClInclude Include="proto\tip\travel_pass_error_tip.pb.h" />
     <ClInclude Include="proto\tip\rewarded_ad_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\jianghu_error_tip.pb.h" />
     <ClInclude Include="proto\tip\chat_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
@@ -465,6 +466,7 @@
     <ClCompile Include="proto\tip\spirit_shop_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\travel_pass_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\rewarded_ad_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\jianghu_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
@@ -746,5 +748,12 @@
     <ClInclude Include="code\rewardedadslot_table_comp.h" />
     <ClCompile Include="proto\rewardedadslot_table.pb.cc" />
     <ClInclude Include="proto\rewardedadslot_table.pb.h" />
+    <ClCompile Include="code\jianghurule_table.cpp" />
+    <ClInclude Include="code\jianghurule_table.h" />
+    <ClInclude Include="code\jianghurule_table_comp.h" />
+    <ClCompile Include="code\jianghurule_table_fk.cpp" />
+    <ClInclude Include="code\jianghurule_table_fk.h" />
+    <ClCompile Include="proto\jianghurule_table.pb.cc" />
+    <ClInclude Include="proto\jianghurule_table.pb.h" />
   </ItemGroup>
 </Project>

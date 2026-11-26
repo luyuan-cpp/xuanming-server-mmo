@@ -35,10 +35,16 @@ constexpr uint32_t SceneNodeHandshakeMessageId = 62;
 constexpr uint32_t SceneNodeHandshakeIndex = 7;
 #define SceneNodeHandshakeMethod  ::Scene_Stub::descriptor()->method(7)
 
+constexpr uint32_t SceneCheckJianghuDuelEligibilityMessageId = 564;
+constexpr uint32_t SceneCheckJianghuDuelEligibilityIndex = 8;
+#define SceneCheckJianghuDuelEligibilityMethod  ::Scene_Stub::descriptor()->method(8)
+
 // 节点间 RPC0 的方法 tag(docs/design/muduo-rpc-channel.md §10):RpcChannel / RpcClient / RpcSession 的
 // CallMethod<Tag> / SendRequest<Tag> 按它取消息号与请求 / 响应类型。只含类型信息、不依赖 core;
 // 请求 / 响应类型在此前向声明,tag 本身不要求完整类型。
 class CancelBattlePrepareRequest;
+class CheckJianghuDuelEligibilityRequest;
+class CheckJianghuDuelEligibilityResponse;
 class CreateSceneRequest;
 class CreateSceneResponse;
 class DestroySceneRequest;
@@ -106,4 +112,11 @@ struct SceneNodeHandshakeRpc
     static constexpr uint32_t kMessageId = SceneNodeHandshakeMessageId;
     using Request = ::NodeHandshakeRequest;
     using Response = ::NodeHandshakeResponse;
+};
+
+struct SceneCheckJianghuDuelEligibilityRpc
+{
+    static constexpr uint32_t kMessageId = SceneCheckJianghuDuelEligibilityMessageId;
+    using Request = ::CheckJianghuDuelEligibilityRequest;
+    using Response = ::CheckJianghuDuelEligibilityResponse;
 };

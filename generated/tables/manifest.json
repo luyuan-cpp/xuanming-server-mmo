@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
-  "schema_digest": "8f1aa7cb914ec44f",
-  "version": 94,
-  "content_digest": "6be99d9f4bd7720a70472ca6438e1a476a55b7641b13d4828419395200e89494",
-  "generated_at": "2026-11-26T10:26:17Z",
+  "schema_digest": "8a767b1f823342bd",
+  "version": 96,
+  "content_digest": "6d4b1c0a9af1ede72c30b359adff450c5bc48ed5c5b75cbc85502d70c17cc49f",
+  "generated_at": "2026-11-26T10:34:45Z",
   "source_rev": {
-    "commit": "1212e017ed1db628af1e3d2a335c0c884f5bf06a",
+    "commit": "5a3313106deeebbd5c7b15dcdff05be6a4eaa331",
     "data_dirty": true
   },
-  "table_count": 82,
+  "table_count": 83,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -1089,24 +1089,49 @@
       "name": "Item",
       "hot_reload": false,
       "ids_permanent": true,
-      "rows": 146,
+      "rows": 148,
       "source": {
         "file": "Item.xlsx",
-        "size": 16043,
-        "sha256": "3c2a73ce783b5e0d0df8d63330e6253148bf8c3774eb88521d2e49f378228810"
+        "size": 16443,
+        "sha256": "fe713812c97dbd9915f671300c1e65a51d98088c617699e0457cf5201283e4ea"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "item.json",
-          "size": 58693,
-          "sha256": "42a535c2513f89fc70836851d3c6ebb72bf972dc321ec3d5172bba78ecc2978f"
+          "size": 59913,
+          "sha256": "d335df4e62ed470cb7fdcdb30b316790ff5bb04d44d4aa90c92c893e59774dca"
         },
         {
           "kind": "binary",
           "file": "item.pb",
-          "size": 14017,
-          "sha256": "48a6438960a80fc69cc2ea0b9e2b2143d85dcc6fc306c28778fd0403c6376607"
+          "size": 14511,
+          "sha256": "1b1230d9b0fa7b488e9d1d606221dc04a917b77bc89c6a3078d0f6c11314a124"
+        }
+      ]
+    },
+    {
+      "name": "JianghuRule",
+      "hot_reload": true,
+      "ids_permanent": false,
+      "rows": 1,
+      "source": {
+        "file": "JianghuRule.xlsx",
+        "size": 5655,
+        "sha256": "516cc7d616d07259d9bd95f918bfca7e5109457cbf3b0660ca1857eea8e0e352"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "jianghurule.json",
+          "size": 556,
+          "sha256": "e926204d09d4121208014e8c63edf857c1ea99f2aa76389eb885a779ec04b9e3"
+        },
+        {
+          "kind": "binary",
+          "file": "jianghurule.pb",
+          "size": 49,
+          "sha256": "46c392fb5d3a4ccf728b475935b3146e806ab3fe436003e150deed07f209fba3"
         }
       ]
     },
@@ -1114,24 +1139,24 @@
       "name": "MessageLimiter",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 120,
+      "rows": 126,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 7000,
-        "sha256": "6e7cd353f5923f58b291e5368ecfc48867c29b50014030d2c5a422150a265ecf"
+        "size": 7111,
+        "sha256": "3b6e209c01e3d7a2f326945f839e65a3b2151d776f710535f2d4454d6e9c1f8d"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 10725,
-          "sha256": "432c44e6828ed8dae420774734fe98e6447bd9a82ab395b7a17b405c3e48061a"
+          "size": 11259,
+          "sha256": "2457cdbeea723afe493566af82515c178da4701bc2b3122bf697f259c0012a9d"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 1420,
-          "sha256": "9680402bbc0028bccbb71b1375dd56885c260f1e0b74ccc231a09a6abf401682"
+          "size": 1492,
+          "sha256": "5622bfecc5c3db7e56780ba644d57696fea67f9a32875f5179c54ba8673afd56"
         }
       ]
     },
@@ -1414,24 +1439,24 @@
       "name": "PlayMode",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 42,
+      "rows": 43,
       "source": {
         "file": "PlayMode.xlsx",
-        "size": 6447,
-        "sha256": "bf710452f35d139dceaccebd93fd3323aaa3c9ac6f507f3119e186531d197395"
+        "size": 6481,
+        "sha256": "d9ed49854e503cfd4338fbff1a48542809fa39b9f96d7d61b8e5ada03268d8f4"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "playmode.json",
-          "size": 4780,
-          "sha256": "48da4cd65b48358865e1dd4807284d58c479a2c3de7e17a9f0e6f9661079505b"
+          "size": 4892,
+          "sha256": "86f33bcba1fae527b610369ce7a4f49e21deaf545e76c504fee9565a4976f0e8"
         },
         {
           "kind": "binary",
           "file": "playmode.pb",
-          "size": 537,
-          "sha256": "b2827dcba875b04dcec4e61faa1e4bec99282b86d327705bfebc246603b7cc7c"
+          "size": 546,
+          "sha256": "eb0003b8e78e07ab7f2b3add65589ec40e039946cf9e0486f9240091aa2d3377"
         }
       ]
     },
@@ -1739,24 +1764,24 @@
       "name": "SpiritShopGoods",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 11,
+      "rows": 13,
       "source": {
         "file": "SpiritShopGoods.xlsx",
-        "size": 8817,
-        "sha256": "158756a5d50a81b653a193382d668be477a20c2e54ccd7988275f1a339c51c7b"
+        "size": 9290,
+        "sha256": "f91494e6a799fbfa4f664c06a480fc2406f8e7e807d2b51be59d63954d2dd918"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "spiritshopgoods.json",
-          "size": 10157,
-          "sha256": "a28407900270f97ceb54ff61a59c5732b2570e94f2052b3076075be617762932"
+          "size": 11968,
+          "sha256": "ff861125d2b8b1443e696bdbb6a1f110127cecfada739343cf2b8b273907d07f"
         },
         {
           "kind": "binary",
           "file": "spiritshopgoods.pb",
-          "size": 2880,
-          "sha256": "24027cd2d5ce1a3f68e734a5a0b1c0cd4e2bc96878a49b0d19a44c7d2e0f9791"
+          "size": 3357,
+          "sha256": "1acd43a5780af063f6de3ac67669621a7748b92644430bb17c3ef546d4a284c6"
         }
       ]
     },

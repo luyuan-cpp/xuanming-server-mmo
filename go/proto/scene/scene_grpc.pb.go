@@ -20,14 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Scene_PlayerEnterGameNode_FullMethodName        = "/Scene/PlayerEnterGameNode"
-	Scene_ProcessClientPlayerMessage_FullMethodName = "/Scene/ProcessClientPlayerMessage"
-	Scene_UpdateSessionDetail_FullMethodName        = "/Scene/UpdateSessionDetail"
-	Scene_CreateScene_FullMethodName                = "/Scene/CreateScene"
-	Scene_DestroyScene_FullMethodName               = "/Scene/DestroyScene"
-	Scene_PrepareBattle_FullMethodName              = "/Scene/PrepareBattle"
-	Scene_CancelBattlePrepare_FullMethodName        = "/Scene/CancelBattlePrepare"
-	Scene_NodeHandshake_FullMethodName              = "/Scene/NodeHandshake"
+	Scene_PlayerEnterGameNode_FullMethodName         = "/Scene/PlayerEnterGameNode"
+	Scene_ProcessClientPlayerMessage_FullMethodName  = "/Scene/ProcessClientPlayerMessage"
+	Scene_UpdateSessionDetail_FullMethodName         = "/Scene/UpdateSessionDetail"
+	Scene_CreateScene_FullMethodName                 = "/Scene/CreateScene"
+	Scene_DestroyScene_FullMethodName                = "/Scene/DestroyScene"
+	Scene_PrepareBattle_FullMethodName               = "/Scene/PrepareBattle"
+	Scene_CancelBattlePrepare_FullMethodName         = "/Scene/CancelBattlePrepare"
+	Scene_NodeHandshake_FullMethodName               = "/Scene/NodeHandshake"
+	Scene_CheckJianghuDuelEligibility_FullMethodName = "/Scene/CheckJianghuDuelEligibility"
 )
 
 // SceneClient is the client API for Scene service.
@@ -42,6 +43,7 @@ type SceneClient interface {
 	PrepareBattle(ctx context.Context, in *PrepareBattleRequest, opts ...grpc.CallOption) (*PrepareBattleResponse, error)
 	CancelBattlePrepare(ctx context.Context, in *CancelBattlePrepareRequest, opts ...grpc.CallOption) (*base.Empty, error)
 	NodeHandshake(ctx context.Context, in *base.NodeHandshakeRequest, opts ...grpc.CallOption) (*base.NodeHandshakeResponse, error)
+	CheckJianghuDuelEligibility(ctx context.Context, in *CheckJianghuDuelEligibilityRequest, opts ...grpc.CallOption) (*CheckJianghuDuelEligibilityResponse, error)
 }
 
 type sceneClient struct {
@@ -132,6 +134,16 @@ func (c *sceneClient) NodeHandshake(ctx context.Context, in *base.NodeHandshakeR
 	return out, nil
 }
 
+func (c *sceneClient) CheckJianghuDuelEligibility(ctx context.Context, in *CheckJianghuDuelEligibilityRequest, opts ...grpc.CallOption) (*CheckJianghuDuelEligibilityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckJianghuDuelEligibilityResponse)
+	err := c.cc.Invoke(ctx, Scene_CheckJianghuDuelEligibility_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneServer is the server API for Scene service.
 // All implementations must embed UnimplementedSceneServer
 // for forward compatibility.
@@ -144,6 +156,7 @@ type SceneServer interface {
 	PrepareBattle(context.Context, *PrepareBattleRequest) (*PrepareBattleResponse, error)
 	CancelBattlePrepare(context.Context, *CancelBattlePrepareRequest) (*base.Empty, error)
 	NodeHandshake(context.Context, *base.NodeHandshakeRequest) (*base.NodeHandshakeResponse, error)
+	CheckJianghuDuelEligibility(context.Context, *CheckJianghuDuelEligibilityRequest) (*CheckJianghuDuelEligibilityResponse, error)
 	mustEmbedUnimplementedSceneServer()
 }
 
@@ -177,6 +190,9 @@ func (UnimplementedSceneServer) CancelBattlePrepare(context.Context, *CancelBatt
 }
 func (UnimplementedSceneServer) NodeHandshake(context.Context, *base.NodeHandshakeRequest) (*base.NodeHandshakeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method NodeHandshake not implemented")
+}
+func (UnimplementedSceneServer) CheckJianghuDuelEligibility(context.Context, *CheckJianghuDuelEligibilityRequest) (*CheckJianghuDuelEligibilityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckJianghuDuelEligibility not implemented")
 }
 func (UnimplementedSceneServer) mustEmbedUnimplementedSceneServer() {}
 func (UnimplementedSceneServer) testEmbeddedByValue()               {}
@@ -343,6 +359,24 @@ func _Scene_NodeHandshake_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Scene_CheckJianghuDuelEligibility_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckJianghuDuelEligibilityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneServer).CheckJianghuDuelEligibility(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Scene_CheckJianghuDuelEligibility_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneServer).CheckJianghuDuelEligibility(ctx, req.(*CheckJianghuDuelEligibilityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Scene_ServiceDesc is the grpc.ServiceDesc for Scene service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -381,6 +415,10 @@ var Scene_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NodeHandshake",
 			Handler:    _Scene_NodeHandshake_Handler,
+		},
+		{
+			MethodName: "CheckJianghuDuelEligibility",
+			Handler:    _Scene_CheckJianghuDuelEligibility_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

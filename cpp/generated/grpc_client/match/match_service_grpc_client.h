@@ -343,6 +343,62 @@ void SendMatchServiceGetTournamentHighlights(entt::registry& registry, entt::ent
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendMatchServiceGetTournamentHighlightsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region MatchServiceCreateJianghuDuelInvite
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceCreateJianghuDuelInviteGrpcPath = "/match.MatchService/CreateJianghuDuelInvite";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceCreateJianghuDuelInvite(entt::registry& registry, entt::entity nodeEntity, const ::match::CreateJianghuDuelInviteRequest& request, GrpcDone<::match::CreateJianghuDuelInviteResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceCreateJianghuDuelInviteErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceConfirmJianghuDuelMember
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceConfirmJianghuDuelMemberGrpcPath = "/match.MatchService/ConfirmJianghuDuelMember";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceConfirmJianghuDuelMember(entt::registry& registry, entt::entity nodeEntity, const ::match::ConfirmJianghuDuelMemberRequest& request, GrpcDone<::match::ConfirmJianghuDuelMemberResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceConfirmJianghuDuelMemberErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceRespondJianghuDuelInvite
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceRespondJianghuDuelInviteGrpcPath = "/match.MatchService/RespondJianghuDuelInvite";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceRespondJianghuDuelInvite(entt::registry& registry, entt::entity nodeEntity, const ::match::RespondJianghuDuelInviteRequest& request, GrpcDone<::match::RespondJianghuDuelInviteResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceRespondJianghuDuelInviteErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceListJianghuGrudges
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceListJianghuGrudgesGrpcPath = "/match.MatchService/ListJianghuGrudges";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceListJianghuGrudges(entt::registry& registry, entt::entity nodeEntity, const ::match::ListJianghuGrudgesRequest& request, GrpcDone<::match::ListJianghuGrudgesResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceListJianghuGrudgesErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceDismissJianghuGrudge
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceDismissJianghuGrudgeGrpcPath = "/match.MatchService/DismissJianghuGrudge";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceDismissJianghuGrudge(entt::registry& registry, entt::entity nodeEntity, const ::match::DismissJianghuGrudgeRequest& request, GrpcDone<::match::DismissJianghuGrudgeResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceDismissJianghuGrudgeErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceNotifyJianghuDuelInvite
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceNotifyJianghuDuelInviteGrpcPath = "/match.MatchService/NotifyJianghuDuelInvite";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceNotifyJianghuDuelInvite(entt::registry& registry, entt::entity nodeEntity, const ::match::JianghuDuelInviteS2C& request, GrpcDone<::Empty> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceNotifyJianghuDuelInviteErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceNotifyJianghuDuelStatus
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceNotifyJianghuDuelStatusGrpcPath = "/match.MatchService/NotifyJianghuDuelStatus";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceNotifyJianghuDuelStatus(entt::registry& registry, entt::entity nodeEntity, const ::match::JianghuDuelStatusS2C& request, GrpcDone<::Empty> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceNotifyJianghuDuelStatusErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline);
 

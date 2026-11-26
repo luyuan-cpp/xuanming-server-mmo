@@ -189,3 +189,44 @@ void SceneSkillClientPlayerHandler::UnsealSkillBook(entt::entity player,const ::
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneSkillClientPlayerHandler::ClaimScrollCollectionMilestone(entt::entity player,const ::ClaimScrollCollectionMilestoneRequest* request,
+	::ClaimScrollCollectionMilestoneResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::ClaimScrollCollectionMilestone(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::BatchDismantleSkillBooks(entt::entity player,const ::BatchDismantleSkillBooksRequest* request,
+	::BatchDismantleSkillBooksResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::BatchDismantleSkillBooks(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::PostSkillBookWantedOrder(entt::entity player,const ::PostSkillBookWantedOrderRequest* request,
+	::PostSkillBookWantedOrderResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::PostWantedOrder(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::CancelSkillBookWantedOrder(entt::entity player,const ::CancelSkillBookWantedOrderRequest* request,
+	::CancelSkillBookWantedOrderResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::CancelWantedOrder(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::ListSkillBookWantedOrders(entt::entity player,const ::ListSkillBookWantedOrdersRequest* request,
+	::ListSkillBookWantedOrdersResponse* response)
+{
+///<<< BEGIN WRITING YOUR 

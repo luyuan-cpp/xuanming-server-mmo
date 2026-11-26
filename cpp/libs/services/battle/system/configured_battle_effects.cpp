@@ -346,8 +346,20 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     event->set_skill_table_id(row.id());
     event->set_hit_kind(origin == BattleDamageOrigin::Mirror ? BATTLE_HIT_MIRROR : BATTLE_HIT_NORMAL);
     if (normal || origin == BattleDamageOrigin::Confusion) {
+        const bool consumeBreathResonance = IsDefendBreathResonanceReady(actor, row.id());
         context.paidMana = SkillManaCost(actor, row);
         ConsumeSkillMana(actor, row, row.id(), result);
+        if (consumeBreathResonance) {
+            auto& rt = seasonSealRuntimeByActor[actor.actor_id()];
+            rt.defendResonanceReadyRound = 0u;
+            const uint64_t fullCost = SkillManaCost(actor, row);
+            const uint64_t saved = fullCost > context.paidMana ? fullCost - context.paidMana : 0u;
+            if (saved > 0u) {
+                rt.contributionValue = AddSafe(rt.contributionValue, saved);
+                EmitSeasonResonanceEvent(actor, actor.actor_id(),
+                                         seasonrules::kResonanceEventBreathHalfMana, saved, result);
+            }
+        }
         if (row.cooldown_rounds() > 0) (*actor.mutable_skill_cooldown_rounds())[row.id()] = row.cooldown_rounds();
         ++(*actor.mutable_ability_use_counts())[row.id()];
         if (row.health_cost_mode() > 0) {
@@ -363,6 +375,22 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     }
     const int effectsBegin = result.events_size();
     bool castSupportEffect = false;
+    bool guardResonanceActive = false;
+    if (normal && actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+        row.id() == seasonrules::kSkillGuzhenLingzhang &&
+        actor.equipment_effects().has_season_seal()) {
+        const auto& seal = actor.equipment_effects().season_seal();
+        if (seal.season_id() == seasonrules::kSeason1Id && seal.seal_id() == seasonrules::kSealGuzhenShouyin) {
+            auto& rt = seasonSealRuntimeByActor[actor.actor_id()];
+            if (!rt.guardResonanceConsumed && rt.guardResonanceReadyRound == roundIndex) {
+                rt.guardResonanceConsumed = true;
+                rt.guardResonanceReadyRound = 0u;
+                guardResonanceActive = true;
+                activeGuardShieldResonanceCasterId = actor.actor_id();
+                activeGuardShieldResonanceExtra = 0u;
+            }
+        }
+    }
     for (size_t i = 0; i < targets.size(); ++i) {
         auto* target = FindActor(targets[i]);
         if (target == nullptr || target->fled()) continue;
@@ -393,6 +421,19 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
             if (definition != nullptr && definition->battle_op() == static_cast<uint32_t>(BattleEffectOp::ReviveMark)) {
                 castSupportEffect = true;
             }
+        }
+        pendingMysticExtendCasterId = 0u;
+        pendingMysticExtendTargetId = 0u;
+    }
+    if (guardResonanceActive && activeGuardShieldResonanceCasterId == actor.actor_id()) {
+        const uint64_t extraShield = activeGuardShieldResonanceExtra;
+        activeGuardShieldResonanceCasterId = 0u;
+        activeGuardShieldResonanceExtra = 0u;
+        if (extraShield > 0u) {
+            auto& rt = seasonSealRuntimeByActor[actor.actor_id()];
+            rt.contributionValue = AddSafe(rt.contributionValue, extraShield);
+            EmitSeasonResonanceEvent(actor, actor.actor_id(),
+                                     seasonrules::kResonanceEventGuardShieldBoost, extraShield, result);
         }
     }
     currentHitIndex = 0;
@@ -457,6 +498,17 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     }
     if (op == BattleEffectOp::Shield && EscalationStacks() > 0) {
         value *= static_cast<double>(EscalationSupportPct()) / 100.0;
+    }
+    uint64_t guardResonanceGain = 0u;
+    if (op == BattleEffectOp::Shield && context.origin == BattleDamageOrigin::Direct &&
+        context.skillId == seasonrules::kSkillGuzhenLingzhang &&
+        activeGuardShieldResonanceCasterId == caster.actor_id()) {
+        const uint64_t beforeShield = Whole(value);
+        value *= (100.0 + seasonrules::kResonanceGuardShieldBonusPct) / 100.0;
+        const uint64_t afterShield = Whole(value);
+        if (afterShield > beforeShield) {
+            guardResonanceGain = afterShield - beforeShield;
+        }
     }
     if (!Persistent(op) && row.trigger_event() == 0) {
         switch (op) {
@@ -689,7 +741,19 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     added->set_source_skill_id(context.skillId); added->set_layer(1);
     added->set_snapshot_value(strength); added->set_remaining_capacity(Whole(value));
     added->set_remaining_hits(row.hit_limit()); added->set_remaining_ticks(row.tick_count());
-    added->set_remain_rounds(row.duration_rounds()); added->set_applied_round(roundIndex);
+    uint32_t appliedRemainRounds = row.duration_rounds();
+    bool mysticResonanceExtended = false;
+    if (hostile && op == BattleEffectOp::Modifier && appliedRemainRounds > 0u &&
+        context.origin == BattleDamageOrigin::Direct &&
+        context.skillId == seasonrules::kSkillPozhenLinglei &&
+        caster.actor_id() == pendingMysticExtendCasterId &&
+        receiver.actor_id() == pendingMysticExtendTargetId) {
+        appliedRemainRounds += seasonrules::kResonanceMysticDebuffBonusRounds;
+        pendingMysticExtendCasterId = 0u;
+        pendingMysticExtendTargetId = 0u;
+        mysticResonanceExtended = true;
+    }
+    added->set_remain_rounds(appliedRemainRounds); added->set_applied_round(roundIndex);
     added->set_tick_round(row.tick_on_apply() ? roundIndex : roundIndex + 1);
     added->set_extensions_used(extensions);
     if (op == BattleEffectOp::ReviveMark)
@@ -710,7 +774,17 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     auto* event = AppendEvent(result, BATTLE_EVENT_BUFF_ADD, caster.actor_id(), receiver.actor_id());
     event->set_buff_table_id(row.id()); event->set_buff_instance_id(instance); event->set_value(1);
     if (op == BattleEffectOp::Shield) event->set_shield_after(Whole(value));
-    if (op == BattleEffectOp::Shield) CommitEquipmentShield(caster, receiver.actor_id(), shieldArtifacts, result);
+    if (op == BattleEffectOp::Shield) {
+        if (guardResonanceGain > 0u) {
+            activeGuardShieldResonanceExtra = AddSafe(activeGuardShieldResonanceExtra, guardResonanceGain);
+        }
+        CommitEquipmentShield(caster, receiver.actor_id(), shieldArtifacts, result);
+    }
+    if (mysticResonanceExtended) {
+        EmitSeasonResonanceEvent(caster, receiver.actor_id(),
+                                 seasonrules::kResonanceEventMysticExtendDebuff,
+                                 seasonrules::kResonanceMysticDebuffBonusRounds, result);
+    }
     if (row.trigger_event() == 0 && op != BattleEffectOp::PursuitDamage && op != BattleEffectOp::PrepareCast) {
         for (const auto child : row.sub_buff()) {
             if (FindBuffIndex(receiver, instance) < 0) break;

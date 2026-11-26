@@ -127,13 +127,13 @@ func (c *memOwnerConn) ExecContext(_ context.Context, query string, args []drive
 		c.st.records[pid] = rec
 		return driver.RowsAffected(1), nil
 	case strings.HasPrefix(q, "UPDATE owner_record"):
-		pid := argU64(args[3].Value)
+		pid := argU64(args[4].Value)
 		rec := c.st.records[pid]
 		rec.OwnerType = OwnerType(args[0].Value.(int64))
 		rec.Phase = Phase(args[1].Value.(int64))
 		rec.Target = OwnerTarget{}
-		rec.AdmitNotBeforeMs = 0
-		rec.UpdatedAtMs = args[2].Value.(int64)
+		rec.AdmitNotBeforeMs = args[2].Value.(int64)
+		rec.UpdatedAtMs = args[3].Value.(int64)
 		c.st.records[pid] = rec
 		return driver.RowsAffected(1), nil
 	case strings.HasPrefix(q, "INSERT INTO owner_instance_lease"):
@@ -354,6 +354,87 @@ func TestStore_TransitionBarrierLeaseFenceAndRelease(t *testing.T) {
 	})
 	if err != nil || !released || afterRel.Phase != PhaseNone || afterRel.OwnerEpoch != 2 || afterRel.SourceRevision != 11 {
 		t.Fatalf("matching release = %+v released=%v err=%v", afterRel, released, err)
+	}
+}
+
+func TestStore_BarrierRetainedAcrossReleaseAndPendingRetarget(t *testing.T) {
+	store, _ := openMemOwnerStore(t)
+	now := time.UnixMilli(1_700_000_000_000)
+	store.now = func() time.Time { return now }
+	ctx := context.Background()
+
+	nodeA := OwnerTarget{PodName: "scene-a", InstanceUID: "uid-a", InstanceEpoch: 1, AssignmentID: "z1:s1", ReleaseTrack: "scene"}
+	nodeB := OwnerTarget{PodName: "scene-b", InstanceUID: "uid-b", InstanceEpoch: 1, AssignmentID: "z1:s2", ReleaseTrack: "scene"}
+	nodeC := OwnerTarget{PodName: "scene-c", InstanceUID: "uid-c", InstanceEpoch: 1, AssignmentID: "z1:s3", ReleaseTrack: "scene"}
+
+	deadlineA, err := store.RenewInstanceLease(ctx, RenewLeaseRequest{
+		PodName: nodeA.PodName, InstanceUID: nodeA.InstanceUID, InstanceEpoch: 1, LeaseSeconds: 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBarrier := deadlineA + 2000
+
+	// 1. Retargeting Pending(B) -> Pending(C) while A's lease is live must NOT collapse A's barrier.
+	rec1, err := store.BeginTransition(ctx, BeginRequest{
+		PlayerID: 2001, ExpectEpoch: 0, TargetType: OwnerInstance, Target: nodeA,
+		SourceRevision: 1, AllowSameSourceRevision: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Admit(ctx, AdmitRequest{PlayerID: 2001, OwnerEpoch: rec1.OwnerEpoch, OperationID: rec1.OperationID, Target: nodeA}); err != nil {
+		t.Fatal(err)
+	}
+	rec2, err := store.BeginTransition(ctx, BeginRequest{
+		PlayerID: 2001, ExpectEpoch: rec1.OwnerEpoch, TargetType: OwnerInstance, Target: nodeB,
+		SourceRevision: 1, AllowSameSourceRevision: true,
+	})
+	if err != nil || rec2.AdmitNotBeforeMs != wantBarrier {
+		t.Fatalf("begin A->B = %+v, err=%v (want barrier %d)", rec2, err, wantBarrier)
+	}
+	rec3, err := store.BeginTransition(ctx, BeginRequest{
+		PlayerID: 2001, ExpectEpoch: rec2.OwnerEpoch, TargetType: OwnerInstance, Target: nodeC,
+		SourceRevision: 1, AllowSameSourceRevision: true,
+	})
+	if err != nil || rec3.AdmitNotBeforeMs != wantBarrier {
+		t.Fatalf("begin Pending(B)->Pending(C) collapsed barrier: got %d, want %d (err=%v)", rec3.AdmitNotBeforeMs, wantBarrier, err)
+	}
+	if _, err := store.Admit(ctx, AdmitRequest{PlayerID: 2001, OwnerEpoch: rec3.OwnerEpoch, OperationID: rec3.OperationID, Target: nodeC}); !errors.Is(err, ErrBarrierNotOpen) {
+		t.Fatalf("admit C before A's barrier must fail ErrBarrierNotOpen, got %v", err)
+	}
+
+	// 2. Release while A's lease is live must retain barrier so Release -> Begin(B) -> Admit(B) cannot split-brain.
+	recA, err := store.BeginTransition(ctx, BeginRequest{
+		PlayerID: 2002, ExpectEpoch: 0, TargetType: OwnerInstance, Target: nodeA,
+		SourceRevision: 5, AllowSameSourceRevision: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Admit(ctx, AdmitRequest{PlayerID: 2002, OwnerEpoch: recA.OwnerEpoch, OperationID: recA.OperationID, Target: nodeA}); err != nil {
+		t.Fatal(err)
+	}
+	rel, ok, err := store.Release(ctx, ReleaseRequest{PlayerID: 2002, OwnerEpoch: recA.OwnerEpoch, OperationID: recA.OperationID})
+	if err != nil || !ok || rel.AdmitNotBeforeMs != wantBarrier {
+		t.Fatalf("release must retain active lease barrier %d, got rec=%+v ok=%v err=%v", wantBarrier, rel, ok, err)
+	}
+	recB, err := store.BeginTransition(ctx, BeginRequest{
+		PlayerID: 2002, ExpectEpoch: rel.OwnerEpoch, TargetType: OwnerInstance, Target: nodeB,
+		SourceRevision: 5, AllowSameSourceRevision: true,
+	})
+	if err != nil || recB.AdmitNotBeforeMs != wantBarrier {
+		t.Fatalf("begin after release collapsed barrier: got %d, want %d (err=%v)", recB.AdmitNotBeforeMs, wantBarrier, err)
+	}
+	if _, err := store.Admit(ctx, AdmitRequest{PlayerID: 2002, OwnerEpoch: recB.OwnerEpoch, OperationID: recB.OperationID, Target: nodeB}); !errors.Is(err, ErrBarrierNotOpen) {
+		t.Fatalf("admit after release before barrier must fail ErrBarrierNotOpen, got %v", err)
+	}
+	// Stale revision (<5) still rejected even with AllowSameSourceRevision=true.
+	if _, err := store.BeginTransition(ctx, BeginRequest{
+		PlayerID: 2002, ExpectEpoch: recB.OwnerEpoch, TargetType: OwnerInstance, Target: nodeC,
+		SourceRevision: 4, AllowSameSourceRevision: true,
+	}); !errors.Is(err, ErrSourceRevisionStale) {
+		t.Fatalf("lower source_revision with AllowSameSourceRevision must still fail ErrSourceRevisionStale, got %v", err)
 	}
 }
 

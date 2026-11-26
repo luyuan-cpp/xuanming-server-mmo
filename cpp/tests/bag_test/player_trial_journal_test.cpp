@@ -215,18 +215,18 @@ TEST_F(PlayerTrialJournalSystemTest, RealExportedTablesValidateAndPopulateInitia
     EXPECT_TRUE(snap.available());
     EXPECT_TRUE(snap.can_operate());
     EXPECT_EQ(snap.total_permanent_lit_seals(), 0u);
-    EXPECT_EQ(snap.total_permanent_seals(), 24u);
+    EXPECT_EQ(snap.total_permanent_seals(), 27u);
     EXPECT_EQ(snap.voucher_balance(), 0u);
     EXPECT_EQ(snap.bound_sand_balance(), 0u);
     ASSERT_EQ(snap.chapters_size(), 3);
     EXPECT_EQ(snap.chapters(0).chapter_id(), trialjournal::kChapterBreakthrough);
-    EXPECT_EQ(snap.chapters(0).entries_size(), 4);
+    EXPECT_EQ(snap.chapters(0).entries_size(), 5);
     EXPECT_EQ(snap.chapters(1).chapter_id(), trialjournal::kChapterThreeRealms);
     EXPECT_EQ(snap.chapters(1).entries_size(), 4);
     EXPECT_EQ(snap.chapters(2).chapter_id(), trialjournal::kChapterSeasonal);
     EXPECT_EQ(snap.chapters(2).season_id(), 1u);
     EXPECT_EQ(snap.chapters(2).entries_size(), 3);
-    EXPECT_EQ(snap.milestones_size(), 10);
+    EXPECT_EQ(snap.milestones_size(), 11);
     EXPECT_EQ(snap.redeemable_artifacts_size(), 8);
 
     const auto* m901 = FindMilestoneView(snap, 901);
@@ -263,9 +263,10 @@ TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingCardUnlockableAppea
 }
 
 TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingPurchasablePetOrSkillCosmetic) {
+    const auto loadedSnap = TrialJournalMilestoneTableManager::Instance().CurrentSnapshot();
+    ASSERT_GT(loadedSnap->data.data_size(), 0);
     {
-        auto snap = std::make_shared<TrialJournalMilestoneTableSnapshot>(
-            *TrialJournalMilestoneTableManager::Instance().CurrentSnapshot());
+        auto snap = std::make_shared<TrialJournalMilestoneTableSnapshot>(*loadedSnap);
         // PetCosmetic #1（苍嶂麟）支持百宝阁幻化符解锁，严禁配进免费试炼志里程碑。
         snap->data.mutable_data(0)->set_grant_pet_cosmetic_id(1);
         snap->idMap.clear();
@@ -276,10 +277,9 @@ TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingPurchasablePetOrSki
         TrialJournalMilestoneTableManager::Instance().InstallSnapshot(snap);
         EXPECT_FALSE(PlayerTrialJournalSystem::ValidateTables());
     }
-    TrialJournalMilestoneTableManager::Instance().InstallSnapshot(prevMilestoneSnap);
+    TrialJournalMilestoneTableManager::Instance().InstallSnapshot(loadedSnap);
     {
-        auto snap = std::make_shared<TrialJournalMilestoneTableSnapshot>(
-            *TrialJournalMilestoneTableManager::Instance().CurrentSnapshot());
+        auto snap = std::make_shared<TrialJournalMilestoneTableSnapshot>(*loadedSnap);
         // SkillVfxCosmetic #1（鎏金符纹）支持百宝阁特效卷解锁，严禁配进免费试炼志里程碑。
         snap->data.mutable_data(0)->set_grant_skill_vfx_id(1);
         snap->idMap.clear();

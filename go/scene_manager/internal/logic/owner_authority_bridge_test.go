@@ -120,13 +120,13 @@ func (c *bridgeMemConn) ExecContext(_ context.Context, query string, args []driv
 		c.st.records[pid] = rec
 		return driver.RowsAffected(1), nil
 	case strings.HasPrefix(q, "UPDATE owner_record"):
-		pid := bridgeU64(args[3].Value)
+		pid := bridgeU64(args[4].Value)
 		rec := c.st.records[pid]
 		rec.OwnerType = ownerauthority.OwnerType(args[0].Value.(int64))
 		rec.Phase = ownerauthority.Phase(args[1].Value.(int64))
 		rec.Target = ownerauthority.OwnerTarget{}
-		rec.AdmitNotBeforeMs = 0
-		rec.UpdatedAtMs = args[2].Value.(int64)
+		rec.AdmitNotBeforeMs = args[2].Value.(int64)
+		rec.UpdatedAtMs = args[3].Value.(int64)
 		c.st.records[pid] = rec
 		return driver.RowsAffected(1), nil
 	case strings.HasPrefix(q, "INSERT INTO owner_instance_lease"):
@@ -223,13 +223,19 @@ func newBridgeTestSvc(t *testing.T, mode string) (*svc.ServiceContext, *bridgeMe
 func TestOwnerAuthorityBridge_ShadowAndEnforce(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. Enforce mode: enter commits -> stale revision rejected -> active lease barrier blocks -> leave releases.
+	// 1. Enforce mode: enter commits -> normal scene switch with same OwnerRevision succeeds ->
+	// stale revision rejected -> active lease barrier blocks -> rollback & leave release cleanly.
 	enforceSvc, _ := newBridgeTestSvc(t, "enforce")
-	if err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 100, "scene-a", 1, 1, 10, true); err != nil {
+	if _, err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 100, "scene-a", 1, 1, 10, true); err != nil {
 		t.Fatalf("initial enforce enter failed: %v", err)
 	}
-	// Stale ownerRevision rejected fail-closed in enforce mode.
-	if err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 101, "scene-b", 1, 2, 9, true); !errors.Is(err, ownerauthority.ErrSourceRevisionStale) {
+	// Normal map/scene switch keeps the same account-role OwnerRevision (10) and must succeed.
+	recSwitched, err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 105, "scene-a", 1, 2, 10, true)
+	if err != nil || recSwitched.Target.AssignmentID != "z1:s105" {
+		t.Fatalf("same-revision scene switch failed: rec=%+v err=%v", recSwitched, err)
+	}
+	// Stale ownerRevision (<10) rejected fail-closed in enforce mode.
+	if _, err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 101, "scene-b", 1, 3, 9, true); !errors.Is(err, ownerauthority.ErrSourceRevisionStale) {
 		t.Fatalf("stale revision err = %v, want ErrSourceRevisionStale", err)
 	}
 	// Active lease on scene-a creates admit_not_before barrier that blocks immediate cross-node enter.
@@ -238,7 +244,7 @@ func TestOwnerAuthorityBridge_ShadowAndEnforce(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 101, "scene-b", 1, 2, 11, true); !errors.Is(err, ownerauthority.ErrBarrierNotOpen) {
+	if _, err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7001, 101, "scene-b", 1, 3, 10, true); !errors.Is(err, ownerauthority.ErrBarrierNotOpen) {
 		t.Fatalf("barrier err = %v, want ErrBarrierNotOpen", err)
 	}
 	// Leave on mismatched target is a safe no-op; leave on matching target clears ownership.
@@ -253,12 +259,23 @@ func TestOwnerAuthorityBridge_ShadowAndEnforce(t *testing.T) {
 		t.Fatalf("after matching leave rec=%+v found=%v err=%v", rec, found, err)
 	}
 
+	// 1b. Route-failure rollback releases the newly admitted SQL record cleanly.
+	recRoll, err := syncOwnerAuthorityEnter(ctx, enforceSvc, nil, 7003, 300, "scene-c", 1, 1, 1, true)
+	if err != nil {
+		t.Fatalf("enter before rollback failed: %v", err)
+	}
+	syncOwnerAuthorityRollback(ctx, enforceSvc, nil, recRoll)
+	afterRoll, found, err := enforceSvc.OwnerAuthority.Query(ctx, 7003)
+	if err != nil || !found || afterRoll.Phase != ownerauthority.PhaseNone {
+		t.Fatalf("after rollback rec=%+v found=%v err=%v", afterRoll, found, err)
+	}
+
 	// 2. Shadow mode: never blocks even when source_revision is stale.
 	shadowSvc, _ := newBridgeTestSvc(t, "shadow")
-	if err := syncOwnerAuthorityEnter(ctx, shadowSvc, nil, 7002, 200, "scene-a", 1, 1, 20, false); err != nil {
+	if _, err := syncOwnerAuthorityEnter(ctx, shadowSvc, nil, 7002, 200, "scene-a", 1, 1, 20, false); err != nil {
 		t.Fatalf("shadow initial enter failed: %v", err)
 	}
-	if err := syncOwnerAuthorityEnter(ctx, shadowSvc, nil, 7002, 201, "scene-b", 1, 2, 10, false); err != nil {
+	if _, err := syncOwnerAuthorityEnter(ctx, shadowSvc, nil, 7002, 201, "scene-b", 1, 2, 10, false); err != nil {
 		t.Fatalf("shadow stale revision must not block, got %v", err)
 	}
 }

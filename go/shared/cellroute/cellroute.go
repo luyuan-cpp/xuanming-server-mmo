@@ -217,10 +217,16 @@ func BuildBalancedEntries(cells []CellSpec) ([]Entry, map[uint32]uint32, error) 
 	if len(cells) == 0 {
 		return nil, nil, errors.New("cellroute: cells must not be empty")
 	}
+	if uint64(len(cells)) > LogicalCellCount {
+		return nil, nil, fmt.Errorf("cellroute: cells len %d exceeds LogicalCellCount %d", len(cells), LogicalCellCount)
+	}
 	regionOfCell := make(map[uint32]uint32, len(cells))
 	for _, c := range cells {
-		if prev, exists := regionOfCell[c.CellID]; exists && prev != c.RegionID {
-			return nil, nil, fmt.Errorf("cellroute: cell %d declared in multiple regions (%d and %d)", c.CellID, prev, c.RegionID)
+		if prev, exists := regionOfCell[c.CellID]; exists {
+			if prev != c.RegionID {
+				return nil, nil, fmt.Errorf("cellroute: cell %d declared in multiple regions (%d and %d)", c.CellID, prev, c.RegionID)
+			}
+			return nil, nil, fmt.Errorf("cellroute: duplicate cell %d in cells", c.CellID)
 		}
 		regionOfCell[c.CellID] = c.RegionID
 	}

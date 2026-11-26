@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+// JianghuRule 表的权威 schema。源表 data/JianghuRule.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 江湖恩怨与天墉生死状一期全局可热更参数（docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2 / §6.4）。
+// 固定单行 id = 1。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message JianghuRuleTable {
+  option (cfg_sheet)       = "JianghuRule";
+  option (cfg_source_file) = "JianghuRule.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 规则行 ID（固定为 1）
+  uint32 id = 1;
+  // 总开关：1 = 开放天墉生死状与江湖恩怨，0 = 关闭
+  uint32 enabled = 2;
+  // 普通江湖战书消耗银两数（CurrencyType = 0，默认 500）
+  uint64 silver_writ_cost = 3;
+  // 官方金帖生死状道具 ID（FK -> Item.id，默认 3415）
+  uint32 gold_writ_item_id = 4 [(cfg_fk) = "Item"];
+  // 战书邀请有效期（秒，默认 60）
+  uint32 invite_ttl_sec = 5;
+  // 目标小队全员确认时间窗（秒，默认 30）
+  uint32 team_confirm_sec = 6;
+  // 同目标拒绝/过期后的再次下帖冷却（秒，默认 300）
+  uint32 same_target_cooldown_sec = 7;
+  // 单角色每日未成局战书邀请次数上限（默认 20）
+  uint32 daily_unmatched_invite_limit = 8;
+  // 天墉生死状单局回合上限（打满双方存活权威判平，默认 30）
+  uint32 duel_round_limit = 9;
+  // 天墉生死状单局最长期限（秒，超时权威判平，默认 720）
+  uint32 duel_timeout_sec = 10;
+  // 战败社交印记自然持续时长（秒，离线照常走表，默认 1800）
+  uint32 defeat_mark_duration_sec = 11;
+  // 普通洗尘消耗银两数（默认 1000）
+  uint64 silver_clear_cost = 12;
+  // 官方清风洗尘符道具 ID（FK -> Item.id，默认 3416）
+  uint32 clear_item_id = 13 [(cfg_fk) = "Item"];
+  // 清风洗尘符附赠洒脱徽记时长（秒，默认 1800）
+  uint32 clear_badge_duration_sec = 14;
+  // 个人恩怨录最多保留活跃宿敌人数（默认 50）
+  uint32 grudge_max_rivals = 15;
+  // 每对宿敌最多保留近期交手战报条数（默认 20）
+  uint32 grudge_max_logs_per_rival = 16;
+  // 帮派恩怨墙最多保留近期对局记录条数（默认 20）
+  uint32 guild_wall_max_records = 17;
+  // 触发宿敌连胜/终结连胜高光全服播报的最低连胜场次（默认 3）
+  uint32 streak_highlight_threshold = 18;
+}

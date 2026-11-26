@@ -883,6 +883,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kEquipLoadoutSpentDiamondFieldNumber = 34,
     kRewardedAdAmountFieldNumber = 36,
     kSealedBookItemIdFieldNumber = 37,
+    kEquipmentActualGoldSpentFieldNumber = 39,
+    kWantedOrderIdFieldNumber = 40,
+    kWantedOrderGoldFieldNumber = 41,
+    kEquipmentPolishAttemptsUsedFieldNumber = 38,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -1259,11 +1263,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_sealed_book_item_id(::uint64_t value);
 
   public:
+  // uint64 equipment_actual_gold_spent = 39;
+  void clear_equipment_actual_gold_spent() ;
+  [[nodiscard]] ::uint64_t equipment_actual_gold_spent() const;
+  void set_equipment_actual_gold_spent(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_equipment_actual_gold_spent() const;
+  void _internal_set_equipment_actual_gold_spent(::uint64_t value);
+
+  public:
+  // uint64 wanted_order_id = 40;
+  void clear_wanted_order_id() ;
+  [[nodiscard]] ::uint64_t wanted_order_id() const;
+  void set_wanted_order_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_wanted_order_id() const;
+  void _internal_set_wanted_order_id(::uint64_t value);
+
+  public:
+  // uint64 wanted_order_gold = 41;
+  void clear_wanted_order_gold() ;
+  [[nodiscard]] ::uint64_t wanted_order_gold() const;
+  void set_wanted_order_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_wanted_order_gold() const;
+  void _internal_set_wanted_order_gold(::uint64_t value);
+
+  public:
+  // uint32 equipment_polish_attempts_used = 38;
+  void clear_equipment_polish_attempts_used() ;
+  [[nodiscard]] ::uint32_t equipment_polish_attempts_used() const;
+  void set_equipment_polish_attempts_used(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equipment_polish_attempts_used() const;
+  void _internal_set_equipment_polish_attempts_used(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 37,
+      ::google::protobuf::internal::TcParseTable<5, 41,
                           0, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1329,6 +1373,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint64_t equip_loadout_spent_diamond_;
     ::uint64_t rewarded_ad_amount_;
     ::uint64_t sealed_book_item_id_;
+    ::uint64_t equipment_actual_gold_spent_;
+    ::uint64_t wanted_order_id_;
+    ::uint64_t wanted_order_gold_;
+    ::uint32_t equipment_polish_attempts_used_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2792,6 +2840,102 @@ inline ::uint64_t ClientRequestRecord::_internal_sealed_book_item_id() const {
 inline void ClientRequestRecord::_internal_set_sealed_book_item_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sealed_book_item_id_ = value;
+}
+
+// uint32 equipment_polish_attempts_used = 38;
+inline void ClientRequestRecord::clear_equipment_polish_attempts_used() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_polish_attempts_used_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+}
+inline ::uint32_t ClientRequestRecord::equipment_polish_attempts_used() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_polish_attempts_used)
+  return _internal_equipment_polish_attempts_used();
+}
+inline void ClientRequestRecord::set_equipment_polish_attempts_used(::uint32_t value) {
+  _internal_set_equipment_polish_attempts_used(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_polish_attempts_used)
+}
+inline ::uint32_t ClientRequestRecord::_internal_equipment_polish_attempts_used() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_polish_attempts_used_;
+}
+inline void ClientRequestRecord::_internal_set_equipment_polish_attempts_used(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_polish_attempts_used_ = value;
+}
+
+// uint64 equipment_actual_gold_spent = 39;
+inline void ClientRequestRecord::clear_equipment_actual_gold_spent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_actual_gold_spent_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+}
+inline ::uint64_t ClientRequestRecord::equipment_actual_gold_spent() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_actual_gold_spent)
+  return _internal_equipment_actual_gold_spent();
+}
+inline void ClientRequestRecord::set_equipment_actual_gold_spent(::uint64_t value) {
+  _internal_set_equipment_actual_gold_spent(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_actual_gold_spent)
+}
+inline ::uint64_t ClientRequestRecord::_internal_equipment_actual_gold_spent() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_actual_gold_spent_;
+}
+inline void ClientRequestRecord::_internal_set_equipment_actual_gold_spent(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_actual_gold_spent_ = value;
+}
+
+// uint64 wanted_order_id = 40;
+inline void ClientRequestRecord::clear_wanted_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wanted_order_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+}
+inline ::uint64_t ClientRequestRecord::wanted_order_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.wanted_order_id)
+  return _internal_wanted_order_id();
+}
+inline void ClientRequestRecord::set_wanted_order_id(::uint64_t value) {
+  _internal_set_wanted_order_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.wanted_order_id)
+}
+inline ::uint64_t ClientRequestRecord::_internal_wanted_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.wanted_order_id_;
+}
+inline void ClientRequestRecord::_internal_set_wanted_order_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wanted_order_id_ = value;
+}
+
+// uint64 wanted_order_gold = 41;
+inline void ClientRequestRecord::clear_wanted_order_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wanted_order_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+}
+inline ::uint64_t ClientRequestRecord::wanted_order_gold() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.wanted_order_gold)
+  return _internal_wanted_order_gold();
+}
+inline void ClientRequestRecord::set_wanted_order_gold(::uint64_t value) {
+  _internal_set_wanted_order_gold(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.wanted_order_gold)
+}
+inline ::uint64_t ClientRequestRecord::_internal_wanted_order_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.wanted_order_gold_;
+}
+inline void ClientRequestRecord::_internal_set_wanted_order_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wanted_order_gold_ = value;
 }
 
 // -------------------------------------------------------------------

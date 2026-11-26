@@ -30,7 +30,7 @@ type CraftedSkillBookEntry struct {
 	ScrollId        uint32                 `protobuf:"varint,3,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`                        // 产出所属卷宗 SkillScrollCraft.id。
 	RarityTier      uint32                 `protobuf:"varint,4,opt,name=rarity_tier,json=rarityTier,proto3" json:"rarity_tier,omitempty"`                  // 0 常规 / 1 稀世绝学。
 	Bound           bool                   `protobuf:"varint,5,opt,name=bound,proto3" json:"bound,omitempty"`                                              // true = 仅自用绑定（消耗绑定残页或绑定天工秘墨产物强制绑定，防洗白）。
-	CrafterName     string                 `protobuf:"bytes,6,opt,name=crafter_name,json=crafterName,proto3" json:"crafter_name,omitempty"`                // 宗师署名（非空时展示「宗师 XXX 亲手撰」）。
+	CrafterName     string                 `protobuf:"bytes,6,opt,name=crafter_name,json=crafterName,proto3" json:"crafter_name,omitempty"`                // 宗师署名（非空时展示「宗师 XXX 亲手撰」或佩戴雅号印款）。
 	CrafterPlayerId uint64                 `protobuf:"varint,7,opt,name=crafter_player_id,json=crafterPlayerId,proto3" json:"crafter_player_id,omitempty"` // 宗师玩家 ID（仅追溯，0 = 非宗师出品）。
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -115,26 +115,140 @@ func (x *CraftedSkillBookEntry) GetCrafterPlayerId() uint64 {
 	return 0
 }
 
+// 西市常规技能书悬赏求购单（V5：发榜时原子扣托管非绑银两，撤单全退，揭榜交卷扣 5% 银两税销毁）。
+type SkillBookWantedOrder struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	OrderId                uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`                                                // 买家维度单调悬赏号（>= 1）。
+	PosterPlayerId         uint64                 `protobuf:"varint,2,opt,name=poster_player_id,json=posterPlayerId,proto3" json:"poster_player_id,omitempty"`                         // 发榜买家 player_id。
+	PosterName             string                 `protobuf:"bytes,3,opt,name=poster_name,json=posterName,proto3" json:"poster_name,omitempty"`                                        // 发榜买家角色名。
+	SkillTableId           uint32                 `protobuf:"varint,4,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`                               // 求购的常规永久技能 SkillTable.id（必须 rarity_tier == 0）。
+	ScrollId               uint32                 `protobuf:"varint,5,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`                                             // 所属卷宗 SkillScrollCraft.id。
+	RequireMasterSignature bool                   `protobuf:"varint,6,opt,name=require_master_signature,json=requireMasterSignature,proto3" json:"require_master_signature,omitempty"` // true = 仅收带宗师署名的可交易书/封卷。
+	RewardGold             uint64                 `protobuf:"varint,7,opt,name=reward_gold,json=rewardGold,proto3" json:"reward_gold,omitempty"`                                       // 已托管的非绑定悬赏银两（100..50000）。
+	CreatedAtSec           uint64                 `protobuf:"varint,8,opt,name=created_at_sec,json=createdAtSec,proto3" json:"created_at_sec,omitempty"`                               // 发榜 Unix 秒。
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *SkillBookWantedOrder) Reset() {
+	*x = SkillBookWantedOrder{}
+	mi := &file_proto_common_component_player_craft_comp_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillBookWantedOrder) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillBookWantedOrder) ProtoMessage() {}
+
+func (x *SkillBookWantedOrder) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_craft_comp_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillBookWantedOrder.ProtoReflect.Descriptor instead.
+func (*SkillBookWantedOrder) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_craft_comp_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SkillBookWantedOrder) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrder) GetPosterPlayerId() uint64 {
+	if x != nil {
+		return x.PosterPlayerId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrder) GetPosterName() string {
+	if x != nil {
+		return x.PosterName
+	}
+	return ""
+}
+
+func (x *SkillBookWantedOrder) GetSkillTableId() uint32 {
+	if x != nil {
+		return x.SkillTableId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrder) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrder) GetRequireMasterSignature() bool {
+	if x != nil {
+		return x.RequireMasterSignature
+	}
+	return false
+}
+
+func (x *SkillBookWantedOrder) GetRewardGold() uint64 {
+	if x != nil {
+		return x.RewardGold
+	}
+	return 0
+}
+
+func (x *SkillBookWantedOrder) GetCreatedAtSec() uint64 {
+	if x != nil {
+		return x.CreatedAtSec
+	}
+	return 0
+}
+
 // 玩家轻量化手艺熟练度、未学技能书架、已通过书解锁的永久技能及主城原子代打配置。
 // 随 player_database.craft_component = 32（GROWTH 组）同事务落盘，旧存档缺失默认为空合法。
 type PlayerCraftComp struct {
 	state                protoimpl.MessageState   `protogen:"open.v1"`
 	ForgeMasteryExp      uint32                   `protobuf:"varint,1,opt,name=forge_mastery_exp,json=forgeMasteryExp,proto3" json:"forge_mastery_exp,omitempty"`                         // 铸器熟练度经验（只增不减；学徒 0..19 / 巧匠 20..59 / 宗师 60+）。
 	ScrollMasteryExp     uint32                   `protobuf:"varint,2,opt,name=scroll_mastery_exp,json=scrollMasteryExp,proto3" json:"scroll_mastery_exp,omitempty"`                      // 制卷熟练度经验（只增不减；学徒 0..19 / 巧匠 20..59 / 宗师 60+）。
-	ScrollCraftRevision  uint64                   `protobuf:"varint,3,opt,name=scroll_craft_revision,json=scrollCraftRevision,proto3" json:"scroll_craft_revision,omitempty"`             // 技能制书/研习/拆页的持久防重水位，每次成功 +1。
+	ScrollCraftRevision  uint64                   `protobuf:"varint,3,opt,name=scroll_craft_revision,json=scrollCraftRevision,proto3" json:"scroll_craft_revision,omitempty"`             // 技能制书/研习/拆页/里程碑/悬赏的持久防重水位，每次成功 +1。
 	NextBookSeq          uint64                   `protobuf:"varint,4,opt,name=next_book_seq,json=nextBookSeq,proto3" json:"next_book_seq,omitempty"`                                     // 下一本未学技能书的本地单调 ID（0 视为 1）。
 	SkillBooks           []*CraftedSkillBookEntry `protobuf:"bytes,5,rep,name=skill_books,json=skillBooks,proto3" json:"skill_books,omitempty"`                                           // 玩家当前持有的未学技能书（无序，按 book_id 索引）。
 	ProxyStallOpen       bool                     `protobuf:"varint,6,opt,name=proxy_stall_open,json=proxyStallOpen,proto3" json:"proxy_stall_open,omitempty"`                            // 宗师是否在主城西市开启原子代打/代制服务摊位。
 	ProxyForgeFeeGold    uint64                   `protobuf:"varint,7,opt,name=proxy_forge_fee_gold,json=proxyForgeFeeGold,proto3" json:"proxy_forge_fee_gold,omitempty"`                 // 装备代打/代打磨固定银两手工费（合法区间 50..100）。
 	ProxyScrollFeeGold   uint64                   `protobuf:"varint,8,opt,name=proxy_scroll_fee_gold,json=proxyScrollFeeGold,proto3" json:"proxy_scroll_fee_gold,omitempty"`              // 技能制书代制固定银两手工费（合法区间 50..100）。
 	BookUnlockedSkillIds []uint32                 `protobuf:"varint,9,rep,packed,name=book_unlocked_skill_ids,json=bookUnlockedSkillIds,proto3" json:"book_unlocked_skill_ids,omitempty"` // 已通过研习技能书永久解锁的 SkillTable.id（永久保值、不重置）。
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// ── V2 名匠江湖口碑与零属性雅号印款 ──
+	ProxyOrdersCompleted  uint32 `protobuf:"varint,10,opt,name=proxy_orders_completed,json=proxyOrdersCompleted,proto3" json:"proxy_orders_completed,omitempty"`      // 累计作为宗师完成的原子代打/代制订单数。
+	SupremeForgedCount    uint32 `protobuf:"varint,11,opt,name=supreme_forged_count,json=supremeForgedCount,proto3" json:"supreme_forged_count,omitempty"`            // 累计亲手或代工产出的 5 档金标极品（非豁免词条）次数。
+	RareBooksCraftedCount uint32 `protobuf:"varint,12,opt,name=rare_books_crafted_count,json=rareBooksCraftedCount,proto3" json:"rare_books_crafted_count,omitempty"` // 累计亲手或代工撰出的稀世绝学书次数。
+	MasterShowcaseTag     uint32 `protobuf:"varint,13,opt,name=master_showcase_tag,json=masterShowcaseTag,proto3" json:"master_showcase_tag,omitempty"`               // 预设安全招牌枚举（0..4，无自由文本 UGC 风险）。
+	EquippedCraftTitleId  uint32 `protobuf:"varint,14,opt,name=equipped_craft_title_id,json=equippedCraftTitleId,proto3" json:"equipped_craft_title_id,omitempty"`    // 当前佩戴的零属性名匠雅号印款 ID（0=默认宗师前缀，1..6=里程碑雅号）。
+	// ── V4 典籍藏经阁卷宗收集里程碑位图（docs/rules/bit-storage-and-table-ids.md） ──
+	// bit[(scroll_id - 1) * 2 + 0] = 小成(>=50%)已领，bit[(scroll_id - 1) * 2 + 1] = 圆满(100%)已领；低位在前、去尾0、高位未知bit透传。
+	ClaimedScrollMilestoneBits []byte `protobuf:"bytes,15,opt,name=claimed_scroll_milestone_bits,json=claimedScrollMilestoneBits,proto3" json:"claimed_scroll_milestone_bits,omitempty"`
+	// ── V5 江湖工坊社交闭环：封卷悬赏求书单与同队情义免税代打 ──
+	WantedOrders       []*SkillBookWantedOrder `protobuf:"bytes,16,rep,name=wanted_orders,json=wantedOrders,proto3" json:"wanted_orders,omitempty"`                        // 本人当前挂出的悬赏求书单（最多 3 条，无序按 order_id 索引）。
+	NextWantedOrderSeq uint64                  `protobuf:"varint,17,opt,name=next_wanted_order_seq,json=nextWantedOrderSeq,proto3" json:"next_wanted_order_seq,omitempty"` // 下一条悬赏求书单本地单调 ID（0 视为 1）。
+	TeamFreeProxy      bool                    `protobuf:"varint,18,opt,name=team_free_proxy,json=teamFreeProxy,proto3" json:"team_free_proxy,omitempty"`                  // true = 对同队（TeamId 相同且非 0）玩家实行情义 0 手工费原子代打/代制。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PlayerCraftComp) Reset() {
 	*x = PlayerCraftComp{}
-	mi := &file_proto_common_component_player_craft_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_craft_comp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -146,7 +260,7 @@ func (x *PlayerCraftComp) String() string {
 func (*PlayerCraftComp) ProtoMessage() {}
 
 func (x *PlayerCraftComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_craft_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_craft_comp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -159,7 +273,7 @@ func (x *PlayerCraftComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerCraftComp.ProtoReflect.Descriptor instead.
 func (*PlayerCraftComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_craft_comp_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_player_craft_comp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PlayerCraftComp) GetForgeMasteryExp() uint32 {
@@ -225,6 +339,69 @@ func (x *PlayerCraftComp) GetBookUnlockedSkillIds() []uint32 {
 	return nil
 }
 
+func (x *PlayerCraftComp) GetProxyOrdersCompleted() uint32 {
+	if x != nil {
+		return x.ProxyOrdersCompleted
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetSupremeForgedCount() uint32 {
+	if x != nil {
+		return x.SupremeForgedCount
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetRareBooksCraftedCount() uint32 {
+	if x != nil {
+		return x.RareBooksCraftedCount
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetMasterShowcaseTag() uint32 {
+	if x != nil {
+		return x.MasterShowcaseTag
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetEquippedCraftTitleId() uint32 {
+	if x != nil {
+		return x.EquippedCraftTitleId
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetClaimedScrollMilestoneBits() []byte {
+	if x != nil {
+		return x.ClaimedScrollMilestoneBits
+	}
+	return nil
+}
+
+func (x *PlayerCraftComp) GetWantedOrders() []*SkillBookWantedOrder {
+	if x != nil {
+		return x.WantedOrders
+	}
+	return nil
+}
+
+func (x *PlayerCraftComp) GetNextWantedOrderSeq() uint64 {
+	if x != nil {
+		return x.NextWantedOrderSeq
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetTeamFreeProxy() bool {
+	if x != nil {
+		return x.TeamFreeProxy
+	}
+	return false
+}
+
 var File_proto_common_component_player_craft_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_craft_comp_proto_rawDesc = "" +
@@ -238,7 +415,18 @@ const file_proto_common_component_player_craft_comp_proto_rawDesc = "" +
 	"rarityTier\x12\x14\n" +
 	"\x05bound\x18\x05 \x01(\bR\x05bound\x12!\n" +
 	"\fcrafter_name\x18\x06 \x01(\tR\vcrafterName\x12*\n" +
-	"\x11crafter_player_id\x18\a \x01(\x04R\x0fcrafterPlayerId\"\xc1\x03\n" +
+	"\x11crafter_player_id\x18\a \x01(\x04R\x0fcrafterPlayerId\"\xc0\x02\n" +
+	"\x14SkillBookWantedOrder\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x04R\aorderId\x12(\n" +
+	"\x10poster_player_id\x18\x02 \x01(\x04R\x0eposterPlayerId\x12\x1f\n" +
+	"\vposter_name\x18\x03 \x01(\tR\n" +
+	"posterName\x12$\n" +
+	"\x0eskill_table_id\x18\x04 \x01(\rR\fskillTableId\x12\x1b\n" +
+	"\tscroll_id\x18\x05 \x01(\rR\bscrollId\x128\n" +
+	"\x18require_master_signature\x18\x06 \x01(\bR\x16requireMasterSignature\x12\x1f\n" +
+	"\vreward_gold\x18\a \x01(\x04R\n" +
+	"rewardGold\x12$\n" +
+	"\x0ecreated_at_sec\x18\b \x01(\x04R\fcreatedAtSec\"\xa3\a\n" +
 	"\x0fPlayerCraftComp\x12*\n" +
 	"\x11forge_mastery_exp\x18\x01 \x01(\rR\x0fforgeMasteryExp\x12,\n" +
 	"\x12scroll_mastery_exp\x18\x02 \x01(\rR\x10scrollMasteryExp\x122\n" +
@@ -249,7 +437,17 @@ const file_proto_common_component_player_craft_comp_proto_rawDesc = "" +
 	"\x10proxy_stall_open\x18\x06 \x01(\bR\x0eproxyStallOpen\x12/\n" +
 	"\x14proxy_forge_fee_gold\x18\a \x01(\x04R\x11proxyForgeFeeGold\x121\n" +
 	"\x15proxy_scroll_fee_gold\x18\b \x01(\x04R\x12proxyScrollFeeGold\x125\n" +
-	"\x17book_unlocked_skill_ids\x18\t \x03(\rR\x14bookUnlockedSkillIdsB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x17book_unlocked_skill_ids\x18\t \x03(\rR\x14bookUnlockedSkillIds\x124\n" +
+	"\x16proxy_orders_completed\x18\n" +
+	" \x01(\rR\x14proxyOrdersCompleted\x120\n" +
+	"\x14supreme_forged_count\x18\v \x01(\rR\x12supremeForgedCount\x127\n" +
+	"\x18rare_books_crafted_count\x18\f \x01(\rR\x15rareBooksCraftedCount\x12.\n" +
+	"\x13master_showcase_tag\x18\r \x01(\rR\x11masterShowcaseTag\x125\n" +
+	"\x17equipped_craft_title_id\x18\x0e \x01(\rR\x14equippedCraftTitleId\x12A\n" +
+	"\x1dclaimed_scroll_milestone_bits\x18\x0f \x01(\fR\x1aclaimedScrollMilestoneBits\x12:\n" +
+	"\rwanted_orders\x18\x10 \x03(\v2\x15.SkillBookWantedOrderR\fwantedOrders\x121\n" +
+	"\x15next_wanted_order_seq\x18\x11 \x01(\x04R\x12nextWantedOrderSeq\x12&\n" +
+	"\x0fteam_free_proxy\x18\x12 \x01(\bR\rteamFreeProxyB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_craft_comp_proto_rawDescOnce sync.Once
@@ -263,18 +461,20 @@ func file_proto_common_component_player_craft_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_craft_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_craft_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_common_component_player_craft_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_common_component_player_craft_comp_proto_goTypes = []any{
 	(*CraftedSkillBookEntry)(nil), // 0: CraftedSkillBookEntry
-	(*PlayerCraftComp)(nil),       // 1: PlayerCraftComp
+	(*SkillBookWantedOrder)(nil),  // 1: SkillBookWantedOrder
+	(*PlayerCraftComp)(nil),       // 2: PlayerCraftComp
 }
 var file_proto_common_component_player_craft_comp_proto_depIdxs = []int32{
 	0, // 0: PlayerCraftComp.skill_books:type_name -> CraftedSkillBookEntry
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: PlayerCraftComp.wanted_orders:type_name -> SkillBookWantedOrder
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_craft_comp_proto_init() }
@@ -288,7 +488,7 @@ func file_proto_common_component_player_craft_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_craft_comp_proto_rawDesc), len(file_proto_common_component_player_craft_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

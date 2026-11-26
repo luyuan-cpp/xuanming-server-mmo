@@ -882,3 +882,26 @@ func (guildServiceRpc) decodeInspectFieldWarTargets(reply *base.MessageContent, 
 	}
 	return resp, nil
 }
+
+// GetGuildJianghuGrudgeWall 异步调用 GuildService.GetGuildJianghuGrudgeWall(REQUEST),done 的契约见 GuildService。
+func (r guildServiceRpc) GetGuildJianghuGrudgeWall(c *pkg.GameClient, req *guild.GetGuildJianghuGrudgeWallRequest, timeout time.Duration, done func(*guild.GetGuildJianghuGrudgeWallResponse, error)) {
+	c.Call(game.GuildServiceGetGuildJianghuGrudgeWallMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetGuildJianghuGrudgeWall(reply, err))
+	})
+}
+
+// GetGuildJianghuGrudgeWallSync 同步调用 GuildService.GetGuildJianghuGrudgeWall(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r guildServiceRpc) GetGuildJianghuGrudgeWallSync(ctx context.Context, c *pkg.GameClient, req *guild.GetGuildJianghuGrudgeWallRequest, timeout time.Duration) (*guild.GetGuildJianghuGrudgeWallResponse, error) {
+	return r.decodeGetGuildJianghuGrudgeWall(c.CallSync(ctx, game.GuildServiceGetGuildJianghuGrudgeWallMessageId, req, timeout))
+}
+
+func (guildServiceRpc) decodeGetGuildJianghuGrudgeWall(reply *base.MessageContent, err error) (*guild.GetGuildJianghuGrudgeWallResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &guild.GetGuildJianghuGrudgeWallResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode GuildService.GetGuildJianghuGrudgeWall reply: %w", err)
+	}
+	return resp, nil
+}

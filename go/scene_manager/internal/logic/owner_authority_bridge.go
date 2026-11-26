@@ -51,7 +51,8 @@ func classifyOwnerAuthorityErr(err error) string {
 
 // syncOwnerAuthorityEnter bridges EnterScene into linearizable SQL ownerauthority.
 // In shadow mode it dual-writes and logs divergences without blocking the Redis path.
-// In enforce mode it gates EnterScene fail-closed before Kafka route publication.
+// In enforce mode it gates EnterScene fail-closed before Kafka route publication and returns
+// the committed record so callers can release it if Kafka publication fails.
 func syncOwnerAuthorityEnter(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
@@ -61,9 +62,9 @@ func syncOwnerAuthorityEnter(
 	zoneID uint32,
 	redisEpoch, ownerRevision uint64,
 	enforce bool,
-) error {
+) (ownerauthority.OwnerRecord, error) {
 	if svcCtx == nil || svcCtx.OwnerAuthority == nil {
-		return nil
+		return ownerauthority.OwnerRecord{}, nil
 	}
 	mode := "shadow"
 	if enforce {
@@ -78,9 +79,9 @@ func syncOwnerAuthorityEnter(
 				mode, playerID, sceneID, nodeID, err)
 		}
 		if enforce {
-			return err
+			return ownerauthority.OwnerRecord{}, err
 		}
-		return nil
+		return ownerauthority.OwnerRecord{}, nil
 	}
 
 	var expectEpoch uint64
@@ -88,12 +89,13 @@ func syncOwnerAuthorityEnter(
 		expectEpoch = cur.OwnerEpoch
 	}
 	rec, err := svcCtx.OwnerAuthority.BeginTransition(ctx, ownerauthority.BeginRequest{
-		PlayerID:       playerID,
-		ExpectEpoch:    expectEpoch,
-		TargetType:     ownerauthority.OwnerInstance,
-		Target:         target,
-		SourceRevision: ownerRevision,
-		Detail:         fmt.Sprintf("enter zone=%d scene=%d node=%s redis_epoch=%d", zoneID, sceneID, nodeID, redisEpoch),
+		PlayerID:                playerID,
+		ExpectEpoch:             expectEpoch,
+		TargetType:              ownerauthority.OwnerInstance,
+		Target:                  target,
+		SourceRevision:          ownerRevision,
+		AllowSameSourceRevision: true,
+		Detail:                  fmt.Sprintf("enter zone=%d scene=%d node=%s redis_epoch=%d", zoneID, sceneID, nodeID, redisEpoch),
 	})
 	if err != nil {
 		res := classifyOwnerAuthorityErr(err)
@@ -103,17 +105,18 @@ func syncOwnerAuthorityEnter(
 				mode, playerID, sceneID, nodeID, res, err)
 		}
 		if enforce {
-			return err
+			return ownerauthority.OwnerRecord{}, err
 		}
-		return nil
+		return ownerauthority.OwnerRecord{}, nil
 	}
 
-	if _, err := svcCtx.OwnerAuthority.Admit(ctx, ownerauthority.AdmitRequest{
+	admitted, err := svcCtx.OwnerAuthority.Admit(ctx, ownerauthority.AdmitRequest{
 		PlayerID:    playerID,
 		OwnerEpoch:  rec.OwnerEpoch,
 		OperationID: rec.OperationID,
 		Target:      target,
-	}); err != nil {
+	})
+	if err != nil {
 		res := classifyOwnerAuthorityErr(err)
 		metrics.ObserveOwnerAuthorityOp(mode, "enter", res)
 		if logger != nil {
@@ -121,13 +124,45 @@ func syncOwnerAuthorityEnter(
 				mode, playerID, rec.OwnerEpoch, sceneID, nodeID, res, err)
 		}
 		if enforce {
-			return err
+			return ownerauthority.OwnerRecord{}, err
 		}
-		return nil
+		return ownerauthority.OwnerRecord{}, nil
 	}
 
 	metrics.ObserveOwnerAuthorityOp(mode, "enter", "ok")
-	return nil
+	return admitted, nil
+}
+
+// syncOwnerAuthorityRollback releases a newly committed SQL owner_record when downstream
+// Kafka route publication fails after enforce-mode EnterScene admission.
+func syncOwnerAuthorityRollback(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	logger logx.Logger,
+	rec ownerauthority.OwnerRecord,
+) {
+	if svcCtx == nil || svcCtx.OwnerAuthority == nil || rec.OwnerEpoch == 0 || rec.OperationID == "" {
+		return
+	}
+	_, released, err := svcCtx.OwnerAuthority.Release(ctx, ownerauthority.ReleaseRequest{
+		PlayerID:    rec.PlayerID,
+		OwnerEpoch:  rec.OwnerEpoch,
+		OperationID: rec.OperationID,
+		Detail:      "enter_route_rollback",
+	})
+	if err != nil {
+		metrics.ObserveOwnerAuthorityOp("enforce", "rollback", "error")
+		if logger != nil {
+			logger.Errorf("[OwnerAuthority] rollback release failed player=%d epoch=%d err=%v",
+				rec.PlayerID, rec.OwnerEpoch, err)
+		}
+		return
+	}
+	if released {
+		metrics.ObserveOwnerAuthorityOp("enforce", "rollback", "ok")
+	} else {
+		metrics.ObserveOwnerAuthorityOp("enforce", "rollback", "noop")
+	}
 }
 
 // syncOwnerAuthorityLeave releases matching ownership in SQL ownerauthority after LeaveScene.

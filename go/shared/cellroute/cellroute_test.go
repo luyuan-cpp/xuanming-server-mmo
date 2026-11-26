@@ -67,6 +67,11 @@ func TestStaticTableRejectsMismatchAndInvalidJSON(t *testing.T) {
 	if _, _, err := ParseTableJSON([]byte("{broken")); err == nil {
 		t.Fatal("expected json parse error")
 	}
+
+	// Duplicate cell ID rejected fail-closed.
+	if _, _, err := BuildBalancedEntries([]CellSpec{{RegionID: 1, CellID: 10}, {RegionID: 1, CellID: 10}}); err == nil {
+		t.Fatal("expected duplicate cell error")
+	}
 }
 
 func TestAtomicTableConcurrentSwapAndJSONRoundTrip(t *testing.T) {

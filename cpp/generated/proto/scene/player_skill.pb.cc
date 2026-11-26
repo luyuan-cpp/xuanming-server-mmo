@@ -95,6 +95,32 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
         // ::ListCraftProxyStallsResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::ClaimScrollCollectionMilestoneRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::ClaimScrollCollectionMilestoneResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::BatchDismantleSkillBooksRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::BatchDismantleSkillBooksResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::SkillBookWantedOrderInfo
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::PostSkillBookWantedOrderRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::PostSkillBookWantedOrderResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::CancelSkillBookWantedOrderRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::CancelSkillBookWantedOrderResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::ListSkillBookWantedOrdersRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::ListSkillBookWantedOrdersResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::FulfillSkillBookWantedOrderRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
+        // ::FulfillSkillBookWantedOrderResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
         // ::UpgradeSkillRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto, /* tracker*/ nullptr,},
         // ::UpgradeSkillResponse
@@ -213,7 +239,7 @@ constexpr auto UpgradeSkillRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[46],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -1376,6 +1402,233 @@ const ::_pbi::ClassData* SkillCraftMasterySnapshot_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class SkillBookWantedOrderInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SkillBookWantedOrderInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_._has_bits_);
+};
+
+constexpr SkillBookWantedOrderInfo::ParseTableT_ SkillBookWantedOrderInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      11, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294965248,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      11,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SkillBookWantedOrderInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 order_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillBookWantedOrderInfo, _impl_.order_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.order_id_)}},
+      // uint64 poster_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillBookWantedOrderInfo, _impl_.poster_player_id_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.poster_player_id_)}},
+      // string poster_name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.poster_name_)}},
+      // uint32 skill_table_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillBookWantedOrderInfo, _impl_.skill_table_id_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.skill_table_id_)}},
+      // string skill_name = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.skill_name_)}},
+      // uint32 scroll_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillBookWantedOrderInfo, _impl_.scroll_id_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.scroll_id_)}},
+      // string scroll_name = 7;
+      {::_pbi::TcParser::FastUS1,
+       {58, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.scroll_name_)}},
+      // bool require_master_signature = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillBookWantedOrderInfo, _impl_.require_master_signature_), 10>(),
+       {64, 10, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.require_master_signature_)}},
+      // uint64 reward_gold = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillBookWantedOrderInfo, _impl_.reward_gold_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.reward_gold_)}},
+      // uint64 seller_net_gold = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillBookWantedOrderInfo, _impl_.seller_net_gold_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.seller_net_gold_)}},
+      // uint64 created_at_sec = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillBookWantedOrderInfo, _impl_.created_at_sec_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.created_at_sec_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 order_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.order_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 poster_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.poster_player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string poster_name = 3;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.poster_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 skill_table_id = 4;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string skill_name = 5;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.skill_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 scroll_id = 6;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.scroll_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string scroll_name = 7;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.scroll_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool require_master_signature = 8;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.require_master_signature_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 reward_gold = 9;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.reward_gold_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 seller_net_gold = 10;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.seller_net_gold_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 created_at_sec = 11;
+      {PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.created_at_sec_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\30\0\0\13\0\12\0\13\0\0\0\0\0\0\0\0"
+      "SkillBookWantedOrderInfo"
+      "poster_name"
+      "skill_name"
+      "scroll_name"
+    }},
+  };
+}
+
+
+inline constexpr SkillBookWantedOrderInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        poster_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        skill_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        scroll_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        order_id_{::uint64_t{0u}},
+        poster_player_id_{::uint64_t{0u}},
+        skill_table_id_{0u},
+        scroll_id_{0u},
+        reward_gold_{::uint64_t{0u}},
+        seller_net_gold_{::uint64_t{0u}},
+        created_at_sec_{::uint64_t{0u}},
+        require_master_signature_{false} {}
+
+template <typename>
+constexpr SkillBookWantedOrderInfo::SkillBookWantedOrderInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SkillBookWantedOrderInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SkillBookWantedOrderInfo(arena);
+}
+constexpr auto SkillBookWantedOrderInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SkillBookWantedOrderInfo), alignof(SkillBookWantedOrderInfo));
+}
+constexpr auto SkillBookWantedOrderInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SkillBookWantedOrderInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SkillBookWantedOrderInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SkillBookWantedOrderInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SkillBookWantedOrderInfo>(), &SkillBookWantedOrderInfo::ByteSizeLong,
+              &SkillBookWantedOrderInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[37],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SkillBookWantedOrderInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SkillBookWantedOrderInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SkillBookWantedOrderInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SkillBookWantedOrderInfo::InternalGenerateClassData_(
+            _default, &SkillBookWantedOrderInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SkillBookWantedOrderInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SkillBookWantedOrderInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SkillBookWantedOrderInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SkillBookWantedOrderInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SkillBookWantedOrderInfoGlobalsTypeInternal SkillBookWantedOrderInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SkillBookWantedOrderInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SkillBookWantedOrderInfo_globals_.GetClassData();
+#else
+  return SkillBookWantedOrderInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SetCraftProxyStallRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<SetCraftProxyStallRequest>()._impl_._has_bits_);
@@ -1388,11 +1641,11 @@ constexpr SetCraftProxyStallRequest::ParseTableT_ SetCraftProxyStallRequest::Int
     {
       PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1415,6 +1668,19 @@ constexpr SetCraftProxyStallRequest::ParseTableT_ SetCraftProxyStallRequest::Int
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetCraftProxyStallRequest, _impl_.proxy_scroll_fee_gold_), 1>(),
        {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.proxy_scroll_fee_gold_)}},
+      // uint32 master_showcase_tag = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetCraftProxyStallRequest, _impl_.master_showcase_tag_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.master_showcase_tag_)}},
+      // uint32 equipped_craft_title_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetCraftProxyStallRequest, _impl_.equipped_craft_title_id_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.equipped_craft_title_id_)}},
+      // bool team_free_proxy = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SetCraftProxyStallRequest, _impl_.team_free_proxy_), 3>(),
+       {48, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.team_free_proxy_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1424,6 +1690,12 @@ constexpr SetCraftProxyStallRequest::ParseTableT_ SetCraftProxyStallRequest::Int
       {PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.proxy_forge_fee_gold_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 proxy_scroll_fee_gold = 3;
       {PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.proxy_scroll_fee_gold_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 master_showcase_tag = 4;
+      {PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.master_showcase_tag_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 equipped_craft_title_id = 5;
+      {PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.equipped_craft_title_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool team_free_proxy = 6;
+      {PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.team_free_proxy_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1438,7 +1710,10 @@ inline constexpr SetCraftProxyStallRequest::Impl_::Impl_(
       : _cached_size_{0},
         proxy_forge_fee_gold_{::uint64_t{0u}},
         proxy_scroll_fee_gold_{::uint64_t{0u}},
-        open_{false} {}
+        open_{false},
+        team_free_proxy_{false},
+        master_showcase_tag_{0u},
+        equipped_craft_title_id_{0u} {}
 
 template <typename>
 constexpr SetCraftProxyStallRequest::SetCraftProxyStallRequest(::_pbi::ConstantInitialized,
@@ -1892,6 +2167,178 @@ const ::_pbi::ClassData* SaveSkillLoadoutRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PostSkillBookWantedOrderRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PostSkillBookWantedOrderRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_._has_bits_);
+};
+
+constexpr PostSkillBookWantedOrderRequest::ParseTableT_ PostSkillBookWantedOrderRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PostSkillBookWantedOrderRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 skill_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PostSkillBookWantedOrderRequest, _impl_.skill_table_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.skill_table_id_)}},
+      // bool require_master_signature = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PostSkillBookWantedOrderRequest, _impl_.require_master_signature_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.require_master_signature_)}},
+      // uint64 reward_gold = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PostSkillBookWantedOrderRequest, _impl_.reward_gold_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.reward_gold_)}},
+      // uint64 expected_revision = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PostSkillBookWantedOrderRequest, _impl_.expected_revision_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.expected_revision_)}},
+      // uint64 client_request_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PostSkillBookWantedOrderRequest, _impl_.client_request_id_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.client_request_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 skill_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool require_master_signature = 2;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.require_master_signature_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 reward_gold = 3;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.reward_gold_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expected_revision = 4;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 5;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PostSkillBookWantedOrderRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        skill_table_id_{0u},
+        require_master_signature_{false},
+        reward_gold_{::uint64_t{0u}},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr PostSkillBookWantedOrderRequest::PostSkillBookWantedOrderRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PostSkillBookWantedOrderRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PostSkillBookWantedOrderRequest(arena);
+}
+constexpr auto PostSkillBookWantedOrderRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PostSkillBookWantedOrderRequest), alignof(PostSkillBookWantedOrderRequest));
+}
+constexpr auto PostSkillBookWantedOrderRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PostSkillBookWantedOrderRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PostSkillBookWantedOrderRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PostSkillBookWantedOrderRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PostSkillBookWantedOrderRequest>(), &PostSkillBookWantedOrderRequest::ByteSizeLong,
+              &PostSkillBookWantedOrderRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[38],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PostSkillBookWantedOrderRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PostSkillBookWantedOrderRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PostSkillBookWantedOrderRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PostSkillBookWantedOrderRequest::InternalGenerateClassData_(
+            _default, &PostSkillBookWantedOrderRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PostSkillBookWantedOrderRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PostSkillBookWantedOrderRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PostSkillBookWantedOrderRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PostSkillBookWantedOrderRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PostSkillBookWantedOrderRequestGlobalsTypeInternal PostSkillBookWantedOrderRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PostSkillBookWantedOrderRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PostSkillBookWantedOrderRequest_globals_.GetClassData();
+#else
+  return PostSkillBookWantedOrderRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ListSkillsRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<ListSkillsRequest>()._impl_._has_bits_);
@@ -2029,6 +2476,154 @@ const ::_pbi::ClassData* ListSkillsRequest_get_class_data() {
   return ListSkillsRequest_globals_.GetClassData();
 #else
   return ListSkillsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ListSkillBookWantedOrdersRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListSkillBookWantedOrdersRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_._has_bits_);
+};
+
+constexpr ListSkillBookWantedOrdersRequest::ParseTableT_ ListSkillBookWantedOrdersRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ListSkillBookWantedOrdersRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool only_mine = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ListSkillBookWantedOrdersRequest, _impl_.only_mine_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_.only_mine_)}},
+      // uint32 filter_skill_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListSkillBookWantedOrdersRequest, _impl_.filter_skill_table_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_.filter_skill_table_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 filter_skill_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_.filter_skill_table_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool only_mine = 2;
+      {PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_.only_mine_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ListSkillBookWantedOrdersRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        filter_skill_table_id_{0u},
+        only_mine_{false} {}
+
+template <typename>
+constexpr ListSkillBookWantedOrdersRequest::ListSkillBookWantedOrdersRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListSkillBookWantedOrdersRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListSkillBookWantedOrdersRequest(arena);
+}
+constexpr auto ListSkillBookWantedOrdersRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ListSkillBookWantedOrdersRequest), alignof(ListSkillBookWantedOrdersRequest));
+}
+constexpr auto ListSkillBookWantedOrdersRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListSkillBookWantedOrdersRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListSkillBookWantedOrdersRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListSkillBookWantedOrdersRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListSkillBookWantedOrdersRequest>(), &ListSkillBookWantedOrdersRequest::ByteSizeLong,
+              &ListSkillBookWantedOrdersRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[42],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListSkillBookWantedOrdersRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListSkillBookWantedOrdersRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListSkillBookWantedOrdersRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListSkillBookWantedOrdersRequest::InternalGenerateClassData_(
+            _default, &ListSkillBookWantedOrdersRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListSkillBookWantedOrdersRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListSkillBookWantedOrdersRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListSkillBookWantedOrdersRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListSkillBookWantedOrdersRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListSkillBookWantedOrdersRequestGlobalsTypeInternal ListSkillBookWantedOrdersRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListSkillBookWantedOrdersRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListSkillBookWantedOrdersRequest_globals_.GetClassData();
+#else
+  return ListSkillBookWantedOrdersRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2443,6 +3038,184 @@ const ::_pbi::ClassData* GetSkillCraftingStateRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class FulfillSkillBookWantedOrderRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<FulfillSkillBookWantedOrderRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_._has_bits_);
+};
+
+constexpr FulfillSkillBookWantedOrderRequest::ParseTableT_ FulfillSkillBookWantedOrderRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::FulfillSkillBookWantedOrderRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 poster_player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderRequest, _impl_.poster_player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.poster_player_id_)}},
+      // uint64 order_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderRequest, _impl_.order_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.order_id_)}},
+      // uint64 sealed_item_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderRequest, _impl_.sealed_item_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.sealed_item_id_)}},
+      // uint64 bookshelf_book_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderRequest, _impl_.bookshelf_book_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.bookshelf_book_id_)}},
+      // uint64 expected_revision = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderRequest, _impl_.expected_revision_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.expected_revision_)}},
+      // uint64 client_request_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderRequest, _impl_.client_request_id_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.client_request_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 poster_player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.poster_player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 order_id = 2;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 sealed_item_id = 3;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.sealed_item_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 bookshelf_book_id = 4;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.bookshelf_book_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expected_revision = 5;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 6;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr FulfillSkillBookWantedOrderRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        poster_player_id_{::uint64_t{0u}},
+        order_id_{::uint64_t{0u}},
+        sealed_item_id_{::uint64_t{0u}},
+        bookshelf_book_id_{::uint64_t{0u}},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr FulfillSkillBookWantedOrderRequest::FulfillSkillBookWantedOrderRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL FulfillSkillBookWantedOrderRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) FulfillSkillBookWantedOrderRequest(arena);
+}
+constexpr auto FulfillSkillBookWantedOrderRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(FulfillSkillBookWantedOrderRequest), alignof(FulfillSkillBookWantedOrderRequest));
+}
+constexpr auto FulfillSkillBookWantedOrderRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &FulfillSkillBookWantedOrderRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<FulfillSkillBookWantedOrderRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &FulfillSkillBookWantedOrderRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<FulfillSkillBookWantedOrderRequest>(), &FulfillSkillBookWantedOrderRequest::ByteSizeLong,
+              &FulfillSkillBookWantedOrderRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[44],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct FulfillSkillBookWantedOrderRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr FulfillSkillBookWantedOrderRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 FulfillSkillBookWantedOrderRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(FulfillSkillBookWantedOrderRequest::InternalGenerateClassData_(
+            _default, &FulfillSkillBookWantedOrderRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<FulfillSkillBookWantedOrderRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~FulfillSkillBookWantedOrderRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) FulfillSkillBookWantedOrderRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<FulfillSkillBookWantedOrderRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST FulfillSkillBookWantedOrderRequestGlobalsTypeInternal FulfillSkillBookWantedOrderRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* FulfillSkillBookWantedOrderRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return FulfillSkillBookWantedOrderRequest_globals_.GetClassData();
+#else
+  return FulfillSkillBookWantedOrderRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class DismantleSkillBookRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<DismantleSkillBookRequest>()._impl_._has_bits_);
@@ -2789,11 +3562,11 @@ constexpr CraftProxyStallInfo::ParseTableT_ CraftProxyStallInfo::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      15,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2803,10 +3576,7 @@ constexpr CraftProxyStallInfo::ParseTableT_ CraftProxyStallInfo::InternalGenerat
       ::_pbi::TcParser::GetTable<::CraftProxyStallInfo>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 proxy_scroll_fee_gold = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_), 7>(),
-       {64, 7, 0,
-        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 master_player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CraftProxyStallInfo, _impl_.master_player_id_), 1>(),
        {8, 1, 0,
@@ -2835,6 +3605,38 @@ constexpr CraftProxyStallInfo::ParseTableT_ CraftProxyStallInfo::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CraftProxyStallInfo, _impl_.proxy_forge_fee_gold_), 6>(),
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_forge_fee_gold_)}},
+      // uint64 proxy_scroll_fee_gold = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_)}},
+      // uint32 proxy_orders_completed = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftProxyStallInfo, _impl_.proxy_orders_completed_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_orders_completed_)}},
+      // uint32 supreme_forged_count = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftProxyStallInfo, _impl_.supreme_forged_count_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.supreme_forged_count_)}},
+      // uint32 rare_books_crafted_count = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftProxyStallInfo, _impl_.rare_books_crafted_count_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.rare_books_crafted_count_)}},
+      // uint32 master_showcase_tag = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftProxyStallInfo, _impl_.master_showcase_tag_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.master_showcase_tag_)}},
+      // uint32 equipped_craft_title_id = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftProxyStallInfo, _impl_.equipped_craft_title_id_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.equipped_craft_title_id_)}},
+      // bool team_free_proxy = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CraftProxyStallInfo, _impl_.team_free_proxy_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.team_free_proxy_)}},
+      // bool viewer_gets_free_proxy = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CraftProxyStallInfo, _impl_.viewer_gets_free_proxy_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.viewer_gets_free_proxy_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2854,6 +3656,20 @@ constexpr CraftProxyStallInfo::ParseTableT_ CraftProxyStallInfo::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_forge_fee_gold_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 proxy_scroll_fee_gold = 8;
       {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 proxy_orders_completed = 9;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_orders_completed_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 supreme_forged_count = 10;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.supreme_forged_count_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rare_books_crafted_count = 11;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.rare_books_crafted_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 master_showcase_tag = 12;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.master_showcase_tag_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 equipped_craft_title_id = 13;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.equipped_craft_title_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool team_free_proxy = 14;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.team_free_proxy_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool viewer_gets_free_proxy = 15;
+      {PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.viewer_gets_free_proxy_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -2878,7 +3694,14 @@ inline constexpr CraftProxyStallInfo::Impl_::Impl_(
         top_quality_rate_bps_{0u},
         scroll_bonus_rate_bps_{0u},
         proxy_forge_fee_gold_{::uint64_t{0u}},
-        proxy_scroll_fee_gold_{::uint64_t{0u}} {}
+        proxy_scroll_fee_gold_{::uint64_t{0u}},
+        proxy_orders_completed_{0u},
+        supreme_forged_count_{0u},
+        rare_books_crafted_count_{0u},
+        master_showcase_tag_{0u},
+        equipped_craft_title_id_{0u},
+        team_free_proxy_{false},
+        viewer_gets_free_proxy_{false} {}
 
 template <typename>
 constexpr CraftProxyStallInfo::CraftProxyStallInfo(::_pbi::ConstantInitialized,
@@ -2968,6 +3791,485 @@ const ::_pbi::ClassData* CraftProxyStallInfo_get_class_data() {
   return CraftProxyStallInfo_globals_.GetClassData();
 #else
   return CraftProxyStallInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimScrollCollectionMilestoneRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimScrollCollectionMilestoneRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_._has_bits_);
+};
+
+constexpr ClaimScrollCollectionMilestoneRequest::ParseTableT_ ClaimScrollCollectionMilestoneRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ClaimScrollCollectionMilestoneRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 client_request_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimScrollCollectionMilestoneRequest, _impl_.client_request_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.client_request_id_)}},
+      // uint32 scroll_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimScrollCollectionMilestoneRequest, _impl_.scroll_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.scroll_id_)}},
+      // uint32 milestone_tier = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimScrollCollectionMilestoneRequest, _impl_.milestone_tier_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.milestone_tier_)}},
+      // uint64 expected_revision = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimScrollCollectionMilestoneRequest, _impl_.expected_revision_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.expected_revision_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 scroll_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.scroll_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 milestone_tier = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.milestone_tier_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 expected_revision = 3;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 4;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimScrollCollectionMilestoneRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        scroll_id_{0u},
+        milestone_tier_{0u},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ClaimScrollCollectionMilestoneRequest::ClaimScrollCollectionMilestoneRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimScrollCollectionMilestoneRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimScrollCollectionMilestoneRequest(arena);
+}
+constexpr auto ClaimScrollCollectionMilestoneRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimScrollCollectionMilestoneRequest), alignof(ClaimScrollCollectionMilestoneRequest));
+}
+constexpr auto ClaimScrollCollectionMilestoneRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimScrollCollectionMilestoneRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimScrollCollectionMilestoneRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimScrollCollectionMilestoneRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimScrollCollectionMilestoneRequest>(), &ClaimScrollCollectionMilestoneRequest::ByteSizeLong,
+              &ClaimScrollCollectionMilestoneRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[33],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimScrollCollectionMilestoneRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimScrollCollectionMilestoneRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimScrollCollectionMilestoneRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimScrollCollectionMilestoneRequest::InternalGenerateClassData_(
+            _default, &ClaimScrollCollectionMilestoneRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimScrollCollectionMilestoneRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimScrollCollectionMilestoneRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimScrollCollectionMilestoneRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimScrollCollectionMilestoneRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimScrollCollectionMilestoneRequestGlobalsTypeInternal ClaimScrollCollectionMilestoneRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimScrollCollectionMilestoneRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimScrollCollectionMilestoneRequest_globals_.GetClassData();
+#else
+  return ClaimScrollCollectionMilestoneRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CancelSkillBookWantedOrderRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CancelSkillBookWantedOrderRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_._has_bits_);
+};
+
+constexpr CancelSkillBookWantedOrderRequest::ParseTableT_ CancelSkillBookWantedOrderRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CancelSkillBookWantedOrderRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 order_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelSkillBookWantedOrderRequest, _impl_.order_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.order_id_)}},
+      // uint64 expected_revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelSkillBookWantedOrderRequest, _impl_.expected_revision_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.expected_revision_)}},
+      // uint64 client_request_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelSkillBookWantedOrderRequest, _impl_.client_request_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.client_request_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 order_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.order_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expected_revision = 2;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 3;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CancelSkillBookWantedOrderRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        order_id_{::uint64_t{0u}},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr CancelSkillBookWantedOrderRequest::CancelSkillBookWantedOrderRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CancelSkillBookWantedOrderRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CancelSkillBookWantedOrderRequest(arena);
+}
+constexpr auto CancelSkillBookWantedOrderRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CancelSkillBookWantedOrderRequest), alignof(CancelSkillBookWantedOrderRequest));
+}
+constexpr auto CancelSkillBookWantedOrderRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CancelSkillBookWantedOrderRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CancelSkillBookWantedOrderRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CancelSkillBookWantedOrderRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CancelSkillBookWantedOrderRequest>(), &CancelSkillBookWantedOrderRequest::ByteSizeLong,
+              &CancelSkillBookWantedOrderRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[40],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CancelSkillBookWantedOrderRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CancelSkillBookWantedOrderRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CancelSkillBookWantedOrderRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CancelSkillBookWantedOrderRequest::InternalGenerateClassData_(
+            _default, &CancelSkillBookWantedOrderRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CancelSkillBookWantedOrderRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CancelSkillBookWantedOrderRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CancelSkillBookWantedOrderRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CancelSkillBookWantedOrderRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CancelSkillBookWantedOrderRequestGlobalsTypeInternal CancelSkillBookWantedOrderRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CancelSkillBookWantedOrderRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CancelSkillBookWantedOrderRequest_globals_.GetClassData();
+#else
+  return CancelSkillBookWantedOrderRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchDismantleSkillBooksRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchDismantleSkillBooksRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_._has_bits_);
+};
+
+constexpr BatchDismantleSkillBooksRequest::ParseTableT_ BatchDismantleSkillBooksRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BatchDismantleSkillBooksRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // repeated uint64 book_ids = 1;
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.book_ids_)}},
+      // uint64 expected_revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchDismantleSkillBooksRequest, _impl_.expected_revision_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.expected_revision_)}},
+      // uint64 client_request_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchDismantleSkillBooksRequest, _impl_.client_request_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.client_request_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 book_ids = 1;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.book_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // uint64 expected_revision = 2;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 client_request_id = 3;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchDismantleSkillBooksRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        book_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BatchDismantleSkillBooksRequest,
+            PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_.book_ids_)>()
+         }
+        ,
+        _book_ids_cached_byte_size_{0},
+        expected_revision_{::uint64_t{0u}},
+        client_request_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr BatchDismantleSkillBooksRequest::BatchDismantleSkillBooksRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchDismantleSkillBooksRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchDismantleSkillBooksRequest(arena);
+}
+constexpr auto BatchDismantleSkillBooksRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BatchDismantleSkillBooksRequest), alignof(BatchDismantleSkillBooksRequest));
+}
+constexpr auto BatchDismantleSkillBooksRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchDismantleSkillBooksRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchDismantleSkillBooksRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchDismantleSkillBooksRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchDismantleSkillBooksRequest>(), &BatchDismantleSkillBooksRequest::ByteSizeLong,
+              &BatchDismantleSkillBooksRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[35],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchDismantleSkillBooksRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchDismantleSkillBooksRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchDismantleSkillBooksRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchDismantleSkillBooksRequest::InternalGenerateClassData_(
+            _default, &BatchDismantleSkillBooksRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchDismantleSkillBooksRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchDismantleSkillBooksRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchDismantleSkillBooksRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchDismantleSkillBooksRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchDismantleSkillBooksRequestGlobalsTypeInternal BatchDismantleSkillBooksRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchDismantleSkillBooksRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchDismantleSkillBooksRequest_globals_.GetClassData();
+#else
+  return BatchDismantleSkillBooksRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3392,12 +4694,12 @@ constexpr SkillCraftingStateSnapshot::ParseTableT_ SkillCraftingStateSnapshot::I
     {
       PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      23, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4286578688,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
-      4,  // num_aux_entries
+      23,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -3408,16 +4710,16 @@ constexpr SkillCraftingStateSnapshot::ParseTableT_ SkillCraftingStateSnapshot::I
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 scroll_craft_revision = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.scroll_craft_revision_), 5>(),
-       {8, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.scroll_craft_revision_), 8>(),
+       {8, 8, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scroll_craft_revision_)}},
       // .SkillCraftMasterySnapshot forge_mastery = 2;
       {::_pbi::TcParser::FastMtS1,
-       {18, 3, 0,
+       {18, 6, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.forge_mastery_)}},
       // .SkillCraftMasterySnapshot scroll_mastery = 3;
       {::_pbi::TcParser::FastMtS1,
-       {26, 4, 1,
+       {26, 7, 1,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scroll_mastery_)}},
       // repeated .SkillScrollCatalogInfo scrolls = 4;
       {::_pbi::TcParser::FastMtR1,
@@ -3432,47 +4734,90 @@ constexpr SkillCraftingStateSnapshot::ParseTableT_ SkillCraftingStateSnapshot::I
        {50, 2, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.book_unlocked_skill_ids_)}},
       // uint64 gold_balance = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.gold_balance_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.gold_balance_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.gold_balance_)}},
       // uint64 fragment_owned = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.fragment_owned_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.fragment_owned_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.fragment_owned_)}},
       // uint64 rare_scroll_owned = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.rare_scroll_owned_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.rare_scroll_owned_), 11>(),
+       {72, 11, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_scroll_owned_)}},
       // uint64 rare_ink_owned = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.rare_ink_owned_), 9>(),
-       {80, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.rare_ink_owned_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_ink_owned_)}},
       // bool proxy_stall_open = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_stall_open_), 12>(),
-       {88, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_stall_open_), 16>(),
+       {88, 16, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_stall_open_)}},
       // uint64 proxy_forge_fee_gold = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_forge_fee_gold_), 10>(),
-       {96, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_forge_fee_gold_), 13>(),
+       {96, 13, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_forge_fee_gold_)}},
       // uint64 proxy_scroll_fee_gold = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_scroll_fee_gold_), 11>(),
-       {104, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_scroll_fee_gold_), 14>(),
+       {104, 14, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_scroll_fee_gold_)}},
       // bool craft_unlock_gate_enabled = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_), 17>(),
+       {112, 17, 0,
         PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_)}},
+      // uint32 proxy_orders_completed = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCraftingStateSnapshot, _impl_.proxy_orders_completed_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_orders_completed_)}},
+      // uint32 supreme_forged_count = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 19, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.supreme_forged_count_)}},
+      // uint32 rare_books_crafted_count = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 20, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_books_crafted_count_)}},
+      // uint32 master_showcase_tag = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 21, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.master_showcase_tag_)}},
+      // uint32 equipped_craft_title_id = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 22, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.equipped_craft_title_id_)}},
+      // repeated uint32 unlocked_craft_title_ids = 20;
+      {::_pbi::TcParser::FastV32P2,
+       {418, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.unlocked_craft_title_ids_)}},
+      // bool team_free_proxy = 21;
+      {::_pbi::TcParser::FastV8S2,
+       {424, 18, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.team_free_proxy_)}},
+      // bytes claimed_scroll_milestone_bits = 22;
+      {::_pbi::TcParser::FastBS2,
+       {434, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.claimed_scroll_milestone_bits_)}},
+      // repeated .SkillBookWantedOrderInfo my_wanted_orders = 23;
+      {::_pbi::TcParser::FastMtR2,
+       {442, 4, 4,
+        PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.my_wanted_orders_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 scroll_craft_revision = 1;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scroll_craft_revision_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scroll_craft_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .SkillCraftMasterySnapshot forge_mastery = 2;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.forge_mastery_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.forge_mastery_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .SkillCraftMasterySnapshot scroll_mastery = 3;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scroll_mastery_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scroll_mastery_), _Internal::kHasBitsOffset + 7, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .SkillScrollCatalogInfo scrolls = 4;
       {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.scrolls_), _Internal::kHasBitsOffset + 0, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .CraftedSkillBookEntry skill_books = 5;
@@ -3480,21 +4825,39 @@ constexpr SkillCraftingStateSnapshot::ParseTableT_ SkillCraftingStateSnapshot::I
       // repeated uint32 book_unlocked_skill_ids = 6;
       {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.book_unlocked_skill_ids_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // uint64 gold_balance = 7;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.gold_balance_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.gold_balance_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 fragment_owned = 8;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.fragment_owned_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.fragment_owned_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 rare_scroll_owned = 9;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_scroll_owned_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_scroll_owned_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 rare_ink_owned = 10;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_ink_owned_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_ink_owned_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool proxy_stall_open = 11;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_stall_open_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_stall_open_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 proxy_forge_fee_gold = 12;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_forge_fee_gold_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_forge_fee_gold_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 proxy_scroll_fee_gold = 13;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_scroll_fee_gold_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_scroll_fee_gold_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool craft_unlock_gate_enabled = 14;
-      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 proxy_orders_completed = 15;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.proxy_orders_completed_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 supreme_forged_count = 16;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.supreme_forged_count_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rare_books_crafted_count = 17;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.rare_books_crafted_count_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 master_showcase_tag = 18;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.master_showcase_tag_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 equipped_craft_title_id = 19;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.equipped_craft_title_id_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 unlocked_craft_title_ids = 20;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.unlocked_craft_title_ids_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // bool team_free_proxy = 21;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.team_free_proxy_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bytes claimed_scroll_milestone_bits = 22;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.claimed_scroll_milestone_bits_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // repeated .SkillBookWantedOrderInfo my_wanted_orders = 23;
+      {PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.my_wanted_orders_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3516,6 +4879,11 @@ constexpr SkillCraftingStateSnapshot::ParseTableT_ SkillCraftingStateSnapshot::I
         {::_pbi::TcParser::GetTable<::CraftedSkillBookEntry>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::CraftedSkillBookEntry_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillBookWantedOrderInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillBookWantedOrderInfo_globals_},
         #endif
     }},
     {{
@@ -3544,6 +4912,20 @@ inline constexpr SkillCraftingStateSnapshot::Impl_::Impl_(
          }
         ,
         _book_unlocked_skill_ids_cached_byte_size_{0},
+        unlocked_craft_title_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillCraftingStateSnapshot,
+            PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.unlocked_craft_title_ids_)>()
+         }
+        ,
+        _unlocked_craft_title_ids_cached_byte_size_{0},
+        my_wanted_orders_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillCraftingStateSnapshot,
+            PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.my_wanted_orders_)>()
+         }
+        ,
+        claimed_scroll_milestone_bits_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         forge_mastery_{nullptr},
         scroll_mastery_{nullptr},
         scroll_craft_revision_{::uint64_t{0u}},
@@ -3553,8 +4935,14 @@ inline constexpr SkillCraftingStateSnapshot::Impl_::Impl_(
         rare_ink_owned_{::uint64_t{0u}},
         proxy_forge_fee_gold_{::uint64_t{0u}},
         proxy_scroll_fee_gold_{::uint64_t{0u}},
+        proxy_orders_completed_{0u},
         proxy_stall_open_{false},
-        craft_unlock_gate_enabled_{false} {}
+        craft_unlock_gate_enabled_{false},
+        team_free_proxy_{false},
+        supreme_forged_count_{0u},
+        rare_books_crafted_count_{0u},
+        master_showcase_tag_{0u},
+        equipped_craft_title_id_{0u} {}
 
 template <typename>
 constexpr SkillCraftingStateSnapshot::SkillCraftingStateSnapshot(::_pbi::ConstantInitialized,
@@ -4340,6 +5728,169 @@ const ::_pbi::ClassData* ReleaseSkillRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ListSkillBookWantedOrdersResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ListSkillBookWantedOrdersResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_._has_bits_);
+};
+
+constexpr ListSkillBookWantedOrdersResponse::ParseTableT_ ListSkillBookWantedOrdersResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ListSkillBookWantedOrdersResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated .SkillBookWantedOrderInfo orders = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 1,
+        PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_.orders_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .SkillBookWantedOrderInfo orders = 2;
+      {PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_.orders_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillBookWantedOrderInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillBookWantedOrderInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ListSkillBookWantedOrdersResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        orders_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::ListSkillBookWantedOrdersResponse,
+            PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersResponse, _impl_.orders_)>()
+         }
+        ,
+        error_message_{nullptr} {}
+
+template <typename>
+constexpr ListSkillBookWantedOrdersResponse::ListSkillBookWantedOrdersResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ListSkillBookWantedOrdersResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ListSkillBookWantedOrdersResponse(arena);
+}
+constexpr auto ListSkillBookWantedOrdersResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ListSkillBookWantedOrdersResponse), alignof(ListSkillBookWantedOrdersResponse));
+}
+constexpr auto ListSkillBookWantedOrdersResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ListSkillBookWantedOrdersResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ListSkillBookWantedOrdersResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ListSkillBookWantedOrdersResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ListSkillBookWantedOrdersResponse>(), &ListSkillBookWantedOrdersResponse::ByteSizeLong,
+              &ListSkillBookWantedOrdersResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[43],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ListSkillBookWantedOrdersResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ListSkillBookWantedOrdersResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ListSkillBookWantedOrdersResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ListSkillBookWantedOrdersResponse::InternalGenerateClassData_(
+            _default, &ListSkillBookWantedOrdersResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ListSkillBookWantedOrdersResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ListSkillBookWantedOrdersResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ListSkillBookWantedOrdersResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ListSkillBookWantedOrdersResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ListSkillBookWantedOrdersResponseGlobalsTypeInternal ListSkillBookWantedOrdersResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ListSkillBookWantedOrdersResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ListSkillBookWantedOrdersResponse_globals_.GetClassData();
+#else
+  return ListSkillBookWantedOrdersResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ListCraftProxyStallsResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<ListCraftProxyStallsResponse>()._impl_._has_bits_);
@@ -5039,6 +6590,194 @@ const ::_pbi::ClassData* SealSkillBookResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PostSkillBookWantedOrderResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PostSkillBookWantedOrderResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_._has_bits_);
+};
+
+constexpr PostSkillBookWantedOrderResponse::ParseTableT_ PostSkillBookWantedOrderResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      3,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PostSkillBookWantedOrderResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PostSkillBookWantedOrderResponse, _impl_.client_request_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PostSkillBookWantedOrderResponse, _impl_.replayed_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.replayed_)}},
+      // .SkillBookWantedOrderInfo order = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 1, 1,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.order_)}},
+      // .SkillCraftingStateSnapshot state = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 2, 2,
+        PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .SkillBookWantedOrderInfo order = 4;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.order_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .SkillCraftingStateSnapshot state = 5;
+      {PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.state_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillBookWantedOrderInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillBookWantedOrderInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PostSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        order_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        replayed_{false} {}
+
+template <typename>
+constexpr PostSkillBookWantedOrderResponse::PostSkillBookWantedOrderResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PostSkillBookWantedOrderResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PostSkillBookWantedOrderResponse(arena);
+}
+constexpr auto PostSkillBookWantedOrderResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PostSkillBookWantedOrderResponse), alignof(PostSkillBookWantedOrderResponse));
+}
+constexpr auto PostSkillBookWantedOrderResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PostSkillBookWantedOrderResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PostSkillBookWantedOrderResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PostSkillBookWantedOrderResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PostSkillBookWantedOrderResponse>(), &PostSkillBookWantedOrderResponse::ByteSizeLong,
+              &PostSkillBookWantedOrderResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[39],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PostSkillBookWantedOrderResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PostSkillBookWantedOrderResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PostSkillBookWantedOrderResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PostSkillBookWantedOrderResponse::InternalGenerateClassData_(
+            _default, &PostSkillBookWantedOrderResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PostSkillBookWantedOrderResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PostSkillBookWantedOrderResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PostSkillBookWantedOrderResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PostSkillBookWantedOrderResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PostSkillBookWantedOrderResponseGlobalsTypeInternal PostSkillBookWantedOrderResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PostSkillBookWantedOrderResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PostSkillBookWantedOrderResponse_globals_.GetClassData();
+#else
+  return PostSkillBookWantedOrderResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ListSkillsResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<ListSkillsResponse>()._impl_._has_bits_);
@@ -5596,6 +7335,195 @@ const ::_pbi::ClassData* GetSkillCraftingStateResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class FulfillSkillBookWantedOrderResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<FulfillSkillBookWantedOrderResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_._has_bits_);
+};
+
+constexpr FulfillSkillBookWantedOrderResponse::ParseTableT_ FulfillSkillBookWantedOrderResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::FulfillSkillBookWantedOrderResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderResponse, _impl_.client_request_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(FulfillSkillBookWantedOrderResponse, _impl_.replayed_), 5>(),
+       {24, 5, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.replayed_)}},
+      // uint64 order_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderResponse, _impl_.order_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.order_id_)}},
+      // uint64 seller_net_gold = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(FulfillSkillBookWantedOrderResponse, _impl_.seller_net_gold_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.seller_net_gold_)}},
+      // .SkillCraftingStateSnapshot state = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 1, 1,
+        PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 order_id = 4;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.order_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 seller_net_gold = 5;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.seller_net_gold_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .SkillCraftingStateSnapshot state = 6;
+      {PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.state_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr FulfillSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        order_id_{::uint64_t{0u}},
+        seller_net_gold_{::uint64_t{0u}},
+        replayed_{false} {}
+
+template <typename>
+constexpr FulfillSkillBookWantedOrderResponse::FulfillSkillBookWantedOrderResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL FulfillSkillBookWantedOrderResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) FulfillSkillBookWantedOrderResponse(arena);
+}
+constexpr auto FulfillSkillBookWantedOrderResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(FulfillSkillBookWantedOrderResponse), alignof(FulfillSkillBookWantedOrderResponse));
+}
+constexpr auto FulfillSkillBookWantedOrderResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &FulfillSkillBookWantedOrderResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<FulfillSkillBookWantedOrderResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &FulfillSkillBookWantedOrderResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<FulfillSkillBookWantedOrderResponse>(), &FulfillSkillBookWantedOrderResponse::ByteSizeLong,
+              &FulfillSkillBookWantedOrderResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[45],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct FulfillSkillBookWantedOrderResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr FulfillSkillBookWantedOrderResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 FulfillSkillBookWantedOrderResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(FulfillSkillBookWantedOrderResponse::InternalGenerateClassData_(
+            _default, &FulfillSkillBookWantedOrderResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<FulfillSkillBookWantedOrderResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~FulfillSkillBookWantedOrderResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) FulfillSkillBookWantedOrderResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<FulfillSkillBookWantedOrderResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST FulfillSkillBookWantedOrderResponseGlobalsTypeInternal FulfillSkillBookWantedOrderResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* FulfillSkillBookWantedOrderResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return FulfillSkillBookWantedOrderResponse_globals_.GetClassData();
+#else
+  return FulfillSkillBookWantedOrderResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class DismantleSkillBookResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<DismantleSkillBookResponse>()._impl_._has_bits_);
@@ -5973,6 +7901,561 @@ const ::_pbi::ClassData* CraftSkillBookResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimScrollCollectionMilestoneResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimScrollCollectionMilestoneResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_._has_bits_);
+};
+
+constexpr ClaimScrollCollectionMilestoneResponse::ParseTableT_ ClaimScrollCollectionMilestoneResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ClaimScrollCollectionMilestoneResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimScrollCollectionMilestoneResponse, _impl_.client_request_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimScrollCollectionMilestoneResponse, _impl_.replayed_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.replayed_)}},
+      // uint32 rewarded_fragments = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimScrollCollectionMilestoneResponse, _impl_.rewarded_fragments_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.rewarded_fragments_)}},
+      // .SkillCraftingStateSnapshot state = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 1, 1,
+        PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 rewarded_fragments = 4;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.rewarded_fragments_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .SkillCraftingStateSnapshot state = 5;
+      {PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.state_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimScrollCollectionMilestoneResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        replayed_{false},
+        rewarded_fragments_{0u} {}
+
+template <typename>
+constexpr ClaimScrollCollectionMilestoneResponse::ClaimScrollCollectionMilestoneResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimScrollCollectionMilestoneResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimScrollCollectionMilestoneResponse(arena);
+}
+constexpr auto ClaimScrollCollectionMilestoneResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimScrollCollectionMilestoneResponse), alignof(ClaimScrollCollectionMilestoneResponse));
+}
+constexpr auto ClaimScrollCollectionMilestoneResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimScrollCollectionMilestoneResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimScrollCollectionMilestoneResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimScrollCollectionMilestoneResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimScrollCollectionMilestoneResponse>(), &ClaimScrollCollectionMilestoneResponse::ByteSizeLong,
+              &ClaimScrollCollectionMilestoneResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[34],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimScrollCollectionMilestoneResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimScrollCollectionMilestoneResponse::InternalGenerateClassData_(
+            _default, &ClaimScrollCollectionMilestoneResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimScrollCollectionMilestoneResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimScrollCollectionMilestoneResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimScrollCollectionMilestoneResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal ClaimScrollCollectionMilestoneResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimScrollCollectionMilestoneResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimScrollCollectionMilestoneResponse_globals_.GetClassData();
+#else
+  return ClaimScrollCollectionMilestoneResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CancelSkillBookWantedOrderResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CancelSkillBookWantedOrderResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_._has_bits_);
+};
+
+constexpr CancelSkillBookWantedOrderResponse::ParseTableT_ CancelSkillBookWantedOrderResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CancelSkillBookWantedOrderResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelSkillBookWantedOrderResponse, _impl_.client_request_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CancelSkillBookWantedOrderResponse, _impl_.replayed_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.replayed_)}},
+      // uint64 refunded_gold = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelSkillBookWantedOrderResponse, _impl_.refunded_gold_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.refunded_gold_)}},
+      // .SkillCraftingStateSnapshot state = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 1, 1,
+        PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 refunded_gold = 4;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.refunded_gold_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .SkillCraftingStateSnapshot state = 5;
+      {PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.state_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CancelSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        refunded_gold_{::uint64_t{0u}},
+        replayed_{false} {}
+
+template <typename>
+constexpr CancelSkillBookWantedOrderResponse::CancelSkillBookWantedOrderResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CancelSkillBookWantedOrderResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CancelSkillBookWantedOrderResponse(arena);
+}
+constexpr auto CancelSkillBookWantedOrderResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CancelSkillBookWantedOrderResponse), alignof(CancelSkillBookWantedOrderResponse));
+}
+constexpr auto CancelSkillBookWantedOrderResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CancelSkillBookWantedOrderResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CancelSkillBookWantedOrderResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CancelSkillBookWantedOrderResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CancelSkillBookWantedOrderResponse>(), &CancelSkillBookWantedOrderResponse::ByteSizeLong,
+              &CancelSkillBookWantedOrderResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[41],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CancelSkillBookWantedOrderResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CancelSkillBookWantedOrderResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CancelSkillBookWantedOrderResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CancelSkillBookWantedOrderResponse::InternalGenerateClassData_(
+            _default, &CancelSkillBookWantedOrderResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CancelSkillBookWantedOrderResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CancelSkillBookWantedOrderResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CancelSkillBookWantedOrderResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CancelSkillBookWantedOrderResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CancelSkillBookWantedOrderResponseGlobalsTypeInternal CancelSkillBookWantedOrderResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CancelSkillBookWantedOrderResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CancelSkillBookWantedOrderResponse_globals_.GetClassData();
+#else
+  return CancelSkillBookWantedOrderResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchDismantleSkillBooksResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchDismantleSkillBooksResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_._has_bits_);
+};
+
+constexpr BatchDismantleSkillBooksResponse::ParseTableT_ BatchDismantleSkillBooksResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BatchDismantleSkillBooksResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchDismantleSkillBooksResponse, _impl_.client_request_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.client_request_id_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BatchDismantleSkillBooksResponse, _impl_.replayed_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.replayed_)}},
+      // uint32 dismantled_count = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BatchDismantleSkillBooksResponse, _impl_.dismantled_count_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.dismantled_count_)}},
+      // uint32 refunded_fragments = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BatchDismantleSkillBooksResponse, _impl_.refunded_fragments_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.refunded_fragments_)}},
+      // .SkillCraftingStateSnapshot state = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 1, 1,
+        PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 dismantled_count = 4;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.dismantled_count_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 refunded_fragments = 5;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.refunded_fragments_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .SkillCraftingStateSnapshot state = 6;
+      {PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.state_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillCraftingStateSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillCraftingStateSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchDismantleSkillBooksResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        state_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        replayed_{false},
+        dismantled_count_{0u},
+        refunded_fragments_{0u} {}
+
+template <typename>
+constexpr BatchDismantleSkillBooksResponse::BatchDismantleSkillBooksResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchDismantleSkillBooksResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchDismantleSkillBooksResponse(arena);
+}
+constexpr auto BatchDismantleSkillBooksResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BatchDismantleSkillBooksResponse), alignof(BatchDismantleSkillBooksResponse));
+}
+constexpr auto BatchDismantleSkillBooksResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchDismantleSkillBooksResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchDismantleSkillBooksResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchDismantleSkillBooksResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchDismantleSkillBooksResponse>(), &BatchDismantleSkillBooksResponse::ByteSizeLong,
+              &BatchDismantleSkillBooksResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[36],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchDismantleSkillBooksResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchDismantleSkillBooksResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchDismantleSkillBooksResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchDismantleSkillBooksResponse::InternalGenerateClassData_(
+            _default, &BatchDismantleSkillBooksResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchDismantleSkillBooksResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchDismantleSkillBooksResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchDismantleSkillBooksResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchDismantleSkillBooksResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchDismantleSkillBooksResponseGlobalsTypeInternal BatchDismantleSkillBooksResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchDismantleSkillBooksResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchDismantleSkillBooksResponse_globals_.GetClassData();
+#else
+  return BatchDismantleSkillBooksResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class UpgradeSkillResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<UpgradeSkillResponse>()._impl_._has_bits_);
@@ -6095,7 +8578,7 @@ constexpr auto UpgradeSkillResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[47],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
@@ -6774,7 +9257,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_._has_bits_),
-        17, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.scroll_craft_revision_),
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.forge_mastery_),
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.scroll_mastery_),
@@ -6789,20 +9272,38 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.proxy_forge_fee_gold_),
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.proxy_scroll_fee_gold_),
         PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_),
-        5,
-        3,
-        4,
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.proxy_orders_completed_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.supreme_forged_count_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.rare_books_crafted_count_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.master_showcase_tag_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.equipped_craft_title_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.unlocked_craft_title_ids_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.team_free_proxy_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.claimed_scroll_milestone_bits_),
+        PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.my_wanted_orders_),
+        8,
+        6,
+        7,
         0,
         1,
         2,
-        6,
-        7,
-        8,
         9,
-        12,
         10,
         11,
+        12,
+        16,
         13,
+        14,
+        17,
+        15,
+        19,
+        20,
+        21,
+        22,
+        3,
+        18,
+        5,
+        4,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetSkillCraftingStateResponse, _impl_._has_bits_),
@@ -6935,13 +9436,19 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.open_),
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.proxy_forge_fee_gold_),
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.proxy_scroll_fee_gold_),
+        PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.master_showcase_tag_),
+        PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.equipped_craft_title_id_),
+        PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallRequest, _impl_.team_free_proxy_),
         2,
         0,
         1,
+        4,
+        5,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SetCraftProxyStallResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -6951,7 +9458,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_._has_bits_),
-        11, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.master_player_id_),
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.master_name_),
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.forge_mastery_tier_),
@@ -6960,6 +9467,13 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.scroll_bonus_rate_bps_),
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.proxy_forge_fee_gold_),
         PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.proxy_orders_completed_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.supreme_forged_count_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.rare_books_crafted_count_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.master_showcase_tag_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.equipped_craft_title_id_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.team_free_proxy_),
+        PROTOBUF_FIELD_OFFSET(::CraftProxyStallInfo, _impl_.viewer_gets_free_proxy_),
         1,
         0,
         2,
@@ -6968,6 +9482,13 @@ const ::uint32_t
         5,
         6,
         7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ListCraftProxyStallsResponse, _impl_._has_bits_),
@@ -6976,6 +9497,171 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ListCraftProxyStallsResponse, _impl_.stalls_),
         1,
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneRequest, _impl_.scroll_id_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneRequest, _impl_.milestone_tier_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneResponse, _impl_.rewarded_fragments_),
+        PROTOBUF_FIELD_OFFSET(::ClaimScrollCollectionMilestoneResponse, _impl_.state_),
+        0,
+        2,
+        3,
+        4,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_.book_ids_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_.dismantled_count_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_.refunded_fragments_),
+        PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksResponse, _impl_.state_),
+        0,
+        2,
+        3,
+        4,
+        5,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_._has_bits_),
+        14, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.order_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.poster_player_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.poster_name_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.skill_table_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.skill_name_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.scroll_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.scroll_name_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.require_master_signature_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.reward_gold_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.seller_net_gold_),
+        PROTOBUF_FIELD_OFFSET(::SkillBookWantedOrderInfo, _impl_.created_at_sec_),
+        3,
+        4,
+        0,
+        5,
+        1,
+        6,
+        2,
+        10,
+        7,
+        8,
+        9,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderRequest, _impl_.skill_table_id_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderRequest, _impl_.require_master_signature_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderRequest, _impl_.reward_gold_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderResponse, _impl_.order_),
+        PROTOBUF_FIELD_OFFSET(::PostSkillBookWantedOrderResponse, _impl_.state_),
+        0,
+        3,
+        4,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderRequest, _impl_.order_id_),
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderResponse, _impl_.refunded_gold_),
+        PROTOBUF_FIELD_OFFSET(::CancelSkillBookWantedOrderResponse, _impl_.state_),
+        0,
+        2,
+        4,
+        3,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersRequest, _impl_.filter_skill_table_id_),
+        PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersRequest, _impl_.only_mine_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersResponse, _impl_.orders_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_.poster_player_id_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_.order_id_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_.sealed_item_id_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_.bookshelf_book_id_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderRequest, _impl_.client_request_id_),
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_.order_id_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_.seller_net_gold_),
+        PROTOBUF_FIELD_OFFSET(::FulfillSkillBookWantedOrderResponse, _impl_.state_),
+        0,
+        2,
+        5,
+        3,
+        4,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::UpgradeSkillRequest, _impl_._has_bits_),
         7, // hasbit index offset
@@ -7018,25 +9704,38 @@ static const ::_pbi::MigrationSchema
         {215, sizeof(::SkillCraftMasterySnapshot)},
         {228, sizeof(::SkillScrollCatalogInfo)},
         {263, sizeof(::SkillCraftingStateSnapshot)},
-        {294, sizeof(::GetSkillCraftingStateRequest)},
-        {295, sizeof(::GetSkillCraftingStateResponse)},
-        {302, sizeof(::CraftSkillBookRequest)},
-        {317, sizeof(::CraftSkillBookResponse)},
-        {332, sizeof(::LearnSkillBookRequest)},
-        {343, sizeof(::LearnSkillBookResponse)},
-        {356, sizeof(::DismantleSkillBookRequest)},
-        {365, sizeof(::DismantleSkillBookResponse)},
-        {378, sizeof(::SealSkillBookRequest)},
-        {387, sizeof(::SealSkillBookResponse)},
-        {402, sizeof(::UnsealSkillBookRequest)},
-        {411, sizeof(::UnsealSkillBookResponse)},
-        {424, sizeof(::SetCraftProxyStallRequest)},
-        {433, sizeof(::SetCraftProxyStallResponse)},
-        {440, sizeof(::CraftProxyStallInfo)},
-        {459, sizeof(::ListCraftProxyStallsRequest)},
-        {460, sizeof(::ListCraftProxyStallsResponse)},
-        {467, sizeof(::UpgradeSkillRequest)},
-        {478, sizeof(::UpgradeSkillResponse)},
+        {312, sizeof(::GetSkillCraftingStateRequest)},
+        {313, sizeof(::GetSkillCraftingStateResponse)},
+        {320, sizeof(::CraftSkillBookRequest)},
+        {335, sizeof(::CraftSkillBookResponse)},
+        {350, sizeof(::LearnSkillBookRequest)},
+        {361, sizeof(::LearnSkillBookResponse)},
+        {374, sizeof(::DismantleSkillBookRequest)},
+        {383, sizeof(::DismantleSkillBookResponse)},
+        {396, sizeof(::SealSkillBookRequest)},
+        {405, sizeof(::SealSkillBookResponse)},
+        {420, sizeof(::UnsealSkillBookRequest)},
+        {429, sizeof(::UnsealSkillBookResponse)},
+        {442, sizeof(::SetCraftProxyStallRequest)},
+        {457, sizeof(::SetCraftProxyStallResponse)},
+        {464, sizeof(::CraftProxyStallInfo)},
+        {497, sizeof(::ListCraftProxyStallsRequest)},
+        {498, sizeof(::ListCraftProxyStallsResponse)},
+        {505, sizeof(::ClaimScrollCollectionMilestoneRequest)},
+        {516, sizeof(::ClaimScrollCollectionMilestoneResponse)},
+        {529, sizeof(::BatchDismantleSkillBooksRequest)},
+        {538, sizeof(::BatchDismantleSkillBooksResponse)},
+        {553, sizeof(::SkillBookWantedOrderInfo)},
+        {578, sizeof(::PostSkillBookWantedOrderRequest)},
+        {591, sizeof(::PostSkillBookWantedOrderResponse)},
+        {604, sizeof(::CancelSkillBookWantedOrderRequest)},
+        {613, sizeof(::CancelSkillBookWantedOrderResponse)},
+        {626, sizeof(::ListSkillBookWantedOrdersRequest)},
+        {633, sizeof(::ListSkillBookWantedOrdersResponse)},
+        {640, sizeof(::FulfillSkillBookWantedOrderRequest)},
+        {655, sizeof(::FulfillSkillBookWantedOrderResponse)},
+        {670, sizeof(::UpgradeSkillRequest)},
+        {681, sizeof(::UpgradeSkillResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7073,6 +9772,19 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::CraftProxyStallInfo_globals_,
         &::ListCraftProxyStallsRequest_globals_,
         &::ListCraftProxyStallsResponse_globals_,
+        &::ClaimScrollCollectionMilestoneRequest_globals_,
+        &::ClaimScrollCollectionMilestoneResponse_globals_,
+        &::BatchDismantleSkillBooksRequest_globals_,
+        &::BatchDismantleSkillBooksResponse_globals_,
+        &::SkillBookWantedOrderInfo_globals_,
+        &::PostSkillBookWantedOrderRequest_globals_,
+        &::PostSkillBookWantedOrderResponse_globals_,
+        &::CancelSkillBookWantedOrderRequest_globals_,
+        &::CancelSkillBookWantedOrderResponse_globals_,
+        &::ListSkillBookWantedOrdersRequest_globals_,
+        &::ListSkillBookWantedOrdersResponse_globals_,
+        &::FulfillSkillBookWantedOrderRequest_globals_,
+        &::FulfillSkillBookWantedOrderResponse_globals_,
         &::UpgradeSkillRequest_globals_,
         &::UpgradeSkillResponse_globals_,
 };
@@ -7162,7 +9874,7 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "\013 \001(\r\022\031\n\021rare_scroll_count\030\014 \001(\r\022\030\n\020rare"
     "_ink_item_id\030\r \001(\r\022\026\n\016rare_ink_count\030\016 \001"
     "(\r\022\026\n\016rare_gold_cost\030\017 \001(\004\022\027\n\017skill_tabl"
-    "e_ids\030\020 \003(\r\"\365\003\n\032SkillCraftingStateSnapsh"
+    "e_ids\030\020 \003(\r\"\252\006\n\032SkillCraftingStateSnapsh"
     "ot\022\035\n\025scroll_craft_revision\030\001 \001(\004\0221\n\rfor"
     "ge_mastery\030\002 \001(\0132\032.SkillCraftMasterySnap"
     "shot\0222\n\016scroll_mastery\030\003 \001(\0132\032.SkillCraf"
@@ -7174,103 +9886,190 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "ned\030\t \001(\004\022\026\n\016rare_ink_owned\030\n \001(\004\022\030\n\020pro"
     "xy_stall_open\030\013 \001(\010\022\034\n\024proxy_forge_fee_g"
     "old\030\014 \001(\004\022\035\n\025proxy_scroll_fee_gold\030\r \001(\004"
-    "\022!\n\031craft_unlock_gate_enabled\030\016 \001(\010\"\036\n\034G"
-    "etSkillCraftingStateRequest\"s\n\035GetSkillC"
-    "raftingStateResponse\022&\n\rerror_message\030\001 "
-    "\001(\0132\017.TipInfoMessage\022*\n\005state\030\002 \001(\0132\033.Sk"
-    "illCraftingStateSnapshot\"\265\002\n\025CraftSkillB"
-    "ookRequest\022.\n\004mode\030\001 \001(\0162 .CraftSkillBoo"
-    "kRequest.CraftMode\022\021\n\tscroll_id\030\002 \001(\r\022\035\n"
-    "\025target_skill_table_id\030\003 \001(\r\022\031\n\021expected"
-    "_revision\030\004 \001(\004\022\031\n\021client_request_id\030\005 \001"
-    "(\004\022\036\n\026proxy_master_player_id\030\006 \001(\004\"d\n\tCr"
-    "aftMode\022\032\n\026CRAFT_MODE_UNSPECIFIED\020\000\022\022\n\016R"
-    "ANDOM_REGULAR\020\001\022\024\n\020TARGETED_REGULAR\020\002\022\021\n"
-    "\rTARGETED_RARE\020\003\"\350\001\n\026CraftSkillBookRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replay"
-    "ed\030\003 \001(\010\022,\n\014crafted_book\030\004 \001(\0132\026.Crafted"
-    "SkillBookEntry\022\037\n\027bonus_fragments_grante"
-    "d\030\005 \001(\r\022*\n\005state\030\006 \001(\0132\033.SkillCraftingSt"
-    "ateSnapshot\"n\n\025LearnSkillBookRequest\022\017\n\007"
-    "book_id\030\001 \001(\004\022\016\n\006pet_id\030\002 \001(\004\022\031\n\021expecte"
-    "d_revision\030\003 \001(\004\022\031\n\021client_request_id\030\004 "
-    "\001(\004\"\271\001\n\026LearnSkillBookResponse\022&\n\rerror_"
-    "message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021client"
-    "_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\036\n\026l"
-    "earned_skill_table_id\030\004 \001(\r\022*\n\005state\030\005 \001"
-    "(\0132\033.SkillCraftingStateSnapshot\"b\n\031Disma"
-    "ntleSkillBookRequest\022\017\n\007book_id\030\001 \001(\004\022\031\n"
-    "\021expected_revision\030\002 \001(\004\022\031\n\021client_reque"
-    "st_id\030\003 \001(\004\"\271\001\n\032DismantleSkillBookRespon"
+    "\022!\n\031craft_unlock_gate_enabled\030\016 \001(\010\022\036\n\026p"
+    "roxy_orders_completed\030\017 \001(\r\022\034\n\024supreme_f"
+    "orged_count\030\020 \001(\r\022 \n\030rare_books_crafted_"
+    "count\030\021 \001(\r\022\033\n\023master_showcase_tag\030\022 \001(\r"
+    "\022\037\n\027equipped_craft_title_id\030\023 \001(\r\022 \n\030unl"
+    "ocked_craft_title_ids\030\024 \003(\r\022\027\n\017team_free"
+    "_proxy\030\025 \001(\010\022%\n\035claimed_scroll_milestone"
+    "_bits\030\026 \001(\014\0223\n\020my_wanted_orders\030\027 \003(\0132\031."
+    "SkillBookWantedOrderInfo\"\036\n\034GetSkillCraf"
+    "tingStateRequest\"s\n\035GetSkillCraftingStat"
+    "eResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
+    "foMessage\022*\n\005state\030\002 \001(\0132\033.SkillCrafting"
+    "StateSnapshot\"\265\002\n\025CraftSkillBookRequest\022"
+    ".\n\004mode\030\001 \001(\0162 .CraftSkillBookRequest.Cr"
+    "aftMode\022\021\n\tscroll_id\030\002 \001(\r\022\035\n\025target_ski"
+    "ll_table_id\030\003 \001(\r\022\031\n\021expected_revision\030\004"
+    " \001(\004\022\031\n\021client_request_id\030\005 \001(\004\022\036\n\026proxy"
+    "_master_player_id\030\006 \001(\004\"d\n\tCraftMode\022\032\n\026"
+    "CRAFT_MODE_UNSPECIFIED\020\000\022\022\n\016RANDOM_REGUL"
+    "AR\020\001\022\024\n\020TARGETED_REGULAR\020\002\022\021\n\rTARGETED_R"
+    "ARE\020\003\"\350\001\n\026CraftSkillBookResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clie"
+    "nt_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022,\n"
+    "\014crafted_book\030\004 \001(\0132\026.CraftedSkillBookEn"
+    "try\022\037\n\027bonus_fragments_granted\030\005 \001(\r\022*\n\005"
+    "state\030\006 \001(\0132\033.SkillCraftingStateSnapshot"
+    "\"n\n\025LearnSkillBookRequest\022\017\n\007book_id\030\001 \001"
+    "(\004\022\016\n\006pet_id\030\002 \001(\004\022\031\n\021expected_revision\030"
+    "\003 \001(\004\022\031\n\021client_request_id\030\004 \001(\004\"\271\001\n\026Lea"
+    "rnSkillBookResponse\022&\n\rerror_message\030\001 \001"
+    "(\0132\017.TipInfoMessage\022\031\n\021client_request_id"
+    "\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\036\n\026learned_skil"
+    "l_table_id\030\004 \001(\r\022*\n\005state\030\005 \001(\0132\033.SkillC"
+    "raftingStateSnapshot\"b\n\031DismantleSkillBo"
+    "okRequest\022\017\n\007book_id\030\001 \001(\004\022\031\n\021expected_r"
+    "evision\030\002 \001(\004\022\031\n\021client_request_id\030\003 \001(\004"
+    "\"\271\001\n\032DismantleSkillBookResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clien"
+    "t_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\032\n\022"
+    "refunded_fragments\030\004 \001(\r\022*\n\005state\030\005 \001(\0132"
+    "\033.SkillCraftingStateSnapshot\"]\n\024SealSkil"
+    "lBookRequest\022\017\n\007book_id\030\001 \001(\004\022\031\n\021expecte"
+    "d_revision\030\002 \001(\004\022\031\n\021client_request_id\030\003 "
+    "\001(\004\"\301\001\n\025SealSkillBookResponse\022&\n\rerror_m"
+    "essage\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021client_"
+    "request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\017\n\007it"
+    "em_id\030\004 \001(\004\022\026\n\016skill_table_id\030\005 \001(\r\022*\n\005s"
+    "tate\030\006 \001(\0132\033.SkillCraftingStateSnapshot\""
+    "_\n\026UnsealSkillBookRequest\022\017\n\007item_id\030\001 \001"
+    "(\004\022\031\n\021expected_revision\030\002 \001(\004\022\031\n\021client_"
+    "request_id\030\003 \001(\004\"\311\001\n\027UnsealSkillBookResp"
+    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
+    "sage\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010repla"
+    "yed\030\003 \001(\010\022-\n\runsealed_book\030\004 \001(\0132\026.Craft"
+    "edSkillBookEntry\022*\n\005state\030\005 \001(\0132\033.SkillC"
+    "raftingStateSnapshot\"\275\001\n\031SetCraftProxySt"
+    "allRequest\022\014\n\004open\030\001 \001(\010\022\034\n\024proxy_forge_"
+    "fee_gold\030\002 \001(\004\022\035\n\025proxy_scroll_fee_gold\030"
+    "\003 \001(\004\022\033\n\023master_showcase_tag\030\004 \001(\r\022\037\n\027eq"
+    "uipped_craft_title_id\030\005 \001(\r\022\027\n\017team_free"
+    "_proxy\030\006 \001(\010\"p\n\032SetCraftProxyStallRespon"
     "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
-    "ge\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replaye"
-    "d\030\003 \001(\010\022\032\n\022refunded_fragments\030\004 \001(\r\022*\n\005s"
-    "tate\030\005 \001(\0132\033.SkillCraftingStateSnapshot\""
-    "]\n\024SealSkillBookRequest\022\017\n\007book_id\030\001 \001(\004"
-    "\022\031\n\021expected_revision\030\002 \001(\004\022\031\n\021client_re"
-    "quest_id\030\003 \001(\004\"\301\001\n\025SealSkillBookResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010replayed\030"
-    "\003 \001(\010\022\017\n\007item_id\030\004 \001(\004\022\026\n\016skill_table_id"
-    "\030\005 \001(\r\022*\n\005state\030\006 \001(\0132\033.SkillCraftingSta"
-    "teSnapshot\"_\n\026UnsealSkillBookRequest\022\017\n\007"
-    "item_id\030\001 \001(\004\022\031\n\021expected_revision\030\002 \001(\004"
-    "\022\031\n\021client_request_id\030\003 \001(\004\"\311\001\n\027UnsealSk"
-    "illBookResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    "ge\022*\n\005state\030\002 \001(\0132\033.SkillCraftingStateSn"
+    "apshot\"\316\003\n\023CraftProxyStallInfo\022\030\n\020master"
+    "_player_id\030\001 \001(\004\022\023\n\013master_name\030\002 \001(\t\022\032\n"
+    "\022forge_mastery_tier\030\003 \001(\r\022\033\n\023scroll_mast"
+    "ery_tier\030\004 \001(\r\022\034\n\024top_quality_rate_bps\030\005"
+    " \001(\r\022\035\n\025scroll_bonus_rate_bps\030\006 \001(\r\022\034\n\024p"
+    "roxy_forge_fee_gold\030\007 \001(\004\022\035\n\025proxy_scrol"
+    "l_fee_gold\030\010 \001(\004\022\036\n\026proxy_orders_complet"
+    "ed\030\t \001(\r\022\034\n\024supreme_forged_count\030\n \001(\r\022 "
+    "\n\030rare_books_crafted_count\030\013 \001(\r\022\033\n\023mast"
+    "er_showcase_tag\030\014 \001(\r\022\037\n\027equipped_craft_"
+    "title_id\030\r \001(\r\022\027\n\017team_free_proxy\030\016 \001(\010\022"
+    "\036\n\026viewer_gets_free_proxy\030\017 \001(\010\"\035\n\033ListC"
+    "raftProxyStallsRequest\"l\n\034ListCraftProxy"
+    "StallsResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\022$\n\006stalls\030\002 \003(\0132\024.CraftPr"
+    "oxyStallInfo\"\210\001\n%ClaimScrollCollectionMi"
+    "lestoneRequest\022\021\n\tscroll_id\030\001 \001(\r\022\026\n\016mil"
+    "estone_tier\030\002 \001(\r\022\031\n\021expected_revision\030\003"
+    " \001(\004\022\031\n\021client_request_id\030\004 \001(\004\"\305\001\n&Clai"
+    "mScrollCollectionMilestoneResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021cl"
+    "ient_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022"
+    "\032\n\022rewarded_fragments\030\004 \001(\r\022*\n\005state\030\005 \001"
+    "(\0132\033.SkillCraftingStateSnapshot\"i\n\037Batch"
+    "DismantleSkillBooksRequest\022\020\n\010book_ids\030\001"
+    " \003(\004\022\031\n\021expected_revision\030\002 \001(\004\022\031\n\021clien"
+    "t_request_id\030\003 \001(\004\"\331\001\n BatchDismantleSki"
+    "llBooksResponse\022&\n\rerror_message\030\001 \001(\0132\017"
     ".TipInfoMessage\022\031\n\021client_request_id\030\002 \001"
-    "(\004\022\020\n\010replayed\030\003 \001(\010\022-\n\runsealed_book\030\004 "
-    "\001(\0132\026.CraftedSkillBookEntry\022*\n\005state\030\005 \001"
-    "(\0132\033.SkillCraftingStateSnapshot\"f\n\031SetCr"
-    "aftProxyStallRequest\022\014\n\004open\030\001 \001(\010\022\034\n\024pr"
-    "oxy_forge_fee_gold\030\002 \001(\004\022\035\n\025proxy_scroll"
-    "_fee_gold\030\003 \001(\004\"p\n\032SetCraftProxyStallRes"
-    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
-    "ssage\022*\n\005state\030\002 \001(\0132\033.SkillCraftingStat"
-    "eSnapshot\"\367\001\n\023CraftProxyStallInfo\022\030\n\020mas"
-    "ter_player_id\030\001 \001(\004\022\023\n\013master_name\030\002 \001(\t"
-    "\022\032\n\022forge_mastery_tier\030\003 \001(\r\022\033\n\023scroll_m"
-    "astery_tier\030\004 \001(\r\022\034\n\024top_quality_rate_bp"
-    "s\030\005 \001(\r\022\035\n\025scroll_bonus_rate_bps\030\006 \001(\r\022\034"
-    "\n\024proxy_forge_fee_gold\030\007 \001(\004\022\035\n\025proxy_sc"
-    "roll_fee_gold\030\010 \001(\004\"\035\n\033ListCraftProxySta"
-    "llsRequest\"l\n\034ListCraftProxyStallsRespon"
-    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
-    "ge\022$\n\006stalls\030\002 \003(\0132\024.CraftProxyStallInfo"
-    "\"c\n\023UpgradeSkillRequest\022\026\n\016skill_table_i"
-    "d\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r\n\005count\030"
-    "\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024UpgradeSkillRe"
+    "(\004\022\020\n\010replayed\030\003 \001(\010\022\030\n\020dismantled_count"
+    "\030\004 \001(\r\022\032\n\022refunded_fragments\030\005 \001(\r\022*\n\005st"
+    "ate\030\006 \001(\0132\033.SkillCraftingStateSnapshot\"\227"
+    "\002\n\030SkillBookWantedOrderInfo\022\020\n\010order_id\030"
+    "\001 \001(\004\022\030\n\020poster_player_id\030\002 \001(\004\022\023\n\013poste"
+    "r_name\030\003 \001(\t\022\026\n\016skill_table_id\030\004 \001(\r\022\022\n\n"
+    "skill_name\030\005 \001(\t\022\021\n\tscroll_id\030\006 \001(\r\022\023\n\013s"
+    "croll_name\030\007 \001(\t\022 \n\030require_master_signa"
+    "ture\030\010 \001(\010\022\023\n\013reward_gold\030\t \001(\004\022\027\n\017selle"
+    "r_net_gold\030\n \001(\004\022\026\n\016created_at_sec\030\013 \001(\004"
+    "\"\246\001\n\037PostSkillBookWantedOrderRequest\022\026\n\016"
+    "skill_table_id\030\001 \001(\r\022 \n\030require_master_s"
+    "ignature\030\002 \001(\010\022\023\n\013reward_gold\030\003 \001(\004\022\031\n\021e"
+    "xpected_revision\030\004 \001(\004\022\031\n\021client_request"
+    "_id\030\005 \001(\004\"\315\001\n PostSkillBookWantedOrderRe"
     "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
-    "essage\022\"\n\005state\030\002 \001(\0132\023.ListSkillsRespon"
-    "se\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013stop_tip_i"
-    "d\030\004 \001(\r2\264\010\n\026SceneSkillClientPlayer\022;\n\014Re"
-    "leaseSkill\022\024.ReleaseSkillRequest\032\025.Relea"
-    "seSkillResponse\022/\n\017NotifySkillUsed\022\r.Ski"
-    "llUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026NotifySkillI"
-    "nterrupted\022\024.SkillInterruptedS2C\032\006.Empty"
-    "\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkillsReques"
-    "t\032\023.ListSkillsResponse\022;\n\014UpgradeSkill\022\024"
-    ".UpgradeSkillRequest\032\025.UpgradeSkillRespo"
-    "nse\022V\n\025GetSkillCraftingState\022\035.GetSkillC"
-    "raftingStateRequest\032\036.GetSkillCraftingSt"
-    "ateResponse\022A\n\016CraftSkillBook\022\026.CraftSki"
-    "llBookRequest\032\027.CraftSkillBookResponse\022A"
-    "\n\016LearnSkillBook\022\026.LearnSkillBookRequest"
-    "\032\027.LearnSkillBookResponse\022M\n\022DismantleSk"
-    "illBook\022\032.DismantleSkillBookRequest\032\033.Di"
-    "smantleSkillBookResponse\022M\n\022SetCraftProx"
-    "yStall\022\032.SetCraftProxyStallRequest\032\033.Set"
-    "CraftProxyStallResponse\022S\n\024ListCraftProx"
-    "yStalls\022\034.ListCraftProxyStallsRequest\032\035."
-    "ListCraftProxyStallsResponse\022G\n\020SaveSkil"
-    "lLoadout\022\030.SaveSkillLoadoutRequest\032\031.Sav"
-    "eSkillLoadoutResponse\022M\n\022SwitchSkillLoad"
-    "out\022\032.SwitchSkillLoadoutRequest\032\033.Switch"
-    "SkillLoadoutResponse\022>\n\rSealSkillBook\022\025."
-    "SealSkillBookRequest\032\026.SealSkillBookResp"
-    "onse\022D\n\017UnsealSkillBook\022\027.UnsealSkillBoo"
-    "kRequest\032\030.UnsealSkillBookResponse\032\n\200\250\303\001"
-    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "essage\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010rep"
+    "layed\030\003 \001(\010\022(\n\005order\030\004 \001(\0132\031.SkillBookWa"
+    "ntedOrderInfo\022*\n\005state\030\005 \001(\0132\033.SkillCraf"
+    "tingStateSnapshot\"k\n!CancelSkillBookWant"
+    "edOrderRequest\022\020\n\010order_id\030\001 \001(\004\022\031\n\021expe"
+    "cted_revision\030\002 \001(\004\022\031\n\021client_request_id"
+    "\030\003 \001(\004\"\274\001\n\"CancelSkillBookWantedOrderRes"
+    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
+    "ssage\022\031\n\021client_request_id\030\002 \001(\004\022\020\n\010repl"
+    "ayed\030\003 \001(\010\022\025\n\rrefunded_gold\030\004 \001(\004\022*\n\005sta"
+    "te\030\005 \001(\0132\033.SkillCraftingStateSnapshot\"T\n"
+    " ListSkillBookWantedOrdersRequest\022\035\n\025fil"
+    "ter_skill_table_id\030\001 \001(\r\022\021\n\tonly_mine\030\002 "
+    "\001(\010\"v\n!ListSkillBookWantedOrdersResponse"
+    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
+    "\022)\n\006orders\030\002 \003(\0132\031.SkillBookWantedOrderI"
+    "nfo\"\271\001\n\"FulfillSkillBookWantedOrderReque"
+    "st\022\030\n\020poster_player_id\030\001 \001(\004\022\020\n\010order_id"
+    "\030\002 \001(\004\022\026\n\016sealed_item_id\030\003 \001(\004\022\031\n\021booksh"
+    "elf_book_id\030\004 \001(\004\022\031\n\021expected_revision\030\005"
+    " \001(\004\022\031\n\021client_request_id\030\006 \001(\004\"\321\001\n#Fulf"
+    "illSkillBookWantedOrderResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clien"
+    "t_request_id\030\002 \001(\004\022\020\n\010replayed\030\003 \001(\010\022\020\n\010"
+    "order_id\030\004 \001(\004\022\027\n\017seller_net_gold\030\005 \001(\004\022"
+    "*\n\005state\030\006 \001(\0132\033.SkillCraftingStateSnaps"
+    "hot\"c\n\023UpgradeSkillRequest\022\026\n\016skill_tabl"
+    "e_id\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r\n\005cou"
+    "nt\030\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024UpgradeSkil"
+    "lResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
+    "foMessage\022\"\n\005state\030\002 \001(\0132\023.ListSkillsRes"
+    "ponse\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013stop_ti"
+    "p_id\030\004 \001(\r2\236\r\n\026SceneSkillClientPlayer\022;\n"
+    "\014ReleaseSkill\022\024.ReleaseSkillRequest\032\025.Re"
+    "leaseSkillResponse\022/\n\017NotifySkillUsed\022\r."
+    "SkillUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026NotifySki"
+    "llInterrupted\022\024.SkillInterruptedS2C\032\006.Em"
+    "pty\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkillsReq"
+    "uest\032\023.ListSkillsResponse\022;\n\014UpgradeSkil"
+    "l\022\024.UpgradeSkillRequest\032\025.UpgradeSkillRe"
+    "sponse\022V\n\025GetSkillCraftingState\022\035.GetSki"
+    "llCraftingStateRequest\032\036.GetSkillCraftin"
+    "gStateResponse\022A\n\016CraftSkillBook\022\026.Craft"
+    "SkillBookRequest\032\027.CraftSkillBookRespons"
+    "e\022A\n\016LearnSkillBook\022\026.LearnSkillBookRequ"
+    "est\032\027.LearnSkillBookResponse\022M\n\022Dismantl"
+    "eSkillBook\022\032.DismantleSkillBookRequest\032\033"
+    ".DismantleSkillBookResponse\022M\n\022SetCraftP"
+    "roxyStall\022\032.SetCraftProxyStallRequest\032\033."
+    "SetCraftProxyStallResponse\022S\n\024ListCraftP"
+    "roxyStalls\022\034.ListCraftProxyStallsRequest"
+    "\032\035.ListCraftProxyStallsResponse\022G\n\020SaveS"
+    "killLoadout\022\030.SaveSkillLoadoutRequest\032\031."
+    "SaveSkillLoadoutResponse\022M\n\022SwitchSkillL"
+    "oadout\022\032.SwitchSkillLoadoutRequest\032\033.Swi"
+    "tchSkillLoadoutResponse\022>\n\rSealSkillBook"
+    "\022\025.SealSkillBookRequest\032\026.SealSkillBookR"
+    "esponse\022D\n\017UnsealSkillBook\022\027.UnsealSkill"
+    "BookRequest\032\030.UnsealSkillBookResponse\022q\n"
+    "\036ClaimScrollCollectionMilestone\022&.ClaimS"
+    "crollCollectionMilestoneRequest\032\'.ClaimS"
+    "crollCollectionMilestoneResponse\022_\n\030Batc"
+    "hDismantleSkillBooks\022 .BatchDismantleSki"
+    "llBooksRequest\032!.BatchDismantleSkillBook"
+    "sResponse\022_\n\030PostSkillBookWantedOrder\022 ."
+    "PostSkillBookWantedOrderRequest\032!.PostSk"
+    "illBookWantedOrderResponse\022e\n\032CancelSkil"
+    "lBookWantedOrder\022\".CancelSkillBookWanted"
+    "OrderRequest\032#.CancelSkillBookWantedOrde"
+    "rResponse\022b\n\031ListSkillBookWantedOrders\022!"
+    ".ListSkillBookWantedOrdersRequest\032\".List"
+    "SkillBookWantedOrdersResponse\022h\n\033Fulfill"
+    "SkillBookWantedOrder\022#.FulfillSkillBookW"
+    "antedOrderRequest\032$.FulfillSkillBookWant"
+    "edOrderResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230"
+    "\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps[8] = {
@@ -7287,13 +10086,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto = {
     false,
     false,
-    7710,
+    11171,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto,
     "proto/scene/player_skill.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps,
     8,
-    35,
+    48,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fskill_2eproto::offsets,
@@ -13170,7 +15969,23 @@ PROTOBUF_NDEBUG_INLINE SkillCraftingStateSnapshot::Impl_::Impl_(
           , from.book_unlocked_skill_ids_
         }
         ,
-        _book_unlocked_skill_ids_cached_byte_size_{0} {}
+        _book_unlocked_skill_ids_cached_byte_size_{0},
+        unlocked_craft_title_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SkillCraftingStateSnapshot,
+              PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.unlocked_craft_title_ids_)>()
+          , from.unlocked_craft_title_ids_
+        }
+        ,
+        _unlocked_craft_title_ids_cached_byte_size_{0},
+        my_wanted_orders_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SkillCraftingStateSnapshot,
+              PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.my_wanted_orders_)>()
+          , from.my_wanted_orders_
+        }
+        ,
+        claimed_scroll_milestone_bits_(arena, from.claimed_scroll_milestone_bits_) {}
 
 SkillCraftingStateSnapshot::SkillCraftingStateSnapshot(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -13187,19 +16002,19 @@ SkillCraftingStateSnapshot::SkillCraftingStateSnapshot(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.forge_mastery_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+  _impl_.forge_mastery_ = (CheckHasBit(cached_has_bits, 0x00000040U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.forge_mastery_)
                 : nullptr;
-  _impl_.scroll_mastery_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+  _impl_.scroll_mastery_ = (CheckHasBit(cached_has_bits, 0x00000080U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.scroll_mastery_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, scroll_craft_revision_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, scroll_craft_revision_),
-           offsetof(Impl_, craft_unlock_gate_enabled_) -
+           offsetof(Impl_, equipped_craft_title_id_) -
                offsetof(Impl_, scroll_craft_revision_) +
-               sizeof(Impl_::craft_unlock_gate_enabled_));
+               sizeof(Impl_::equipped_craft_title_id_));
 
   // @@protoc_insertion_point(copy_constructor:SkillCraftingStateSnapshot)
 }
@@ -13222,16 +16037,28 @@ PROTOBUF_NDEBUG_INLINE SkillCraftingStateSnapshot::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.book_unlocked_skill_ids_)>()
          }
         ,
-        _book_unlocked_skill_ids_cached_byte_size_{0} {}
+        _book_unlocked_skill_ids_cached_byte_size_{0},
+        unlocked_craft_title_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillCraftingStateSnapshot,
+            PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.unlocked_craft_title_ids_)>()
+         }
+        ,
+        _unlocked_craft_title_ids_cached_byte_size_{0},
+        my_wanted_orders_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillCraftingStateSnapshot,
+            PROTOBUF_FIELD_OFFSET(::SkillCraftingStateSnapshot, _impl_.my_wanted_orders_)>()
+         }
+        ,
+        claimed_scroll_milestone_bits_(arena) {}
 
 inline void SkillCraftingStateSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, forge_mastery_),
            0,
-           offsetof(Impl_, craft_unlock_gate_enabled_) -
+           offsetof(Impl_, equipped_craft_title_id_) -
                offsetof(Impl_, forge_mastery_) +
-               sizeof(Impl_::craft_unlock_gate_enabled_));
+               sizeof(Impl_::equipped_craft_title_id_));
 }
 SkillCraftingStateSnapshot::~SkillCraftingStateSnapshot() {
   // @@protoc_insertion_point(destructor:SkillCraftingStateSnapshot)
@@ -13244,6 +16071,7 @@ inline void SkillCraftingStateSnapshot::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.claimed_scroll_milestone_bits_.Destroy();
   delete this_._impl_.forge_mastery_;
   delete this_._impl_.scroll_mastery_;
   this_._impl_.~Impl_();
@@ -13283,7 +16111,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.scrolls_.Clear();
     }
@@ -13294,23 +16122,32 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
       _impl_.book_unlocked_skill_ids_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.unlocked_craft_title_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.my_wanted_orders_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.claimed_scroll_milestone_bits_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(_impl_.forge_mastery_ != nullptr);
       _impl_.forge_mastery_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(_impl_.scroll_mastery_ != nullptr);
       _impl_.scroll_mastery_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.scroll_craft_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.fragment_owned_) -
-        reinterpret_cast<char*>(&_impl_.scroll_craft_revision_)) + sizeof(_impl_.fragment_owned_));
+        reinterpret_cast<char*>(&_impl_.proxy_orders_completed_) -
+        reinterpret_cast<char*>(&_impl_.scroll_craft_revision_)) + sizeof(_impl_.proxy_orders_completed_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    ::memset(&_impl_.rare_scroll_owned_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.craft_unlock_gate_enabled_) -
-        reinterpret_cast<char*>(&_impl_.rare_scroll_owned_)) + sizeof(_impl_.craft_unlock_gate_enabled_));
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    ::memset(&_impl_.proxy_stall_open_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.equipped_craft_title_id_) -
+        reinterpret_cast<char*>(&_impl_.proxy_stall_open_)) + sizeof(_impl_.equipped_craft_title_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -13336,7 +16173,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 scroll_craft_revision = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_scroll_craft_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13345,14 +16182,14 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // .SkillCraftMasterySnapshot forge_mastery = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.forge_mastery_, this_._impl_.forge_mastery_->GetCachedSize(), target,
         stream);
   }
 
   // .SkillCraftMasterySnapshot scroll_mastery = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *this_._impl_.scroll_mastery_, this_._impl_.scroll_mastery_->GetCachedSize(), target,
         stream);
@@ -13396,7 +16233,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // uint64 gold_balance = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_gold_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13405,7 +16242,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // uint64 fragment_owned = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_fragment_owned() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13414,7 +16251,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // uint64 rare_scroll_owned = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_rare_scroll_owned() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13423,7 +16260,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // uint64 rare_ink_owned = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_rare_ink_owned() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13432,7 +16269,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // bool proxy_stall_open = 11;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_proxy_stall_open() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -13441,7 +16278,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // uint64 proxy_forge_fee_gold = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_proxy_forge_fee_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13450,7 +16287,7 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // uint64 proxy_scroll_fee_gold = 13;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_proxy_scroll_fee_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13459,11 +16296,97 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
   }
 
   // bool craft_unlock_gate_enabled = 14;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_craft_unlock_gate_enabled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           14, this_._internal_craft_unlock_gate_enabled(), target);
+    }
+  }
+
+  // uint32 proxy_orders_completed = 15;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_proxy_orders_completed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_proxy_orders_completed(), target);
+    }
+  }
+
+  // uint32 supreme_forged_count = 16;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_supreme_forged_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_supreme_forged_count(), target);
+    }
+  }
+
+  // uint32 rare_books_crafted_count = 17;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_rare_books_crafted_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_rare_books_crafted_count(), target);
+    }
+  }
+
+  // uint32 master_showcase_tag = 18;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_master_showcase_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_master_showcase_tag(), target);
+    }
+  }
+
+  // uint32 equipped_craft_title_id = 19;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_equipped_craft_title_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_equipped_craft_title_id(), target);
+    }
+  }
+
+  // repeated uint32 unlocked_craft_title_ids = 20;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    {
+      int byte_size = this_._impl_._unlocked_craft_title_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            20, this_._internal_unlocked_craft_title_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // bool team_free_proxy = 21;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_team_free_proxy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          21, this_._internal_team_free_proxy(), target);
+    }
+  }
+
+  // bytes claimed_scroll_milestone_bits = 22;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_claimed_scroll_milestone_bits().empty()) {
+      const ::std::string& _s = this_._internal_claimed_scroll_milestone_bits();
+      target = stream->WriteBytesMaybeAliased(22, _s, target);
+    }
+  }
+
+  // repeated .SkillBookWantedOrderInfo my_wanted_orders = 23;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_my_wanted_orders_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_my_wanted_orders().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              23, repfield, repfield.GetCachedSize(),
+              target, stream);
     }
   }
 
@@ -13514,77 +16437,141 @@ PROTOBUF_NOINLINE void SkillCraftingStateSnapshot::Clear() {
               this_._internal_book_unlocked_skill_ids(), 1,
               this_._impl_._book_unlocked_skill_ids_cached_byte_size_);
     }
-    // .SkillCraftMasterySnapshot forge_mastery = 2;
+    // repeated uint32 unlocked_craft_title_ids = 20;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_unlocked_craft_title_ids(), 2,
+              this_._impl_._unlocked_craft_title_ids_cached_byte_size_);
+    }
+    // repeated .SkillBookWantedOrderInfo my_wanted_orders = 23;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 2UL * this_._internal_my_wanted_orders_size();
+      for (const auto& msg : this_._internal_my_wanted_orders()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // bytes claimed_scroll_milestone_bits = 22;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_claimed_scroll_milestone_bits().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_claimed_scroll_milestone_bits());
+      }
+    }
+    // .SkillCraftMasterySnapshot forge_mastery = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.forge_mastery_);
     }
     // .SkillCraftMasterySnapshot scroll_mastery = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.scroll_mastery_);
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 scroll_craft_revision = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_scroll_craft_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_scroll_craft_revision());
       }
     }
     // uint64 gold_balance = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_gold_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_gold_balance());
       }
     }
     // uint64 fragment_owned = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_fragment_owned() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_fragment_owned());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint64 rare_scroll_owned = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_rare_scroll_owned() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_rare_scroll_owned());
       }
     }
     // uint64 rare_ink_owned = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_rare_ink_owned() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_rare_ink_owned());
       }
     }
     // uint64 proxy_forge_fee_gold = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_proxy_forge_fee_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_proxy_forge_fee_gold());
       }
     }
     // uint64 proxy_scroll_fee_gold = 13;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_proxy_scroll_fee_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_proxy_scroll_fee_gold());
       }
     }
+    // uint32 proxy_orders_completed = 15;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_proxy_orders_completed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_proxy_orders_completed());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     // bool proxy_stall_open = 11;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_proxy_stall_open() != 0) {
         total_size += 2;
       }
     }
     // bool craft_unlock_gate_enabled = 14;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_craft_unlock_gate_enabled() != 0) {
         total_size += 2;
+      }
+    }
+    // bool team_free_proxy = 21;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_team_free_proxy() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 supreme_forged_count = 16;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_supreme_forged_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_supreme_forged_count());
+      }
+    }
+    // uint32 rare_books_crafted_count = 17;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_rare_books_crafted_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_rare_books_crafted_count());
+      }
+    }
+    // uint32 master_showcase_tag = 18;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_master_showcase_tag() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_master_showcase_tag());
+      }
+    }
+    // uint32 equipped_craft_title_id = 19;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_equipped_craft_title_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_equipped_craft_title_id());
       }
     }
   }
@@ -13621,6 +16608,23 @@ void SkillCraftingStateSnapshot::MergeImpl(::google::protobuf::MessageLite& to_m
       _this->_internal_mutable_book_unlocked_skill_ids()->MergeFrom(from._internal_book_unlocked_skill_ids());
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _this->_internal_mutable_unlocked_craft_title_ids()->MergeFrom(from._internal_unlocked_craft_title_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _this->_internal_mutable_my_wanted_orders()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_my_wanted_orders());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_claimed_scroll_milestone_bits().empty()) {
+        _this->_internal_set_claimed_scroll_milestone_bits(from._internal_claimed_scroll_milestone_bits());
+      } else {
+        if (_this->_impl_.claimed_scroll_milestone_bits_.IsDefault()) {
+          _this->_internal_set_claimed_scroll_milestone_bits("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(from._impl_.forge_mastery_ != nullptr);
       if (_this->_impl_.forge_mastery_ == nullptr) {
         _this->_impl_.forge_mastery_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.forge_mastery_);
@@ -13628,7 +16632,7 @@ void SkillCraftingStateSnapshot::MergeImpl(::google::protobuf::MessageLite& to_m
         _this->_impl_.forge_mastery_->MergeFrom(*from._impl_.forge_mastery_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       ABSL_DCHECK(from._impl_.scroll_mastery_ != nullptr);
       if (_this->_impl_.scroll_mastery_ == nullptr) {
         _this->_impl_.scroll_mastery_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.scroll_mastery_);
@@ -13636,51 +16640,83 @@ void SkillCraftingStateSnapshot::MergeImpl(::google::protobuf::MessageLite& to_m
         _this->_impl_.scroll_mastery_->MergeFrom(*from._impl_.scroll_mastery_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_scroll_craft_revision() != 0) {
         _this->_impl_.scroll_craft_revision_ = from._impl_.scroll_craft_revision_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_gold_balance() != 0) {
         _this->_impl_.gold_balance_ = from._impl_.gold_balance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_fragment_owned() != 0) {
         _this->_impl_.fragment_owned_ = from._impl_.fragment_owned_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_rare_scroll_owned() != 0) {
         _this->_impl_.rare_scroll_owned_ = from._impl_.rare_scroll_owned_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_rare_ink_owned() != 0) {
         _this->_impl_.rare_ink_owned_ = from._impl_.rare_ink_owned_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_proxy_forge_fee_gold() != 0) {
         _this->_impl_.proxy_forge_fee_gold_ = from._impl_.proxy_forge_fee_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_proxy_scroll_fee_gold() != 0) {
         _this->_impl_.proxy_scroll_fee_gold_ = from._impl_.proxy_scroll_fee_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_proxy_orders_completed() != 0) {
+        _this->_impl_.proxy_orders_completed_ = from._impl_.proxy_orders_completed_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_proxy_stall_open() != 0) {
         _this->_impl_.proxy_stall_open_ = from._impl_.proxy_stall_open_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_craft_unlock_gate_enabled() != 0) {
         _this->_impl_.craft_unlock_gate_enabled_ = from._impl_.craft_unlock_gate_enabled_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_team_free_proxy() != 0) {
+        _this->_impl_.team_free_proxy_ = from._impl_.team_free_proxy_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_supreme_forged_count() != 0) {
+        _this->_impl_.supreme_forged_count_ = from._impl_.supreme_forged_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_rare_books_crafted_count() != 0) {
+        _this->_impl_.rare_books_crafted_count_ = from._impl_.rare_books_crafted_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_master_showcase_tag() != 0) {
+        _this->_impl_.master_showcase_tag_ = from._impl_.master_showcase_tag_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_equipped_craft_title_id() != 0) {
+        _this->_impl_.equipped_craft_title_id_ = from._impl_.equipped_craft_title_id_;
       }
     }
   }
@@ -13699,14 +16735,19 @@ void SkillCraftingStateSnapshot::CopyFrom(const SkillCraftingStateSnapshot& from
 
 void SkillCraftingStateSnapshot::InternalSwap(SkillCraftingStateSnapshot* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.scrolls_.InternalSwap(&other->_impl_.scrolls_);
   _impl_.skill_books_.InternalSwap(&other->_impl_.skill_books_);
   _impl_.book_unlocked_skill_ids_.InternalSwap(&other->_impl_.book_unlocked_skill_ids_);
+  _impl_.unlocked_craft_title_ids_.InternalSwap(&other->_impl_.unlocked_craft_title_ids_);
+  _impl_.my_wanted_orders_.InternalSwap(&other->_impl_.my_wanted_orders_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.claimed_scroll_milestone_bits_, &other->_impl_.claimed_scroll_milestone_bits_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.craft_unlock_gate_enabled_)
-      + sizeof(SkillCraftingStateSnapshot::_impl_.craft_unlock_gate_enabled_)
+      PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.equipped_craft_title_id_)
+      + sizeof(SkillCraftingStateSnapshot::_impl_.equipped_craft_title_id_)
       - PROTOBUF_FIELD_OFFSET(SkillCraftingStateSnapshot, _impl_.forge_mastery_)>(
           reinterpret_cast<char*>(&_impl_.forge_mastery_),
           reinterpret_cast<char*>(&other->_impl_.forge_mastery_));
@@ -17129,9 +20170,9 @@ inline void SetCraftProxyStallRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, proxy_forge_fee_gold_),
            0,
-           offsetof(Impl_, open_) -
+           offsetof(Impl_, equipped_craft_title_id_) -
                offsetof(Impl_, proxy_forge_fee_gold_) +
-               sizeof(Impl_::open_));
+               sizeof(Impl_::equipped_craft_title_id_));
 }
 SetCraftProxyStallRequest::~SetCraftProxyStallRequest() {
   // @@protoc_insertion_point(destructor:SetCraftProxyStallRequest)
@@ -17181,10 +20222,10 @@ PROTOBUF_NOINLINE void SetCraftProxyStallRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     ::memset(&_impl_.proxy_forge_fee_gold_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.open_) -
-        reinterpret_cast<char*>(&_impl_.proxy_forge_fee_gold_)) + sizeof(_impl_.open_));
+        reinterpret_cast<char*>(&_impl_.equipped_craft_title_id_) -
+        reinterpret_cast<char*>(&_impl_.proxy_forge_fee_gold_)) + sizeof(_impl_.equipped_craft_title_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -17236,6 +20277,33 @@ PROTOBUF_NOINLINE void SetCraftProxyStallRequest::Clear() {
     }
   }
 
+  // uint32 master_showcase_tag = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_master_showcase_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_master_showcase_tag(), target);
+    }
+  }
+
+  // uint32 equipped_craft_title_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_equipped_craft_title_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_equipped_craft_title_id(), target);
+    }
+  }
+
+  // bool team_free_proxy = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_team_free_proxy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_team_free_proxy(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -17261,7 +20329,7 @@ PROTOBUF_NOINLINE void SetCraftProxyStallRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // uint64 proxy_forge_fee_gold = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_proxy_forge_fee_gold() != 0) {
@@ -17282,6 +20350,26 @@ PROTOBUF_NOINLINE void SetCraftProxyStallRequest::Clear() {
         total_size += 2;
       }
     }
+    // bool team_free_proxy = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_team_free_proxy() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 master_showcase_tag = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_master_showcase_tag() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_master_showcase_tag());
+      }
+    }
+    // uint32 equipped_craft_title_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_equipped_craft_title_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_equipped_craft_title_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -17300,7 +20388,7 @@ void SetCraftProxyStallRequest::MergeImpl(::google::protobuf::MessageLite& to_ms
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_proxy_forge_fee_gold() != 0) {
         _this->_impl_.proxy_forge_fee_gold_ = from._impl_.proxy_forge_fee_gold_;
@@ -17314,6 +20402,21 @@ void SetCraftProxyStallRequest::MergeImpl(::google::protobuf::MessageLite& to_ms
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_open() != 0) {
         _this->_impl_.open_ = from._impl_.open_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_team_free_proxy() != 0) {
+        _this->_impl_.team_free_proxy_ = from._impl_.team_free_proxy_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_master_showcase_tag() != 0) {
+        _this->_impl_.master_showcase_tag_ = from._impl_.master_showcase_tag_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_equipped_craft_title_id() != 0) {
+        _this->_impl_.equipped_craft_title_id_ = from._impl_.equipped_craft_title_id_;
       }
     }
   }
@@ -17335,8 +20438,8 @@ void SetCraftProxyStallRequest::InternalSwap(SetCraftProxyStallRequest* PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.open_)
-      + sizeof(SetCraftProxyStallRequest::_impl_.open_)
+      PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.equipped_craft_title_id_)
+      + sizeof(SetCraftProxyStallRequest::_impl_.equipped_craft_title_id_)
       - PROTOBUF_FIELD_OFFSET(SetCraftProxyStallRequest, _impl_.proxy_forge_fee_gold_)>(
           reinterpret_cast<char*>(&_impl_.proxy_forge_fee_gold_),
           reinterpret_cast<char*>(&other->_impl_.proxy_forge_fee_gold_));
@@ -17641,9 +20744,9 @@ CraftProxyStallInfo::CraftProxyStallInfo(
                offsetof(Impl_, master_player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, master_player_id_),
-           offsetof(Impl_, proxy_scroll_fee_gold_) -
+           offsetof(Impl_, viewer_gets_free_proxy_) -
                offsetof(Impl_, master_player_id_) +
-               sizeof(Impl_::proxy_scroll_fee_gold_));
+               sizeof(Impl_::viewer_gets_free_proxy_));
 
   // @@protoc_insertion_point(copy_constructor:CraftProxyStallInfo)
 }
@@ -17658,9 +20761,9 @@ inline void CraftProxyStallInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, master_player_id_),
            0,
-           offsetof(Impl_, proxy_scroll_fee_gold_) -
+           offsetof(Impl_, viewer_gets_free_proxy_) -
                offsetof(Impl_, master_player_id_) +
-               sizeof(Impl_::proxy_scroll_fee_gold_));
+               sizeof(Impl_::viewer_gets_free_proxy_));
 }
 CraftProxyStallInfo::~CraftProxyStallInfo() {
   // @@protoc_insertion_point(destructor:CraftProxyStallInfo)
@@ -17718,6 +20821,11 @@ PROTOBUF_NOINLINE void CraftProxyStallInfo::Clear() {
     ::memset(&_impl_.master_player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.proxy_scroll_fee_gold_) -
         reinterpret_cast<char*>(&_impl_.master_player_id_)) + sizeof(_impl_.proxy_scroll_fee_gold_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    ::memset(&_impl_.proxy_orders_completed_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.viewer_gets_free_proxy_) -
+        reinterpret_cast<char*>(&_impl_.proxy_orders_completed_)) + sizeof(_impl_.viewer_gets_free_proxy_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -17815,6 +20923,69 @@ PROTOBUF_NOINLINE void CraftProxyStallInfo::Clear() {
     }
   }
 
+  // uint32 proxy_orders_completed = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_proxy_orders_completed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_proxy_orders_completed(), target);
+    }
+  }
+
+  // uint32 supreme_forged_count = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_supreme_forged_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_supreme_forged_count(), target);
+    }
+  }
+
+  // uint32 rare_books_crafted_count = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_rare_books_crafted_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_rare_books_crafted_count(), target);
+    }
+  }
+
+  // uint32 master_showcase_tag = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_master_showcase_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_master_showcase_tag(), target);
+    }
+  }
+
+  // uint32 equipped_craft_title_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_equipped_craft_title_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_equipped_craft_title_id(), target);
+    }
+  }
+
+  // bool team_free_proxy = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_team_free_proxy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_team_free_proxy(), target);
+    }
+  }
+
+  // bool viewer_gets_free_proxy = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_viewer_gets_free_proxy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          15, this_._internal_viewer_gets_free_proxy(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -17898,6 +21069,55 @@ PROTOBUF_NOINLINE void CraftProxyStallInfo::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    // uint32 proxy_orders_completed = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_proxy_orders_completed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_proxy_orders_completed());
+      }
+    }
+    // uint32 supreme_forged_count = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_supreme_forged_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_supreme_forged_count());
+      }
+    }
+    // uint32 rare_books_crafted_count = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_rare_books_crafted_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rare_books_crafted_count());
+      }
+    }
+    // uint32 master_showcase_tag = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_master_showcase_tag() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_master_showcase_tag());
+      }
+    }
+    // uint32 equipped_craft_title_id = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_equipped_craft_title_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_equipped_craft_title_id());
+      }
+    }
+    // bool team_free_proxy = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_team_free_proxy() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool viewer_gets_free_proxy = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_viewer_gets_free_proxy() != 0) {
+        total_size += 2;
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -17961,6 +21181,43 @@ void CraftProxyStallInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_proxy_orders_completed() != 0) {
+        _this->_impl_.proxy_orders_completed_ = from._impl_.proxy_orders_completed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_supreme_forged_count() != 0) {
+        _this->_impl_.supreme_forged_count_ = from._impl_.supreme_forged_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_rare_books_crafted_count() != 0) {
+        _this->_impl_.rare_books_crafted_count_ = from._impl_.rare_books_crafted_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_master_showcase_tag() != 0) {
+        _this->_impl_.master_showcase_tag_ = from._impl_.master_showcase_tag_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_equipped_craft_title_id() != 0) {
+        _this->_impl_.equipped_craft_title_id_ = from._impl_.equipped_craft_title_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_team_free_proxy() != 0) {
+        _this->_impl_.team_free_proxy_ = from._impl_.team_free_proxy_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_viewer_gets_free_proxy() != 0) {
+        _this->_impl_.viewer_gets_free_proxy_ = from._impl_.viewer_gets_free_proxy_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -17982,8 +21239,8 @@ void CraftProxyStallInfo::InternalSwap(CraftProxyStallInfo* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.master_name_, &other->_impl_.master_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.proxy_scroll_fee_gold_)
-      + sizeof(CraftProxyStallInfo::_impl_.proxy_scroll_fee_gold_)
+      PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.viewer_gets_free_proxy_)
+      + sizeof(CraftProxyStallInfo::_impl_.viewer_gets_free_proxy_)
       - PROTOBUF_FIELD_OFFSET(CraftProxyStallInfo, _impl_.master_player_id_)>(
           reinterpret_cast<char*>(&_impl_.master_player_id_),
           reinterpret_cast<char*>(&other->_impl_.master_player_id_));
@@ -18315,6 +21572,4102 @@ void ListCraftProxyStallsResponse::InternalSwap(ListCraftProxyStallsResponse* PR
 }
 
 ::google::protobuf::Metadata ListCraftProxyStallsResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimScrollCollectionMilestoneRequest::ClaimScrollCollectionMilestoneRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimScrollCollectionMilestoneRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ClaimScrollCollectionMilestoneRequest)
+}
+ClaimScrollCollectionMilestoneRequest::ClaimScrollCollectionMilestoneRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimScrollCollectionMilestoneRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimScrollCollectionMilestoneRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ClaimScrollCollectionMilestoneRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimScrollCollectionMilestoneRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, scroll_id_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, scroll_id_) +
+               sizeof(Impl_::client_request_id_));
+}
+ClaimScrollCollectionMilestoneRequest::~ClaimScrollCollectionMilestoneRequest() {
+  // @@protoc_insertion_point(destructor:ClaimScrollCollectionMilestoneRequest)
+  SharedDtor(*this);
+}
+inline void ClaimScrollCollectionMilestoneRequest::SharedDtor(MessageLite& self) {
+  ClaimScrollCollectionMilestoneRequest& this_ = static_cast<ClaimScrollCollectionMilestoneRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimScrollCollectionMilestoneRequest_class_data_ =
+        ClaimScrollCollectionMilestoneRequest::InternalGenerateClassData_(ClaimScrollCollectionMilestoneRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimScrollCollectionMilestoneRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimScrollCollectionMilestoneRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimScrollCollectionMilestoneRequest_class_data_.tc_table);
+  return ClaimScrollCollectionMilestoneRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimScrollCollectionMilestoneRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimScrollCollectionMilestoneRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimScrollCollectionMilestoneRequest_globals_));
+  return ClaimScrollCollectionMilestoneRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimScrollCollectionMilestoneRequest::ParseTableT_
+    ClaimScrollCollectionMilestoneRequest::_table_ =
+        ClaimScrollCollectionMilestoneRequest::InternalGenerateParseTable_(ClaimScrollCollectionMilestoneRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimScrollCollectionMilestoneRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:ClaimScrollCollectionMilestoneRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.scroll_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.scroll_id_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimScrollCollectionMilestoneRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimScrollCollectionMilestoneRequest& this_ = static_cast<const ClaimScrollCollectionMilestoneRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimScrollCollectionMilestoneRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimScrollCollectionMilestoneRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ClaimScrollCollectionMilestoneRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 scroll_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_scroll_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_scroll_id(), target);
+    }
+  }
+
+  // uint32 milestone_tier = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_milestone_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_milestone_tier(), target);
+    }
+  }
+
+  // uint64 expected_revision = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ClaimScrollCollectionMilestoneRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimScrollCollectionMilestoneRequest::ByteSizeLong(const MessageLite& base) {
+  const ClaimScrollCollectionMilestoneRequest& this_ = static_cast<const ClaimScrollCollectionMilestoneRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimScrollCollectionMilestoneRequest::ByteSizeLong() const {
+  const ClaimScrollCollectionMilestoneRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ClaimScrollCollectionMilestoneRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint32 scroll_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_scroll_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_scroll_id());
+      }
+    }
+    // uint32 milestone_tier = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_milestone_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_milestone_tier());
+      }
+    }
+    // uint64 expected_revision = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimScrollCollectionMilestoneRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimScrollCollectionMilestoneRequest*>(&to_msg);
+  auto& from = static_cast<const ClaimScrollCollectionMilestoneRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:ClaimScrollCollectionMilestoneRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_scroll_id() != 0) {
+        _this->_impl_.scroll_id_ = from._impl_.scroll_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_milestone_tier() != 0) {
+        _this->_impl_.milestone_tier_ = from._impl_.milestone_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimScrollCollectionMilestoneRequest::CopyFrom(const ClaimScrollCollectionMilestoneRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ClaimScrollCollectionMilestoneRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimScrollCollectionMilestoneRequest::InternalSwap(ClaimScrollCollectionMilestoneRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.client_request_id_)
+      + sizeof(ClaimScrollCollectionMilestoneRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneRequest, _impl_.scroll_id_)>(
+          reinterpret_cast<char*>(&_impl_.scroll_id_),
+          reinterpret_cast<char*>(&other->_impl_.scroll_id_));
+}
+
+::google::protobuf::Metadata ClaimScrollCollectionMilestoneRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ClaimScrollCollectionMilestoneResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ClaimScrollCollectionMilestoneResponse::ClaimScrollCollectionMilestoneResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimScrollCollectionMilestoneResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ClaimScrollCollectionMilestoneResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimScrollCollectionMilestoneResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::ClaimScrollCollectionMilestoneResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ClaimScrollCollectionMilestoneResponse::ClaimScrollCollectionMilestoneResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimScrollCollectionMilestoneResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimScrollCollectionMilestoneResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimScrollCollectionMilestoneResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, rewarded_fragments_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::rewarded_fragments_));
+
+  // @@protoc_insertion_point(copy_constructor:ClaimScrollCollectionMilestoneResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimScrollCollectionMilestoneResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimScrollCollectionMilestoneResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, rewarded_fragments_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::rewarded_fragments_));
+}
+ClaimScrollCollectionMilestoneResponse::~ClaimScrollCollectionMilestoneResponse() {
+  // @@protoc_insertion_point(destructor:ClaimScrollCollectionMilestoneResponse)
+  SharedDtor(*this);
+}
+inline void ClaimScrollCollectionMilestoneResponse::SharedDtor(MessageLite& self) {
+  ClaimScrollCollectionMilestoneResponse& this_ = static_cast<ClaimScrollCollectionMilestoneResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimScrollCollectionMilestoneResponse_class_data_ =
+        ClaimScrollCollectionMilestoneResponse::InternalGenerateClassData_(ClaimScrollCollectionMilestoneResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimScrollCollectionMilestoneResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimScrollCollectionMilestoneResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimScrollCollectionMilestoneResponse_class_data_.tc_table);
+  return ClaimScrollCollectionMilestoneResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimScrollCollectionMilestoneResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimScrollCollectionMilestoneResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimScrollCollectionMilestoneResponse_globals_));
+  return ClaimScrollCollectionMilestoneResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimScrollCollectionMilestoneResponse::ParseTableT_
+    ClaimScrollCollectionMilestoneResponse::_table_ =
+        ClaimScrollCollectionMilestoneResponse::InternalGenerateParseTable_(ClaimScrollCollectionMilestoneResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimScrollCollectionMilestoneResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:ClaimScrollCollectionMilestoneResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.rewarded_fragments_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.rewarded_fragments_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimScrollCollectionMilestoneResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimScrollCollectionMilestoneResponse& this_ = static_cast<const ClaimScrollCollectionMilestoneResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimScrollCollectionMilestoneResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimScrollCollectionMilestoneResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ClaimScrollCollectionMilestoneResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint32 rewarded_fragments = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_rewarded_fragments() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_rewarded_fragments(), target);
+    }
+  }
+
+  // .SkillCraftingStateSnapshot state = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ClaimScrollCollectionMilestoneResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimScrollCollectionMilestoneResponse::ByteSizeLong(const MessageLite& base) {
+  const ClaimScrollCollectionMilestoneResponse& this_ = static_cast<const ClaimScrollCollectionMilestoneResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimScrollCollectionMilestoneResponse::ByteSizeLong() const {
+  const ClaimScrollCollectionMilestoneResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ClaimScrollCollectionMilestoneResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .SkillCraftingStateSnapshot state = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 rewarded_fragments = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_rewarded_fragments() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rewarded_fragments());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimScrollCollectionMilestoneResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimScrollCollectionMilestoneResponse*>(&to_msg);
+  auto& from = static_cast<const ClaimScrollCollectionMilestoneResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:ClaimScrollCollectionMilestoneResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_rewarded_fragments() != 0) {
+        _this->_impl_.rewarded_fragments_ = from._impl_.rewarded_fragments_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimScrollCollectionMilestoneResponse::CopyFrom(const ClaimScrollCollectionMilestoneResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ClaimScrollCollectionMilestoneResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimScrollCollectionMilestoneResponse::InternalSwap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.rewarded_fragments_)
+      + sizeof(ClaimScrollCollectionMilestoneResponse::_impl_.rewarded_fragments_)
+      - PROTOBUF_FIELD_OFFSET(ClaimScrollCollectionMilestoneResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata ClaimScrollCollectionMilestoneResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+BatchDismantleSkillBooksRequest::BatchDismantleSkillBooksRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchDismantleSkillBooksRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BatchDismantleSkillBooksRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchDismantleSkillBooksRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::BatchDismantleSkillBooksRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        book_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::BatchDismantleSkillBooksRequest,
+              PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_.book_ids_)>()
+          , from.book_ids_
+        }
+        ,
+        _book_ids_cached_byte_size_{0} {}
+
+BatchDismantleSkillBooksRequest::BatchDismantleSkillBooksRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchDismantleSkillBooksRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchDismantleSkillBooksRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchDismantleSkillBooksRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, expected_revision_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, expected_revision_),
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, expected_revision_) +
+               sizeof(Impl_::client_request_id_));
+
+  // @@protoc_insertion_point(copy_constructor:BatchDismantleSkillBooksRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchDismantleSkillBooksRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        book_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::BatchDismantleSkillBooksRequest,
+            PROTOBUF_FIELD_OFFSET(::BatchDismantleSkillBooksRequest, _impl_.book_ids_)>()
+         }
+        ,
+        _book_ids_cached_byte_size_{0} {}
+
+inline void BatchDismantleSkillBooksRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, expected_revision_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, expected_revision_) +
+               sizeof(Impl_::client_request_id_));
+}
+BatchDismantleSkillBooksRequest::~BatchDismantleSkillBooksRequest() {
+  // @@protoc_insertion_point(destructor:BatchDismantleSkillBooksRequest)
+  SharedDtor(*this);
+}
+inline void BatchDismantleSkillBooksRequest::SharedDtor(MessageLite& self) {
+  BatchDismantleSkillBooksRequest& this_ = static_cast<BatchDismantleSkillBooksRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchDismantleSkillBooksRequest_class_data_ =
+        BatchDismantleSkillBooksRequest::InternalGenerateClassData_(BatchDismantleSkillBooksRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchDismantleSkillBooksRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchDismantleSkillBooksRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchDismantleSkillBooksRequest_class_data_.tc_table);
+  return BatchDismantleSkillBooksRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchDismantleSkillBooksRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchDismantleSkillBooksRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchDismantleSkillBooksRequest_globals_));
+  return BatchDismantleSkillBooksRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchDismantleSkillBooksRequest::ParseTableT_
+    BatchDismantleSkillBooksRequest::_table_ =
+        BatchDismantleSkillBooksRequest::InternalGenerateParseTable_(BatchDismantleSkillBooksRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchDismantleSkillBooksRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:BatchDismantleSkillBooksRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.book_ids_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.expected_revision_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.expected_revision_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchDismantleSkillBooksRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchDismantleSkillBooksRequest& this_ = static_cast<const BatchDismantleSkillBooksRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchDismantleSkillBooksRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchDismantleSkillBooksRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BatchDismantleSkillBooksRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 book_ids = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._book_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_book_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // uint64 expected_revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BatchDismantleSkillBooksRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchDismantleSkillBooksRequest::ByteSizeLong(const MessageLite& base) {
+  const BatchDismantleSkillBooksRequest& this_ = static_cast<const BatchDismantleSkillBooksRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchDismantleSkillBooksRequest::ByteSizeLong() const {
+  const BatchDismantleSkillBooksRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BatchDismantleSkillBooksRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated uint64 book_ids = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_book_ids(), 1,
+              this_._impl_._book_ids_cached_byte_size_);
+    }
+    // uint64 expected_revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchDismantleSkillBooksRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchDismantleSkillBooksRequest*>(&to_msg);
+  auto& from = static_cast<const BatchDismantleSkillBooksRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:BatchDismantleSkillBooksRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_book_ids()->MergeFrom(from._internal_book_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchDismantleSkillBooksRequest::CopyFrom(const BatchDismantleSkillBooksRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BatchDismantleSkillBooksRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchDismantleSkillBooksRequest::InternalSwap(BatchDismantleSkillBooksRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.book_ids_.InternalSwap(&other->_impl_.book_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.client_request_id_)
+      + sizeof(BatchDismantleSkillBooksRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksRequest, _impl_.expected_revision_)>(
+          reinterpret_cast<char*>(&_impl_.expected_revision_),
+          reinterpret_cast<char*>(&other->_impl_.expected_revision_));
+}
+
+::google::protobuf::Metadata BatchDismantleSkillBooksRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void BatchDismantleSkillBooksResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+BatchDismantleSkillBooksResponse::BatchDismantleSkillBooksResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchDismantleSkillBooksResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BatchDismantleSkillBooksResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchDismantleSkillBooksResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::BatchDismantleSkillBooksResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+BatchDismantleSkillBooksResponse::BatchDismantleSkillBooksResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchDismantleSkillBooksResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchDismantleSkillBooksResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchDismantleSkillBooksResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, refunded_fragments_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::refunded_fragments_));
+
+  // @@protoc_insertion_point(copy_constructor:BatchDismantleSkillBooksResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchDismantleSkillBooksResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BatchDismantleSkillBooksResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, refunded_fragments_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::refunded_fragments_));
+}
+BatchDismantleSkillBooksResponse::~BatchDismantleSkillBooksResponse() {
+  // @@protoc_insertion_point(destructor:BatchDismantleSkillBooksResponse)
+  SharedDtor(*this);
+}
+inline void BatchDismantleSkillBooksResponse::SharedDtor(MessageLite& self) {
+  BatchDismantleSkillBooksResponse& this_ = static_cast<BatchDismantleSkillBooksResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchDismantleSkillBooksResponse_class_data_ =
+        BatchDismantleSkillBooksResponse::InternalGenerateClassData_(BatchDismantleSkillBooksResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchDismantleSkillBooksResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchDismantleSkillBooksResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchDismantleSkillBooksResponse_class_data_.tc_table);
+  return BatchDismantleSkillBooksResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchDismantleSkillBooksResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchDismantleSkillBooksResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchDismantleSkillBooksResponse_globals_));
+  return BatchDismantleSkillBooksResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchDismantleSkillBooksResponse::ParseTableT_
+    BatchDismantleSkillBooksResponse::_table_ =
+        BatchDismantleSkillBooksResponse::InternalGenerateParseTable_(BatchDismantleSkillBooksResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchDismantleSkillBooksResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:BatchDismantleSkillBooksResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.refunded_fragments_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.refunded_fragments_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchDismantleSkillBooksResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchDismantleSkillBooksResponse& this_ = static_cast<const BatchDismantleSkillBooksResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchDismantleSkillBooksResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchDismantleSkillBooksResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BatchDismantleSkillBooksResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint32 dismantled_count = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_dismantled_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_dismantled_count(), target);
+    }
+  }
+
+  // uint32 refunded_fragments = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_refunded_fragments() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_refunded_fragments(), target);
+    }
+  }
+
+  // .SkillCraftingStateSnapshot state = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BatchDismantleSkillBooksResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchDismantleSkillBooksResponse::ByteSizeLong(const MessageLite& base) {
+  const BatchDismantleSkillBooksResponse& this_ = static_cast<const BatchDismantleSkillBooksResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchDismantleSkillBooksResponse::ByteSizeLong() const {
+  const BatchDismantleSkillBooksResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BatchDismantleSkillBooksResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .SkillCraftingStateSnapshot state = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 dismantled_count = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_dismantled_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_dismantled_count());
+      }
+    }
+    // uint32 refunded_fragments = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_refunded_fragments() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_refunded_fragments());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchDismantleSkillBooksResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchDismantleSkillBooksResponse*>(&to_msg);
+  auto& from = static_cast<const BatchDismantleSkillBooksResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:BatchDismantleSkillBooksResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_dismantled_count() != 0) {
+        _this->_impl_.dismantled_count_ = from._impl_.dismantled_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_refunded_fragments() != 0) {
+        _this->_impl_.refunded_fragments_ = from._impl_.refunded_fragments_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchDismantleSkillBooksResponse::CopyFrom(const BatchDismantleSkillBooksResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BatchDismantleSkillBooksResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchDismantleSkillBooksResponse::InternalSwap(BatchDismantleSkillBooksResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.refunded_fragments_)
+      + sizeof(BatchDismantleSkillBooksResponse::_impl_.refunded_fragments_)
+      - PROTOBUF_FIELD_OFFSET(BatchDismantleSkillBooksResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata BatchDismantleSkillBooksResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SkillBookWantedOrderInfo::SkillBookWantedOrderInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SkillBookWantedOrderInfo_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SkillBookWantedOrderInfo)
+}
+PROTOBUF_NDEBUG_INLINE SkillBookWantedOrderInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SkillBookWantedOrderInfo& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        poster_name_(arena, from.poster_name_),
+        skill_name_(arena, from.skill_name_),
+        scroll_name_(arena, from.scroll_name_) {}
+
+SkillBookWantedOrderInfo::SkillBookWantedOrderInfo(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SkillBookWantedOrderInfo& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SkillBookWantedOrderInfo_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SkillBookWantedOrderInfo* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, order_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, order_id_),
+           offsetof(Impl_, require_master_signature_) -
+               offsetof(Impl_, order_id_) +
+               sizeof(Impl_::require_master_signature_));
+
+  // @@protoc_insertion_point(copy_constructor:SkillBookWantedOrderInfo)
+}
+PROTOBUF_NDEBUG_INLINE SkillBookWantedOrderInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        poster_name_(arena),
+        skill_name_(arena),
+        scroll_name_(arena) {}
+
+inline void SkillBookWantedOrderInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, order_id_),
+           0,
+           offsetof(Impl_, require_master_signature_) -
+               offsetof(Impl_, order_id_) +
+               sizeof(Impl_::require_master_signature_));
+}
+SkillBookWantedOrderInfo::~SkillBookWantedOrderInfo() {
+  // @@protoc_insertion_point(destructor:SkillBookWantedOrderInfo)
+  SharedDtor(*this);
+}
+inline void SkillBookWantedOrderInfo::SharedDtor(MessageLite& self) {
+  SkillBookWantedOrderInfo& this_ = static_cast<SkillBookWantedOrderInfo&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.poster_name_.Destroy();
+  this_._impl_.skill_name_.Destroy();
+  this_._impl_.scroll_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SkillBookWantedOrderInfo_class_data_ =
+        SkillBookWantedOrderInfo::InternalGenerateClassData_(SkillBookWantedOrderInfo_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SkillBookWantedOrderInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SkillBookWantedOrderInfo_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SkillBookWantedOrderInfo_class_data_.tc_table);
+  return SkillBookWantedOrderInfo_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SkillBookWantedOrderInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SkillBookWantedOrderInfo_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SkillBookWantedOrderInfo_globals_));
+  return SkillBookWantedOrderInfo_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SkillBookWantedOrderInfo::ParseTableT_
+    SkillBookWantedOrderInfo::_table_ =
+        SkillBookWantedOrderInfo::InternalGenerateParseTable_(SkillBookWantedOrderInfo_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SkillBookWantedOrderInfo::Clear() {
+// @@protoc_insertion_point(message_clear_start:SkillBookWantedOrderInfo)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.poster_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.skill_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.scroll_name_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.order_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.reward_gold_) -
+        reinterpret_cast<char*>(&_impl_.order_id_)) + sizeof(_impl_.reward_gold_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.seller_net_gold_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.require_master_signature_) -
+        reinterpret_cast<char*>(&_impl_.seller_net_gold_)) + sizeof(_impl_.require_master_signature_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SkillBookWantedOrderInfo::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SkillBookWantedOrderInfo& this_ = static_cast<const SkillBookWantedOrderInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SkillBookWantedOrderInfo::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SkillBookWantedOrderInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SkillBookWantedOrderInfo)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 order_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_order_id(), target);
+    }
+  }
+
+  // uint64 poster_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_poster_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_poster_player_id(), target);
+    }
+  }
+
+  // string poster_name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_poster_name().empty()) {
+      const ::std::string& _s = this_._internal_poster_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SkillBookWantedOrderInfo.poster_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 skill_table_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_skill_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_skill_table_id(), target);
+    }
+  }
+
+  // string skill_name = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_skill_name().empty()) {
+      const ::std::string& _s = this_._internal_skill_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SkillBookWantedOrderInfo.skill_name");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint32 scroll_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_scroll_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_scroll_id(), target);
+    }
+  }
+
+  // string scroll_name = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_scroll_name().empty()) {
+      const ::std::string& _s = this_._internal_scroll_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SkillBookWantedOrderInfo.scroll_name");
+      target = stream->WriteStringMaybeAliased(7, _s, target);
+    }
+  }
+
+  // bool require_master_signature = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_require_master_signature() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          8, this_._internal_require_master_signature(), target);
+    }
+  }
+
+  // uint64 reward_gold = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_reward_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_reward_gold(), target);
+    }
+  }
+
+  // uint64 seller_net_gold = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_seller_net_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_seller_net_gold(), target);
+    }
+  }
+
+  // uint64 created_at_sec = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_created_at_sec() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_created_at_sec(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SkillBookWantedOrderInfo)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SkillBookWantedOrderInfo::ByteSizeLong(const MessageLite& base) {
+  const SkillBookWantedOrderInfo& this_ = static_cast<const SkillBookWantedOrderInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SkillBookWantedOrderInfo::ByteSizeLong() const {
+  const SkillBookWantedOrderInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SkillBookWantedOrderInfo)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string poster_name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_poster_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_poster_name());
+      }
+    }
+    // string skill_name = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_skill_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_skill_name());
+      }
+    }
+    // string scroll_name = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_scroll_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_scroll_name());
+      }
+    }
+    // uint64 order_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_order_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_order_id());
+      }
+    }
+    // uint64 poster_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_poster_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_poster_player_id());
+      }
+    }
+    // uint32 skill_table_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_skill_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_skill_table_id());
+      }
+    }
+    // uint32 scroll_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_scroll_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_scroll_id());
+      }
+    }
+    // uint64 reward_gold = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_reward_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_reward_gold());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // uint64 seller_net_gold = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_seller_net_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seller_net_gold());
+      }
+    }
+    // uint64 created_at_sec = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_created_at_sec() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_at_sec());
+      }
+    }
+    // bool require_master_signature = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_require_master_signature() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SkillBookWantedOrderInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SkillBookWantedOrderInfo*>(&to_msg);
+  auto& from = static_cast<const SkillBookWantedOrderInfo&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SkillBookWantedOrderInfo)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_poster_name().empty()) {
+        _this->_internal_set_poster_name(from._internal_poster_name());
+      } else {
+        if (_this->_impl_.poster_name_.IsDefault()) {
+          _this->_internal_set_poster_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_skill_name().empty()) {
+        _this->_internal_set_skill_name(from._internal_skill_name());
+      } else {
+        if (_this->_impl_.skill_name_.IsDefault()) {
+          _this->_internal_set_skill_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_scroll_name().empty()) {
+        _this->_internal_set_scroll_name(from._internal_scroll_name());
+      } else {
+        if (_this->_impl_.scroll_name_.IsDefault()) {
+          _this->_internal_set_scroll_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_order_id() != 0) {
+        _this->_impl_.order_id_ = from._impl_.order_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_poster_player_id() != 0) {
+        _this->_impl_.poster_player_id_ = from._impl_.poster_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_skill_table_id() != 0) {
+        _this->_impl_.skill_table_id_ = from._impl_.skill_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_scroll_id() != 0) {
+        _this->_impl_.scroll_id_ = from._impl_.scroll_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_reward_gold() != 0) {
+        _this->_impl_.reward_gold_ = from._impl_.reward_gold_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_seller_net_gold() != 0) {
+        _this->_impl_.seller_net_gold_ = from._impl_.seller_net_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_created_at_sec() != 0) {
+        _this->_impl_.created_at_sec_ = from._impl_.created_at_sec_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_require_master_signature() != 0) {
+        _this->_impl_.require_master_signature_ = from._impl_.require_master_signature_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SkillBookWantedOrderInfo::CopyFrom(const SkillBookWantedOrderInfo& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SkillBookWantedOrderInfo)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SkillBookWantedOrderInfo::InternalSwap(SkillBookWantedOrderInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.poster_name_, &other->_impl_.poster_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.skill_name_, &other->_impl_.skill_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.scroll_name_, &other->_impl_.scroll_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.require_master_signature_)
+      + sizeof(SkillBookWantedOrderInfo::_impl_.require_master_signature_)
+      - PROTOBUF_FIELD_OFFSET(SkillBookWantedOrderInfo, _impl_.order_id_)>(
+          reinterpret_cast<char*>(&_impl_.order_id_),
+          reinterpret_cast<char*>(&other->_impl_.order_id_));
+}
+
+::google::protobuf::Metadata SkillBookWantedOrderInfo::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PostSkillBookWantedOrderRequest::PostSkillBookWantedOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PostSkillBookWantedOrderRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PostSkillBookWantedOrderRequest)
+}
+PostSkillBookWantedOrderRequest::PostSkillBookWantedOrderRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PostSkillBookWantedOrderRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PostSkillBookWantedOrderRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE PostSkillBookWantedOrderRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PostSkillBookWantedOrderRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, skill_table_id_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, skill_table_id_) +
+               sizeof(Impl_::client_request_id_));
+}
+PostSkillBookWantedOrderRequest::~PostSkillBookWantedOrderRequest() {
+  // @@protoc_insertion_point(destructor:PostSkillBookWantedOrderRequest)
+  SharedDtor(*this);
+}
+inline void PostSkillBookWantedOrderRequest::SharedDtor(MessageLite& self) {
+  PostSkillBookWantedOrderRequest& this_ = static_cast<PostSkillBookWantedOrderRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PostSkillBookWantedOrderRequest_class_data_ =
+        PostSkillBookWantedOrderRequest::InternalGenerateClassData_(PostSkillBookWantedOrderRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PostSkillBookWantedOrderRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PostSkillBookWantedOrderRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PostSkillBookWantedOrderRequest_class_data_.tc_table);
+  return PostSkillBookWantedOrderRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PostSkillBookWantedOrderRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PostSkillBookWantedOrderRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PostSkillBookWantedOrderRequest_globals_));
+  return PostSkillBookWantedOrderRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PostSkillBookWantedOrderRequest::ParseTableT_
+    PostSkillBookWantedOrderRequest::_table_ =
+        PostSkillBookWantedOrderRequest::InternalGenerateParseTable_(PostSkillBookWantedOrderRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PostSkillBookWantedOrderRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:PostSkillBookWantedOrderRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    ::memset(&_impl_.skill_table_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.skill_table_id_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PostSkillBookWantedOrderRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PostSkillBookWantedOrderRequest& this_ = static_cast<const PostSkillBookWantedOrderRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PostSkillBookWantedOrderRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PostSkillBookWantedOrderRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PostSkillBookWantedOrderRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 skill_table_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_skill_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_skill_table_id(), target);
+    }
+  }
+
+  // bool require_master_signature = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_require_master_signature() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_require_master_signature(), target);
+    }
+  }
+
+  // uint64 reward_gold = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_reward_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_reward_gold(), target);
+    }
+  }
+
+  // uint64 expected_revision = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PostSkillBookWantedOrderRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PostSkillBookWantedOrderRequest::ByteSizeLong(const MessageLite& base) {
+  const PostSkillBookWantedOrderRequest& this_ = static_cast<const PostSkillBookWantedOrderRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PostSkillBookWantedOrderRequest::ByteSizeLong() const {
+  const PostSkillBookWantedOrderRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PostSkillBookWantedOrderRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // uint32 skill_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_skill_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_skill_table_id());
+      }
+    }
+    // bool require_master_signature = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_require_master_signature() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 reward_gold = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_reward_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_reward_gold());
+      }
+    }
+    // uint64 expected_revision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PostSkillBookWantedOrderRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PostSkillBookWantedOrderRequest*>(&to_msg);
+  auto& from = static_cast<const PostSkillBookWantedOrderRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:PostSkillBookWantedOrderRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_skill_table_id() != 0) {
+        _this->_impl_.skill_table_id_ = from._impl_.skill_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_require_master_signature() != 0) {
+        _this->_impl_.require_master_signature_ = from._impl_.require_master_signature_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_reward_gold() != 0) {
+        _this->_impl_.reward_gold_ = from._impl_.reward_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PostSkillBookWantedOrderRequest::CopyFrom(const PostSkillBookWantedOrderRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PostSkillBookWantedOrderRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PostSkillBookWantedOrderRequest::InternalSwap(PostSkillBookWantedOrderRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.client_request_id_)
+      + sizeof(PostSkillBookWantedOrderRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderRequest, _impl_.skill_table_id_)>(
+          reinterpret_cast<char*>(&_impl_.skill_table_id_),
+          reinterpret_cast<char*>(&other->_impl_.skill_table_id_));
+}
+
+::google::protobuf::Metadata PostSkillBookWantedOrderRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void PostSkillBookWantedOrderResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+PostSkillBookWantedOrderResponse::PostSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PostSkillBookWantedOrderResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PostSkillBookWantedOrderResponse)
+}
+PROTOBUF_NDEBUG_INLINE PostSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PostSkillBookWantedOrderResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+PostSkillBookWantedOrderResponse::PostSkillBookWantedOrderResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PostSkillBookWantedOrderResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PostSkillBookWantedOrderResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PostSkillBookWantedOrderResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.order_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.order_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::replayed_));
+
+  // @@protoc_insertion_point(copy_constructor:PostSkillBookWantedOrderResponse)
+}
+PROTOBUF_NDEBUG_INLINE PostSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PostSkillBookWantedOrderResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::replayed_));
+}
+PostSkillBookWantedOrderResponse::~PostSkillBookWantedOrderResponse() {
+  // @@protoc_insertion_point(destructor:PostSkillBookWantedOrderResponse)
+  SharedDtor(*this);
+}
+inline void PostSkillBookWantedOrderResponse::SharedDtor(MessageLite& self) {
+  PostSkillBookWantedOrderResponse& this_ = static_cast<PostSkillBookWantedOrderResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.order_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PostSkillBookWantedOrderResponse_class_data_ =
+        PostSkillBookWantedOrderResponse::InternalGenerateClassData_(PostSkillBookWantedOrderResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PostSkillBookWantedOrderResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PostSkillBookWantedOrderResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PostSkillBookWantedOrderResponse_class_data_.tc_table);
+  return PostSkillBookWantedOrderResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PostSkillBookWantedOrderResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PostSkillBookWantedOrderResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PostSkillBookWantedOrderResponse_globals_));
+  return PostSkillBookWantedOrderResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PostSkillBookWantedOrderResponse::ParseTableT_
+    PostSkillBookWantedOrderResponse::_table_ =
+        PostSkillBookWantedOrderResponse::InternalGenerateParseTable_(PostSkillBookWantedOrderResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PostSkillBookWantedOrderResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:PostSkillBookWantedOrderResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.order_ != nullptr);
+      _impl_.order_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.replayed_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.replayed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PostSkillBookWantedOrderResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PostSkillBookWantedOrderResponse& this_ = static_cast<const PostSkillBookWantedOrderResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PostSkillBookWantedOrderResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PostSkillBookWantedOrderResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PostSkillBookWantedOrderResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // .SkillBookWantedOrderInfo order = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.order_, this_._impl_.order_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .SkillCraftingStateSnapshot state = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PostSkillBookWantedOrderResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PostSkillBookWantedOrderResponse::ByteSizeLong(const MessageLite& base) {
+  const PostSkillBookWantedOrderResponse& this_ = static_cast<const PostSkillBookWantedOrderResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PostSkillBookWantedOrderResponse::ByteSizeLong() const {
+  const PostSkillBookWantedOrderResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PostSkillBookWantedOrderResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .SkillBookWantedOrderInfo order = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.order_);
+    }
+    // .SkillCraftingStateSnapshot state = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PostSkillBookWantedOrderResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PostSkillBookWantedOrderResponse*>(&to_msg);
+  auto& from = static_cast<const PostSkillBookWantedOrderResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:PostSkillBookWantedOrderResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.order_ != nullptr);
+      if (_this->_impl_.order_ == nullptr) {
+        _this->_impl_.order_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.order_);
+      } else {
+        _this->_impl_.order_->MergeFrom(*from._impl_.order_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PostSkillBookWantedOrderResponse::CopyFrom(const PostSkillBookWantedOrderResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PostSkillBookWantedOrderResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PostSkillBookWantedOrderResponse::InternalSwap(PostSkillBookWantedOrderResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.replayed_)
+      + sizeof(PostSkillBookWantedOrderResponse::_impl_.replayed_)
+      - PROTOBUF_FIELD_OFFSET(PostSkillBookWantedOrderResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata PostSkillBookWantedOrderResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CancelSkillBookWantedOrderRequest::CancelSkillBookWantedOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CancelSkillBookWantedOrderRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:CancelSkillBookWantedOrderRequest)
+}
+CancelSkillBookWantedOrderRequest::CancelSkillBookWantedOrderRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CancelSkillBookWantedOrderRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CancelSkillBookWantedOrderRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE CancelSkillBookWantedOrderRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void CancelSkillBookWantedOrderRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, order_id_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, order_id_) +
+               sizeof(Impl_::client_request_id_));
+}
+CancelSkillBookWantedOrderRequest::~CancelSkillBookWantedOrderRequest() {
+  // @@protoc_insertion_point(destructor:CancelSkillBookWantedOrderRequest)
+  SharedDtor(*this);
+}
+inline void CancelSkillBookWantedOrderRequest::SharedDtor(MessageLite& self) {
+  CancelSkillBookWantedOrderRequest& this_ = static_cast<CancelSkillBookWantedOrderRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CancelSkillBookWantedOrderRequest_class_data_ =
+        CancelSkillBookWantedOrderRequest::InternalGenerateClassData_(CancelSkillBookWantedOrderRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CancelSkillBookWantedOrderRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CancelSkillBookWantedOrderRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CancelSkillBookWantedOrderRequest_class_data_.tc_table);
+  return CancelSkillBookWantedOrderRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CancelSkillBookWantedOrderRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CancelSkillBookWantedOrderRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CancelSkillBookWantedOrderRequest_globals_));
+  return CancelSkillBookWantedOrderRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CancelSkillBookWantedOrderRequest::ParseTableT_
+    CancelSkillBookWantedOrderRequest::_table_ =
+        CancelSkillBookWantedOrderRequest::InternalGenerateParseTable_(CancelSkillBookWantedOrderRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CancelSkillBookWantedOrderRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:CancelSkillBookWantedOrderRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.order_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.order_id_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CancelSkillBookWantedOrderRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CancelSkillBookWantedOrderRequest& this_ = static_cast<const CancelSkillBookWantedOrderRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CancelSkillBookWantedOrderRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CancelSkillBookWantedOrderRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:CancelSkillBookWantedOrderRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 order_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_order_id(), target);
+    }
+  }
+
+  // uint64 expected_revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:CancelSkillBookWantedOrderRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CancelSkillBookWantedOrderRequest::ByteSizeLong(const MessageLite& base) {
+  const CancelSkillBookWantedOrderRequest& this_ = static_cast<const CancelSkillBookWantedOrderRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CancelSkillBookWantedOrderRequest::ByteSizeLong() const {
+  const CancelSkillBookWantedOrderRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:CancelSkillBookWantedOrderRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 order_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_order_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_order_id());
+      }
+    }
+    // uint64 expected_revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CancelSkillBookWantedOrderRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CancelSkillBookWantedOrderRequest*>(&to_msg);
+  auto& from = static_cast<const CancelSkillBookWantedOrderRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:CancelSkillBookWantedOrderRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_order_id() != 0) {
+        _this->_impl_.order_id_ = from._impl_.order_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CancelSkillBookWantedOrderRequest::CopyFrom(const CancelSkillBookWantedOrderRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:CancelSkillBookWantedOrderRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CancelSkillBookWantedOrderRequest::InternalSwap(CancelSkillBookWantedOrderRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.client_request_id_)
+      + sizeof(CancelSkillBookWantedOrderRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderRequest, _impl_.order_id_)>(
+          reinterpret_cast<char*>(&_impl_.order_id_),
+          reinterpret_cast<char*>(&other->_impl_.order_id_));
+}
+
+::google::protobuf::Metadata CancelSkillBookWantedOrderRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void CancelSkillBookWantedOrderResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+CancelSkillBookWantedOrderResponse::CancelSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CancelSkillBookWantedOrderResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:CancelSkillBookWantedOrderResponse)
+}
+PROTOBUF_NDEBUG_INLINE CancelSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::CancelSkillBookWantedOrderResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+CancelSkillBookWantedOrderResponse::CancelSkillBookWantedOrderResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CancelSkillBookWantedOrderResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CancelSkillBookWantedOrderResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CancelSkillBookWantedOrderResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::replayed_));
+
+  // @@protoc_insertion_point(copy_constructor:CancelSkillBookWantedOrderResponse)
+}
+PROTOBUF_NDEBUG_INLINE CancelSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void CancelSkillBookWantedOrderResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::replayed_));
+}
+CancelSkillBookWantedOrderResponse::~CancelSkillBookWantedOrderResponse() {
+  // @@protoc_insertion_point(destructor:CancelSkillBookWantedOrderResponse)
+  SharedDtor(*this);
+}
+inline void CancelSkillBookWantedOrderResponse::SharedDtor(MessageLite& self) {
+  CancelSkillBookWantedOrderResponse& this_ = static_cast<CancelSkillBookWantedOrderResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CancelSkillBookWantedOrderResponse_class_data_ =
+        CancelSkillBookWantedOrderResponse::InternalGenerateClassData_(CancelSkillBookWantedOrderResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CancelSkillBookWantedOrderResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CancelSkillBookWantedOrderResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CancelSkillBookWantedOrderResponse_class_data_.tc_table);
+  return CancelSkillBookWantedOrderResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CancelSkillBookWantedOrderResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CancelSkillBookWantedOrderResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CancelSkillBookWantedOrderResponse_globals_));
+  return CancelSkillBookWantedOrderResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CancelSkillBookWantedOrderResponse::ParseTableT_
+    CancelSkillBookWantedOrderResponse::_table_ =
+        CancelSkillBookWantedOrderResponse::InternalGenerateParseTable_(CancelSkillBookWantedOrderResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CancelSkillBookWantedOrderResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:CancelSkillBookWantedOrderResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.replayed_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.replayed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CancelSkillBookWantedOrderResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CancelSkillBookWantedOrderResponse& this_ = static_cast<const CancelSkillBookWantedOrderResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CancelSkillBookWantedOrderResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CancelSkillBookWantedOrderResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:CancelSkillBookWantedOrderResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint64 refunded_gold = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_refunded_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_refunded_gold(), target);
+    }
+  }
+
+  // .SkillCraftingStateSnapshot state = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:CancelSkillBookWantedOrderResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CancelSkillBookWantedOrderResponse::ByteSizeLong(const MessageLite& base) {
+  const CancelSkillBookWantedOrderResponse& this_ = static_cast<const CancelSkillBookWantedOrderResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CancelSkillBookWantedOrderResponse::ByteSizeLong() const {
+  const CancelSkillBookWantedOrderResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:CancelSkillBookWantedOrderResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .SkillCraftingStateSnapshot state = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint64 refunded_gold = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_refunded_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_refunded_gold());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CancelSkillBookWantedOrderResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CancelSkillBookWantedOrderResponse*>(&to_msg);
+  auto& from = static_cast<const CancelSkillBookWantedOrderResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:CancelSkillBookWantedOrderResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_refunded_gold() != 0) {
+        _this->_impl_.refunded_gold_ = from._impl_.refunded_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CancelSkillBookWantedOrderResponse::CopyFrom(const CancelSkillBookWantedOrderResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:CancelSkillBookWantedOrderResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CancelSkillBookWantedOrderResponse::InternalSwap(CancelSkillBookWantedOrderResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.replayed_)
+      + sizeof(CancelSkillBookWantedOrderResponse::_impl_.replayed_)
+      - PROTOBUF_FIELD_OFFSET(CancelSkillBookWantedOrderResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata CancelSkillBookWantedOrderResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ListSkillBookWantedOrdersRequest::ListSkillBookWantedOrdersRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListSkillBookWantedOrdersRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ListSkillBookWantedOrdersRequest)
+}
+ListSkillBookWantedOrdersRequest::ListSkillBookWantedOrdersRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListSkillBookWantedOrdersRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListSkillBookWantedOrdersRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ListSkillBookWantedOrdersRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ListSkillBookWantedOrdersRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, filter_skill_table_id_),
+           0,
+           offsetof(Impl_, only_mine_) -
+               offsetof(Impl_, filter_skill_table_id_) +
+               sizeof(Impl_::only_mine_));
+}
+ListSkillBookWantedOrdersRequest::~ListSkillBookWantedOrdersRequest() {
+  // @@protoc_insertion_point(destructor:ListSkillBookWantedOrdersRequest)
+  SharedDtor(*this);
+}
+inline void ListSkillBookWantedOrdersRequest::SharedDtor(MessageLite& self) {
+  ListSkillBookWantedOrdersRequest& this_ = static_cast<ListSkillBookWantedOrdersRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListSkillBookWantedOrdersRequest_class_data_ =
+        ListSkillBookWantedOrdersRequest::InternalGenerateClassData_(ListSkillBookWantedOrdersRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListSkillBookWantedOrdersRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListSkillBookWantedOrdersRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListSkillBookWantedOrdersRequest_class_data_.tc_table);
+  return ListSkillBookWantedOrdersRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListSkillBookWantedOrdersRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListSkillBookWantedOrdersRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListSkillBookWantedOrdersRequest_globals_));
+  return ListSkillBookWantedOrdersRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListSkillBookWantedOrdersRequest::ParseTableT_
+    ListSkillBookWantedOrdersRequest::_table_ =
+        ListSkillBookWantedOrdersRequest::InternalGenerateParseTable_(ListSkillBookWantedOrdersRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListSkillBookWantedOrdersRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:ListSkillBookWantedOrdersRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.filter_skill_table_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.only_mine_) -
+        reinterpret_cast<char*>(&_impl_.filter_skill_table_id_)) + sizeof(_impl_.only_mine_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListSkillBookWantedOrdersRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListSkillBookWantedOrdersRequest& this_ = static_cast<const ListSkillBookWantedOrdersRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListSkillBookWantedOrdersRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListSkillBookWantedOrdersRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ListSkillBookWantedOrdersRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 filter_skill_table_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_filter_skill_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_filter_skill_table_id(), target);
+    }
+  }
+
+  // bool only_mine = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_only_mine() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_only_mine(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ListSkillBookWantedOrdersRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListSkillBookWantedOrdersRequest::ByteSizeLong(const MessageLite& base) {
+  const ListSkillBookWantedOrdersRequest& this_ = static_cast<const ListSkillBookWantedOrdersRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListSkillBookWantedOrdersRequest::ByteSizeLong() const {
+  const ListSkillBookWantedOrdersRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ListSkillBookWantedOrdersRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint32 filter_skill_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_filter_skill_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_filter_skill_table_id());
+      }
+    }
+    // bool only_mine = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_only_mine() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListSkillBookWantedOrdersRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListSkillBookWantedOrdersRequest*>(&to_msg);
+  auto& from = static_cast<const ListSkillBookWantedOrdersRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:ListSkillBookWantedOrdersRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_filter_skill_table_id() != 0) {
+        _this->_impl_.filter_skill_table_id_ = from._impl_.filter_skill_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_only_mine() != 0) {
+        _this->_impl_.only_mine_ = from._impl_.only_mine_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListSkillBookWantedOrdersRequest::CopyFrom(const ListSkillBookWantedOrdersRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ListSkillBookWantedOrdersRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListSkillBookWantedOrdersRequest::InternalSwap(ListSkillBookWantedOrdersRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_.only_mine_)
+      + sizeof(ListSkillBookWantedOrdersRequest::_impl_.only_mine_)
+      - PROTOBUF_FIELD_OFFSET(ListSkillBookWantedOrdersRequest, _impl_.filter_skill_table_id_)>(
+          reinterpret_cast<char*>(&_impl_.filter_skill_table_id_),
+          reinterpret_cast<char*>(&other->_impl_.filter_skill_table_id_));
+}
+
+::google::protobuf::Metadata ListSkillBookWantedOrdersRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ListSkillBookWantedOrdersResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+ListSkillBookWantedOrdersResponse::ListSkillBookWantedOrdersResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListSkillBookWantedOrdersResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ListSkillBookWantedOrdersResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListSkillBookWantedOrdersResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::ListSkillBookWantedOrdersResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        orders_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::ListSkillBookWantedOrdersResponse,
+              PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersResponse, _impl_.orders_)>()
+          , from.orders_
+        }
+     {}
+
+ListSkillBookWantedOrdersResponse::ListSkillBookWantedOrdersResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ListSkillBookWantedOrdersResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ListSkillBookWantedOrdersResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ListSkillBookWantedOrdersResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:ListSkillBookWantedOrdersResponse)
+}
+PROTOBUF_NDEBUG_INLINE ListSkillBookWantedOrdersResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        orders_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::ListSkillBookWantedOrdersResponse,
+            PROTOBUF_FIELD_OFFSET(::ListSkillBookWantedOrdersResponse, _impl_.orders_)>()
+         }
+     {}
+
+inline void ListSkillBookWantedOrdersResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.error_message_ = {};
+}
+ListSkillBookWantedOrdersResponse::~ListSkillBookWantedOrdersResponse() {
+  // @@protoc_insertion_point(destructor:ListSkillBookWantedOrdersResponse)
+  SharedDtor(*this);
+}
+inline void ListSkillBookWantedOrdersResponse::SharedDtor(MessageLite& self) {
+  ListSkillBookWantedOrdersResponse& this_ = static_cast<ListSkillBookWantedOrdersResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ListSkillBookWantedOrdersResponse_class_data_ =
+        ListSkillBookWantedOrdersResponse::InternalGenerateClassData_(ListSkillBookWantedOrdersResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListSkillBookWantedOrdersResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListSkillBookWantedOrdersResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ListSkillBookWantedOrdersResponse_class_data_.tc_table);
+  return ListSkillBookWantedOrdersResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ListSkillBookWantedOrdersResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ListSkillBookWantedOrdersResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ListSkillBookWantedOrdersResponse_globals_));
+  return ListSkillBookWantedOrdersResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ListSkillBookWantedOrdersResponse::ParseTableT_
+    ListSkillBookWantedOrdersResponse::_table_ =
+        ListSkillBookWantedOrdersResponse::InternalGenerateParseTable_(ListSkillBookWantedOrdersResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ListSkillBookWantedOrdersResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:ListSkillBookWantedOrdersResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.orders_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ListSkillBookWantedOrdersResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ListSkillBookWantedOrdersResponse& this_ = static_cast<const ListSkillBookWantedOrdersResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ListSkillBookWantedOrdersResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ListSkillBookWantedOrdersResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ListSkillBookWantedOrdersResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .SkillBookWantedOrderInfo orders = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_orders_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_orders().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ListSkillBookWantedOrdersResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ListSkillBookWantedOrdersResponse::ByteSizeLong(const MessageLite& base) {
+  const ListSkillBookWantedOrdersResponse& this_ = static_cast<const ListSkillBookWantedOrdersResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ListSkillBookWantedOrdersResponse::ByteSizeLong() const {
+  const ListSkillBookWantedOrdersResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ListSkillBookWantedOrdersResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated .SkillBookWantedOrderInfo orders = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_orders_size();
+      for (const auto& msg : this_._internal_orders()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ListSkillBookWantedOrdersResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ListSkillBookWantedOrdersResponse*>(&to_msg);
+  auto& from = static_cast<const ListSkillBookWantedOrdersResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:ListSkillBookWantedOrdersResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_orders()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_orders());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ListSkillBookWantedOrdersResponse::CopyFrom(const ListSkillBookWantedOrdersResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ListSkillBookWantedOrdersResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ListSkillBookWantedOrdersResponse::InternalSwap(ListSkillBookWantedOrdersResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.orders_.InternalSwap(&other->_impl_.orders_);
+  swap(_impl_.error_message_, other->_impl_.error_message_);
+}
+
+::google::protobuf::Metadata ListSkillBookWantedOrdersResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+FulfillSkillBookWantedOrderRequest::FulfillSkillBookWantedOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FulfillSkillBookWantedOrderRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:FulfillSkillBookWantedOrderRequest)
+}
+FulfillSkillBookWantedOrderRequest::FulfillSkillBookWantedOrderRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FulfillSkillBookWantedOrderRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FulfillSkillBookWantedOrderRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE FulfillSkillBookWantedOrderRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void FulfillSkillBookWantedOrderRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, poster_player_id_),
+           0,
+           offsetof(Impl_, client_request_id_) -
+               offsetof(Impl_, poster_player_id_) +
+               sizeof(Impl_::client_request_id_));
+}
+FulfillSkillBookWantedOrderRequest::~FulfillSkillBookWantedOrderRequest() {
+  // @@protoc_insertion_point(destructor:FulfillSkillBookWantedOrderRequest)
+  SharedDtor(*this);
+}
+inline void FulfillSkillBookWantedOrderRequest::SharedDtor(MessageLite& self) {
+  FulfillSkillBookWantedOrderRequest& this_ = static_cast<FulfillSkillBookWantedOrderRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull FulfillSkillBookWantedOrderRequest_class_data_ =
+        FulfillSkillBookWantedOrderRequest::InternalGenerateClassData_(FulfillSkillBookWantedOrderRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FulfillSkillBookWantedOrderRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FulfillSkillBookWantedOrderRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(FulfillSkillBookWantedOrderRequest_class_data_.tc_table);
+  return FulfillSkillBookWantedOrderRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FulfillSkillBookWantedOrderRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FulfillSkillBookWantedOrderRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&FulfillSkillBookWantedOrderRequest_globals_));
+  return FulfillSkillBookWantedOrderRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const FulfillSkillBookWantedOrderRequest::ParseTableT_
+    FulfillSkillBookWantedOrderRequest::_table_ =
+        FulfillSkillBookWantedOrderRequest::InternalGenerateParseTable_(FulfillSkillBookWantedOrderRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void FulfillSkillBookWantedOrderRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:FulfillSkillBookWantedOrderRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    ::memset(&_impl_.poster_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.client_request_id_) -
+        reinterpret_cast<char*>(&_impl_.poster_player_id_)) + sizeof(_impl_.client_request_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL FulfillSkillBookWantedOrderRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const FulfillSkillBookWantedOrderRequest& this_ = static_cast<const FulfillSkillBookWantedOrderRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL FulfillSkillBookWantedOrderRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const FulfillSkillBookWantedOrderRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:FulfillSkillBookWantedOrderRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 poster_player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_poster_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_poster_player_id(), target);
+    }
+  }
+
+  // uint64 order_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_order_id(), target);
+    }
+  }
+
+  // uint64 sealed_item_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_sealed_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_sealed_item_id(), target);
+    }
+  }
+
+  // uint64 bookshelf_book_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_bookshelf_book_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_bookshelf_book_id(), target);
+    }
+  }
+
+  // uint64 expected_revision = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint64 client_request_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_client_request_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:FulfillSkillBookWantedOrderRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t FulfillSkillBookWantedOrderRequest::ByteSizeLong(const MessageLite& base) {
+  const FulfillSkillBookWantedOrderRequest& this_ = static_cast<const FulfillSkillBookWantedOrderRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t FulfillSkillBookWantedOrderRequest::ByteSizeLong() const {
+  const FulfillSkillBookWantedOrderRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:FulfillSkillBookWantedOrderRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // uint64 poster_player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_poster_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_poster_player_id());
+      }
+    }
+    // uint64 order_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_order_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_order_id());
+      }
+    }
+    // uint64 sealed_item_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_sealed_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_sealed_item_id());
+      }
+    }
+    // uint64 bookshelf_book_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_bookshelf_book_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_bookshelf_book_id());
+      }
+    }
+    // uint64 expected_revision = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint64 client_request_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void FulfillSkillBookWantedOrderRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<FulfillSkillBookWantedOrderRequest*>(&to_msg);
+  auto& from = static_cast<const FulfillSkillBookWantedOrderRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:FulfillSkillBookWantedOrderRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_poster_player_id() != 0) {
+        _this->_impl_.poster_player_id_ = from._impl_.poster_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_order_id() != 0) {
+        _this->_impl_.order_id_ = from._impl_.order_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_sealed_item_id() != 0) {
+        _this->_impl_.sealed_item_id_ = from._impl_.sealed_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_bookshelf_book_id() != 0) {
+        _this->_impl_.bookshelf_book_id_ = from._impl_.bookshelf_book_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void FulfillSkillBookWantedOrderRequest::CopyFrom(const FulfillSkillBookWantedOrderRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:FulfillSkillBookWantedOrderRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void FulfillSkillBookWantedOrderRequest::InternalSwap(FulfillSkillBookWantedOrderRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.client_request_id_)
+      + sizeof(FulfillSkillBookWantedOrderRequest::_impl_.client_request_id_)
+      - PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderRequest, _impl_.poster_player_id_)>(
+          reinterpret_cast<char*>(&_impl_.poster_player_id_),
+          reinterpret_cast<char*>(&other->_impl_.poster_player_id_));
+}
+
+::google::protobuf::Metadata FulfillSkillBookWantedOrderRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void FulfillSkillBookWantedOrderResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+FulfillSkillBookWantedOrderResponse::FulfillSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FulfillSkillBookWantedOrderResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:FulfillSkillBookWantedOrderResponse)
+}
+PROTOBUF_NDEBUG_INLINE FulfillSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::FulfillSkillBookWantedOrderResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+FulfillSkillBookWantedOrderResponse::FulfillSkillBookWantedOrderResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const FulfillSkillBookWantedOrderResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FulfillSkillBookWantedOrderResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  FulfillSkillBookWantedOrderResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::replayed_));
+
+  // @@protoc_insertion_point(copy_constructor:FulfillSkillBookWantedOrderResponse)
+}
+PROTOBUF_NDEBUG_INLINE FulfillSkillBookWantedOrderResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void FulfillSkillBookWantedOrderResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::replayed_));
+}
+FulfillSkillBookWantedOrderResponse::~FulfillSkillBookWantedOrderResponse() {
+  // @@protoc_insertion_point(destructor:FulfillSkillBookWantedOrderResponse)
+  SharedDtor(*this);
+}
+inline void FulfillSkillBookWantedOrderResponse::SharedDtor(MessageLite& self) {
+  FulfillSkillBookWantedOrderResponse& this_ = static_cast<FulfillSkillBookWantedOrderResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.state_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull FulfillSkillBookWantedOrderResponse_class_data_ =
+        FulfillSkillBookWantedOrderResponse::InternalGenerateClassData_(FulfillSkillBookWantedOrderResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FulfillSkillBookWantedOrderResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FulfillSkillBookWantedOrderResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(FulfillSkillBookWantedOrderResponse_class_data_.tc_table);
+  return FulfillSkillBookWantedOrderResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FulfillSkillBookWantedOrderResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FulfillSkillBookWantedOrderResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&FulfillSkillBookWantedOrderResponse_globals_));
+  return FulfillSkillBookWantedOrderResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const FulfillSkillBookWantedOrderResponse::ParseTableT_
+    FulfillSkillBookWantedOrderResponse::_table_ =
+        FulfillSkillBookWantedOrderResponse::InternalGenerateParseTable_(FulfillSkillBookWantedOrderResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void FulfillSkillBookWantedOrderResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:FulfillSkillBookWantedOrderResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.replayed_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.replayed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL FulfillSkillBookWantedOrderResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const FulfillSkillBookWantedOrderResponse& this_ = static_cast<const FulfillSkillBookWantedOrderResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL FulfillSkillBookWantedOrderResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const FulfillSkillBookWantedOrderResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:FulfillSkillBookWantedOrderResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // bool replayed = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint64 order_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_order_id(), target);
+    }
+  }
+
+  // uint64 seller_net_gold = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_seller_net_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_seller_net_gold(), target);
+    }
+  }
+
+  // .SkillCraftingStateSnapshot state = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:FulfillSkillBookWantedOrderResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t FulfillSkillBookWantedOrderResponse::ByteSizeLong(const MessageLite& base) {
+  const FulfillSkillBookWantedOrderResponse& this_ = static_cast<const FulfillSkillBookWantedOrderResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t FulfillSkillBookWantedOrderResponse::ByteSizeLong() const {
+  const FulfillSkillBookWantedOrderResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:FulfillSkillBookWantedOrderResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .SkillCraftingStateSnapshot state = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint64 order_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_order_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_order_id());
+      }
+    }
+    // uint64 seller_net_gold = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_seller_net_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seller_net_gold());
+      }
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void FulfillSkillBookWantedOrderResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<FulfillSkillBookWantedOrderResponse*>(&to_msg);
+  auto& from = static_cast<const FulfillSkillBookWantedOrderResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:FulfillSkillBookWantedOrderResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_order_id() != 0) {
+        _this->_impl_.order_id_ = from._impl_.order_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_seller_net_gold() != 0) {
+        _this->_impl_.seller_net_gold_ = from._impl_.seller_net_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void FulfillSkillBookWantedOrderResponse::CopyFrom(const FulfillSkillBookWantedOrderResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:FulfillSkillBookWantedOrderResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void FulfillSkillBookWantedOrderResponse::InternalSwap(FulfillSkillBookWantedOrderResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.replayed_)
+      + sizeof(FulfillSkillBookWantedOrderResponse::_impl_.replayed_)
+      - PROTOBUF_FIELD_OFFSET(FulfillSkillBookWantedOrderResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata FulfillSkillBookWantedOrderResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -19016,6 +26369,48 @@ void SceneSkillClientPlayer::UnsealSkillBook(::google::protobuf::RpcController* 
   controller->SetFailed("Method UnsealSkillBook() not implemented.");
   done->Run();
 }
+void SceneSkillClientPlayer::ClaimScrollCollectionMilestone(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::ClaimScrollCollectionMilestoneRequest* PROTOBUF_NONNULL,
+                         ::ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method ClaimScrollCollectionMilestone() not implemented.");
+  done->Run();
+}
+void SceneSkillClientPlayer::BatchDismantleSkillBooks(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::BatchDismantleSkillBooksRequest* PROTOBUF_NONNULL,
+                         ::BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method BatchDismantleSkillBooks() not implemented.");
+  done->Run();
+}
+void SceneSkillClientPlayer::PostSkillBookWantedOrder(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::PostSkillBookWantedOrderRequest* PROTOBUF_NONNULL,
+                         ::PostSkillBookWantedOrderResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method PostSkillBookWantedOrder() not implemented.");
+  done->Run();
+}
+void SceneSkillClientPlayer::CancelSkillBookWantedOrder(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::CancelSkillBookWantedOrderRequest* PROTOBUF_NONNULL,
+                         ::CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method CancelSkillBookWantedOrder() not implemented.");
+  done->Run();
+}
+void SceneSkillClientPlayer::ListSkillBookWantedOrders(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::ListSkillBookWantedOrdersRequest* PROTOBUF_NONNULL,
+                         ::ListSkillBookWantedOrdersResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method ListSkillBookWantedOrders() not implemented.");
+  done->Run();
+}
+void SceneSkillClientPlayer::FulfillSkillBookWantedOrder(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::FulfillSkillBookWantedOrderRequest* PROTOBUF_NONNULL,
+                         ::FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method FulfillSkillBookWantedOrder() not implemented.");
+  done->Run();
+}
 
 void SceneSkillClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -19084,6 +26479,30 @@ void SceneSkillClientPlayer::CallMethod(
       this->UnsealSkillBook(controller, ::google::protobuf::DownCastMessage<::UnsealSkillBookRequest>(request),
                    ::google::protobuf::DownCastMessage<::UnsealSkillBookResponse>(response), done);
       break;
+    case 15:
+      this->ClaimScrollCollectionMilestone(controller, ::google::protobuf::DownCastMessage<::ClaimScrollCollectionMilestoneRequest>(request),
+                   ::google::protobuf::DownCastMessage<::ClaimScrollCollectionMilestoneResponse>(response), done);
+      break;
+    case 16:
+      this->BatchDismantleSkillBooks(controller, ::google::protobuf::DownCastMessage<::BatchDismantleSkillBooksRequest>(request),
+                   ::google::protobuf::DownCastMessage<::BatchDismantleSkillBooksResponse>(response), done);
+      break;
+    case 17:
+      this->PostSkillBookWantedOrder(controller, ::google::protobuf::DownCastMessage<::PostSkillBookWantedOrderRequest>(request),
+                   ::google::protobuf::DownCastMessage<::PostSkillBookWantedOrderResponse>(response), done);
+      break;
+    case 18:
+      this->CancelSkillBookWantedOrder(controller, ::google::protobuf::DownCastMessage<::CancelSkillBookWantedOrderRequest>(request),
+                   ::google::protobuf::DownCastMessage<::CancelSkillBookWantedOrderResponse>(response), done);
+      break;
+    case 19:
+      this->ListSkillBookWantedOrders(controller, ::google::protobuf::DownCastMessage<::ListSkillBookWantedOrdersRequest>(request),
+                   ::google::protobuf::DownCastMessage<::ListSkillBookWantedOrdersResponse>(response), done);
+      break;
+    case 20:
+      this->FulfillSkillBookWantedOrder(controller, ::google::protobuf::DownCastMessage<::FulfillSkillBookWantedOrderRequest>(request),
+                   ::google::protobuf::DownCastMessage<::FulfillSkillBookWantedOrderResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -19125,6 +26544,18 @@ const ::google::protobuf::Message& SceneSkillClientPlayer::GetRequestPrototype(
       return ::SealSkillBookRequest::default_instance();
     case 14:
       return ::UnsealSkillBookRequest::default_instance();
+    case 15:
+      return ::ClaimScrollCollectionMilestoneRequest::default_instance();
+    case 16:
+      return ::BatchDismantleSkillBooksRequest::default_instance();
+    case 17:
+      return ::PostSkillBookWantedOrderRequest::default_instance();
+    case 18:
+      return ::CancelSkillBookWantedOrderRequest::default_instance();
+    case 19:
+      return ::ListSkillBookWantedOrdersRequest::default_instance();
+    case 20:
+      return ::FulfillSkillBookWantedOrderRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -19167,6 +26598,18 @@ const ::google::protobuf::Message& SceneSkillClientPlayer::GetResponsePrototype(
       return ::SealSkillBookResponse::default_instance();
     case 14:
       return ::UnsealSkillBookResponse::default_instance();
+    case 15:
+      return ::ClaimScrollCollectionMilestoneResponse::default_instance();
+    case 16:
+      return ::BatchDismantleSkillBooksResponse::default_instance();
+    case 17:
+      return ::PostSkillBookWantedOrderResponse::default_instance();
+    case 18:
+      return ::CancelSkillBookWantedOrderResponse::default_instance();
+    case 19:
+      return ::ListSkillBookWantedOrdersResponse::default_instance();
+    case 20:
+      return ::FulfillSkillBookWantedOrderResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -19291,6 +26734,48 @@ void SceneSkillClientPlayer_Stub::UnsealSkillBook(
     const ::UnsealSkillBookRequest* PROTOBUF_NONNULL request, ::UnsealSkillBookResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(14), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::ClaimScrollCollectionMilestone(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::ClaimScrollCollectionMilestoneRequest* PROTOBUF_NONNULL request, ::ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(15), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::BatchDismantleSkillBooks(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::BatchDismantleSkillBooksRequest* PROTOBUF_NONNULL request, ::BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(16), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::PostSkillBookWantedOrder(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::PostSkillBookWantedOrderRequest* PROTOBUF_NONNULL request, ::PostSkillBookWantedOrderResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(17), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::CancelSkillBookWantedOrder(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::CancelSkillBookWantedOrderRequest* PROTOBUF_NONNULL request, ::CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(18), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::ListSkillBookWantedOrders(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::ListSkillBookWantedOrdersRequest* PROTOBUF_NONNULL request, ::ListSkillBookWantedOrdersResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(19), controller,
+                       request, response, done);
+}
+void SceneSkillClientPlayer_Stub::FulfillSkillBookWantedOrder(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::FulfillSkillBookWantedOrderRequest* PROTOBUF_NONNULL request, ::FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(20), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

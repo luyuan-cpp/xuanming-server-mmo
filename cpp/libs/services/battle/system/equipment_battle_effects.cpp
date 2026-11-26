@@ -11,6 +11,9 @@
 
 namespace turnbattle {
 namespace {
+uint64_t SaturatingAddU64(uint64_t lhs, uint64_t rhs) {
+    return rhs > UINT64_MAX - lhs ? UINT64_MAX : lhs + rhs;
+}
 uint32_t Value(const google::protobuf::Map<uint32_t, uint32_t>& values, uint32_t key) {
     const auto found = values.find(key);
     return found == values.end() ? 0u : found->second;
@@ -122,9 +125,53 @@ void TurnBattleEngine::UseSeasonSeal(BattleActorState& actor, uint64_t targetId,
     state->set_used_count(state->used_count() + 1);
     state->set_round_trigger_count(state->last_trigger_round() == roundIndex ? state->round_trigger_count() + 1 : 1);
     state->set_last_trigger_round(roundIndex);
+    auto& runtime = seasonSealRuntimeByActor[actor.actor_id()];
+    runtime.triggerCount += 1u;
+    runtime.contributionValue = SaturatingAddU64(runtime.contributionValue, value);
     auto* event = AppendEvent(result, BATTLE_EVENT_ARTIFACT, actor.actor_id(), targetId);
     event->set_artifact_item_id(0);
     event->set_artifact_effect_id(seal.effect_id());
+    event->set_season_seal_id(seal.seal_id());
+    event->set_value(value);
+    event->set_success(true);
+}
+
+bool TurnBattleEngine::HasAnyRegularShield(const BattleActorState& target) const {
+    for (const auto& entry : target.buffs()) {
+        if (entry.remaining_capacity() == 0) continue;
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield) &&
+            row->hit_limit() == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TurnBattleEngine::IsDefendBreathResonanceReady(const BattleActorState& actor, uint32_t skillId) const {
+    if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER ||
+        skillId != seasonrules::kSkillPozhenXushi ||
+        !actor.equipment_effects().has_season_seal()) {
+        return false;
+    }
+    const auto& seal = actor.equipment_effects().season_seal();
+    if (seal.season_id() != seasonrules::kSeason1Id || seal.seal_id() != seasonrules::kSealJuxiYuanyin) {
+        return false;
+    }
+    const auto it = seasonSealRuntimeByActor.find(actor.actor_id());
+    return it != seasonSealRuntimeByActor.end() && it->second.defendResonanceReadyRound == roundIndex;
+}
+
+void TurnBattleEngine::EmitSeasonResonanceEvent(BattleActorState& actor, uint64_t targetId,
+                                                uint32_t resonanceEffectId, uint64_t value,
+                                                TurnResultS2C& result) {
+    if (!actor.equipment_effects().has_season_seal()) return;
+    const auto& seal = actor.equipment_effects().season_seal();
+    auto& runtime = seasonSealRuntimeByActor[actor.actor_id()];
+    runtime.resonanceCount += 1u;
+    auto* event = AppendEvent(result, BATTLE_EVENT_ARTIFACT, actor.actor_id(), targetId);
+    event->set_artifact_item_id(0);
+    event->set_artifact_effect_id(resonanceEffectId);
     event->set_season_seal_id(seal.seal_id());
     event->set_value(value);
     event->set_success(true);
@@ -147,6 +194,9 @@ void TurnBattleEngine::EquipmentDefend(BattleActorState& actor, TurnResultS2C& r
         if (gain > 0) {
             total += gain;
             UseSeasonSeal(actor, actor.actor_id(), gain, result);
+            if (seal.season_id() == seasonrules::kSeason1Id && seal.seal_id() == seasonrules::kSealJuxiYuanyin) {
+                seasonSealRuntimeByActor[actor.actor_id()].defendResonanceReadyRound = roundIndex + 1u;
+            }
         }
     }
     if (total == 0) return;
@@ -176,6 +226,12 @@ uint64_t TurnBattleEngine::EquipmentReduceDamage(BattleActorState& source, Battl
         if (part > 0) {
             reduction += part;
             UseSeasonSeal(target, target.actor_id(), part, result);
+            if (seal.season_id() == seasonrules::kSeason1Id && seal.seal_id() == seasonrules::kSealGuzhenShouyin) {
+                auto& rt = seasonSealRuntimeByActor[target.actor_id()];
+                if (!rt.guardResonanceConsumed) {
+                    rt.guardResonanceReadyRound = roundIndex + 1u;
+                }
+            }
         }
     }
     return damage - reduction;
@@ -238,6 +294,29 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
             UseSeasonSeal(source, target.actor_id(), removed, result);
             if (source.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
                 shieldBreakPlayers.insert(source.actor_id());
+            }
+            if (seal.season_id() == seasonrules::kSeason1Id) {
+                if (seal.seal_id() == seasonrules::kSealPozhenRuiyin &&
+                    context.skillId == seasonrules::kSkillPozhenLiefeng &&
+                    !HasAnyRegularShield(target)) {
+                    const uint64_t manaBefore = source.attributes().mana();
+                    const uint64_t missingMana = source.max_mana() > manaBefore ? source.max_mana() - manaBefore : 0u;
+                    const uint64_t refund = std::min(missingMana, seasonrules::ResonanceSharpManaRefund(context.paidMana));
+                    if (refund > 0u) {
+                        source.mutable_attributes()->set_mana(manaBefore + refund);
+                        auto* manaEv = AppendEvent(result, BATTLE_EVENT_MANA, source.actor_id(), source.actor_id());
+                        manaEv->set_skill_table_id(context.skillId);
+                        manaEv->set_value(refund);
+                        manaEv->set_mana_delta(static_cast<int64_t>(std::min<uint64_t>(refund, INT64_MAX)));
+                        manaEv->set_target_mana_after(manaBefore + refund);
+                        EmitSeasonResonanceEvent(source, source.actor_id(),
+                                                 seasonrules::kResonanceEventSharpManaRefund, refund, result);
+                    }
+                } else if (seal.seal_id() == seasonrules::kSealPozhenXuanyin &&
+                           context.skillId == seasonrules::kSkillPozhenLinglei) {
+                    pendingMysticExtendCasterId = source.actor_id();
+                    pendingMysticExtendTargetId = target.actor_id();
+                }
             }
         }
     }

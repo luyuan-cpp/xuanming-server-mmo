@@ -1,0 +1,30 @@
+syntax = "proto3";
+option go_package = "common/component";
+
+// 江湖恩怨与天墉生死状一期持久化组件（scene 侧玩家实体持久组件，落库于 PROFILE(4) 组）。
+// 设计文档：docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2 / §2.5。
+//
+// 仅在切换「闭关免战」开关、生死状战败挂印记、复仇清除印记或使用洗尘符时变脏写盘，
+// 不拖累普通货币写盘行；角色官方过户（owner_revision 递增）时服务端自动清空旧持有者印记与徽记。
+message PlayerJianghuComp {
+  // true = 闭关免战（拒收非好友生死状邀请，同时本人禁止主动向外发起生死状）
+  bool duel_refuse_strangers = 1;
+  // 印记与徽记所属的角色持有代次；与当前角色持有代次不符时自动清空（防过户背旧仇）
+  uint64 owner_revision = 2;
+  // 战败社交印记到期时刻（Unix 毫秒，自然墙钟计时，离线照常递减；0 = 无印记）
+  uint64 defeat_mark_expires_at_ms = 3;
+  // 胜方队长或胜方帮会 ID（用于复仇战获胜时精准清除印记）
+  uint64 defeat_mark_winner_id = 4;
+  // 胜方展示名（白名单模板拼接，严禁自由输入）
+  string defeat_mark_winner_name = 5;
+  // 印记展示样式 ID（1 = 普通「惜败于 XXX」，2 = 金帖「封剑思过 · 惜败于 XXX」）
+  uint32 defeat_mark_style_id = 6;
+  // true = defeat_mark_winner_name 为帮会名，defeat_mark_winner_id 为胜方帮会 ID
+  bool defeat_mark_is_guild_name = 7;
+  // 触发该印记的战斗 ID（幂等去重）
+  uint64 defeat_mark_battle_id = 8;
+  // 清风洗尘符附赠的洒脱自嘲徽记到期时刻（Unix 毫秒，0 = 无）
+  uint64 clear_badge_expires_at_ms = 9;
+  // 洒脱徽记白名单样式 ID（1 = 「清风拂尘 · 胜败常事」）
+  uint32 clear_badge_style_id = 10;
+}

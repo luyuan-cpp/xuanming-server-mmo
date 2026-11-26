@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"proto/scene_manager"
 	"scene_manager/internal/svc"
+	"shared/ownerauthority"
 	"shared/ownerepoch"
 	"shared/redisslot"
 	"shared/tracing/kafkagotrace"
@@ -1010,15 +1011,18 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	}
 
 	// 6d. Optional linearizable SQL owner authority enforce gate (before Kafka route commit).
+	var enforcedOwnerRec ownerauthority.OwnerRecord
 	if ownerAuthorityMode(l.svcCtx) == "enforce" {
-		if oaErr := syncOwnerAuthorityEnter(l.ctx, l.svcCtx, l.Logger,
-			in.PlayerId, sceneId, nodeId, targetZoneId, placed.epoch, in.OwnerRevision, true); oaErr != nil {
+		oaRec, oaErr := syncOwnerAuthorityEnter(l.ctx, l.svcCtx, l.Logger,
+			in.PlayerId, sceneId, nodeId, targetZoneId, placed.epoch, in.OwnerRevision, true)
+		if oaErr != nil {
 			resp := errResp(constants.ErrOwnerEpochConflict, fmt.Sprintf("owner authority rejected enter: %v", oaErr))
 			_, echo := l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, currentZoneID,
 				placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId, nodeId)
 			resp.OwnerEpochAfterRollback = echo
 			return resp, nil
 		}
+		enforcedOwnerRec = oaRec
 	}
 
 	// 7. Send Route Command to Gate. Broker ACK is the transaction commit
@@ -1041,6 +1045,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err))
 			_, echo := l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, currentZoneID,
 				placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId, nodeId)
+			syncOwnerAuthorityRollback(l.ctx, l.svcCtx, l.Logger, enforcedOwnerRec)
 			resp.OwnerEpochAfterRollback = echo
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageRouteGate, time.Since(routeStart))
 			return resp, nil
@@ -1104,7 +1109,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 
 	// 7c. Optional linearizable SQL owner authority shadow dual-write (non-blocking audit).
 	if ownerAuthorityMode(l.svcCtx) == "shadow" {
-		_ = syncOwnerAuthorityEnter(l.ctx, l.svcCtx, l.Logger,
+		_, _ = syncOwnerAuthorityEnter(l.ctx, l.svcCtx, l.Logger,
 			in.PlayerId, sceneId, nodeId, targetZoneId, placed.epoch, in.OwnerRevision, false)
 	}
 
