@@ -30,6 +30,8 @@
 #include "table/code/characterappearance_table.h"
 #include "table/code/equipartifact_table.h"
 #include "table/code/item_table.h"
+#include "table/code/petcosmetic_table.h"
+#include "table/code/skillvfxcosmetic_table.h"
 #include "table/code/trialjournalentry_table.h"
 #include "table/code/trialjournalmilestone_table.h"
 #include "table/code/trialjournalseal_table.h"
@@ -252,6 +254,40 @@ bool IsValidExclusiveAppearance(const std::string& appearanceId) {
     return false;
 }
 
+std::string FindPetCosmeticDisplayName(uint32_t cosmeticId) {
+    if (cosmeticId == 0) {
+        return {};
+    }
+    const auto* row = PetCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+    return row != nullptr ? row->name() : std::string{};
+}
+
+bool IsValidExclusivePetCosmetic(uint32_t cosmeticId) {
+    if (cosmeticId == 0) {
+        return true;
+    }
+    const auto* row = PetCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+    return row != nullptr && row->enabled() != 0 && row->card_item_id() == 0 &&
+           row->mall_sku_id() == 0 && row->spirit_shop_goods_id() == 0;
+}
+
+std::string FindSkillVfxDisplayName(uint32_t cosmeticId) {
+    if (cosmeticId == 0) {
+        return {};
+    }
+    const auto* row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+    return row != nullptr ? row->name() : std::string{};
+}
+
+bool IsValidExclusiveSkillVfx(uint32_t cosmeticId) {
+    if (cosmeticId == 0) {
+        return true;
+    }
+    const auto* row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(cosmeticId).first;
+    return row != nullptr && row->enabled() != 0 && row->card_item_id() == 0 &&
+           row->mall_sku_id() == 0 && row->spirit_shop_goods_id() == 0;
+}
+
 bool IsValidRedeemableArtifactItem(const ItemTable& row) {
     if (row.max_stack_size() != 1 || row.equip_profile() != 3 || row.equip_kind() != 16 ||
         row.artifact_id() < trialjournal::kMinArtifactEffectId ||
@@ -446,6 +482,10 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, TrialJournalSnapshot&
         view->set_commentary_body(milestone->commentary_body());
         view->set_grant_appearance_id(milestone->grant_appearance_id());
         view->set_grant_appearance_name(FindAppearanceDisplayName(milestone->grant_appearance_id()));
+        view->set_grant_pet_cosmetic_id(milestone->grant_pet_cosmetic_id());
+        view->set_grant_pet_cosmetic_name(FindPetCosmeticDisplayName(milestone->grant_pet_cosmetic_id()));
+        view->set_grant_skill_vfx_id(milestone->grant_skill_vfx_id());
+        view->set_grant_skill_vfx_name(FindSkillVfxDisplayName(milestone->grant_skill_vfx_id()));
         view->set_reached(reached);
         view->set_claimed(claimed);
         view->set_claimable(reached && !claimed && writableErr == kSuccess);
@@ -539,6 +579,18 @@ bool PlayerTrialJournalSystem::ValidateTables() {
             LOG_ERROR << "[PlayerTrialJournal] table validation failed: milestone_id=" << milestone.id()
                       << " grant_appearance_id=" << milestone.grant_appearance_id()
                       << " is missing, disabled, or card_unlockable!=0";
+            return false;
+        }
+        if (!IsValidExclusivePetCosmetic(milestone.grant_pet_cosmetic_id())) {
+            LOG_ERROR << "[PlayerTrialJournal] table validation failed: milestone_id=" << milestone.id()
+                      << " grant_pet_cosmetic_id=" << milestone.grant_pet_cosmetic_id()
+                      << " is missing, disabled, or purchasable";
+            return false;
+        }
+        if (!IsValidExclusiveSkillVfx(milestone.grant_skill_vfx_id())) {
+            LOG_ERROR << "[PlayerTrialJournal] table validation failed: milestone_id=" << milestone.id()
+                      << " grant_skill_vfx_id=" << milestone.grant_skill_vfx_id()
+                      << " is missing, disabled, or purchasable";
             return false;
         }
     }
@@ -736,8 +788,16 @@ void PlayerTrialJournalSystem::ClaimMilestone(entt::entity player,
         response.set_granted_sand_count(first.trialMilestoneSandCount);
         response.set_granted_voucher_count(first.trialMilestoneVoucherCount);
         if (const auto* row = TrialJournalMilestoneTableManager::Instance().FindByIdSilent(first.trialMilestoneId).first;
-            row != nullptr && !row->grant_appearance_id().empty()) {
-            response.set_granted_appearance_id(row->grant_appearance_id());
+            row != nullptr) {
+            if (!row->grant_appearance_id().empty()) {
+                response.set_granted_appearance_id(row->grant_appearance_id());
+            }
+            if (row->grant_pet_cosmetic_id() != 0) {
+                response.set_granted_pet_cosmetic_id(row->grant_pet_cosmetic_id());
+            }
+            if (row->grant_skill_vfx_id() != 0) {
+                response.set_granted_skill_vfx_id(row->grant_skill_vfx_id());
+            }
         }
         finish(kSuccess);
         return;
@@ -780,7 +840,9 @@ void PlayerTrialJournalSystem::ClaimMilestone(entt::entity player,
         finish(kTrialJournalMilestoneNotReached);
         return;
     }
-    if (!IsValidExclusiveAppearance(milestone->grant_appearance_id())) {
+    if (!IsValidExclusiveAppearance(milestone->grant_appearance_id()) ||
+        !IsValidExclusivePetCosmetic(milestone->grant_pet_cosmetic_id()) ||
+        !IsValidExclusiveSkillVfx(milestone->grant_skill_vfx_id())) {
         finish(kTrialJournalUnavailable);
         return;
     }
@@ -849,6 +911,20 @@ void PlayerTrialJournalSystem::ClaimMilestone(entt::entity player,
                 return grantErr;
             }
         }
+        if (milestone->grant_pet_cosmetic_id() != 0) {
+            const uint32_t grantErr =
+                PlayerAppearanceSystem::GrantPetCosmetic(player, milestone->grant_pet_cosmetic_id(), nowMs / 1000u);
+            if (grantErr != kSuccess) {
+                return grantErr;
+            }
+        }
+        if (milestone->grant_skill_vfx_id() != 0) {
+            const uint32_t grantErr =
+                PlayerAppearanceSystem::GrantSkillVfx(player, milestone->grant_skill_vfx_id(), nowMs / 1000u);
+            if (grantErr != kSuccess) {
+                return grantErr;
+            }
+        }
         journal->Swap(&nextJournal);
         ledger->Swap(&nextLedger);
         return kSuccess;
@@ -876,13 +952,21 @@ void PlayerTrialJournalSystem::ClaimMilestone(entt::entity player,
              << " milestone_id=" << milestone->id()
              << " bound_sand=" << milestone->bound_sand_count()
              << " bound_voucher=" << milestone->bound_artifact_voucher_count()
-             << " appearance=" << milestone->grant_appearance_id();
+             << " appearance=" << milestone->grant_appearance_id()
+             << " pet_cosmetic=" << milestone->grant_pet_cosmetic_id()
+             << " skill_vfx=" << milestone->grant_skill_vfx_id();
 
     (void)gTrialJournalPersistFn(player);
     response.set_granted_sand_count(milestone->bound_sand_count());
     response.set_granted_voucher_count(milestone->bound_artifact_voucher_count());
     if (!milestone->grant_appearance_id().empty()) {
         response.set_granted_appearance_id(milestone->grant_appearance_id());
+    }
+    if (milestone->grant_pet_cosmetic_id() != 0) {
+        response.set_granted_pet_cosmetic_id(milestone->grant_pet_cosmetic_id());
+    }
+    if (milestone->grant_skill_vfx_id() != 0) {
+        response.set_granted_skill_vfx_id(milestone->grant_skill_vfx_id());
     }
     finish(kSuccess);
 }
@@ -984,49 +1068,4 @@ void PlayerTrialJournalSystem::RedeemArtifactVoucher(entt::entity player,
 
     const std::string ledgerBefore = ledger->SerializeAsString();
     ClientRequestResult applied;
-    applied.redeemedArtifactConfigId = itemRow->id();
-
-    std::vector<GuidVector> written;
-    const uint32_t exchangeErr = BagService::ExchangeInventoryExact(
-        player, consumed, gainedParams, {}, clientRequestId,
-        "{\"operation\":\"trial_artifact_redeem\"}", written,
-        [&](const std::vector<GuidVector>& created) -> uint32_t {
-            if (ledger->SerializeAsString() != ledgerBefore || CheckWritable(player) != kSuccess) {
-                return kTrialJournalUnavailable;
-            }
-            if (created.size() != 1 || created.front().size() != 1 || created.front().front() == 0 ||
-                created.front().front() == kInvalidGuid) {
-                return kTrialJournalUnavailable;
-            }
-            applied.redeemedArtifactItemId = created.front().front();
-            ClientRequestLedgerComp nextLedger = *ledger;
-            if (!client_request_ledger::Remember(nextLedger, clientRequestId,
-                                                 ClientRequestKind::kRedeemBoundArtifactVoucher,
-                                                 fingerprint, applied) ||
-                !client_request_ledger::Validate(nextLedger).empty()) {
-                return kTrialJournalUnavailable;
-            }
-            BumpRevision(*journal);
-            ledger->Swap(&nextLedger);
-            return kSuccess;
-        });
-
-    if (exchangeErr != kSuccess) {
-        finish(exchangeErr == kTrialJournalUnavailable ? exchangeErr : kTrialJournalBagFull);
-        return;
-    }
-
-    const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
-    LOG_INFO << "[PlayerTrialJournal] Bound artifact redeemed: player_id=" << (guid != nullptr ? guid->value : 0)
-             << " config_id=" << itemRow->id() << " artifact_id=" << itemRow->artifact_id()
-             << " item_id=" << applied.redeemedArtifactItemId;
-
-    (void)gTrialJournalPersistFn(player);
-    response.set_created_item_id(applied.redeemedArtifactItemId);
-    response.set_artifact_item_config_id(applied.redeemedArtifactConfigId);
-    finish(kSuccess);
-}
-
-void PlayerTrialJournalSystem::SetPersistForTest(PersistFn fn) {
-    gTrialJournalPersistFn = fn == nullptr ? &PlayerLifecycleSystem::SavePlayerForAssetCommit : fn;
-}
+    applied.redeemedAr

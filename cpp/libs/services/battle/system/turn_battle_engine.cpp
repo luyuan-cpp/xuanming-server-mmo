@@ -6026,6 +6026,72 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         }
         settlement.set_ended_opponent_streak(maxEnemyStreak);
     }
+    settlement.set_player_display_name(actor->name());
+    if (IsRankedBattle() && playerWon && CompletedRounds() > 0u) {
+        const RankedRivalryEncounter* bestRevenge = nullptr;
+        std::string bestRevengeName;
+        for (const auto& enc : createRequest.ranked_context().rivalry_encounters()) {
+            if (enc.player_id() != playerId || !enc.revenge_target() || enc.opponent_id() == 0) {
+                continue;
+            }
+            const auto* opp = FindActor(enc.opponent_id());
+            if (opp == nullptr || opp->actor_type() != BATTLE_ACTOR_TYPE_PLAYER ||
+                opp->team_index() == actor->team_index()) {
+                continue;
+            }
+            const bool better = bestRevenge == nullptr ||
+                                enc.losses() > bestRevenge->losses() ||
+                                (enc.losses() == bestRevenge->losses() && enc.wins() > bestRevenge->wins()) ||
+                                (enc.losses() == bestRevenge->losses() && enc.wins() == bestRevenge->wins() &&
+                                 enc.opponent_id() < bestRevenge->opponent_id());
+            if (better) {
+                bestRevenge = &enc;
+                bestRevengeName = !enc.opponent_name().empty() ? enc.opponent_name() : opp->name();
+            }
+        }
+        if (bestRevenge != nullptr) {
+            settlement.set_revenged_rival(true);
+            settlement.set_revenged_opponent_name(bestRevengeName);
+            settlement.set_revenged_wins_after(bestRevenge->wins() + 1u);
+            settlement.set_revenged_losses_after(bestRevenge->losses());
+        }
+    }
+    if (IsRankedBattle() && !UsesFreePreset()) {
+        if (actor->equipment_effects().has_season_seal()) {
+            settlement.set_final_season_seal_id(actor->equipment_effects().season_seal().seal_id());
+        }
+        uint32_t starterPetTableId = 0;
+        if (const auto prepIt = prepOptionsByPlayer.find(playerId);
+            prepIt != prepOptionsByPlayer.end() && prepIt->second.selectedPetId != 0) {
+            for (const auto& pet : prepIt->second.availablePets) {
+                if (pet.pet_id() == prepIt->second.selectedPetId) {
+                    starterPetTableId = pet.pet_table_id();
+                    break;
+                }
+            }
+        }
+        if (starterPetTableId == 0) {
+            for (const auto& other : actors) {
+                if (other.actor_type() == BATTLE_ACTOR_TYPE_PET && other.owner_player_id() == playerId &&
+                    other.pet_table_id() != 0) {
+                    starterPetTableId = other.pet_table_id();
+                    break;
+                }
+            }
+        }
+        settlement.set_starter_pet_table_id(starterPetTableId);
+        settlement.clear_core_skill_ids();
+        std::set<uint32_t> seenSkills;
+        for (const uint32_t sid : actor->skill_table_ids()) {
+            if (sid == 0 || !seenSkills.insert(sid).second) {
+                continue;
+            }
+            settlement.add_core_skill_ids(sid);
+            if (settlement.core_skill_ids_size() >= 4) {
+                break;
+            }
+        }
+    }
 
     // 出战宝宝的战后终值:随主人的结算一起回 scene(scene 是唯一应用者);论剑临时竞技宠不回写永久宠物。
     for (const auto& other : actors) {
@@ -7203,6 +7269,22 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
     }
     for (const auto sid : AggregateTeamBans(selfOpt.teamIndex)) {
         out.add_team_effective_ban_skill_ids(sid);
+    }
+    // 论剑 V6 宿敌交手提示：仅投影本人视角的敌方宿敌，观众与第三方清空。
+    for (const auto& enc : createRequest.ranked_context().rivalry_encounters()) {
+        if (enc.player_id() != viewerPlayerId || enc.opponent_id() == 0) {
+            continue;
+        }
+        const auto* opp = FindActor(enc.opponent_id());
+        if (opp == nullptr || opp->actor_type() != BATTLE_ACTOR_TYPE_PLAYER ||
+            opp->team_index() == selfOpt.teamIndex) {
+            continue;
+        }
+        auto* dst = out.add_self_rivalries();
+        *dst = enc;
+        if (dst->opponent_name().empty() && !opp->name().empty()) {
+            dst->set_opponent_name(opp->name());
+        }
     }
 }
 

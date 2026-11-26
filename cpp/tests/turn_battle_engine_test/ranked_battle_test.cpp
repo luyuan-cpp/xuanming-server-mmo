@@ -1665,4 +1665,147 @@ TEST(RankedBattleTest, PrepThreeSkillBanFullFlowCopyBlockAutoFallbackAndTeamAggr
     EXPECT_EQ(duelEngine.PrepDurationSeconds(), 25u);
 }
 
+TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
+    FakeBattleDataProvider data;
+    RegisterRankedCoreSkills(data);
+
+    auto makeSeal = [](uint32_t id, uint32_t effectId, const char* name) {
+        SeasonSealEffect s;
+        s.set_season_id(1);
+        s.set_seal_id(id);
+        s.set_effect_id(effectId);
+        s.set_effect_value(10);
+        s.set_name(name);
+        return s;
+    };
+    const auto seal101 = makeSeal(101, 1, "破阵锐印");
+    const auto seal103 = makeSeal(103, 6, "固阵守印");
+
+    auto makePet = [](uint64_t petId, uint64_t ownerId, uint32_t tableId, const char* name) {
+        BattlePetSnapshot p;
+        p.set_pet_id(petId);
+        p.set_owner_player_id(ownerId);
+        p.set_pet_table_id(tableId);
+        p.set_pet_name(name);
+        p.set_level(30);
+        p.set_max_health(2000);
+        p.set_max_mana(500);
+        p.set_physical_attack(100);
+        p.set_defense(50);
+        p.mutable_base_attributes()->set_health(2000);
+        p.mutable_base_attributes()->set_mana(500);
+        p.mutable_base_attributes()->set_speed(150);
+        return p;
+    };
+
+    CreateBattleRequest req;
+    req.set_battle_id(99601);
+    req.set_battle_config_id(5);
+    req.set_match_mode(7);
+    req.set_seed(601);
+    auto* rctx = req.mutable_ranked_context();
+    rctx->set_season_id(1);
+    rctx->set_season_key("s1");
+    rctx->set_rank_generation(1);
+    rctx->set_rule_version(2);
+    rctx->set_team_size(1);
+    rctx->set_use_free_preset(false);
+
+    auto* r1 = rctx->add_rivalry_encounters();
+    r1->set_player_id(101);
+    r1->set_opponent_id(201);
+    r1->set_wins(1);
+    r1->set_losses(2);
+    r1->set_revenge_target(true);
+
+    auto* r2 = rctx->add_rivalry_encounters();
+    r2->set_player_id(201);
+    r2->set_opponent_id(101);
+    r2->set_opponent_name("青云");
+    r2->set_wins(2);
+    r2->set_losses(1);
+    r2->set_revenge_target(false);
+
+    auto* p1 = req.add_players();
+    p1->set_player_id(101);
+    p1->set_team_index(0);
+    p1->set_player_name("青云");
+    p1->set_level(30);
+    p1->set_active_season_id(1);
+    p1->set_max_health(10000);
+    p1->mutable_base_attributes()->set_health(10000);
+    p1->mutable_base_attributes()->set_mana(2000);
+    p1->mutable_base_attributes()->set_speed(300);
+    p1->set_physical_attack(6000);
+    p1->set_defense(100);
+    p1->add_skill_table_ids(10002);
+    p1->add_skill_table_ids(10018);
+    *p1->mutable_equipment_effects()->mutable_season_seal() = seal101;
+    *p1->add_available_season_seals() = seal101;
+    *p1->add_available_season_seals() = seal103;
+    *p1->add_pets() = makePet(5001, 101, 1, "灵狐");
+    *p1->add_standby_pets() = makePet(5002, 101, 2, "石灵");
+
+    auto* p2 = req.add_players();
+    p2->set_player_id(201);
+    p2->set_team_index(1);
+    p2->set_player_name("玄烈");
+    p2->set_level(30);
+    p2->set_active_season_id(1);
+    p2->set_max_health(500);
+    p2->mutable_base_attributes()->set_health(500);
+    p2->mutable_base_attributes()->set_mana(500);
+    p2->mutable_base_attributes()->set_speed(100);
+    p2->set_physical_attack(100);
+    p2->set_defense(0);
+    p2->add_skill_table_ids(10002);
+    *p2->mutable_equipment_effects()->mutable_season_seal() = seal101;
+    *p2->add_available_season_seals() = seal101;
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    ASSERT_TRUE(engine.IsInPrepPhase());
+
+    // 视角脱敏：101 看到自己的宿敌（并自动补全对手名“玄烈”），201 看到自己的视角，观众 0 必须清空。
+    BattleStateS2C s101;
+    engine.FillPrepStateForViewer(s101, 101, 999);
+    ASSERT_EQ(s101.prep_state().self_rivalries_size(), 1);
+    EXPECT_EQ(s101.prep_state().self_rivalries(0).opponent_id(), 201u);
+    EXPECT_EQ(s101.prep_state().self_rivalries(0).opponent_name(), "玄烈");
+    EXPECT_TRUE(s101.prep_state().self_rivalries(0).revenge_target());
+
+    BattleStateS2C s201;
+    engine.FillPrepStateForViewer(s201, 201, 999);
+    ASSERT_EQ(s201.prep_state().self_rivalries_size(), 1);
+    EXPECT_FALSE(s201.prep_state().self_rivalries(0).revenge_target());
+
+    BattleStateS2C obs;
+    engine.FillPrepStateForViewer(obs, 0, 999);
+    EXPECT_EQ(obs.prep_state().self_rivalries_size(), 0);
+
+    // 101 变阵换 103 赛季印 + 5002 石灵(tableId=2)并锁定，首回合击杀 201 完成雪耻复仇。
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 103, 5002, true), 0u);
+    ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true), 0u);
+    ASSERT_TRUE(engine.FinalizePrepPhase());
+
+    ASSERT_TRUE(engine.SubmitAction(101, Attack(201)));
+    engine.SubmitAction(201, Defend());
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+
+    const auto settleA = engine.BuildSettlement(101);
+    EXPECT_TRUE(settleA.revenged_rival());
+    EXPECT_EQ(settleA.revenged_opponent_name(), "玄烈");
+    EXPECT_EQ(settleA.revenged_wins_after(), 2u);
+    EXPECT_EQ(settleA.revenged_losses_after(), 2u);
+    EXPECT_EQ(settleA.final_season_seal_id(), 103u);
+    EXPECT_EQ(settleA.starter_pet_table_id(), 2u);
+    EXPECT_EQ(settleA.player_display_name(), "青云");
+    ASSERT_GE(settleA.core_skill_ids_size(), 2);
+    EXPECT_EQ(settleA.core_skill_ids(0), 10002u);
+
+    const auto settleB = engine.BuildSettlement(201);
+    EXPECT_FALSE(settleB.revenged_rival());
+}
+
 }  // namespace

@@ -3,9 +3,10 @@
 """衣柜灵宠幻化与技能特效 V1(docs/planning/wardrobe-pet-morph-and-skill-vfx-v1.md)的 xlsx 幂等补丁脚本。
 
 用法(仓库根目录执行):
-    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py new-tables       # ① 生成/更新 PetCosmetic.xlsx 与 SkillVfxCosmetic.xlsx
-    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py voucher-closure  # ② 追加 3411/3412 外观券至 Item.xlsx 与 303/304 至 SpiritShopGoods.xlsx
-    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py message-limiter  # ③ 跑完 proto-gen 后为 2 条新 RPC 追加 MessageLimiter 行
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py new-tables             # ① 生成/更新 PetCosmetic.xlsx 与 SkillVfxCosmetic.xlsx
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py voucher-closure        # ② 追加 3411/3412 外观券至 Item.xlsx 与 303/304 至 SpiritShopGoods.xlsx
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py message-limiter        # ③ 跑完 proto-gen 后为 2 条新 RPC 追加 MessageLimiter 行
+    python tools/scripts/wardrobe_cosmetics_xlsx_patch.py trial-milestone-grants # ④ 将专属限定 #3 月弦师 / #3 寒星流华接入 TrialJournalMilestone.xlsx 并同步说明
 """
 
 from __future__ import annotations
@@ -81,7 +82,7 @@ PET_COSMETIC_ROWS = [
         enabled=1,
         sort_order=30,
         mall_sku_id=0,
-        acquire_hint="赛季荣誉或活动专属解锁",
+        acquire_hint="试炼志·破阵之季卷三点亮4印解锁",
         desc="幻化仅改变外观，将当前灵宠化作月弦师仪态，不影响资质、技能与任何战斗数值。",
         card_item_id=0,
         card_item_count=0,
@@ -139,7 +140,7 @@ SKILL_VFX_ROWS = [
         enabled=1,
         sort_order=30,
         mall_sku_id=0,
-        acquire_hint="赛季荣誉或活动专属解锁",
+        acquire_hint="试炼志·卷一15印「破阵双绝」解锁",
         desc="特效仅改变战斗画面，为寒星凝魄赋予专属寒星替换特效，不改变伤害、范围与目标规则。",
         card_item_id=0,
         card_item_count=0,
@@ -415,15 +416,100 @@ def cmd_message_limiter(dry_run: bool) -> None:
     print(f"[DONE] Updated {rel(MESSAGE_LIMITER_XLSX)}")
 
 
+TRIAL_MILESTONE_XLSX = DATA_DIR / "TrialJournalMilestone.xlsx"
+TRIAL_MILESTONE_SHEET = "TrialJournalMilestone"
+TRIAL_MILESTONE_UPDATES = {
+    105: {
+        "grant_pet_cosmetic_id": 0,
+        "grant_skill_vfx_id": 3,
+        "desc": "卷一累计点亮 15 枚战法印（含困难·双卫同阵），永久免费解锁专属技能特效「寒星流华」、荣誉印戳「破阵双绝」与留灯院四人合评《留灯院·双卫破阵记》。",
+    },
+    302: {
+        "grant_pet_cosmetic_id": 3,
+        "grant_skill_vfx_id": 0,
+        "desc": "破阵之季卷三累计点亮 4 枚赛季印，永久免费解锁专属灵宠幻化「月弦师」，并获赠 1 份仅自用重铸砂与破阵之季纪念印戳「破阵季游」。",
+    },
+}
+
+
+def cmd_trial_milestone_grants(dry_run: bool) -> None:
+    cmd_new_tables(dry_run)
+
+    wb = openpyxl.load_workbook(TRIAL_MILESTONE_XLSX)
+    ws = only_sheet(wb, TRIAL_MILESTONE_XLSX, TRIAL_MILESTONE_SHEET)
+    before = sheet_matrix(ws)
+    header = [str(v).strip() if v is not None else "" for v in before[HEADER_ROW - 1]]
+    col_by_name = {name: idx + 1 for idx, name in enumerate(header) if name}
+
+    patches: list[Patch] = []
+    next_col = len(header) + 1
+    for col_name, comment in (
+        ("grant_pet_cosmetic_id", "专属灵宠幻化ID(0无)"),
+        ("grant_skill_vfx_id", "专属技能特效ID(0无)"),
+    ):
+        if col_name not in col_by_name:
+            col_by_name[col_name] = next_col
+            patches.append((HEADER_ROW, next_col, col_name))
+            patches.append((COMMENT_ROW, next_col, comment))
+            next_col += 1
+
+    desc_col = col_by_name["desc"]
+    pet_col = col_by_name["grant_pet_cosmetic_id"]
+    vfx_col = col_by_name["grant_skill_vfx_id"]
+    seen_targets: set[int] = set()
+
+    for r_idx, row in enumerate(before[DATA_BEGIN_ROW - 1:], start=DATA_BEGIN_ROW):
+        if not any(v is not None for v in row) or row[0] is None:
+            continue
+        mid = int(row[0])
+        spec = TRIAL_MILESTONE_UPDATES.get(mid)
+        if spec is not None:
+            seen_targets.add(mid)
+            want_pet = spec["grant_pet_cosmetic_id"]
+            want_vfx = spec["grant_skill_vfx_id"]
+            want_desc = spec["desc"]
+        else:
+            want_pet = 0
+            want_vfx = 0
+            want_desc = None
+
+        cur_pet = row[pet_col - 1] if pet_col - 1 < len(row) else None
+        cur_vfx = row[vfx_col - 1] if vfx_col - 1 < len(row) else None
+        if cur_pet != want_pet:
+            patches.append((r_idx, pet_col, want_pet))
+        if cur_vfx != want_vfx:
+            patches.append((r_idx, vfx_col, want_vfx))
+        if want_desc is not None:
+            cur_desc = row[desc_col - 1] if desc_col - 1 < len(row) else None
+            if cur_desc != want_desc:
+                patches.append((r_idx, desc_col, want_desc))
+
+    missing = set(TRIAL_MILESTONE_UPDATES) - seen_targets
+    if missing:
+        fail(f"{TRIAL_MILESTONE_XLSX.name} missing milestone ids: {sorted(missing)}")
+
+    if not patches:
+        bind(TRIAL_MILESTONE_SHEET, TRIAL_MILESTONE_XLSX)
+        print(f"[ALREADY CURRENT] {rel(TRIAL_MILESTONE_XLSX)}")
+        return
+    if dry_run:
+        print(f"[dry-run] Would patch {len(patches)} cells in {rel(TRIAL_MILESTONE_XLSX)}.")
+        return
+    apply_patches_and_verify(TRIAL_MILESTONE_XLSX, TRIAL_MILESTONE_SHEET, wb, ws, before, patches, bind_schema=True)
+    print(f"[DONE] Updated {rel(TRIAL_MILESTONE_XLSX)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("new-tables", "voucher-closure", "message-limiter"))
+    parser.add_argument("command", choices=("new-tables", "voucher-closure", "message-limiter", "trial-milestone-grants"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.command == "new-tables":
         cmd_new_tables(args.dry_run)
     elif args.command == "voucher-closure":
         cmd_voucher_closure(args.dry_run)
+    elif args.command == "trial-milestone-grants":
+        cmd_trial_milestone_grants(args.dry_run)
     else:
         cmd_message_limiter(args.dry_run)
 
