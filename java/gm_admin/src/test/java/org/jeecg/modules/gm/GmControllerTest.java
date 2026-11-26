@@ -28,8 +28,9 @@ class GmControllerTest {
         currencies.addObject().put("id", 0).put("label", "CURRENCY_TYPE_GOLD");
         currencies.addObject().put("id", 1).put("label", "CURRENCY_TYPE_DIAMOND");
         currencies.addObject().put("id", 2).put("label", "CURRENCY_TYPE_BIND_DIAMOND");
+        currencies.addObject().put("id", 3).put("label", "CURRENCY_TYPE_BIND_GOLD");
         when(game.currencyTypes()).thenReturn(currencies);
-        when(game.supportsCurrency(anyInt())).thenAnswer(inv -> Set.of(0, 1, 2).contains((Integer) inv.getArgument(0)));
+        when(game.supportsCurrency(anyInt())).thenAnswer(inv -> Set.of(0, 1, 2, 3).contains((Integer) inv.getArgument(0)));
         controller = new GmController(json, game, journal, "http://127.0.0.1:8081", "", "127.0.0.1:50900", "x".repeat(32));
     }
     @AfterEach void clear() { ThreadContext.unbindSubject(); }

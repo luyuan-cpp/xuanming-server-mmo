@@ -584,7 +584,7 @@ void PetSystem::FillTierAscension(entt::entity player, const PetInstance& pet,
                ownedMaterial < currentRow->ascend_cost_item_count()) {
         blockTip = kPetTierMaterialNotEnough;
     } else if (currentRow->ascend_cost_gold() > 0 &&
-               CurrencySystem::GetBalance(player, kCurrencyGold) < currentRow->ascend_cost_gold()) {
+               CurrencySystem::GetSpendableGoldWithBind(player) < currentRow->ascend_cost_gold()) {
         blockTip = kPetGoldNotEnough;
     }
     out->set_can_ascend(blockTip == 0);
@@ -672,7 +672,7 @@ void PetSystem::AscendTier(entt::entity player, const AscendPetTierRequest& requ
     constexpr uint64_t kMaxPayableGold = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
     const uint64_t costGold = currentRow->ascend_cost_gold();
     if (costGold > 0 && (costGold > kMaxPayableGold ||
-                         !CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(costGold)))) {
+                         !CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(costGold)))) {
         fail(kPetGoldNotEnough);
         return;
     }
@@ -681,8 +681,8 @@ void PetSystem::AscendTier(entt::entity player, const AscendPetTierRequest& requ
     const uint32_t costItemCount = currentRow->ascend_cost_item_count();
     const auto applyAscension = [&]() -> uint32_t {
         if (costGold > 0) {
-            const auto goldErr = CurrencySystem::DeductCurrency(
-                player, kCurrencyGold, static_cast<int64_t>(costGold), TX_CURRENCY_DEDUCT, pet->pet_table_id());
+            const auto goldErr = CurrencySystem::DeductGoldPreferBind(
+                player, static_cast<int64_t>(costGold), TX_CURRENCY_DEDUCT, pet->pet_table_id());
             if (goldErr != kSuccess) {
                 return goldErr;
             }

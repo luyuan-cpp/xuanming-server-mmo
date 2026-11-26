@@ -752,6 +752,24 @@ protected:
         passSeason->add_unlocked_cosmetic_keys("title_travel_qingyun_s1");
         passSeason->set_last_updated_at_ms(1795521700000ULL);
 
+        // 装备流派方案预设（equipment-loadout-presets-v1.md）：覆盖全部子消息与槽位映射。
+        auto &equipLoadout = *db.mutable_equip_loadout_component();
+        equipLoadout.set_unlocked_scheme_count(2);
+        equipLoadout.set_active_scheme_id(2);
+        equipLoadout.set_state_version(5);
+        equipLoadout.set_last_request_id("loadout_req_000001");
+        equipLoadout.set_last_base_version(4);
+        equipLoadout.set_last_scheme_id(2);
+        auto *loadoutScheme = equipLoadout.add_schemes();
+        loadoutScheme->set_scheme_id(2);
+        loadoutScheme->set_name("速攻流");
+        loadoutScheme->set_role_tag(1);
+        loadoutScheme->set_linked_skill_scheme_id(2);
+        loadoutScheme->set_linked_attribute_scheme_id(1);
+        auto *slotBinding = loadoutScheme->add_slots();
+        slotBinding->set_slot(3);
+        slotBinding->set_item_guid(kBagItemGuid);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

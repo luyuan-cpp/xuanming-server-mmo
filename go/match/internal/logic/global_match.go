@@ -88,7 +88,11 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*p
 			}
 			t.RankedContext = rankedRaw
 		}
-	} else if in.Mode == pb.MatchMode_MATCH_MODE_POLARITY_5V5 || l.svcCtx.ActiveCatalog().BossTrialKind(in.BattleConfigId) == 5 {
+	} else if in.Mode == pb.MatchMode_MATCH_MODE_POLARITY_5V5 ||
+		l.svcCtx.ActiveCatalog().BossTrialKind(in.BattleConfigId) == 5 ||
+		((l.svcCtx.ActiveCatalog().BossTrialKind(in.BattleConfigId) == 10 ||
+			l.svcCtx.ActiveCatalog().BossTrialKind(in.BattleConfigId) == 11) &&
+			(in.GetCharacterPresetId() != 0 || in.GetPetPresetId() != 0)) {
 		presetRaw, rErr := l.svcCtx.Authority.ResolveFreePresetContext(l.ctx, d.PlayerId, in.GetCharacterPresetId(), in.GetPetPresetId(), in.GetRankedRuleVersion(), t.TeamSize)
 		if rErr != nil {
 			return joinRejection(rErr, "轮换娱乐预设不可用"), nil

@@ -87,8 +87,8 @@
   - 加载时无条件挂组件（旧存档缺字段合法，默认 `unlocked_scheme_count=1, active_scheme_id=1`）；存盘缺组件 fail-closed 拒存。
 
 ### 2.3 配表与错误码增量
-1. **`data/Item.xlsx`**（遵守永久 ID 追加原则，仅末尾追加 1 行）：
-   - `3411`：**装备方案扩容符**（`max_stack_size=99`，不可战斗使用，非装备；官方商城可直售，解锁额外装备流派方案位时优先消耗）。
+1. **`data/Item.xlsx`**（遵守永久 ID 追加原则，因 `3411 灵宠幻化符` 与 `3412 技能特效卷` 已先入表，末尾顺延追加 `3413`）：
+   - `3413`：**装备方案扩容符**（`max_stack_size=99`，不可战斗使用，非装备；官方商城可直售，解锁额外装备流派方案位时优先消耗）。
 2. **`data/tip/Tip.xlsx`**（`equip_error` 域末尾追加，单轴发号，严禁手写数字）：
    - `kEquipLoadoutSchemeInvalid`（方案号越界或未解锁）
    - `kEquipLoadoutMaxUnlocked`（已达最大 5 套方案上限）

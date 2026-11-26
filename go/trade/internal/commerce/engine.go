@@ -83,8 +83,8 @@ func (p Policy) Selection(v *tradepb.TradeAssetSelection) error {
 	if v.CurrencyAmount == 0 && v.CurrencyType != 0 || v.CurrencyAmount > math.MaxInt64 {
 		return ErrInvalid
 	}
-	// 绑定灵石不论 Currencies 怎么配都不可交易(配置校验 config.IsTradableCurrency 本就拒绝它进白名单)。
-	if v.CurrencyAmount > 0 && (v.CurrencyType == currencytype.BindDiamond || !contains(p.Currencies, v.CurrencyType)) {
+	// 绑定灵石与绑定银两不论 Currencies 怎么配都不可交易(配置校验 config.IsTradableCurrency 本就拒绝它们进白名单)。
+	if v.CurrencyAmount > 0 && (currencytype.IsBound(v.CurrencyType) || !contains(p.Currencies, v.CurrencyType)) {
 		return ErrNotTradable
 	}
 	var total uint64
@@ -324,7 +324,7 @@ func (e *Engine) CreatePlayerTrade(ctx context.Context, me uint64, in *tradepb.C
 	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 2, Status: Escrowing, SellerPlayerId: me, BuyerPlayerId: in.BuyerPlayerId, ExpiresMs: e.now() + 15*60*1000}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.SellerAssets, BuyerAssets: in.BuyerAssets, Stage: "offer_escrow"})
 }
 func validPrice(p uint64, c uint32, policy Policy) bool {
-	return p > 0 && p <= math.MaxInt64 && c != currencytype.BindDiamond && contains(policy.Currencies, c)
+	return p > 0 && p <= math.MaxInt64 && !currencytype.IsBound(c) && contains(policy.Currencies, c)
 }
 func (e *Engine) CreateConsignment(ctx context.Context, me uint64, in *tradepb.CreateConsignmentRequest) (*tradepb.TradeCommerceRecord, error) {
 	if err := e.Policy.Selection(in.GetAssets()); err != nil {

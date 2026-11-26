@@ -81,9 +81,59 @@ TEST(CurrencyTest, CurrencyTypeEnumIsDerivedFromTheProtoTable)
     EXPECT_EQ(0u, static_cast<uint32_t>(kCurrencyGold));
     EXPECT_EQ(1u, static_cast<uint32_t>(kCurrencyDiamond));
     EXPECT_EQ(2u, static_cast<uint32_t>(kCurrencyBindDiamond));
+    EXPECT_EQ(3u, static_cast<uint32_t>(kCurrencyBindGold));
     EXPECT_EQ("CURRENCY_TYPE_GOLD", common::base::CurrencyType_Name(common::base::CURRENCY_TYPE_GOLD));
     EXPECT_EQ("CURRENCY_TYPE_DIAMOND", common::base::CurrencyType_Name(common::base::CURRENCY_TYPE_DIAMOND));
     EXPECT_EQ("CURRENCY_TYPE_BIND_DIAMOND", common::base::CurrencyType_Name(common::base::CURRENCY_TYPE_BIND_DIAMOND));
+    EXPECT_EQ("CURRENCY_TYPE_BIND_GOLD", common::base::CurrencyType_Name(common::base::CURRENCY_TYPE_BIND_GOLD));
+}
+
+TEST(CurrencyTest, DeductGoldPreferBindAndSplitGoldAntiLaundering)
+{
+    auto player = CreateTestPlayer();
+
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindGold, 300));
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 250));
+    EXPECT_EQ(550u, CurrencySystem::GetSpendableGoldWithBind(player));
+    EXPECT_TRUE(CurrencySystem::CanAffordGoldWithBind(player, 550));
+    EXPECT_FALSE(CurrencySystem::CanAffordGoldWithBind(player, 551));
+
+    // 1. 纯绑银优先抵扣：300 绑银 + 250 银两支付 420 -> 扣 300 绑银 + 120 银两，余 0 绑银 + 130 银两。
+    uint64_t spentBind = 999;
+    uint64_t spentGold = 999;
+    ASSERT_EQ(kSuccess, CurrencySystem::DeductGoldPreferBind(player, 420, TX_CURRENCY_DEDUCT, 1001, &spentBind, &spentGold));
+    EXPECT_EQ(300u, spentBind);
+    EXPECT_EQ(120u, spentGold);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyBindGold));
+    EXPECT_EQ(130u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 2. 复合防洗白：再补 500 绑银（此时 500 绑银 + 130 流通银两），代工费 strict=200 + 系统费 preferBind=100。
+    //    尽管总额 630 >= 300，但流通银两 130 < 代工费 200，必须整笔拒绝且零半扣。
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindGold, 500));
+    EXPECT_FALSE(CurrencySystem::CanAffordSplitGold(player, 200, 100));
+    EXPECT_EQ(kAssetCurrencyInsufficient,
+              CurrencySystem::DeductSplitGold(player, 200, 100, TX_CRAFT_PROXY_FEE, 1002, &spentBind, &spentGold));
+    EXPECT_EQ(0u, spentBind);
+    EXPECT_EQ(0u, spentGold);
+    EXPECT_EQ(500u, CurrencySystem::GetBalance(player, kCurrencyBindGold));
+    EXPECT_EQ(130u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 3. 流通银两刚好覆盖 strict=100，系统费 preferBind=520 用 500 绑银 + 剩余 20 流通银两补齐。
+    EXPECT_TRUE(CurrencySystem::CanAffordSplitGold(player, 100, 520));
+    ASSERT_EQ(kSuccess, CurrencySystem::DeductSplitGold(player, 100, 520, TX_CRAFT_PROXY_FEE, 1003, &spentBind, &spentGold));
+    EXPECT_EQ(500u, spentBind);
+    EXPECT_EQ(120u, spentGold);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyBindGold));
+    EXPECT_EQ(10u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 4. 跨服冻结拦截零副作用。
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindGold, 100));
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::DeductGoldPreferBind(player, 50, TX_CURRENCY_DEDUCT, 1004));
+    EXPECT_EQ(100u, CurrencySystem::GetBalance(player, kCurrencyBindGold));
+    EXPECT_EQ(10u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
 }
 
 // ---------------------------------------------------------------------------

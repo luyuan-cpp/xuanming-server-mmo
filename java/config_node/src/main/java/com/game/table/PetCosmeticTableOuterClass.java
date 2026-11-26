@@ -45,17 +45,18 @@ public final class PetCosmeticTableOuterClass extends com.google.protobuf.Genera
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\027petcosmetic_table.proto\"\362\001\n\020PetCosmeti" +
+      "\n\027petcosmetic_table.proto\"\277\002\n\020PetCosmeti" +
       "cTable\022\n\n\002id\030\001 \001(\r\022\024\n\014cosmetic_key\030\002 \001(\t" +
       "\022\014\n\004name\030\003 \001(\t\022\033\n\023target_pet_table_id\030\004 " +
       "\001(\r\022\033\n\023visual_pet_table_id\030\005 \001(\r\022\026\n\016visu" +
       "al_art_key\030\006 \001(\t\022\017\n\007enabled\030\007 \001(\r\022\022\n\nsor" +
       "t_order\030\010 \001(\r\022\023\n\013mall_sku_id\030\t \001(\004\022\024\n\014ac" +
-      "quire_hint\030\n \001(\t\022\014\n\004desc\030\013 \001(\t\"7\n\024PetCos" +
-      "meticTableData\022\037\n\004data\030\001 \003(\0132\021.PetCosmet" +
-      "icTableBB\n\016com.game.tableB\032PetCosmeticTa" +
-      "bleOuterClassP\001Z\022generated/pb/tableb\006pro" +
-      "to3"
+      "quire_hint\030\n \001(\t\022\014\n\004desc\030\013 \001(\t\022\024\n\014card_i" +
+      "tem_id\030\014 \001(\r\022\027\n\017card_item_count\030\r \001(\r\022\034\n" +
+      "\024spirit_shop_goods_id\030\016 \001(\r\"7\n\024PetCosmet" +
+      "icTableData\022\037\n\004data\030\001 \003(\0132\021.PetCosmeticT" +
+      "ableBB\n\016com.game.tableB\032PetCosmeticTable" +
+      "OuterClassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -66,7 +67,7 @@ public final class PetCosmeticTableOuterClass extends com.google.protobuf.Genera
     internal_static_PetCosmeticTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_PetCosmeticTable_descriptor,
-        new java.lang.String[] { "Id", "CosmeticKey", "Name", "TargetPetTableId", "VisualPetTableId", "VisualArtKey", "Enabled", "SortOrder", "MallSkuId", "AcquireHint", "Desc", });
+        new java.lang.String[] { "Id", "CosmeticKey", "Name", "TargetPetTableId", "VisualPetTableId", "VisualArtKey", "Enabled", "SortOrder", "MallSkuId", "AcquireHint", "Desc", "CardItemId", "CardItemCount", "SpiritShopGoodsId", });
     internal_static_PetCosmeticTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_PetCosmeticTableData_fieldAccessorTable = new

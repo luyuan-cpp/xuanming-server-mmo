@@ -2146,6 +2146,8 @@ void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
     state.clear_surrender_vote();
     state.clear_prep_state();
     state.clear_team_pings();
+    state.clear_self_standby_pets();
+    state.clear_self_summon_pet_remaining();
     // 战斗类属性(装备带来的必杀 / 连击 / 反击 / 反震 / 抗性概率)只供引擎判定:不分视角全员清掉,
     // 自己的看属性面板(equipment-attributes.md §4.5)。所有出站状态(开战包 / 回合结果 / 补拉 /
     // 观战首帧)都经过本函数,新增下发路径必须同样先过这里。
@@ -2172,6 +2174,8 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     state.clear_surrender_vote();
     state.clear_prep_state();
     state.clear_team_pings();
+    state.clear_self_standby_pets();
+    state.clear_self_summon_pet_remaining();
     if (viewerPlayerId == 0)
     {
         return;
@@ -2183,6 +2187,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     room.engine.FillSurrenderVoteForViewer(state, viewerPlayerId);
     room.engine.FillPrepStateForViewer(state, viewerPlayerId, room.prepDeadlineMs);
     room.engine.FillTeamPingsForViewer(state, viewerPlayerId);
+    room.engine.FillSummonStateForViewer(state, viewerPlayerId);
 }
 
 ::SpectateStateS2C BattleRoomManager::BuildSpectatorState(const BattleRoom &room, const uint32_t observerCount) const

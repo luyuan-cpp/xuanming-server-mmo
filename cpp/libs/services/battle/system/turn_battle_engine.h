@@ -172,6 +172,16 @@ public:
     uint32_t SubmitBattlePing(uint64_t playerId, uint64_t targetActorId, BattlePingKind kind,
                               BattleTacticalPing* outPing = nullptr);
     void FillTeamPingsForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const;
+    // 论剑 V5 临阵唤灵：正式自养竞技第 2 回合起单局限 1 次唤出备选灵宠（仅本人可见备选池与余次）。
+    bool IsSummonPetEnabled() const {
+        return !IsPveMatch() && !UsesFreePreset() &&
+               (IsRankedBattle() || createRequest.match_mode() == kMatchModeSeasonTournament);
+    }
+    uint32_t SummonPetUnlockRound() const {
+        return IsSummonPetEnabled() ? kPvpSummonPetUnlockRound : 0u;
+    }
+    uint32_t SummonPetRemaining(uint64_t playerId) const;
+    void FillSummonStateForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const;
     // 查询指定参战者的阵营（0/1），不存在返回 std::nullopt。
     std::optional<uint32_t> TeamIndexOfPlayer(uint64_t playerId) const;
     void MarkPlayerEntered(uint64_t playerId);
@@ -293,6 +303,7 @@ private:
     bool HasConfiguredState(const BattleActorState& actor, BattleStateKind state) const;
     bool HasBuffTag(const BattleActorState& actor, const std::string& tag) const;
     void InitializeConfiguredAbilities();
+    void InitializeConfiguredAbilitiesForActor(BattleActorState& actor, TurnResultS2C& result);
     void TickConfiguredBuffs(TurnResultS2C& result);
     void BeginConfiguredRound(TurnResultS2C& result);
     bool ExecuteConfiguredControl(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
@@ -770,9 +781,17 @@ private:
     bool prepActive = false;
     uint64_t nextPetActorIndex = 0;
     std::map<uint64_t, PrepPlayerOptions> prepOptionsByPlayer;
+    // 论剑 V5 临阵唤灵状态：validatedPetsByPlayer 冻结开局合规全量宠，standbyPetPoolByPlayer 冻结开打后剩余可唤宠。
+    std::map<uint64_t, std::vector<BattlePetSnapshot>> validatedPetsByPlayer;
+    std::map<uint64_t, std::vector<BattlePetSnapshot>> standbyPetPoolByPlayer;
+    std::map<uint64_t, uint32_t> summonPetRemainingByPlayer;
     bool InitTacticalPrep(const CreateBattleRequest& request);
+    void RebuildMidBattleStandbyPools();
+    uint32_t CheckSummonPet(const BattleActorState& actor, uint64_t summonPetId) const;
+    void ExecuteSummonPet(BattleActorState& actor, uint64_t summonPetId, TurnResultS2C& result);
     bool BuildPetActor(const BattlePlayerSnapshot& ownerSnapshot, const BattlePetSnapshot& pet,
                        uint64_t actorId, uint32_t formationSlot, BattleActorState& outActor) const;
+    static void PopulatePetOption(const BattlePetSnapshot& pet, BattlePrepPetOption& dst);
     void PopulatePrepStateForViewer(BattlePrepState& out, uint64_t viewerPlayerId, uint64_t deadlineMs) const;
 
     std::mt19937_64 rng;

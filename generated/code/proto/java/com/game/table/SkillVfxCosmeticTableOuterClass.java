@@ -45,18 +45,20 @@ public final class SkillVfxCosmeticTableOuterClass extends com.google.protobuf.G
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\034skillvfxcosmetic_table.proto\"\214\002\n\025Skill" +
+      "\n\034skillvfxcosmetic_table.proto\"\331\002\n\025Skill" +
       "VfxCosmeticTable\022\n\n\002id\030\001 \001(\r\022\017\n\007vfx_key\030" +
       "\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\026\n\016skill_table_id\030\004 " +
       "\001(\r\022\r\n\005fx_id\030\005 \001(\t\022\030\n\020projectile_fx_id\030\006" +
       " \001(\t\022\027\n\017telegraph_fx_id\030\007 \001(\t\022\020\n\010tint_he" +
       "x\030\010 \001(\t\022\017\n\007enabled\030\t \001(\r\022\022\n\nsort_order\030\n" +
       " \001(\r\022\023\n\013mall_sku_id\030\013 \001(\004\022\024\n\014acquire_hin" +
-      "t\030\014 \001(\t\022\014\n\004desc\030\r \001(\t\"A\n\031SkillVfxCosmeti" +
-      "cTableData\022$\n\004data\030\001 \003(\0132\026.SkillVfxCosme" +
-      "ticTableBG\n\016com.game.tableB\037SkillVfxCosm" +
-      "eticTableOuterClassP\001Z\022generated/pb/tabl" +
-      "eb\006proto3"
+      "t\030\014 \001(\t\022\014\n\004desc\030\r \001(\t\022\024\n\014card_item_id\030\016 " +
+      "\001(\r\022\027\n\017card_item_count\030\017 \001(\r\022\034\n\024spirit_s" +
+      "hop_goods_id\030\020 \001(\r\"A\n\031SkillVfxCosmeticTa" +
+      "bleData\022$\n\004data\030\001 \003(\0132\026.SkillVfxCosmetic" +
+      "TableBG\n\016com.game.tableB\037SkillVfxCosmeti" +
+      "cTableOuterClassP\001Z\022generated/pb/tableb\006" +
+      "proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -67,7 +69,7 @@ public final class SkillVfxCosmeticTableOuterClass extends com.google.protobuf.G
     internal_static_SkillVfxCosmeticTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_SkillVfxCosmeticTable_descriptor,
-        new java.lang.String[] { "Id", "VfxKey", "Name", "SkillTableId", "FxId", "ProjectileFxId", "TelegraphFxId", "TintHex", "Enabled", "SortOrder", "MallSkuId", "AcquireHint", "Desc", });
+        new java.lang.String[] { "Id", "VfxKey", "Name", "SkillTableId", "FxId", "ProjectileFxId", "TelegraphFxId", "TintHex", "Enabled", "SortOrder", "MallSkuId", "AcquireHint", "Desc", "CardItemId", "CardItemCount", "SpiritShopGoodsId", });
     internal_static_SkillVfxCosmeticTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_SkillVfxCosmeticTableData_fieldAccessorTable = new

@@ -70,6 +70,7 @@
 #include "rankedpreset_table.h"
 #include "rankedrule_table.h"
 #include "reward_table.h"
+#include "rewardedadslot_table.h"
 #include "rolenamerule_table.h"
 #include "seasonrule_table.h"
 #include "seasonseal_table.h"
@@ -103,9 +104,9 @@ LoadSuccessCallback loadSuccessCallback;
 
 namespace {
 
-constexpr std::size_t kTableCount = 81;
+constexpr std::size_t kTableCount = 82;
 
-constexpr std::array<std::string_view, 81> kTableNames = {
+constexpr std::array<std::string_view, 82> kTableNames = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -167,6 +168,7 @@ constexpr std::array<std::string_view, 81> kTableNames = {
     "RankedPreset",
     "RankedRule",
     "Reward",
+    "RewardedAdSlot",
     "RoleNameRule",
     "SeasonRule",
     "SeasonSeal",
@@ -190,7 +192,7 @@ constexpr std::array<std::string_view, 81> kTableNames = {
 };
 
 
-constexpr std::array<std::string_view, 31> kHotReloadableTables = {
+constexpr std::array<std::string_view, 32> kHotReloadableTables = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -210,6 +212,7 @@ constexpr std::array<std::string_view, 31> kHotReloadableTables = {
     "MysteryMerchantGoods",
     "MysteryMerchantRule",
     "PlayerLevelExp",
+    "RewardedAdSlot",
     "SeasonRule",
     "SeasonSeal",
     "Skill",
@@ -353,6 +356,8 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
     set->rankedRuleTable = RankedRuleTableManager::Instance().CurrentSnapshot();
 
     set->rewardTable = RewardTableManager::Instance().CurrentSnapshot();
+
+    set->rewardedAdSlotTable = RewardedAdSlotTableManager::Instance().CurrentSnapshot();
 
     set->roleNameRuleTable = RoleNameRuleTableManager::Instance().CurrentSnapshot();
 
@@ -521,6 +526,8 @@ void InstallTableSetIntoManagers(const TableSet& set) {
 
     RewardTableManager::Instance().InstallSnapshot(set.rewardTable);
 
+    RewardedAdSlotTableManager::Instance().InstallSnapshot(set.rewardedAdSlotTable);
+
     RoleNameRuleTableManager::Instance().InstallSnapshot(set.roleNameRuleTable);
 
     SeasonRuleTableManager::Instance().InstallSnapshot(set.seasonRuleTable);
@@ -627,26 +634,27 @@ void LoadTableAt(std::size_t index) {
     case 58: RankedPresetTableManager::Instance().Load(); break;
     case 59: RankedRuleTableManager::Instance().Load(); break;
     case 60: RewardTableManager::Instance().Load(); break;
-    case 61: RoleNameRuleTableManager::Instance().Load(); break;
-    case 62: SeasonRuleTableManager::Instance().Load(); break;
-    case 63: SeasonSealTableManager::Instance().Load(); break;
-    case 64: SkillTableManager::Instance().Load(); break;
-    case 65: SkillPermissionTableManager::Instance().Load(); break;
-    case 66: SkillScrollCraftTableManager::Instance().Load(); break;
-    case 67: SkillVfxCosmeticTableManager::Instance().Load(); break;
-    case 68: SpiritShopGoodsTableManager::Instance().Load(); break;
-    case 69: SpiritShopLimitGroupTableManager::Instance().Load(); break;
-    case 70: TestTableManager::Instance().Load(); break;
-    case 71: TestMultiKeyTableManager::Instance().Load(); break;
-    case 72: TournamentRewardTableManager::Instance().Load(); break;
-    case 73: TournamentRuleTableManager::Instance().Load(); break;
-    case 74: TravelPassSeasonTableManager::Instance().Load(); break;
-    case 75: TravelPassTierTableManager::Instance().Load(); break;
-    case 76: TrialJournalEntryTableManager::Instance().Load(); break;
-    case 77: TrialJournalMilestoneTableManager::Instance().Load(); break;
-    case 78: TrialJournalSealTableManager::Instance().Load(); break;
-    case 79: WorldTableManager::Instance().Load(); break;
-    case 80: ZoneGroupTableManager::Instance().Load(); break;
+    case 61: RewardedAdSlotTableManager::Instance().Load(); break;
+    case 62: RoleNameRuleTableManager::Instance().Load(); break;
+    case 63: SeasonRuleTableManager::Instance().Load(); break;
+    case 64: SeasonSealTableManager::Instance().Load(); break;
+    case 65: SkillTableManager::Instance().Load(); break;
+    case 66: SkillPermissionTableManager::Instance().Load(); break;
+    case 67: SkillScrollCraftTableManager::Instance().Load(); break;
+    case 68: SkillVfxCosmeticTableManager::Instance().Load(); break;
+    case 69: SpiritShopGoodsTableManager::Instance().Load(); break;
+    case 70: SpiritShopLimitGroupTableManager::Instance().Load(); break;
+    case 71: TestTableManager::Instance().Load(); break;
+    case 72: TestMultiKeyTableManager::Instance().Load(); break;
+    case 73: TournamentRewardTableManager::Instance().Load(); break;
+    case 74: TournamentRuleTableManager::Instance().Load(); break;
+    case 75: TravelPassSeasonTableManager::Instance().Load(); break;
+    case 76: TravelPassTierTableManager::Instance().Load(); break;
+    case 77: TrialJournalEntryTableManager::Instance().Load(); break;
+    case 78: TrialJournalMilestoneTableManager::Instance().Load(); break;
+    case 79: TrialJournalSealTableManager::Instance().Load(); break;
+    case 80: WorldTableManager::Instance().Load(); break;
+    case 81: ZoneGroupTableManager::Instance().Load(); break;
     }
 }
 
@@ -885,63 +893,66 @@ bool LoadTableIntoSetAt(const std::size_t index,
         return RewardTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rewardTable, err);
     case 61:
+        return RewardedAdSlotTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.rewardedAdSlotTable, err);
+    case 62:
         return RoleNameRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.roleNameRuleTable, err);
-    case 62:
+    case 63:
         return SeasonRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.seasonRuleTable, err);
-    case 63:
+    case 64:
         return SeasonSealTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.seasonSealTable, err);
-    case 64:
+    case 65:
         return SkillTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillTable, err);
-    case 65:
+    case 66:
         return SkillPermissionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillPermissionTable, err);
-    case 66:
+    case 67:
         return SkillScrollCraftTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillScrollCraftTable, err);
-    case 67:
+    case 68:
         return SkillVfxCosmeticTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillVfxCosmeticTable, err);
-    case 68:
+    case 69:
         return SpiritShopGoodsTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.spiritShopGoodsTable, err);
-    case 69:
+    case 70:
         return SpiritShopLimitGroupTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.spiritShopLimitGroupTable, err);
-    case 70:
+    case 71:
         return TestTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testTable, err);
-    case 71:
+    case 72:
         return TestMultiKeyTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testMultiKeyTable, err);
-    case 72:
+    case 73:
         return TournamentRewardTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.tournamentRewardTable, err);
-    case 73:
+    case 74:
         return TournamentRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.tournamentRuleTable, err);
-    case 74:
+    case 75:
         return TravelPassSeasonTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.travelPassSeasonTable, err);
-    case 75:
+    case 76:
         return TravelPassTierTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.travelPassTierTable, err);
-    case 76:
+    case 77:
         return TrialJournalEntryTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.trialJournalEntryTable, err);
-    case 77:
+    case 78:
         return TrialJournalMilestoneTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.trialJournalMilestoneTable, err);
-    case 78:
+    case 79:
         return TrialJournalSealTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.trialJournalSealTable, err);
-    case 79:
+    case 80:
         return WorldTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.worldTable, err);
-    case 80:
+    case 81:
         return ZoneGroupTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.zoneGroupTable, err);
     default:
@@ -1112,6 +1123,8 @@ void InvokeTablesLoadSuccess() {
 
     RewardTableManager::Instance().LoadSuccess();
 
+    RewardedAdSlotTableManager::Instance().LoadSuccess();
+
     RoleNameRuleTableManager::Instance().LoadSuccess();
 
     SeasonRuleTableManager::Instance().LoadSuccess();
@@ -1281,6 +1294,8 @@ void LoadTables() {
     RankedRuleTableManager::Instance().Load();
 
     RewardTableManager::Instance().Load();
+
+    RewardedAdSlotTableManager::Instance().Load();
 
     RoleNameRuleTableManager::Instance().Load();
 

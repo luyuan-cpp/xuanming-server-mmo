@@ -139,7 +139,7 @@ TEST_F(PlayerSkillBookTest, FreeCatalogIsSharedAcrossClassesAndLearningUsesTheSe
     ListSkillsResponse first, second;
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, first), kSuccess);
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(otherClass, second), kSuccess);
-    ASSERT_EQ(first.catalog_size(), 66); // 41 首发人物自由技 + 3 成长被动 + 14 兵谋定向 + 8 奇策构筑。
+    ASSERT_EQ(first.catalog_size(), 71); // 41 首发人物自由技 + 3 成长被动 + 14 兵谋定向 + 8 奇策构筑 + 5 叠势成长被动(G04~G08)。
     ASSERT_EQ(second.catalog_size(), first.catalog_size());
     EXPECT_NE(FindEntry(first, 10041), nullptr); // A41 玄镜映法：人物专属主动。
     EXPECT_EQ(FindEntry(first, 10018), nullptr); // A18 仅限宝宝学习。
@@ -203,7 +203,7 @@ TEST_F(PlayerSkillBookTest, PetSkillBookEnforcesOwnershipRankAndKeepsHealthRatio
     ListSkillsResponse book;
     ASSERT_EQ(PetSystem::BuildSkillBook(player, 88, book), kSuccess);
     EXPECT_EQ(book.pet_id(), 88u);
-    EXPECT_EQ(book.catalog_size(), 38); // 原 34 宝宝技 + SP01/SP02 宝宝定向 2 招 + E05/E06 通用追击 2 招。
+    EXPECT_EQ(book.catalog_size(), 39); // 原 34 宝宝技 + SP01/SP02 宝宝定向 2 招 + E05/E06 通用追击 2 招 + G09 宝宝叠势成长被动 1 招。
     EXPECT_EQ(FindEntry(book, 10003), nullptr); // A03 只可由人物学习。
     EXPECT_NE(FindEntry(book, 10018), nullptr); // A18 转为宝宝专属敌2主动。
     EXPECT_NE(FindEntry(book, 13001), nullptr); // T01 转为宝宝专属追击。

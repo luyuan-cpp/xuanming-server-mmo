@@ -56,6 +56,18 @@ public:
     static void ClaimEquipmentMaterialReward(entt::entity player,
         const ::ClaimEquipmentMaterialRewardRequest* request,
         ::ClaimEquipmentMaterialRewardResponse* response);
+    static void GetEquipLoadouts(entt::entity player,
+        const ::GetEquipLoadoutsRequest* request,
+        ::GetEquipLoadoutsResponse* response);
+    static void SaveEquipLoadout(entt::entity player,
+        const ::SaveEquipLoadoutRequest* request,
+        ::SaveEquipLoadoutResponse* response);
+    static void SwitchEquipLoadout(entt::entity player,
+        const ::SwitchEquipLoadoutRequest* request,
+        ::SwitchEquipLoadoutResponse* response);
+    static void UnlockEquipLoadout(entt::entity player,
+        const ::UnlockEquipLoadoutRequest* request,
+        ::UnlockEquipLoadoutResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -188,6 +200,42 @@ public:
             ClaimEquipmentMaterialReward(player,
                 static_cast<const ::ClaimEquipmentMaterialRewardRequest*>(request),
                 static_cast<::ClaimEquipmentMaterialRewardResponse*>(response));
+			}
+            break;
+        case 14:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetEquipLoadoutsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetEquipLoadouts(player,
+                static_cast<const ::GetEquipLoadoutsRequest*>(request),
+                static_cast<::GetEquipLoadoutsResponse*>(response));
+			}
+            break;
+        case 15:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SaveEquipLoadoutResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SaveEquipLoadout(player,
+                static_cast<const ::SaveEquipLoadoutRequest*>(request),
+                static_cast<::SaveEquipLoadoutResponse*>(response));
+			}
+            break;
+        case 16:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SwitchEquipLoadoutResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SwitchEquipLoadout(player,
+                static_cast<const ::SwitchEquipLoadoutRequest*>(request),
+                static_cast<::SwitchEquipLoadoutResponse*>(response));
+			}
+            break;
+        case 17:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::UnlockEquipLoadoutResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            UnlockEquipLoadout(player,
+                static_cast<const ::UnlockEquipLoadoutRequest*>(request),
+                static_cast<::UnlockEquipLoadoutResponse*>(response));
 			}
             break;
         default:

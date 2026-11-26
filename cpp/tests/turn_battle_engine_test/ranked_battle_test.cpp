@@ -1080,6 +1080,282 @@ TEST(RankedBattleTest, CombatHighlightsAndStreakBreakerSettlement) {
     EXPECT_EQ(settleB.ended_opponent_streak(), 0u);
 }
 
+TEST(RankedBattleTest, MidBattleSummonPetPrepSwapRound2UnlockOnceAndPrivacy) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_time_limit(720);
+    dungeon.set_max_team_size(5);
+
+    auto makePet = [](uint64_t petId, uint64_t ownerId, uint32_t tableId, const char* name,
+                      uint64_t hp, uint64_t spd) {
+        BattlePetSnapshot p;
+        p.set_pet_id(petId);
+        p.set_owner_player_id(ownerId);
+        p.set_pet_table_id(tableId);
+        p.set_pet_name(name);
+        p.set_level(30);
+        p.set_max_health(hp);
+        p.set_max_mana(1000);
+        p.set_physical_attack(200);
+        p.set_magic_attack(100);
+        p.set_defense(120);
+        p.mutable_base_attributes()->set_health(hp);
+        p.mutable_base_attributes()->set_mana(1000);
+        p.mutable_base_attributes()->set_speed(spd);
+        return p;
+    };
+    auto summonAction = [](uint64_t petId) {
+        BattleAction a;
+        a.set_action_type(BATTLE_ACTION_SUMMON_PET);
+        a.set_summon_pet_id(petId);
+        return a;
+    };
+
+    CreateBattleRequest req;
+    req.set_battle_id(99501);
+    req.set_battle_config_id(5);
+    req.set_match_mode(7);
+    req.set_seed(501);
+    auto* rctx = req.mutable_ranked_context();
+    rctx->set_season_id(1);
+    rctx->set_season_key("s1");
+    rctx->set_rank_generation(1);
+    rctx->set_rule_version(2);
+    rctx->set_team_size(1);
+    rctx->set_use_free_preset(false);
+
+    auto* p1 = req.add_players();
+    p1->set_player_id(101);
+    p1->set_team_index(0);
+    p1->set_level(30);
+    p1->set_max_health(12000);
+    p1->mutable_base_attributes()->set_health(12000);
+    p1->mutable_base_attributes()->set_speed(220);
+    p1->set_physical_attack(300);
+    p1->set_defense(120);
+    *p1->add_pets() = makePet(5001, 101, 1, "灵狐", 3000, 150);
+    *p1->add_standby_pets() = makePet(5002, 101, 2, "石灵", 5500, 140);
+    *p1->add_standby_pets() = makePet(5003, 101, 3, "玄龟", 6200, 110);
+
+    auto* p2 = req.add_players();
+    p2->set_player_id(201);
+    p2->set_team_index(1);
+    p2->set_level(30);
+    p2->set_max_health(12000);
+    p2->mutable_base_attributes()->set_health(12000);
+    p2->mutable_base_attributes()->set_speed(190);
+    p2->set_physical_attack(300);
+    p2->set_defense(120);
+    *p2->add_pets() = makePet(6001, 201, 4, "金猊", 3200, 160);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    ASSERT_TRUE(engine.IsInPrepPhase());
+
+    // 变阵期隐藏中盘唤灵池；玩家 101 将首发从 5001 换成 5002 并锁定。
+    BattleStateS2C duringPrep;
+    engine.FillSummonStateForViewer(duringPrep, 101);
+    EXPECT_EQ(duringPrep.self_summon_pet_remaining(), 0u);
+    EXPECT_EQ(duringPrep.self_standby_pets_size(), 0);
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 0, 5002, true), 0u);
+    ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true), 0u);
+    ASSERT_TRUE(engine.FinalizePrepPhase());
+
+    const auto r1Snap = engine.BuildStateSnapshot();
+    EXPECT_EQ(r1Snap.summon_pet_unlock_round(), 2u);
+    uint64_t activePetActorId = 0;
+    uint32_t activePetSlot = 0;
+    for (const auto& a : r1Snap.actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_PET && a.owner_player_id() == 101) {
+            activePetActorId = a.actor_id();
+            activePetSlot = a.formation_slot();
+            EXPECT_EQ(a.pet_id(), 5002u);
+        }
+    }
+    ASSERT_NE(activePetActorId, 0u);
+
+    // 亮牌后 101 看到原首发 5001 与 5003 进入中盘备选池；对手 201 与观众严格不可见。
+    BattleStateS2C view101 = r1Snap;
+    engine.FillSummonStateForViewer(view101, 101);
+    EXPECT_EQ(view101.self_summon_pet_remaining(), 1u);
+    ASSERT_EQ(view101.self_standby_pets_size(), 2);
+    EXPECT_EQ(view101.self_standby_pets(0).pet_id(), 5001u);
+    EXPECT_EQ(view101.self_standby_pets(1).pet_id(), 5003u);
+
+    BattleStateS2C view201 = r1Snap;
+    engine.FillSummonStateForViewer(view201, 201);
+    EXPECT_EQ(view201.self_summon_pet_remaining(), 0u);
+    EXPECT_EQ(view201.self_standby_pets_size(), 0);
+
+    BattleStateS2C viewObs = r1Snap;
+    engine.FillSummonStateForViewer(viewObs, 0);
+    EXPECT_EQ(viewObs.self_summon_pet_remaining(), 0u);
+    EXPECT_EQ(viewObs.self_standby_pets_size(), 0);
+
+    // 第 1 回合禁止唤灵；宝宝自身严禁唤灵。
+    EXPECT_EQ(engine.ValidateAction(101, summonAction(5001)), kFeatureUnavailable);
+    EXPECT_EQ(engine.ValidateActorAction(101, activePetActorId, summonAction(5001)), kInvalidParameter);
+
+    // 推进至第 2 回合。
+    engine.SubmitAction(101, Defend());
+    engine.SubmitActorAction(101, activePetActorId, Defend());
+    engine.SubmitAction(201, Defend());
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.BuildStateSnapshot().round_index(), 2u);
+
+    // 伪造他人宠物或当前在场宠被拒绝。
+    EXPECT_EQ(engine.ValidateAction(101, summonAction(6001)), kInvalidParameter);
+    EXPECT_EQ(engine.ValidateAction(101, summonAction(5002)), kInvalidParameter);
+    EXPECT_EQ(engine.ValidateAction(101, summonAction(0)), kInvalidParameter);
+
+    // 第 2 回合主角先手唤出 5001（灵狐），旧宠 5002 虽已排单普攻也不得在被替下后执行，新宠本轮不抢跑。
+    ASSERT_EQ(engine.ValidateAction(101, summonAction(5001)), kSuccess);
+    engine.SubmitAction(101, summonAction(5001));
+    engine.SubmitActorAction(101, activePetActorId, Attack(201));
+    engine.SubmitAction(201, Defend());
+    const auto r2 = engine.ResolveCurrentRound();
+
+    bool sawSummonEvent = false;
+    uint64_t newPetActorId = 0;
+    for (const auto& ev : r2.events()) {
+        if (ev.event_type() == BATTLE_EVENT_SUMMON_PET) {
+            sawSummonEvent = true;
+            EXPECT_EQ(ev.source_id(), 101u);
+            EXPECT_NE(ev.target_id(), activePetActorId);
+            EXPECT_EQ(ev.skill_table_id(), 1u);
+            EXPECT_TRUE(ev.success());
+            newPetActorId = ev.target_id();
+        }
+        // 旧宠被先手替下后不得出手，新宠本轮亦不得出手。
+        if (ev.event_type() == BATTLE_EVENT_ATTACK) {
+            EXPECT_NE(ev.source_id(), activePetActorId);
+            EXPECT_NE(ev.source_id(), newPetActorId);
+        }
+    }
+    ASSERT_TRUE(sawSummonEvent);
+    ASSERT_NE(newPetActorId, 0u);
+
+    // 原阵位保留、全新 actor_id、满血满蓝、余次归零且第 3 回合严禁二次唤灵。
+    bool foundNewPet = false;
+    for (const auto& a : r2.state().actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_PET && a.owner_player_id() == 101) {
+            foundNewPet = true;
+            EXPECT_EQ(a.actor_id(), newPetActorId);
+            EXPECT_EQ(a.pet_id(), 5001u);
+            EXPECT_EQ(a.formation_slot(), activePetSlot);
+            EXPECT_EQ(a.attributes().health(), 3000u);
+        }
+    }
+    EXPECT_TRUE(foundNewPet);
+
+    BattleStateS2C afterSummon;
+    engine.FillSummonStateForViewer(afterSummon, 101);
+    EXPECT_EQ(afterSummon.self_summon_pet_remaining(), 0u);
+    EXPECT_EQ(afterSummon.self_standby_pets_size(), 0);
+    EXPECT_EQ(engine.ValidateAction(101, summonAction(5003)), kFeatureUnavailable);
+
+    // 第 3 回合新宠正常进入可操作列表并可提交指令。
+    EXPECT_EQ(engine.ValidateActorAction(101, newPetActorId, Attack(201)), kSuccess);
+}
+
+TEST(RankedBattleTest, MidBattleSummonPetDisabledInFreePresetAndPreservedWhenStunned) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_time_limit(720);
+    dungeon.set_max_team_size(5);
+
+    auto& stunBuff = data->AddBuff(9501);
+    stunBuff.set_id(9501);
+    stunBuff.set_buff_type(turnbattle::kBuffTypeStun);
+    stunBuff.set_duration(6000);
+    stunBuff.set_max_layer(1);
+
+    auto& stunSkill = data->AddSkill(9501);
+    stunSkill.set_id(9501);
+    stunSkill.add_skill_type(1);
+    stunSkill.add_targeting_mode(1);
+    stunSkill.set_range(100);
+    stunSkill.set_damage("10");
+    stunSkill.add_effect(9501);
+
+    auto summonAction = [](uint64_t petId) {
+        BattleAction a;
+        a.set_action_type(BATTLE_ACTION_SUMMON_PET);
+        a.set_summon_pet_id(petId);
+        return a;
+    };
+
+    // 1. 免费预设娱乐场关闭中盘唤灵。
+    auto freeReq = MakeRanked1v1Request(99502, 5);
+    freeReq.set_match_mode(7);
+    freeReq.mutable_ranked_context()->set_use_free_preset(true);
+    TurnBattleEngine freeEngine(data);
+    ASSERT_TRUE(freeEngine.Initialize(freeReq));
+    EXPECT_EQ(freeEngine.BuildStateSnapshot().summon_pet_unlock_round(), 0u);
+    EXPECT_EQ(freeEngine.ValidateAction(101, summonAction(5001)), kFeatureUnavailable);
+
+    // 2. 正式论剑第 2 回合主角提交唤灵，但出手前被高速对手眩晕打断 -> 不扣唯一一次唤灵额度。
+    auto req = MakeRanked1v1Request(99503, 5);
+    req.set_match_mode(7);
+    req.mutable_ranked_context()->set_use_free_preset(false);
+    req.mutable_players(0)->set_max_health(10000);
+    req.mutable_players(0)->mutable_base_attributes()->set_health(10000);
+    req.mutable_players(0)->mutable_base_attributes()->set_speed(80);
+    req.mutable_players(0)->clear_pets();
+    {
+        auto* p = req.mutable_players(0)->add_pets();
+        p->set_pet_id(7001);
+        p->set_owner_player_id(101);
+        p->set_pet_table_id(1);
+        p->set_pet_name("青狐");
+        p->set_level(30);
+        p->set_max_health(3000);
+        p->mutable_base_attributes()->set_health(3000);
+        p->mutable_base_attributes()->set_speed(70);
+        auto* sb = req.mutable_players(0)->add_standby_pets();
+        sb->set_pet_id(7002);
+        sb->set_owner_player_id(101);
+        sb->set_pet_table_id(2);
+        sb->set_pet_name("玄石");
+        sb->set_level(30);
+        sb->set_max_health(4000);
+        sb->mutable_base_attributes()->set_health(4000);
+        sb->mutable_base_attributes()->set_speed(60);
+    }
+    req.mutable_players(1)->set_max_health(10000);
+    req.mutable_players(1)->mutable_base_attributes()->set_health(10000);
+    req.mutable_players(1)->mutable_base_attributes()->set_speed(260);
+    req.mutable_players(1)->add_skill_table_ids(9501);
+    req.mutable_players(1)->clear_pets();
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    ASSERT_TRUE(engine.FinalizePrepPhase());
+
+    engine.SubmitAction(101, Defend());
+    engine.SubmitAction(201, Defend());
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.BuildStateSnapshot().round_index(), 2u);
+
+    BattleAction castStun;
+    castStun.set_action_type(BATTLE_ACTION_SKILL);
+    castStun.set_skill_table_id(9501);
+    castStun.set_target_id(101);
+    ASSERT_EQ(engine.ValidateAction(101, summonAction(7002)), kSuccess);
+    ASSERT_EQ(engine.ValidateAction(201, castStun), kSuccess);
+    engine.SubmitAction(101, summonAction(7002));
+    engine.SubmitAction(201, castStun);
+    const auto r2 = engine.ResolveCurrentRound();
+    for (const auto& ev : r2.events()) {
+        EXPECT_NE(ev.event_type(), BATTLE_EVENT_SUMMON_PET);
+    }
+    EXPECT_EQ(engine.SummonPetRemaining(101), 1u);
+}
+
 TEST(GuildWarBattleTest, AiDefenderAutoActsAndRound12EscalationDrawsAtMaxRounds) {
     auto data = std::make_shared<MemoryBattleDataProvider>();
     auto& dungeon = data->AddDungeon(1);

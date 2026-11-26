@@ -288,4 +288,47 @@
 | **主城西市名匠代打** | `Assets/Scripts/Net/Generated/Rpc/SceneSkillClientPlayerRpc.cs`（`SetCraftProxyStall = 463` / `ListCraftProxyStalls = 464`） | 仅 `forge_mastery.tier == 3` 或 `scroll_mastery.tier == 3` 开放开摊设置（费用合法区间由服务端权威校验，5% 摆摊银两税自动扣除）；买家选择宗师后透传 `proxy_master_player_id` 进入原子代打/代制结算。 |
 | **移动端与小游戏红线** | 遵循 `mmorpg-client/AGENTS.md` | WebGL2 单线程禁阻塞、IL2CPP 防裁剪、`Screen.safeArea` 与右上角胶囊避让、无 Hover 依赖、运行时 PNG 严格无字全由 TMP 渲染。 |
 
+---
+
+## 8. V1 验收结论与 V1.1 唯一推荐扩展：可交易常规技能书「封卷入包 / 开卷入书架」
+
+### 8.1 V1 全链路闭环验收状态
+
+- **玩法逻辑 + 服务端（C++ / Go / 配表）+ 客户端（C# / uGUI / HUD / 背包浮窗）+ 美术资源（首包 26 张 + 补齐 7 张，共 33 张运行期 PNG 与 `.meta`）已 100% 闭环通过**：
+  - 服务端：`bag_test` 32/32、`turn_battle_engine_test` 28/28、`scene.exe --validate-tables` 81 表全过、Go `match/tournament` 与 `guild/logic` & `guild/war` 全过。
+  - 客户端：`client_compile_check.ps1`（781 files, 0 errors）、7 套件 NUnit 147/147 全过；全 6 卷技能图标与全部打磨/制书/代打核心道具（`3403~3410`）无缺口。
+- **不做无意义硬扩展**：3 套技能配招方案服务端（`player_skill.cpp`）已有，不重复造轮子；不增加“品相套装共鸣额外战力”等数值膨胀系统。
+
+### 8.2 V1.1 扩展方案（按 `AGENTS.md §10.4` 六项分析）
+
+#### 1) 需求分析
+- 当前「典籍制书」界面明确提示 `随机拓印：20 残页 + 50 银两（产物可交易）`，服务端 `CraftedSkillBookEntry.bound` 也严格按实扣材料判定了可交易/绑定；但未学技能书目前仅存在私有书架 `PlayerCraftComp.skill_books`，**无法进入背包、无法挂聚宝斋/集市、也无法面对面卖给好友**。
+- 玩家需要把随机拓印出的热门常规技能书（以及宗师署名技能书）真正变现流通，形成「20 页低成本随机拓印 → 自用研习 / 热门封卷挂市卖银两 / 冷门拆页返 16 残页兜底」的真实玩家经济循环。
+
+#### 2) 设计分析
+- **核心动作（零重复造交易系统，直接复用现有背包 + 面对面交易 + 集市托管）**：
+  1. **封卷入包（`SealSkillBook`）**：仅允许 `book.bound() == false && book.rarity_tier() == 0` 的书架技能书执行；原子从 `PlayerCraftComp.skill_books` 移除该 `book_id`，并在人物背包创建 1 枚不可堆叠的实体道具 `3411 封卷道籍`（`ItemComp.bound = false`，携带 `SealedSkillBookData { skill_table_id, scroll_id, rarity_tier, crafter_player_id, crafter_name }`）。
+  2. **自由流通**：`3411 封卷道籍` 作为标准 `ItemComp` 实例，天然复用 `bag_marshal.cpp` 完整存盘透传、邮件附件、面对面交易与聚宝斋集市托管，不另写第二套交易管线。
+  3. **开卷入书架（`UnsealSkillBook`）**：从人物背包原子销毁指定 `item_id` 的 `3411 封卷道籍`，按其 `SealedSkillBookData` 写回 `PlayerCraftComp.skill_books`（分配新 `book_id`，`bound` 继承 `ItemComp.bound()` 防洗白），随后即可研习或拆页。
+
+#### 3) 思想分析
+- **KISS / 复用优先**：`bag_marshal.cpp` 已整份拷贝 `ItemEntry.instance`，`go/trade` 与集市已整份托管 `ItemComp` 快照；在 `ItemComp` 挂 1 个不可堆叠子消息 `SealedSkillBookData`，即可零侵入接入整套经济/交易/防篡改基础设施。
+- **公平与经济守恒**：不提高稀世绝学产出、不绕过天工秘墨绑定规则；只让原本就设计为“可交易”的常规技能书兑现可交易承诺，让「制卷宗师」署名书与 20 页随机拓印具备真实市场博弈乐趣。
+
+#### 4) 漏洞分析与防线
+1. **稀世/绑定书洗白漏洞** → 服务端 `SealSkillBook` 硬拦截 `book.bound() || book.rarity_tier() != 0 || skill_table_id == 0`；`UnsealSkillBook` 写回书架时强制 `newBook.bound = item.bound()`，即使未来邮件发绑定封卷也无法洗白。
+2. **并堆串技能 / 串宗师署名漏洞** → `ItemStore::IsIndependentInstance(item)` 增加 `|| item.has_sealed_skill_book()`，同时 `Item.xlsx` 配 `max_stack_size = 1`，杜绝两本不同技能书合并。
+3. **重放复制 / 背包满丢书漏洞** → `SealSkillBook` 与 `UnsealSkillBook` 均必带非 0 `client_request_id` 与 `expected_revision`（写入 `ClientRequestLedgerComp`），封卷走 `BagService::AddItems` 前校验背包空位与玩家冻结态，开卷走 `BagService::RemoveItem` 预检可移除且未被战斗/交易预留（`CheckRemovableInstances`）后与书架写回原子提交。
+4. **市场/交易信息不透明防欺诈** → 背包与交易/集市悬浮窗（`EquipTooltip` / `EquipmentScreenModel`）必须直接展示封卷内技能名、所属卷宗与宗师署名，防止买家误买。
+
+#### 5) 步骤分析
+- **阻塞前置**：当前检测到并行会话正在修改 `data/Item.xlsx`、`data/tip/Tip.xlsx`、`proto/message_id.txt`、`proto/persist_schema_gen.txt`、`proto/common/component/client_request_ledger_comp.proto`，须等该并行会话提交落地后再改共享协议与配表，避免覆盖冲突。
+- **美术侧**：仅需 1 张 `512×512` 透明底道具图标（`item_sealed_skill_book.png`），界面直接复用既有典籍制书书架与背包浮窗，无需新整屏。
+
+#### 6) 执行步骤（待并行会话提交后按序执行）
+1. **协议与配表**：`item_base_comp.proto` 新增 `SealedSkillBookData sealed_skill_book = 7`；`player_skill.proto` 追加 `SealSkillBook` / `UnsealSkillBook` 两个 RPC；`client_request_ledger_comp.proto` 增加对应去重枚举；`data/Item.xlsx` 新增 `3411 封卷道籍`（`max_stack_size = 1`, `icon_key = UI/Icons/item_sealed_skill_book`，同时顺手修正 `3410` 的 `icon_key` 为 `UI/Ugui/EconomyTradeV2/icon_inherit_talisman`）；`data/MessageLimiter.xlsx` 为两新 RPC 补限流；执行协议生成、导表与 `persist_schema_gen` 同步。
+2. **服务端实现与单测**：更新 `ItemStore::IsIndependentInstance`、`PlayerCraftSystem::SealSkillBook / UnsealSkillBook` 及 Scene Handler 路由；在 `player_craft_quality_test.cpp` 补充封卷/开卷往返、绑定/稀世拦截、背包满回滚、幂等重放与预留拦截单测；同步核对 `go/trade` 与 Java `PARITY.md`。
+3. **客户端接入与单测**：执行 `gen_proto.ps1`、`gen_messageids.ps1`、`sync_tables.ps1`；在 `SkillCraftClient` 接双 RPC，`SkillCraftWindow` 书架未绑定常规书新增「封卷入包」按钮并展示背包中待开卷的 `3411` 条目（点击「开卷入书架」），`EquipmentScreenModel` / `EquipTooltip` 展示封卷技能与署名信息；导入 Codex 交付的 `item_sealed_skill_book.png`；跑通 `client_compile_check.ps1` 与 NUnit 单测。
+
+
 

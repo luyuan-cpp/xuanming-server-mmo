@@ -901,9 +901,13 @@ uint32_t Availability(entt::entity player, const PreparedCraft& prepared) {
     if (verdict == BagService::RemovalVerdict::kInsufficient) return kEquipEnhanceMaterialNotEnough;
     if (verdict != BagService::RemovalVerdict::kEnough) return kFeatureUnavailable;
     if (prepared.bindConfirmBlocked) return kEquipBindConfirmRequired;
-    const uint64_t totalGold = prepared.baseGoldCost + prepared.proxyFeeGold;
-    if (totalGold > 0 && (totalGold > kMaxPayableGold ||
-                          !CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(totalGold)))) {
+    // 防洗白与防染毒硬隔离：代工费(proxyFeeGold)及可交易装备/解封的费用严格只扣流通银两(kCurrencyGold)；
+    // 仅当目标装备已绑定(prepared.result.bound())时，系统手续费(baseGoldCost)允许优先抵扣绑定银两。
+    const bool allowBindForBaseFee = prepared.result.bound();
+    const uint64_t strictGold = prepared.proxyFeeGold + (allowBindForBaseFee ? 0u : prepared.baseGoldCost);
+    const uint64_t preferBindGold = allowBindForBaseFee ? prepared.baseGoldCost : 0u;
+    if ((strictGold > 0 || preferBindGold > 0) &&
+        !CurrencySystem::CanAffordSplitGold(player, strictGold, preferBindGold)) {
         return kEquipCraftGoldNotEnough;
     }
     if (prepared.original.item_id() == 0) {
@@ -1071,7 +1075,9 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                                 op == EquipmentCraftChoice::UPGRADE_TIER});
     }
 
-    const uint64_t totalGold = prepared.baseGoldCost + prepared.proxyFeeGold;
+    const bool allowBindForBaseFee = (op != EquipmentCraftChoice::UNSEAL_TO_TRADABLE) && prepared.result.bound();
+    const uint64_t strictGold = prepared.proxyFeeGold + (allowBindForBaseFee ? 0u : prepared.baseGoldCost);
+    const uint64_t preferBindGold = allowBindForBaseFee ? prepared.baseGoldCost : 0u;
     const TransactionType goldTxType = (op == EquipmentCraftChoice::POLISH_AFFIX ||
                                         op == EquipmentCraftChoice::REFORGE_AFFIX ||
                                         op == EquipmentCraftChoice::UPGRADE_TIER)
@@ -1090,8 +1096,8 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                     created.front().front() == kInvalidGuid) return kEquipInternalError;
                 applied.equipmentItemId = created.front().front();
             }
-            if (totalGold > 0 && (totalGold > kMaxPayableGold ||
-                                  !CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(totalGold)))) {
+            if ((strictGold > 0 || preferBindGold > 0) &&
+                !CurrencySystem::CanAffordSplitGold(player, strictGold, preferBindGold)) {
                 return kEquipCraftGoldNotEnough;
             }
             entt::entity proxyMaster = entt::null;
@@ -1118,9 +1124,9 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                 !client_request_ledger::Validate(next).empty()) {
                 return kEquipInternalError;
             }
-            if (totalGold > 0) {
-                const auto deductErr = CurrencySystem::DeductCurrency(
-                    player, kCurrencyGold, static_cast<int64_t>(totalGold), goldTxType, request.client_request_id());
+            if (strictGold > 0 || preferBindGold > 0) {
+                const auto deductErr = CurrencySystem::DeductSplitGold(
+                    player, strictGold, preferBindGold, goldTxType, request.client_request_id());
                 if (deductErr != kSuccess) return kEquipCraftGoldNotEnough;
             }
             if (proxyMaster != entt::null && proxyNetGold > 0) {

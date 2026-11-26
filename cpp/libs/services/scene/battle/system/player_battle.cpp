@@ -1465,6 +1465,20 @@ namespace
 	}
 } // namespace
 
+bool PlayerBattleSystem::IsWorldTideActiveOnScene(uint64_t nowUnixSec, uint32_t sceneConfigId)
+{
+	// shortcut: uses default tide schedule [2,3,5]/3600s/2400s, read WorldMapOverview snapshot if ops customizes tide schedule
+	constexpr std::array<uint32_t, 3> kTideCandidates = {2u, 3u, 5u};
+	constexpr uint64_t kTideIntervalSec = 3600ull;
+	constexpr uint64_t kTideDurationSec = 2400ull;
+	if (sceneConfigId == 0u || (nowUnixSec % kTideIntervalSec) >= kTideDurationSec)
+	{
+		return false;
+	}
+	const uint64_t roundIndex = nowUnixSec / kTideIntervalSec;
+	return kTideCandidates[roundIndex % kTideCandidates.size()] == sceneConfigId;
+}
+
 void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::PrepareBattleResponse& response)
 {
 	const uint64_t playerId = request.player_id();
@@ -1549,10 +1563,61 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 			response.mutable_error_message()->set_id(kFeatureUnavailable);
 			return;
 		}
+		// 灵潮珍兽潮专属副本(ID 210..219)：除身处对应野外图外，还必须处于该图灵潮激活窗口。
+		if (dungeonRow->id() >= 210u && dungeonRow->id() <= 219u)
+		{
+			const uint64_t nowUnixSec = TimeSystem::NowMillisecondsUTC() / 1000ull;
+			if (!IsWorldTideActiveOnScene(nowUnixSec, dungeonRow->scene_id()))
+			{
+				LOG_WARN << "[PlayerBattle] PrepareBattle rejected: wild pet tide habitat inactive, player_id=" << playerId
+						 << " battle_id=" << battleId
+						 << " battle_config_id=" << request.battle_config_id()
+						 << " required_scene=" << dungeonRow->scene_id();
+				response.mutable_error_message()->set_id(kFeatureUnavailable);
+				return;
+			}
+		}
 	}
 	const uint32_t bossTrialKind = dungeonRow != nullptr ? dungeonRow->boss_trial_kind() : turnbattle::kBossTrialKindNone;
 	const bool isBossTrial = turnbattle::IsBossTrialKind(bossTrialKind);
 	const bool isGuardRescue = bossTrialKind == turnbattle::kBossTrialKindGuardianRescue;
+	const bool isNpcIsolatedEncounter = turnbattle::IsNpcIsolatedEncounterKind(bossTrialKind);
+	// 归元城原创 NPC 场景玩法（演武试招木桩=9、回合残局=10、人物奇谈=11）场景与预设准入硬校验：
+	//   1) 必须身处配置绑定的归元城安全区（scene_id），防野外原地开城内演武/奇谈；
+	//   2) 演武木桩强制使用本人真实养成，禁止挂载免费 3×3 预设（残局与奇谈允许选用预设）。
+	if (isNpcIsolatedEncounter && dungeonRow != nullptr)
+	{
+		if (dungeonRow->scene_id() != 0)
+		{
+			uint32_t currentSceneConfigId = 0;
+			if (const auto* sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+				sceneEntityComp != nullptr && sceneEntityComp->sceneEntity != entt::null)
+			{
+				if (const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntityComp->sceneEntity))
+				{
+					currentSceneConfigId = sceneInfo->scene_config_id();
+				}
+			}
+			if (currentSceneConfigId != dungeonRow->scene_id())
+			{
+				LOG_WARN << "[PlayerBattle] PrepareBattle rejected: npc encounter scene mismatch, player_id=" << playerId
+						 << " battle_id=" << battleId
+						 << " battle_config_id=" << request.battle_config_id()
+						 << " required_scene=" << dungeonRow->scene_id()
+						 << " current_scene=" << currentSceneConfigId;
+				response.mutable_error_message()->set_id(kFeatureUnavailable);
+				return;
+			}
+		}
+		if (turnbattle::IsPracticeDummyKind(bossTrialKind) && useFreePreset)
+		{
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: practice dummy forbids free preset, player_id=" << playerId
+					 << " battle_id=" << battleId
+					 << " battle_config_id=" << request.battle_config_id();
+			response.mutable_error_message()->set_id(kFeatureUnavailable);
+			return;
+		}
+	}
 	const bool isFestivalBeast = request.has_activity_context() &&
 								 request.activity_context().kind() == ::BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST &&
 								 request.activity_context().has_festival_beast();
@@ -1613,9 +1678,9 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		return;
 	}
 
-	// 免费预设娱乐场、正式人宠会武、首领试炼、瑞兽迎春、五行幻境爬塔、道友切磋坊与帮会帮战均以局内满血蓝无耗材快照入场（不改局外永久血蓝）。
+	// 免费预设娱乐场、正式人宠会武、首领试炼、瑞兽迎春、五行幻境爬塔、道友切磋坊、帮会帮战与归元城演武/残局/奇谈均以局内满血蓝无耗材快照入场（不改局外永久血蓝）。
 	const bool isolateBattleTempState =
-		useFreePreset || isFormalRanked || isBossTrial || isGuardRescue || isFestivalBeast || isWuxingTower || isCustomDuel || isGuildWar;
+		useFreePreset || isFormalRanked || isBossTrial || isGuardRescue || isFestivalBeast || isWuxingTower || isCustomDuel || isGuildWar || isNpcIsolatedEncounter;
 	if (!isolateBattleTempState)
 	{
 		if (const auto* attrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
@@ -2848,7 +2913,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     const uint64_t settlementNowMs = TimeSystem::NowMillisecondsUTC();
     const bool isWuxingTower =
         settlement.has_tower_settlement() && settlement.tower_settlement().floor() != 0;
-    const bool creditsMaterialReward = !isWuxingTower && PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
+    const bool isNpcIsolatedEncounter =
+        turnbattle::IsNpcIsolatedEncounterKind(settlement.boss_trial_kind());
+    const bool creditsMaterialReward =
+        !isWuxingTower && !isNpcIsolatedEncounter && PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
     ClientRequestLedgerComp materialRewardCandidate;
     std::string materialRewardBefore;
     PlayerEquipmentMaterialRewardSystem::BattleCreditDelta materialCreditDelta;
@@ -2911,10 +2979,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             festivalBeastCandidate, festivalBeastDelta) != kSuccess) return false;
     }
 
-    // 赛季印进度与五行幻境周常爬塔同在首次收件箱应用时原子入账（瑞兽迎春不额外发赛季进度）。
+    // 赛季印进度与五行幻境周常爬塔同在首次收件箱应用时原子入账（瑞兽迎春与归元城演武/残局/奇谈不额外发赛季进度）。
     const bool creditsSeasonProgress =
         isWuxingTower ||
-        (!isFestivalBeast && PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 &&
+        (!isFestivalBeast && !isNpcIsolatedEncounter && PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 &&
          PlayerSeasonSystem::IsEligibleBattle(settlement));
     PlayerSeasonComp seasonProgressCandidate;
     std::string seasonProgressBefore;
@@ -2930,7 +2998,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     }
 
     // 五行试炼志 V2：同一收件箱原子入账，先制备候选并记录本局增量回显（不改写材料日额度）。
-    const bool creditsTrialJournal = !isFestivalBeast && !isWuxingTower && PlayerTrialJournalSystem::HasJournalUpdate(settlement);
+    const bool creditsTrialJournal =
+        !isFestivalBeast && !isWuxingTower && !isNpcIsolatedEncounter && PlayerTrialJournalSystem::HasJournalUpdate(settlement);
     PlayerTrialJournalComp trialJournalCandidate;
     std::string trialJournalBefore;
     PlayerTrialJournalSystem::SettlementDelta trialJournalDelta;
@@ -2944,7 +3013,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 
     // 游历手记（不肝不逼氪双轨活动）：任意合格正式战斗同一收件箱原子积点（未挂组件的老测试夹具自动跳过）。
     const auto* travelPassComp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
-    const bool creditsTravelPass = travelPassComp != nullptr && PlayerTravelPassSystem::IsEligibleBattle(settlement);
+    const bool creditsTravelPass =
+        !isNpcIsolatedEncounter && travelPassComp != nullptr && PlayerTravelPassSystem::IsEligibleBattle(settlement);
     PlayerTravelPassComp travelPassCandidate;
     std::string travelPassBefore;
     bool travelPassPointsIncreased = false;
@@ -2954,12 +3024,12 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             travelPassCandidate, travelPassPointsIncreased) != kSuccess) return false;
     }
 
-    // 正式人宠会武(competitive_ranked)、免费预设娱乐场(use_free_preset)、瑞兽迎春(isFestivalBeast)、五行幻境(isWuxingTower)与帮会帮战严格资产隔离：
+    // 正式人宠会武(competitive_ranked)、免费预设娱乐场(use_free_preset)、瑞兽迎春(isFestivalBeast)、五行幻境(isWuxingTower)、帮会帮战与归元城演武/残局/奇谈严格资产隔离：
     // 绝不回写场外血蓝/复活/宠物/道具消耗，仅原子记材料额度、赛季/活动/爬塔进度、试炼志与近期战果。
     const bool isGuildWar =
         settlement.match_mode() == match::MATCH_MODE_GUILD_WAR_PVP ||
         settlement.match_mode() == match::MATCH_MODE_GUILD_WAR_SIEGE;
-    if (settlement.competitive_ranked() || settlement.use_free_preset() || isFestivalBeast || isWuxingTower || isGuildWar) {
+    if (settlement.competitive_ranked() || settlement.use_free_preset() || isFestivalBeast || isWuxingTower || isGuildWar || isNpcIsolatedEncounter) {
         const auto rankedIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
         if (!rankedIdentity || !IsSettlementApplicable(player) ||
             !tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player)) {
@@ -2991,7 +3061,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             currentTravelPass->SerializeAsString() != travelPassBefore)) {
             return false;
         }
-        if (!isFestivalBeast && progressionDelta.expGain > 0) {
+        if (!isFestivalBeast && !isNpcIsolatedEncounter && progressionDelta.expGain > 0) {
             const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
             if (levelComp == nullptr ||
                 progressionDelta.expGain > std::numeric_limits<uint64_t>::max() - levelComp->total_exp()) {
@@ -2999,7 +3069,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             }
         }
         SettlementCurrencyGains isolatedCurrencies;
-        const bool grantIsolatedSilver = !isFestivalBeast && progressionDelta.silverGain > 0;
+        const bool grantIsolatedSilver = !isFestivalBeast && !isNpcIsolatedEncounter && progressionDelta.silverGain > 0;
         if (grantIsolatedSilver) {
             if (!tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player) ||
                 !CanCreditWholeBattleCurrency(player, kCurrencyGold, progressionDelta.silverGain)) {

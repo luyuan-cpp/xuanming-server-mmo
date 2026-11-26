@@ -25,6 +25,8 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/item_hold.h" // 战斗道具预留(battle-item-reservation.md)
 #include "services/scene/player/system/player_mail_outbox.h" // 两包都放不下时掉落改投邮件(battle-overflow-mail.md)
+#include "services/scene/player/system/player_season.h"
+#include "services/scene/player/system/player_travel_pass.h"
 #include "table/proto/tip/bag_error_tip.pb.h" // kBagItemNotStacked:改投也接不住时带回的延后原因
 #include "modules/bag/bag_system.h"
 #include "modules/bag/comp/player_bags_comp.h"
@@ -3148,6 +3150,96 @@ TEST_F(PlayerBattleSettlementTest, PrepareWildPetHabitatRequiresMatchingWildScen
         PrepareBattleResponse resp;
         PlayerBattleSystem::PrepareBattle(req, resp);
         EXPECT_EQ(resp.error_message().id(), kRefusedAtSnapshot);
+    }
+
+    // 灵潮珍兽潮副本表项与确定性灵潮窗口判定([2,3,5], 3600s 周期 / 2400s 激活)。
+    const auto* tideHabitat = DungeonTableManager::Instance().FindByIdSilent(212).first;
+    ASSERT_NE(tideHabitat, nullptr);
+    EXPECT_EQ(tideHabitat->allow_pet_capture(), 1u);
+    EXPECT_EQ(tideHabitat->scene_id(), 2u);
+    EXPECT_TRUE(PlayerBattleSystem::IsWorldTideActiveOnScene(0ull, 2u));
+    EXPECT_TRUE(PlayerBattleSystem::IsWorldTideActiveOnScene(2399ull, 2u));
+    EXPECT_FALSE(PlayerBattleSystem::IsWorldTideActiveOnScene(2400ull, 2u));
+    EXPECT_FALSE(PlayerBattleSystem::IsWorldTideActiveOnScene(100ull, 3u));
+    EXPECT_TRUE(PlayerBattleSystem::IsWorldTideActiveOnScene(3600ull, 3u));
+    EXPECT_TRUE(PlayerBattleSystem::IsWorldTideActiveOnScene(7200ull, 5u));
+    EXPECT_TRUE(PlayerBattleSystem::IsWorldTideActiveOnScene(10800ull, 2u));
+
+    tlsEcs.actorRegistry.remove<SceneEntityComp>(player);
+    tlsEcs.sceneRegistry.destroy(scene);
+}
+
+// 归元城原创 NPC 玩法（演武试招木桩=9、回合残局=10、人物奇谈=11）：
+//   1) 必须身处归元城(scene_id=1)才可备战；
+//   2) 演武木桩禁止挂免费预设，残局与奇谈允许可选免费预设；
+//   3) 结算严格隔离：零装备材料、零战斗经验银两、零赛季印与游历手记点数。
+TEST_F(PlayerBattleSettlementTest, GuiyuanNpcEncountersCheckScenePresetAndZeroRewards) {
+    DungeonTableManager::Instance().Load();
+    const auto* dummy = DungeonTableManager::Instance().FindByIdSilent(301).first;
+    const auto* puzzle = DungeonTableManager::Instance().FindByIdSilent(311).first;
+    const auto* tale = DungeonTableManager::Instance().FindByIdSilent(321).first;
+    ASSERT_NE(dummy, nullptr);
+    ASSERT_NE(puzzle, nullptr);
+    ASSERT_NE(tale, nullptr);
+    EXPECT_EQ(dummy->boss_trial_kind(), 9u);
+    EXPECT_EQ(puzzle->boss_trial_kind(), 10u);
+    EXPECT_EQ(tale->boss_trial_kind(), 11u);
+    EXPECT_EQ(dummy->scene_id(), 1u);
+
+    const SceneEntity scene = tlsEcs.sceneRegistry.create();
+    auto& sceneInfo = tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene);
+    sceneInfo.set_scene_config_id(2); // 身在野外八景岛
+    tlsEcs.actorRegistry.emplace<SceneEntityComp>(player, SceneEntityComp{scene});
+
+    // 野外不可开归元城演武木桩/残局/奇谈
+    for (uint32_t cfgId : {301u, 311u, 321u}) {
+        auto req = MakePrepareRequest(playerId, 900 + cfgId);
+        req.set_battle_config_id(cfgId);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), static_cast<uint32_t>(kFeatureUnavailable));
+    }
+
+    // 回到归元城(1)：演武木桩禁用免费预设，本人真实养成放行
+    sceneInfo.set_scene_config_id(1);
+    {
+        auto req = MakePrepareRequest(playerId, 1301);
+        req.set_battle_config_id(301);
+        req.mutable_ranked_context()->set_use_free_preset(true);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), static_cast<uint32_t>(kFeatureUnavailable));
+    }
+    {
+        auto req = MakePrepareRequest(playerId, 1302);
+        req.set_battle_config_id(301);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), kRefusedAtSnapshot);
+    }
+    // 残局与奇谈允许可选免费预设
+    for (uint32_t cfgId : {311u, 321u}) {
+        auto req = MakePrepareRequest(playerId, 1400 + cfgId);
+        req.set_battle_config_id(cfgId);
+        req.mutable_ranked_context()->set_use_free_preset(true);
+        PrepareBattleResponse resp;
+        PlayerBattleSystem::PrepareBattle(req, resp);
+        EXPECT_EQ(resp.error_message().id(), kRefusedAtSnapshot);
+    }
+
+    // 结算防刷验证：kind=9/10/11 全部零材料/零赛季/零游历/零经验银两
+    for (uint32_t kind : {9u, 10u, 11u}) {
+        BattleSettlementData s = settlement;
+        s.set_match_mode(match::MATCH_MODE_PVE_SOLO);
+        s.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+        s.set_player_team_index(0);
+        s.set_total_rounds(4);
+        s.set_boss_trial_kind(kind);
+        EXPECT_FALSE(PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(s));
+        EXPECT_FALSE(PlayerSeasonSystem::IsEligibleBattle(s));
+        EXPECT_FALSE(PlayerTravelPassSystem::IsEligibleBattle(s));
+        uint32_t lookupMode = 0, diff = 0, tier = 0;
+        EXPECT_FALSE(battleprogression::ResolveBattleLookupKey(s, lookupMode, diff, tier));
     }
 
     tlsEcs.actorRegistry.remove<SceneEntityComp>(player);

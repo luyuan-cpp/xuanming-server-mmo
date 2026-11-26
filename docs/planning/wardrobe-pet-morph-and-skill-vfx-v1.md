@@ -100,3 +100,19 @@
 3. **C++ 服务端闭环与单测**：扩展 `appearance_rules.h`、`player_appearance.h/.cpp`、`player_appearance_handler.cpp`、`player_pet.cpp`、`player_battle.cpp`、`turn_battle_engine.cpp`，在 `player_appearance_test.cpp` 补齐单测，跑静态检查、`msbuild /m:1` 与 `bag_test`。
 4. **Unity 素材与客户端全链路接入**：拷贝 12 张切片与 `.meta` 至 `Assets/Resources/UI/Ugui/WardrobeCosmetics/`；实现 `WardrobeCosmeticModels.cs`、`AppearanceClient.cs`、`JubaozhaiUiRoot.cs`/`CommerceWindow.cs`、`AppearanceUiArt.cs`、`AppearanceUiRoot.Cosmetics.cs` 及战斗/灵宠表现接入；新增 `WardrobeCosmeticsTests.cs` 并执行编译检查与 NUnit 测试。
 5. **Java 独立服同步与回归**：同步契约并在 `xuanming-server-mmo` 完成持久化、服务、战斗/灵宠快照与单测对齐，登记 `PARITY.md` 与 `docs/PROGRESS.md`。
+
+---
+
+## 6. 2026-11-26 商业化券闭环、技能面板直达与四仓对齐补齐
+
+1. **真实局内购券解锁闭环（零新 RPC、复用灵石百宝阁）**：
+   - `Item.xlsx` 新增绑定自用券 `3411 灵宠幻化符`、`3412 技能特效卷`；`SpiritShopGoods.xlsx`（`tab_id=3 外观便利`）正式上架 `303 灵宠幻化符（120 灵石）` 与 `304 技能特效卷（180 灵石）`。
+   - `PetCosmetic`（`12..14`）与 `SkillVfxCosmetic`（`14..16`）追加 `card_item_id`、`card_item_count`、`spirit_shop_goods_id`（`#1/#2` 支持百宝阁券解锁，`#3 月弦师/寒星流华` 置 `0` 严格保留赛季/活动专属）。
+   - `EquipPetCosmetic(530)` / `EquipSkillVfx(531)` 末尾追加 `expect_free_equip = 4` 防误扣确认位，复用 `ClientRequestLedger`（C++ `kEquipPetCosmetic=18` / `kEquipSkillVfx=19`；Java `KIND_EQUIP_PET_COSMETIC=4` / `KIND_EQUIP_SKILL_VFX=5`）实现原子耗券（含绑定券自耗）+ 置永久拥有位图 + 穿戴 + 同键幂等重放 + 换参拒回。
+   - Java 侧同步在 `BagService` 新增 `prepareSelfConsume`（支持绑定/可交易自耗道具），修复 `prepareDebit` 仅限可交易道具导致绑定形象卡与绑定外观券无法自耗的隐患。
+2. **客户端入口与刷态补齐**：
+   - `SkillPanel.cs` / `SkillPanel.Fidelity.cs` 新增「技能特效」直达按钮，与 `PetPanel.cs`「灵宠幻化」入口对称，一键打开衣柜「特效」页并定位当前选中技能。
+   - `SpiritShopUiRoot.cs` 购买成功回包后即时触发 `AppearanceClient.RequestInfo(force: true)`，切回衣柜立即可见最新券余量并点击「使用幻化符/特效卷解锁并穿戴」；无券时直达百宝阁对应分页并聚焦 `303/304`。
+3. **四仓全对齐与不硬扩展结论**：
+   - `xuanming-server-mmo-python` 补齐 `530/531`、5 张配置表、`scene_appearance.py`、`scene_pets.py`、`scene_battle.py`、`battle.py` 及端到端单测。
+   - 保持纯外观零数值原则，不强行扩展战力加成、抽奖盲盒或额外养成负担；新增道具图标与可选生产级特效帧条/百宝阁切图清单见 [wardrobe-cosmetics-assets-handoff.md](ui-handoff/wardrobe-cosmetics-assets-handoff.md)。

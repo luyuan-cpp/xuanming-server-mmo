@@ -20,6 +20,9 @@ message PetCosmeticTable {
 	uint64 mall_sku_id = 9;
 	string acquire_hint = 10;
 	string desc = 11;
+	uint32 card_item_id = 12;
+	uint32 card_item_count = 13;
+	uint32 spirit_shop_goods_id = 14;
 }
 
 message PetCosmeticTableData {

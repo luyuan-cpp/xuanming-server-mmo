@@ -57,6 +57,18 @@ type PetCosmeticDescComp struct {
     Value string
 }
 
+type PetCosmeticCard_item_idComp struct {
+    Value uint32
+}
+
+type PetCosmeticCard_item_countComp struct {
+    Value uint32
+}
+
+type PetCosmeticSpirit_shop_goods_idComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -104,5 +116,17 @@ func MakePetCosmeticAcquire_hintComp(row *pb.PetCosmeticTable) PetCosmeticAcquir
 
 func MakePetCosmeticDescComp(row *pb.PetCosmeticTable) PetCosmeticDescComp {
     return PetCosmeticDescComp{Value: row.Desc}
+}
+
+func MakePetCosmeticCard_item_idComp(row *pb.PetCosmeticTable) PetCosmeticCard_item_idComp {
+    return PetCosmeticCard_item_idComp{Value: row.CardItemId}
+}
+
+func MakePetCosmeticCard_item_countComp(row *pb.PetCosmeticTable) PetCosmeticCard_item_countComp {
+    return PetCosmeticCard_item_countComp{Value: row.CardItemCount}
+}
+
+func MakePetCosmeticSpirit_shop_goods_idComp(row *pb.PetCosmeticTable) PetCosmeticSpirit_shop_goods_idComp {
+    return PetCosmeticSpirit_shop_goods_idComp{Value: row.SpiritShopGoodsId}
 }
 

@@ -33,6 +33,10 @@ const (
 	SceneBagClientPlayer_CommitEquipmentCraft_FullMethodName         = "/SceneBagClientPlayer/CommitEquipmentCraft"
 	SceneBagClientPlayer_GetEquipmentMaterialReward_FullMethodName   = "/SceneBagClientPlayer/GetEquipmentMaterialReward"
 	SceneBagClientPlayer_ClaimEquipmentMaterialReward_FullMethodName = "/SceneBagClientPlayer/ClaimEquipmentMaterialReward"
+	SceneBagClientPlayer_GetEquipLoadouts_FullMethodName             = "/SceneBagClientPlayer/GetEquipLoadouts"
+	SceneBagClientPlayer_SaveEquipLoadout_FullMethodName             = "/SceneBagClientPlayer/SaveEquipLoadout"
+	SceneBagClientPlayer_SwitchEquipLoadout_FullMethodName           = "/SceneBagClientPlayer/SwitchEquipLoadout"
+	SceneBagClientPlayer_UnlockEquipLoadout_FullMethodName           = "/SceneBagClientPlayer/UnlockEquipLoadout"
 )
 
 // SceneBagClientPlayerClient is the client API for SceneBagClientPlayer service.
@@ -61,6 +65,11 @@ type SceneBagClientPlayerClient interface {
 	CommitEquipmentCraft(ctx context.Context, in *CommitEquipmentCraftRequest, opts ...grpc.CallOption) (*CommitEquipmentCraftResponse, error)
 	GetEquipmentMaterialReward(ctx context.Context, in *GetEquipmentMaterialRewardRequest, opts ...grpc.CallOption) (*GetEquipmentMaterialRewardResponse, error)
 	ClaimEquipmentMaterialReward(ctx context.Context, in *ClaimEquipmentMaterialRewardRequest, opts ...grpc.CallOption) (*ClaimEquipmentMaterialRewardResponse, error)
+	// ── 装备流派方案预设（method index 14..17，严禁重排）──
+	GetEquipLoadouts(ctx context.Context, in *GetEquipLoadoutsRequest, opts ...grpc.CallOption) (*GetEquipLoadoutsResponse, error)
+	SaveEquipLoadout(ctx context.Context, in *SaveEquipLoadoutRequest, opts ...grpc.CallOption) (*SaveEquipLoadoutResponse, error)
+	SwitchEquipLoadout(ctx context.Context, in *SwitchEquipLoadoutRequest, opts ...grpc.CallOption) (*SwitchEquipLoadoutResponse, error)
+	UnlockEquipLoadout(ctx context.Context, in *UnlockEquipLoadoutRequest, opts ...grpc.CallOption) (*UnlockEquipLoadoutResponse, error)
 }
 
 type sceneBagClientPlayerClient struct {
@@ -211,6 +220,46 @@ func (c *sceneBagClientPlayerClient) ClaimEquipmentMaterialReward(ctx context.Co
 	return out, nil
 }
 
+func (c *sceneBagClientPlayerClient) GetEquipLoadouts(ctx context.Context, in *GetEquipLoadoutsRequest, opts ...grpc.CallOption) (*GetEquipLoadoutsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEquipLoadoutsResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_GetEquipLoadouts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) SaveEquipLoadout(ctx context.Context, in *SaveEquipLoadoutRequest, opts ...grpc.CallOption) (*SaveEquipLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveEquipLoadoutResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_SaveEquipLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) SwitchEquipLoadout(ctx context.Context, in *SwitchEquipLoadoutRequest, opts ...grpc.CallOption) (*SwitchEquipLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SwitchEquipLoadoutResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_SwitchEquipLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) UnlockEquipLoadout(ctx context.Context, in *UnlockEquipLoadoutRequest, opts ...grpc.CallOption) (*UnlockEquipLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnlockEquipLoadoutResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_UnlockEquipLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneBagClientPlayerServer is the server API for SceneBagClientPlayer service.
 // All implementations must embed UnimplementedSceneBagClientPlayerServer
 // for forward compatibility.
@@ -237,6 +286,11 @@ type SceneBagClientPlayerServer interface {
 	CommitEquipmentCraft(context.Context, *CommitEquipmentCraftRequest) (*CommitEquipmentCraftResponse, error)
 	GetEquipmentMaterialReward(context.Context, *GetEquipmentMaterialRewardRequest) (*GetEquipmentMaterialRewardResponse, error)
 	ClaimEquipmentMaterialReward(context.Context, *ClaimEquipmentMaterialRewardRequest) (*ClaimEquipmentMaterialRewardResponse, error)
+	// ── 装备流派方案预设（method index 14..17，严禁重排）──
+	GetEquipLoadouts(context.Context, *GetEquipLoadoutsRequest) (*GetEquipLoadoutsResponse, error)
+	SaveEquipLoadout(context.Context, *SaveEquipLoadoutRequest) (*SaveEquipLoadoutResponse, error)
+	SwitchEquipLoadout(context.Context, *SwitchEquipLoadoutRequest) (*SwitchEquipLoadoutResponse, error)
+	UnlockEquipLoadout(context.Context, *UnlockEquipLoadoutRequest) (*UnlockEquipLoadoutResponse, error)
 	mustEmbedUnimplementedSceneBagClientPlayerServer()
 }
 
@@ -288,6 +342,18 @@ func (UnimplementedSceneBagClientPlayerServer) GetEquipmentMaterialReward(contex
 }
 func (UnimplementedSceneBagClientPlayerServer) ClaimEquipmentMaterialReward(context.Context, *ClaimEquipmentMaterialRewardRequest) (*ClaimEquipmentMaterialRewardResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimEquipmentMaterialReward not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) GetEquipLoadouts(context.Context, *GetEquipLoadoutsRequest) (*GetEquipLoadoutsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEquipLoadouts not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) SaveEquipLoadout(context.Context, *SaveEquipLoadoutRequest) (*SaveEquipLoadoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveEquipLoadout not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) SwitchEquipLoadout(context.Context, *SwitchEquipLoadoutRequest) (*SwitchEquipLoadoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SwitchEquipLoadout not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) UnlockEquipLoadout(context.Context, *UnlockEquipLoadoutRequest) (*UnlockEquipLoadoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnlockEquipLoadout not implemented")
 }
 func (UnimplementedSceneBagClientPlayerServer) mustEmbedUnimplementedSceneBagClientPlayerServer() {}
 func (UnimplementedSceneBagClientPlayerServer) testEmbeddedByValue()                              {}
@@ -562,6 +628,78 @@ func _SceneBagClientPlayer_ClaimEquipmentMaterialReward_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneBagClientPlayer_GetEquipLoadouts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEquipLoadoutsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).GetEquipLoadouts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_GetEquipLoadouts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).GetEquipLoadouts(ctx, req.(*GetEquipLoadoutsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_SaveEquipLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveEquipLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).SaveEquipLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_SaveEquipLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).SaveEquipLoadout(ctx, req.(*SaveEquipLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_SwitchEquipLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SwitchEquipLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).SwitchEquipLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_SwitchEquipLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).SwitchEquipLoadout(ctx, req.(*SwitchEquipLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_UnlockEquipLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlockEquipLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).UnlockEquipLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_UnlockEquipLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).UnlockEquipLoadout(ctx, req.(*UnlockEquipLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneBagClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneBagClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -624,6 +762,22 @@ var SceneBagClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimEquipmentMaterialReward",
 			Handler:    _SceneBagClientPlayer_ClaimEquipmentMaterialReward_Handler,
+		},
+		{
+			MethodName: "GetEquipLoadouts",
+			Handler:    _SceneBagClientPlayer_GetEquipLoadouts_Handler,
+		},
+		{
+			MethodName: "SaveEquipLoadout",
+			Handler:    _SceneBagClientPlayer_SaveEquipLoadout_Handler,
+		},
+		{
+			MethodName: "SwitchEquipLoadout",
+			Handler:    _SceneBagClientPlayer_SwitchEquipLoadout_Handler,
+		},
+		{
+			MethodName: "UnlockEquipLoadout",
+			Handler:    _SceneBagClientPlayer_UnlockEquipLoadout_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

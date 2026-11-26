@@ -23,7 +23,13 @@ const (
 	Gold        = uint32(basepb.CurrencyType_CURRENCY_TYPE_GOLD)         // 银两
 	Diamond     = uint32(basepb.CurrencyType_CURRENCY_TYPE_DIAMOND)      // 灵石
 	BindDiamond = uint32(basepb.CurrencyType_CURRENCY_TYPE_BIND_DIAMOND) // 绑定灵石
+	BindGold    = uint32(basepb.CurrencyType_CURRENCY_TYPE_BIND_GOLD)    // 绑定银两
 )
+
+// IsBound 报告 v 是否属于禁止玩家间交易/寄售的绑定货币。
+func IsBound(v uint32) bool {
+	return v == BindDiamond || v == BindGold
+}
 
 // IsKnown 报告 v 是否在取值表内。线上字段是 uint32,枚举是 int32:先排除转换后会变号的值。
 // 取值从 0 连续(由本包测试与 C++ currency_test 守住)时,与 C++ 的 IsKnownCurrencyType 等价。

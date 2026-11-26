@@ -980,6 +980,9 @@ protected:
 		EmplaceIfAbsent<PlayerTrialJournalComp>(entity); // 五行试炼志持久状态(long-term-progression-v2.md)
 		EmplaceIfAbsent<PlayerCraftComp>(entity); // 装备品相/技能制书与代打持久状态(equipment-quality-and-skill-crafting-v1.md)
 		EmplaceIfAbsent<PlayerFestivalBeastComp>(entity); // 瑞兽迎春限时活动持久状态
+		EmplaceIfAbsent<PlayerSpiritShopComp>(entity); // 官方灵石百宝阁限购状态
+		EmplaceIfAbsent<PlayerTravelPassComp>(entity); // 游历手记持久状态
+		EmplaceIfAbsent<PlayerEquipLoadoutComp>(entity); // 装备流派方案预设
 		// 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
 		EmplaceIfAbsent<PlayerDatabaseCarryComp>(entity);
 	}

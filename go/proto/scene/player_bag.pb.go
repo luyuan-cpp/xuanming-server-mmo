@@ -24,6 +24,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type EquipLoadoutSlotStatus int32
+
+const (
+	EquipLoadoutSlotStatus_EQUIP_LOADOUT_SLOT_EMPTY             EquipLoadoutSlotStatus = 0 // 该槽位未绑定任何装备
+	EquipLoadoutSlotStatus_EQUIP_LOADOUT_SLOT_EQUIPPED          EquipLoadoutSlotStatus = 1 // 所绑装备当前正穿在身上（kEquipment）
+	EquipLoadoutSlotStatus_EQUIP_LOADOUT_SLOT_IN_BAG            EquipLoadoutSlotStatus = 2 // 所绑装备当前在人物背包中（kInventory）
+	EquipLoadoutSlotStatus_EQUIP_LOADOUT_SLOT_MISSING_OR_STORED EquipLoadoutSlotStatus = 3 // 所绑装备已不在身上和背包（已出售/存仓/分解等）
+)
+
+// Enum value maps for EquipLoadoutSlotStatus.
+var (
+	EquipLoadoutSlotStatus_name = map[int32]string{
+		0: "EQUIP_LOADOUT_SLOT_EMPTY",
+		1: "EQUIP_LOADOUT_SLOT_EQUIPPED",
+		2: "EQUIP_LOADOUT_SLOT_IN_BAG",
+		3: "EQUIP_LOADOUT_SLOT_MISSING_OR_STORED",
+	}
+	EquipLoadoutSlotStatus_value = map[string]int32{
+		"EQUIP_LOADOUT_SLOT_EMPTY":             0,
+		"EQUIP_LOADOUT_SLOT_EQUIPPED":          1,
+		"EQUIP_LOADOUT_SLOT_IN_BAG":            2,
+		"EQUIP_LOADOUT_SLOT_MISSING_OR_STORED": 3,
+	}
+)
+
+func (x EquipLoadoutSlotStatus) Enum() *EquipLoadoutSlotStatus {
+	p := new(EquipLoadoutSlotStatus)
+	*p = x
+	return p
+}
+
+func (x EquipLoadoutSlotStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EquipLoadoutSlotStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_bag_proto_enumTypes[0].Descriptor()
+}
+
+func (EquipLoadoutSlotStatus) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_bag_proto_enumTypes[0]
+}
+
+func (x EquipLoadoutSlotStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EquipLoadoutSlotStatus.Descriptor instead.
+func (EquipLoadoutSlotStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{0}
+}
+
 type EquipmentCraftChoice_Operation int32
 
 const (
@@ -72,11 +124,11 @@ func (x EquipmentCraftChoice_Operation) String() string {
 }
 
 func (EquipmentCraftChoice_Operation) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_scene_player_bag_proto_enumTypes[0].Descriptor()
+	return file_proto_scene_player_bag_proto_enumTypes[1].Descriptor()
 }
 
 func (EquipmentCraftChoice_Operation) Type() protoreflect.EnumType {
-	return &file_proto_scene_player_bag_proto_enumTypes[0]
+	return &file_proto_scene_player_bag_proto_enumTypes[1]
 }
 
 func (x EquipmentCraftChoice_Operation) Number() protoreflect.EnumNumber {
@@ -121,11 +173,11 @@ func (x CommitEquipmentCraftResponse_Outcome) String() string {
 }
 
 func (CommitEquipmentCraftResponse_Outcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_scene_player_bag_proto_enumTypes[1].Descriptor()
+	return file_proto_scene_player_bag_proto_enumTypes[2].Descriptor()
 }
 
 func (CommitEquipmentCraftResponse_Outcome) Type() protoreflect.EnumType {
-	return &file_proto_scene_player_bag_proto_enumTypes[1]
+	return &file_proto_scene_player_bag_proto_enumTypes[2]
 }
 
 func (x CommitEquipmentCraftResponse_Outcome) Number() protoreflect.EnumNumber {
@@ -170,11 +222,11 @@ func (x ClaimEquipmentMaterialRewardResponse_Outcome) String() string {
 }
 
 func (ClaimEquipmentMaterialRewardResponse_Outcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_scene_player_bag_proto_enumTypes[2].Descriptor()
+	return file_proto_scene_player_bag_proto_enumTypes[3].Descriptor()
 }
 
 func (ClaimEquipmentMaterialRewardResponse_Outcome) Type() protoreflect.EnumType {
-	return &file_proto_scene_player_bag_proto_enumTypes[2]
+	return &file_proto_scene_player_bag_proto_enumTypes[3]
 }
 
 func (x ClaimEquipmentMaterialRewardResponse_Outcome) Number() protoreflect.EnumNumber {
@@ -184,6 +236,55 @@ func (x ClaimEquipmentMaterialRewardResponse_Outcome) Number() protoreflect.Enum
 // Deprecated: Use ClaimEquipmentMaterialRewardResponse_Outcome.Descriptor instead.
 func (ClaimEquipmentMaterialRewardResponse_Outcome) EnumDescriptor() ([]byte, []int) {
 	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{46, 0}
+}
+
+type UnlockEquipLoadoutResponse_Outcome int32
+
+const (
+	UnlockEquipLoadoutResponse_UNKNOWN  UnlockEquipLoadoutResponse_Outcome = 0 // 含旧回执已淘汰或存盘未定，不可换键重发
+	UnlockEquipLoadoutResponse_REJECTED UnlockEquipLoadoutResponse_Outcome = 1 // 提交前明确拒绝，无扣费/扣符
+	UnlockEquipLoadoutResponse_APPLIED  UnlockEquipLoadoutResponse_Outcome = 2 // 已生效（仅 durable=true 后才确认落盘）
+)
+
+// Enum value maps for UnlockEquipLoadoutResponse_Outcome.
+var (
+	UnlockEquipLoadoutResponse_Outcome_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "REJECTED",
+		2: "APPLIED",
+	}
+	UnlockEquipLoadoutResponse_Outcome_value = map[string]int32{
+		"UNKNOWN":  0,
+		"REJECTED": 1,
+		"APPLIED":  2,
+	}
+)
+
+func (x UnlockEquipLoadoutResponse_Outcome) Enum() *UnlockEquipLoadoutResponse_Outcome {
+	p := new(UnlockEquipLoadoutResponse_Outcome)
+	*p = x
+	return p
+}
+
+func (x UnlockEquipLoadoutResponse_Outcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UnlockEquipLoadoutResponse_Outcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_bag_proto_enumTypes[4].Descriptor()
+}
+
+func (UnlockEquipLoadoutResponse_Outcome) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_bag_proto_enumTypes[4]
+}
+
+func (x UnlockEquipLoadoutResponse_Outcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UnlockEquipLoadoutResponse_Outcome.Descriptor instead.
+func (UnlockEquipLoadoutResponse_Outcome) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{58, 0}
 }
 
 // 装备 tooltip 的一行属性(设计文档 docs/design/equipment-attributes.md §3.2)。
@@ -4089,11 +4190,1020 @@ func (x *ClaimEquipmentMaterialRewardResponse) GetSnapshot() *EquipmentMaterialR
 	return nil
 }
 
+type EquipLoadoutSlotView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`                                 // EquipSlot.xlsx 正式槽位号（3..10）
+	SlotName      string                 `protobuf:"bytes,2,opt,name=slot_name,json=slotName,proto3" json:"slot_name,omitempty"`          // 部位显示名（武器/帽子/衣服/鞋子/首饰一/首饰二/法宝一/法宝二）
+	EquipKind     uint32                 `protobuf:"varint,3,opt,name=equip_kind,json=equipKind,proto3" json:"equip_kind,omitempty"`      // 该槽位接受的 equip_kind
+	ItemGuid      uint64                 `protobuf:"varint,4,opt,name=item_guid,json=itemGuid,proto3" json:"item_guid,omitempty"`         // 方案绑定的装备永久 guid（0 表示留空）
+	Status        EquipLoadoutSlotStatus `protobuf:"varint,5,opt,name=status,proto3,enum=EquipLoadoutSlotStatus" json:"status,omitempty"` // 实时状态
+	Item          *BagItemInfo           `protobuf:"bytes,6,opt,name=item,proto3" json:"item,omitempty"`                                  // 存在时的道具简要预览（缺失或留空不填）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipLoadoutSlotView) Reset() {
+	*x = EquipLoadoutSlotView{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipLoadoutSlotView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipLoadoutSlotView) ProtoMessage() {}
+
+func (x *EquipLoadoutSlotView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipLoadoutSlotView.ProtoReflect.Descriptor instead.
+func (*EquipLoadoutSlotView) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *EquipLoadoutSlotView) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSlotView) GetSlotName() string {
+	if x != nil {
+		return x.SlotName
+	}
+	return ""
+}
+
+func (x *EquipLoadoutSlotView) GetEquipKind() uint32 {
+	if x != nil {
+		return x.EquipKind
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSlotView) GetItemGuid() uint64 {
+	if x != nil {
+		return x.ItemGuid
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSlotView) GetStatus() EquipLoadoutSlotStatus {
+	if x != nil {
+		return x.Status
+	}
+	return EquipLoadoutSlotStatus_EQUIP_LOADOUT_SLOT_EMPTY
+}
+
+func (x *EquipLoadoutSlotView) GetItem() *BagItemInfo {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+type EquipLoadoutSchemeInfo struct {
+	state                   protoimpl.MessageState  `protogen:"open.v1"`
+	SchemeId                uint32                  `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                                  // 1..5 显式方案号
+	Unlocked                bool                    `protobuf:"varint,2,opt,name=unlocked,proto3" json:"unlocked,omitempty"`                                                                  // 是否已解锁
+	Name                    string                  `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                                           // 自定义方案名（空则展示默认「方案一..五」）
+	RoleTag                 uint32                  `protobuf:"varint,4,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                                     // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
+	Slots                   []*EquipLoadoutSlotView `protobuf:"bytes,5,rep,name=slots,proto3" json:"slots,omitempty"`                                                                         // 8 个正式槽位按 slot 升序
+	LinkedSkillSchemeId     uint32                  `protobuf:"varint,6,opt,name=linked_skill_scheme_id,json=linkedSkillSchemeId,proto3" json:"linked_skill_scheme_id,omitempty"`             // 0 = 不联动；>0 = 关联战法方案号
+	LinkedAttributeSchemeId uint32                  `protobuf:"varint,7,opt,name=linked_attribute_scheme_id,json=linkedAttributeSchemeId,proto3" json:"linked_attribute_scheme_id,omitempty"` // 0 = 不联动；>0 = 关联属性加点方案号
+	MissingCount            uint32                  `protobuf:"varint,8,opt,name=missing_count,json=missingCount,proto3" json:"missing_count,omitempty"`                                      // 实时缺失槽位数
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *EquipLoadoutSchemeInfo) Reset() {
+	*x = EquipLoadoutSchemeInfo{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipLoadoutSchemeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipLoadoutSchemeInfo) ProtoMessage() {}
+
+func (x *EquipLoadoutSchemeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipLoadoutSchemeInfo.ProtoReflect.Descriptor instead.
+func (*EquipLoadoutSchemeInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *EquipLoadoutSchemeInfo) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSchemeInfo) GetUnlocked() bool {
+	if x != nil {
+		return x.Unlocked
+	}
+	return false
+}
+
+func (x *EquipLoadoutSchemeInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EquipLoadoutSchemeInfo) GetRoleTag() uint32 {
+	if x != nil {
+		return x.RoleTag
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSchemeInfo) GetSlots() []*EquipLoadoutSlotView {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+func (x *EquipLoadoutSchemeInfo) GetLinkedSkillSchemeId() uint32 {
+	if x != nil {
+		return x.LinkedSkillSchemeId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSchemeInfo) GetLinkedAttributeSchemeId() uint32 {
+	if x != nil {
+		return x.LinkedAttributeSchemeId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSchemeInfo) GetMissingCount() uint32 {
+	if x != nil {
+		return x.MissingCount
+	}
+	return 0
+}
+
+type EquipLoadoutLinkedOption struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemeId      uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	RoleTag       uint32                 `protobuf:"varint,3,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipLoadoutLinkedOption) Reset() {
+	*x = EquipLoadoutLinkedOption{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipLoadoutLinkedOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipLoadoutLinkedOption) ProtoMessage() {}
+
+func (x *EquipLoadoutLinkedOption) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipLoadoutLinkedOption.ProtoReflect.Descriptor instead.
+func (*EquipLoadoutLinkedOption) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *EquipLoadoutLinkedOption) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutLinkedOption) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EquipLoadoutLinkedOption) GetRoleTag() uint32 {
+	if x != nil {
+		return x.RoleTag
+	}
+	return 0
+}
+
+type EquipLoadoutSnapshot struct {
+	state                      protoimpl.MessageState      `protogen:"open.v1"`
+	UnlockedSchemeCount        uint32                      `protobuf:"varint,1,opt,name=unlocked_scheme_count,json=unlockedSchemeCount,proto3" json:"unlocked_scheme_count,omitempty"`                          // 已解锁套数（1..5）
+	MaxSchemeCount             uint32                      `protobuf:"varint,2,opt,name=max_scheme_count,json=maxSchemeCount,proto3" json:"max_scheme_count,omitempty"`                                         // 套位总上限（固定 5）
+	ActiveSchemeId             uint32                      `protobuf:"varint,3,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`                                         // 当前激活方案号（1..unlocked）
+	StateVersion               uint64                      `protobuf:"varint,4,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`                                                 // 乐观锁版本号
+	Schemes                    []*EquipLoadoutSchemeInfo   `protobuf:"bytes,5,rep,name=schemes,proto3" json:"schemes,omitempty"`                                                                                // 1..5 全部套位，按 scheme_id 升序
+	NextUnlockCostDiamond      uint64                      `protobuf:"varint,6,opt,name=next_unlock_cost_diamond,json=nextUnlockCostDiamond,proto3" json:"next_unlock_cost_diamond,omitempty"`                  // 下一套解锁灵石价格（已满为 0）
+	NextUnlockAllowBindDiamond bool                        `protobuf:"varint,7,opt,name=next_unlock_allow_bind_diamond,json=nextUnlockAllowBindDiamond,proto3" json:"next_unlock_allow_bind_diamond,omitempty"` // 下一套是否允许优先使用绑定灵石（仅第 2 套为 true）
+	UnlockItemConfigId         uint32                      `protobuf:"varint,8,opt,name=unlock_item_config_id,json=unlockItemConfigId,proto3" json:"unlock_item_config_id,omitempty"`                           // 装备方案扩容符配置号（3413）
+	UnlockItemOwned            uint64                      `protobuf:"varint,9,opt,name=unlock_item_owned,json=unlockItemOwned,proto3" json:"unlock_item_owned,omitempty"`                                      // 背包当前可用的扩容符数量
+	DiamondBalance             uint64                      `protobuf:"varint,10,opt,name=diamond_balance,json=diamondBalance,proto3" json:"diamond_balance,omitempty"`                                          // 当前非绑灵石余额
+	BindDiamondBalance         uint64                      `protobuf:"varint,11,opt,name=bind_diamond_balance,json=bindDiamondBalance,proto3" json:"bind_diamond_balance,omitempty"`                            // 当前绑定灵石余额
+	SkillSchemes               []*EquipLoadoutLinkedOption `protobuf:"bytes,12,rep,name=skill_schemes,json=skillSchemes,proto3" json:"skill_schemes,omitempty"`                                                 // 可选联动的战法方案列表
+	AttributeSchemes           []*EquipLoadoutLinkedOption `protobuf:"bytes,13,rep,name=attribute_schemes,json=attributeSchemes,proto3" json:"attribute_schemes,omitempty"`                                     // 可选联动的属性加点方案列表
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *EquipLoadoutSnapshot) Reset() {
+	*x = EquipLoadoutSnapshot{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipLoadoutSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipLoadoutSnapshot) ProtoMessage() {}
+
+func (x *EquipLoadoutSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipLoadoutSnapshot.ProtoReflect.Descriptor instead.
+func (*EquipLoadoutSnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *EquipLoadoutSnapshot) GetUnlockedSchemeCount() uint32 {
+	if x != nil {
+		return x.UnlockedSchemeCount
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetMaxSchemeCount() uint32 {
+	if x != nil {
+		return x.MaxSchemeCount
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetActiveSchemeId() uint32 {
+	if x != nil {
+		return x.ActiveSchemeId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetSchemes() []*EquipLoadoutSchemeInfo {
+	if x != nil {
+		return x.Schemes
+	}
+	return nil
+}
+
+func (x *EquipLoadoutSnapshot) GetNextUnlockCostDiamond() uint64 {
+	if x != nil {
+		return x.NextUnlockCostDiamond
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetNextUnlockAllowBindDiamond() bool {
+	if x != nil {
+		return x.NextUnlockAllowBindDiamond
+	}
+	return false
+}
+
+func (x *EquipLoadoutSnapshot) GetUnlockItemConfigId() uint32 {
+	if x != nil {
+		return x.UnlockItemConfigId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetUnlockItemOwned() uint64 {
+	if x != nil {
+		return x.UnlockItemOwned
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetDiamondBalance() uint64 {
+	if x != nil {
+		return x.DiamondBalance
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetBindDiamondBalance() uint64 {
+	if x != nil {
+		return x.BindDiamondBalance
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetSkillSchemes() []*EquipLoadoutLinkedOption {
+	if x != nil {
+		return x.SkillSchemes
+	}
+	return nil
+}
+
+func (x *EquipLoadoutSnapshot) GetAttributeSchemes() []*EquipLoadoutLinkedOption {
+	if x != nil {
+		return x.AttributeSchemes
+	}
+	return nil
+}
+
+type GetEquipLoadoutsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEquipLoadoutsRequest) Reset() {
+	*x = GetEquipLoadoutsRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEquipLoadoutsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEquipLoadoutsRequest) ProtoMessage() {}
+
+func (x *GetEquipLoadoutsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEquipLoadoutsRequest.ProtoReflect.Descriptor instead.
+func (*GetEquipLoadoutsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{51}
+}
+
+type GetEquipLoadoutsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Snapshot      *EquipLoadoutSnapshot  `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEquipLoadoutsResponse) Reset() {
+	*x = GetEquipLoadoutsResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEquipLoadoutsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEquipLoadoutsResponse) ProtoMessage() {}
+
+func (x *GetEquipLoadoutsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEquipLoadoutsResponse.ProtoReflect.Descriptor instead.
+func (*GetEquipLoadoutsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *GetEquipLoadoutsResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetEquipLoadoutsResponse) GetSnapshot() *EquipLoadoutSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+type SaveEquipLoadoutRequest struct {
+	state                   protoimpl.MessageState               `protogen:"open.v1"`
+	SchemeId                uint32                               `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                                  // 1..unlocked_scheme_count
+	Name                    string                               `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                                                                           // UTF-8 1..12 字符（空则使用默认名）
+	RoleTag                 uint32                               `protobuf:"varint,3,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                                     // 0..4
+	Slots                   []*component.EquipLoadoutSlotBinding `protobuf:"bytes,4,rep,name=slots,proto3" json:"slots,omitempty"`                                                                         // capture_current_equipped=false 时生效
+	CaptureCurrentEquipped  bool                                 `protobuf:"varint,5,opt,name=capture_current_equipped,json=captureCurrentEquipped,proto3" json:"capture_current_equipped,omitempty"`      // true = 一键保存当前身上 8 槽装备
+	LinkedSkillSchemeId     uint32                               `protobuf:"varint,6,opt,name=linked_skill_scheme_id,json=linkedSkillSchemeId,proto3" json:"linked_skill_scheme_id,omitempty"`             // 0 = 不联动
+	LinkedAttributeSchemeId uint32                               `protobuf:"varint,7,opt,name=linked_attribute_scheme_id,json=linkedAttributeSchemeId,proto3" json:"linked_attribute_scheme_id,omitempty"` // 0 = 不联动
+	StateVersion            uint64                               `protobuf:"varint,8,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`                                      // 乐观锁版本号
+	RequestId               string                               `protobuf:"bytes,9,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`                                                // 16..64 字节 ASCII 幂等键
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *SaveEquipLoadoutRequest) Reset() {
+	*x = SaveEquipLoadoutRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveEquipLoadoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveEquipLoadoutRequest) ProtoMessage() {}
+
+func (x *SaveEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveEquipLoadoutRequest.ProtoReflect.Descriptor instead.
+func (*SaveEquipLoadoutRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *SaveEquipLoadoutRequest) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *SaveEquipLoadoutRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SaveEquipLoadoutRequest) GetRoleTag() uint32 {
+	if x != nil {
+		return x.RoleTag
+	}
+	return 0
+}
+
+func (x *SaveEquipLoadoutRequest) GetSlots() []*component.EquipLoadoutSlotBinding {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+func (x *SaveEquipLoadoutRequest) GetCaptureCurrentEquipped() bool {
+	if x != nil {
+		return x.CaptureCurrentEquipped
+	}
+	return false
+}
+
+func (x *SaveEquipLoadoutRequest) GetLinkedSkillSchemeId() uint32 {
+	if x != nil {
+		return x.LinkedSkillSchemeId
+	}
+	return 0
+}
+
+func (x *SaveEquipLoadoutRequest) GetLinkedAttributeSchemeId() uint32 {
+	if x != nil {
+		return x.LinkedAttributeSchemeId
+	}
+	return 0
+}
+
+func (x *SaveEquipLoadoutRequest) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *SaveEquipLoadoutRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type SaveEquipLoadoutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Snapshot      *EquipLoadoutSnapshot  `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Replayed      bool                   `protobuf:"varint,4,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveEquipLoadoutResponse) Reset() {
+	*x = SaveEquipLoadoutResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveEquipLoadoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveEquipLoadoutResponse) ProtoMessage() {}
+
+func (x *SaveEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveEquipLoadoutResponse.ProtoReflect.Descriptor instead.
+func (*SaveEquipLoadoutResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *SaveEquipLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SaveEquipLoadoutResponse) GetSnapshot() *EquipLoadoutSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+func (x *SaveEquipLoadoutResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SaveEquipLoadoutResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+type SwitchEquipLoadoutRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	SchemeId           uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                 // 1..unlocked_scheme_count
+	ApplyLinkedSchemes bool                   `protobuf:"varint,2,opt,name=apply_linked_schemes,json=applyLinkedSchemes,proto3" json:"apply_linked_schemes,omitempty"` // 是否一键联动切换关联战法/加点方案
+	StateVersion       uint64                 `protobuf:"varint,3,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`                     // 乐观锁版本号
+	RequestId          string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`                               // 16..64 字节 ASCII 幂等键
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SwitchEquipLoadoutRequest) Reset() {
+	*x = SwitchEquipLoadoutRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchEquipLoadoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchEquipLoadoutRequest) ProtoMessage() {}
+
+func (x *SwitchEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchEquipLoadoutRequest.ProtoReflect.Descriptor instead.
+func (*SwitchEquipLoadoutRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *SwitchEquipLoadoutRequest) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *SwitchEquipLoadoutRequest) GetApplyLinkedSchemes() bool {
+	if x != nil {
+		return x.ApplyLinkedSchemes
+	}
+	return false
+}
+
+func (x *SwitchEquipLoadoutRequest) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *SwitchEquipLoadoutRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type SwitchEquipLoadoutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Bag           *BagInfo               `protobuf:"bytes,2,opt,name=bag,proto3" json:"bag,omitempty"`                                               // 最新人物背包全量
+	Equipment     *BagInfo               `protobuf:"bytes,3,opt,name=equipment,proto3" json:"equipment,omitempty"`                                   // 最新装备栏全量
+	Snapshot      *EquipLoadoutSnapshot  `protobuf:"bytes,4,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                                     // 最新方案快照
+	MissingSlots  []uint32               `protobuf:"varint,5,rep,packed,name=missing_slots,json=missingSlots,proto3" json:"missing_slots,omitempty"` // 因装备缺失而被跳过保持原状的槽位号
+	LinkedNotices []string               `protobuf:"bytes,6,rep,name=linked_notices,json=linkedNotices,proto3" json:"linked_notices,omitempty"`      // 联动切换提示（如加点冷却中未切提示）
+	RequestId     string                 `protobuf:"bytes,7,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Replayed      bool                   `protobuf:"varint,8,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwitchEquipLoadoutResponse) Reset() {
+	*x = SwitchEquipLoadoutResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchEquipLoadoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchEquipLoadoutResponse) ProtoMessage() {}
+
+func (x *SwitchEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchEquipLoadoutResponse.ProtoReflect.Descriptor instead.
+func (*SwitchEquipLoadoutResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *SwitchEquipLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SwitchEquipLoadoutResponse) GetBag() *BagInfo {
+	if x != nil {
+		return x.Bag
+	}
+	return nil
+}
+
+func (x *SwitchEquipLoadoutResponse) GetEquipment() *BagInfo {
+	if x != nil {
+		return x.Equipment
+	}
+	return nil
+}
+
+func (x *SwitchEquipLoadoutResponse) GetSnapshot() *EquipLoadoutSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+func (x *SwitchEquipLoadoutResponse) GetMissingSlots() []uint32 {
+	if x != nil {
+		return x.MissingSlots
+	}
+	return nil
+}
+
+func (x *SwitchEquipLoadoutResponse) GetLinkedNotices() []string {
+	if x != nil {
+		return x.LinkedNotices
+	}
+	return nil
+}
+
+func (x *SwitchEquipLoadoutResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SwitchEquipLoadoutResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+// 发送前须经 DurableRequestFileStore 持久保存原字节；超时/断线仅重放原请求。
+type UnlockEquipLoadoutRequest struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId       uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`                   // 持久化幂等键（必须非 0）
+	ExpectedUnlockedCount uint32                 `protobuf:"varint,2,opt,name=expected_unlocked_count,json=expectedUnlockedCount,proto3" json:"expected_unlocked_count,omitempty"` // 客户端看到的当前已解锁套数（防连点连买两套）
+	UseBindDiamondFirst   bool                   `protobuf:"varint,3,opt,name=use_bind_diamond_first,json=useBindDiamondFirst,proto3" json:"use_bind_diamond_first,omitempty"`     // 仅第 2 套生效：无扩容符时优先扣绑定灵石并用非绑灵石补足
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *UnlockEquipLoadoutRequest) Reset() {
+	*x = UnlockEquipLoadoutRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockEquipLoadoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockEquipLoadoutRequest) ProtoMessage() {}
+
+func (x *UnlockEquipLoadoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockEquipLoadoutRequest.ProtoReflect.Descriptor instead.
+func (*UnlockEquipLoadoutRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *UnlockEquipLoadoutRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutRequest) GetExpectedUnlockedCount() uint32 {
+	if x != nil {
+		return x.ExpectedUnlockedCount
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutRequest) GetUseBindDiamondFirst() bool {
+	if x != nil {
+		return x.UseBindDiamondFirst
+	}
+	return false
+}
+
+type UnlockEquipLoadoutResponse struct {
+	state                protoimpl.MessageState             `protogen:"open.v1"`
+	ErrorMessage         *base.TipInfoMessage               `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId      uint64                             `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Outcome              UnlockEquipLoadoutResponse_Outcome `protobuf:"varint,3,opt,name=outcome,proto3,enum=UnlockEquipLoadoutResponse_Outcome" json:"outcome,omitempty"`
+	Durable              bool                               `protobuf:"varint,4,opt,name=durable,proto3" json:"durable,omitempty"` // 仅确认提交的本代次完整存档包含新套数时为 true
+	Replayed             bool                               `protobuf:"varint,5,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	ResultUnlockedCount  uint32                             `protobuf:"varint,6,opt,name=result_unlocked_count,json=resultUnlockedCount,proto3" json:"result_unlocked_count,omitempty"`    // 本次解锁后的套数（2..5）
+	CurrentUnlockedCount uint32                             `protobuf:"varint,7,opt,name=current_unlocked_count,json=currentUnlockedCount,proto3" json:"current_unlocked_count,omitempty"` // 服务端当前最新套数
+	UsedItemConfigId     uint32                             `protobuf:"varint,8,opt,name=used_item_config_id,json=usedItemConfigId,proto3" json:"used_item_config_id,omitempty"`           // 若消耗扩容符则为 3413，否则为 0
+	SpentBindDiamond     uint64                             `protobuf:"varint,9,opt,name=spent_bind_diamond,json=spentBindDiamond,proto3" json:"spent_bind_diamond,omitempty"`             // 本次实扣绑定灵石
+	SpentDiamond         uint64                             `protobuf:"varint,10,opt,name=spent_diamond,json=spentDiamond,proto3" json:"spent_diamond,omitempty"`                          // 本次实扣非绑灵石
+	Bag                  *BagInfo                           `protobuf:"bytes,11,opt,name=bag,proto3" json:"bag,omitempty"`                                                                 // 最新人物背包全量（含货币与道具扣减）
+	Snapshot             *EquipLoadoutSnapshot              `protobuf:"bytes,12,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *UnlockEquipLoadoutResponse) Reset() {
+	*x = UnlockEquipLoadoutResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockEquipLoadoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockEquipLoadoutResponse) ProtoMessage() {}
+
+func (x *UnlockEquipLoadoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockEquipLoadoutResponse.ProtoReflect.Descriptor instead.
+func (*UnlockEquipLoadoutResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *UnlockEquipLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *UnlockEquipLoadoutResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutResponse) GetOutcome() UnlockEquipLoadoutResponse_Outcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return UnlockEquipLoadoutResponse_UNKNOWN
+}
+
+func (x *UnlockEquipLoadoutResponse) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *UnlockEquipLoadoutResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *UnlockEquipLoadoutResponse) GetResultUnlockedCount() uint32 {
+	if x != nil {
+		return x.ResultUnlockedCount
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutResponse) GetCurrentUnlockedCount() uint32 {
+	if x != nil {
+		return x.CurrentUnlockedCount
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutResponse) GetUsedItemConfigId() uint32 {
+	if x != nil {
+		return x.UsedItemConfigId
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutResponse) GetSpentBindDiamond() uint64 {
+	if x != nil {
+		return x.SpentBindDiamond
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutResponse) GetSpentDiamond() uint64 {
+	if x != nil {
+		return x.SpentDiamond
+	}
+	return 0
+}
+
+func (x *UnlockEquipLoadoutResponse) GetBag() *BagInfo {
+	if x != nil {
+		return x.Bag
+	}
+	return nil
+}
+
+func (x *UnlockEquipLoadoutResponse) GetSnapshot() *EquipLoadoutSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
 var File_proto_scene_player_bag_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\n" +
-	"\x1cproto/scene/player_bag.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a*proto/common/component/currency_comp.proto\"\xfb\x01\n" +
+	"\x1cproto/scene/player_bag.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a*proto/common/component/currency_comp.proto\x1a6proto/common/component/player_equip_loadout_comp.proto\"\xfb\x01\n" +
 	"\x11EquipAttrLineInfo\x12\x17\n" +
 	"\aattr_id\x18\x01 \x01(\rR\x06attrId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -4450,7 +5560,108 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\aOutcome\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\f\n" +
 	"\bREJECTED\x10\x01\x12\v\n" +
-	"\aAPPLIED\x10\x022\xfc\a\n" +
+	"\aAPPLIED\x10\x02\"\xd6\x01\n" +
+	"\x14EquipLoadoutSlotView\x12\x12\n" +
+	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x1b\n" +
+	"\tslot_name\x18\x02 \x01(\tR\bslotName\x12\x1d\n" +
+	"\n" +
+	"equip_kind\x18\x03 \x01(\rR\tequipKind\x12\x1b\n" +
+	"\titem_guid\x18\x04 \x01(\x04R\bitemGuid\x12/\n" +
+	"\x06status\x18\x05 \x01(\x0e2\x17.EquipLoadoutSlotStatusR\x06status\x12 \n" +
+	"\x04item\x18\x06 \x01(\v2\f.BagItemInfoR\x04item\"\xc4\x02\n" +
+	"\x16EquipLoadoutSchemeInfo\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x1a\n" +
+	"\bunlocked\x18\x02 \x01(\bR\bunlocked\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x19\n" +
+	"\brole_tag\x18\x04 \x01(\rR\aroleTag\x12+\n" +
+	"\x05slots\x18\x05 \x03(\v2\x15.EquipLoadoutSlotViewR\x05slots\x123\n" +
+	"\x16linked_skill_scheme_id\x18\x06 \x01(\rR\x13linkedSkillSchemeId\x12;\n" +
+	"\x1alinked_attribute_scheme_id\x18\a \x01(\rR\x17linkedAttributeSchemeId\x12#\n" +
+	"\rmissing_count\x18\b \x01(\rR\fmissingCount\"f\n" +
+	"\x18EquipLoadoutLinkedOption\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\brole_tag\x18\x03 \x01(\rR\aroleTag\"\xb5\x05\n" +
+	"\x14EquipLoadoutSnapshot\x122\n" +
+	"\x15unlocked_scheme_count\x18\x01 \x01(\rR\x13unlockedSchemeCount\x12(\n" +
+	"\x10max_scheme_count\x18\x02 \x01(\rR\x0emaxSchemeCount\x12(\n" +
+	"\x10active_scheme_id\x18\x03 \x01(\rR\x0eactiveSchemeId\x12#\n" +
+	"\rstate_version\x18\x04 \x01(\x04R\fstateVersion\x121\n" +
+	"\aschemes\x18\x05 \x03(\v2\x17.EquipLoadoutSchemeInfoR\aschemes\x127\n" +
+	"\x18next_unlock_cost_diamond\x18\x06 \x01(\x04R\x15nextUnlockCostDiamond\x12B\n" +
+	"\x1enext_unlock_allow_bind_diamond\x18\a \x01(\bR\x1anextUnlockAllowBindDiamond\x121\n" +
+	"\x15unlock_item_config_id\x18\b \x01(\rR\x12unlockItemConfigId\x12*\n" +
+	"\x11unlock_item_owned\x18\t \x01(\x04R\x0funlockItemOwned\x12'\n" +
+	"\x0fdiamond_balance\x18\n" +
+	" \x01(\x04R\x0ediamondBalance\x120\n" +
+	"\x14bind_diamond_balance\x18\v \x01(\x04R\x12bindDiamondBalance\x12>\n" +
+	"\rskill_schemes\x18\f \x03(\v2\x19.EquipLoadoutLinkedOptionR\fskillSchemes\x12F\n" +
+	"\x11attribute_schemes\x18\r \x03(\v2\x19.EquipLoadoutLinkedOptionR\x10attributeSchemes\"\x19\n" +
+	"\x17GetEquipLoadoutsRequest\"\x83\x01\n" +
+	"\x18GetEquipLoadoutsResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x15.EquipLoadoutSnapshotR\bsnapshot\"\x85\x03\n" +
+	"\x17SaveEquipLoadoutRequest\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\brole_tag\x18\x03 \x01(\rR\aroleTag\x12.\n" +
+	"\x05slots\x18\x04 \x03(\v2\x18.EquipLoadoutSlotBindingR\x05slots\x128\n" +
+	"\x18capture_current_equipped\x18\x05 \x01(\bR\x16captureCurrentEquipped\x123\n" +
+	"\x16linked_skill_scheme_id\x18\x06 \x01(\rR\x13linkedSkillSchemeId\x12;\n" +
+	"\x1alinked_attribute_scheme_id\x18\a \x01(\rR\x17linkedAttributeSchemeId\x12#\n" +
+	"\rstate_version\x18\b \x01(\x04R\fstateVersion\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\t \x01(\tR\trequestId\"\xbe\x01\n" +
+	"\x18SaveEquipLoadoutResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x15.EquipLoadoutSnapshotR\bsnapshot\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12\x1a\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\"\xae\x01\n" +
+	"\x19SwitchEquipLoadoutRequest\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x120\n" +
+	"\x14apply_linked_schemes\x18\x02 \x01(\bR\x12applyLinkedSchemes\x12#\n" +
+	"\rstate_version\x18\x03 \x01(\x04R\fstateVersion\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x04 \x01(\tR\trequestId\"\xd0\x02\n" +
+	"\x1aSwitchEquipLoadoutResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
+	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
+	"\tequipment\x18\x03 \x01(\v2\b.BagInfoR\tequipment\x121\n" +
+	"\bsnapshot\x18\x04 \x01(\v2\x15.EquipLoadoutSnapshotR\bsnapshot\x12#\n" +
+	"\rmissing_slots\x18\x05 \x03(\rR\fmissingSlots\x12%\n" +
+	"\x0elinked_notices\x18\x06 \x03(\tR\rlinkedNotices\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\a \x01(\tR\trequestId\x12\x1a\n" +
+	"\breplayed\x18\b \x01(\bR\breplayed\"\xb4\x01\n" +
+	"\x19UnlockEquipLoadoutRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x126\n" +
+	"\x17expected_unlocked_count\x18\x02 \x01(\rR\x15expectedUnlockedCount\x123\n" +
+	"\x16use_bind_diamond_first\x18\x03 \x01(\bR\x13useBindDiamondFirst\"\xe1\x04\n" +
+	"\x1aUnlockEquipLoadoutResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12=\n" +
+	"\aoutcome\x18\x03 \x01(\x0e2#.UnlockEquipLoadoutResponse.OutcomeR\aoutcome\x12\x18\n" +
+	"\adurable\x18\x04 \x01(\bR\adurable\x12\x1a\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed\x122\n" +
+	"\x15result_unlocked_count\x18\x06 \x01(\rR\x13resultUnlockedCount\x124\n" +
+	"\x16current_unlocked_count\x18\a \x01(\rR\x14currentUnlockedCount\x12-\n" +
+	"\x13used_item_config_id\x18\b \x01(\rR\x10usedItemConfigId\x12,\n" +
+	"\x12spent_bind_diamond\x18\t \x01(\x04R\x10spentBindDiamond\x12#\n" +
+	"\rspent_diamond\x18\n" +
+	" \x01(\x04R\fspentDiamond\x12\x1a\n" +
+	"\x03bag\x18\v \x01(\v2\b.BagInfoR\x03bag\x121\n" +
+	"\bsnapshot\x18\f \x01(\v2\x15.EquipLoadoutSnapshotR\bsnapshot\"1\n" +
+	"\aOutcome\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\f\n" +
+	"\bREJECTED\x10\x01\x12\v\n" +
+	"\aAPPLIED\x10\x02*\xa0\x01\n" +
+	"\x16EquipLoadoutSlotStatus\x12\x1c\n" +
+	"\x18EQUIP_LOADOUT_SLOT_EMPTY\x10\x00\x12\x1f\n" +
+	"\x1bEQUIP_LOADOUT_SLOT_EQUIPPED\x10\x01\x12\x1d\n" +
+	"\x19EQUIP_LOADOUT_SLOT_IN_BAG\x10\x02\x12(\n" +
+	"$EQUIP_LOADOUT_SLOT_MISSING_OR_STORED\x10\x032\xac\n" +
+	"\n" +
 	"\x14SceneBagClientPlayer\x12)\n" +
 	"\x06GetBag\x12\x0e.GetBagRequest\x1a\x0f.GetBagResponse\x12,\n" +
 	"\aSortBag\x12\x0f.SortBagRequest\x1a\x10.SortBagResponse\x122\n" +
@@ -4465,7 +5676,11 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x15PreviewEquipmentCraft\x12\x1d.PreviewEquipmentCraftRequest\x1a\x1e.PreviewEquipmentCraftResponse\x12S\n" +
 	"\x14CommitEquipmentCraft\x12\x1c.CommitEquipmentCraftRequest\x1a\x1d.CommitEquipmentCraftResponse\x12e\n" +
 	"\x1aGetEquipmentMaterialReward\x12\".GetEquipmentMaterialRewardRequest\x1a#.GetEquipmentMaterialRewardResponse\x12k\n" +
-	"\x1cClaimEquipmentMaterialReward\x12$.ClaimEquipmentMaterialRewardRequest\x1a%.ClaimEquipmentMaterialRewardResponse\x1a\n" +
+	"\x1cClaimEquipmentMaterialReward\x12$.ClaimEquipmentMaterialRewardRequest\x1a%.ClaimEquipmentMaterialRewardResponse\x12G\n" +
+	"\x10GetEquipLoadouts\x12\x18.GetEquipLoadoutsRequest\x1a\x19.GetEquipLoadoutsResponse\x12G\n" +
+	"\x10SaveEquipLoadout\x12\x18.SaveEquipLoadoutRequest\x1a\x19.SaveEquipLoadoutResponse\x12M\n" +
+	"\x12SwitchEquipLoadout\x12\x1a.SwitchEquipLoadoutRequest\x1a\x1b.SwitchEquipLoadoutResponse\x12M\n" +
+	"\x12UnlockEquipLoadout\x12\x1a.UnlockEquipLoadoutRequest\x1a\x1b.UnlockEquipLoadoutResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -4480,163 +5695,205 @@ func file_proto_scene_player_bag_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_bag_proto_rawDescData
 }
 
-var file_proto_scene_player_bag_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_proto_scene_player_bag_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
 var file_proto_scene_player_bag_proto_goTypes = []any{
-	(EquipmentCraftChoice_Operation)(0),               // 0: EquipmentCraftChoice.Operation
-	(CommitEquipmentCraftResponse_Outcome)(0),         // 1: CommitEquipmentCraftResponse.Outcome
-	(ClaimEquipmentMaterialRewardResponse_Outcome)(0), // 2: ClaimEquipmentMaterialRewardResponse.Outcome
-	(*EquipAttrLineInfo)(nil),                         // 3: EquipAttrLineInfo
-	(*EquipSlotInfo)(nil),                             // 4: EquipSlotInfo
-	(*EquipGemSocketInfo)(nil),                        // 5: EquipGemSocketInfo
-	(*EquipEnhancePreview)(nil),                       // 6: EquipEnhancePreview
-	(*BagItemInfo)(nil),                               // 7: BagItemInfo
-	(*BagSlotInfo)(nil),                               // 8: BagSlotInfo
-	(*BagLayoutInfo)(nil),                             // 9: BagLayoutInfo
-	(*BagHeldItemInfo)(nil),                           // 10: BagHeldItemInfo
-	(*BagInfo)(nil),                                   // 11: BagInfo
-	(*GetBagRequest)(nil),                             // 12: GetBagRequest
-	(*GetBagResponse)(nil),                            // 13: GetBagResponse
-	(*SortBagRequest)(nil),                            // 14: SortBagRequest
-	(*SortBagResponse)(nil),                           // 15: SortBagResponse
-	(*EquipItemRequest)(nil),                          // 16: EquipItemRequest
-	(*EquipItemResponse)(nil),                         // 17: EquipItemResponse
-	(*UnequipItemRequest)(nil),                        // 18: UnequipItemRequest
-	(*UnequipItemResponse)(nil),                       // 19: UnequipItemResponse
-	(*GmGrantItemRequest)(nil),                        // 20: GmGrantItemRequest
-	(*GmGrantItemResponse)(nil),                       // 21: GmGrantItemResponse
-	(*EnhanceEquipRequest)(nil),                       // 22: EnhanceEquipRequest
-	(*EnhanceEquipResponse)(nil),                      // 23: EnhanceEquipResponse
-	(*InlayGemRequest)(nil),                           // 24: InlayGemRequest
-	(*InlayGemResponse)(nil),                          // 25: InlayGemResponse
-	(*RemoveGemRequest)(nil),                          // 26: RemoveGemRequest
-	(*RemoveGemResponse)(nil),                         // 27: RemoveGemResponse
-	(*RetrieveTemporaryItemsRequest)(nil),             // 28: RetrieveTemporaryItemsRequest
-	(*RetrieveTemporaryItemsResponse)(nil),            // 29: RetrieveTemporaryItemsResponse
-	(*EquipFixedAffixInfo)(nil),                       // 30: EquipFixedAffixInfo
-	(*EquipAffixQualityInfo)(nil),                     // 31: EquipAffixQualityInfo
-	(*CraftMasteryInfo)(nil),                          // 32: CraftMasteryInfo
-	(*EquipFixedAffixSlotInfo)(nil),                   // 33: EquipFixedAffixSlotInfo
-	(*EquipArtifactInfo)(nil),                         // 34: EquipArtifactInfo
-	(*EquipmentCraftChoice)(nil),                      // 35: EquipmentCraftChoice
-	(*EquipmentCraftMaterial)(nil),                    // 36: EquipmentCraftMaterial
-	(*EquipmentCraftRecipe)(nil),                      // 37: EquipmentCraftRecipe
-	(*GetEquipmentCraftRulesRequest)(nil),             // 38: GetEquipmentCraftRulesRequest
-	(*GetEquipmentCraftRulesResponse)(nil),            // 39: GetEquipmentCraftRulesResponse
-	(*EquipmentCraftPreview)(nil),                     // 40: EquipmentCraftPreview
-	(*PreviewEquipmentCraftRequest)(nil),              // 41: PreviewEquipmentCraftRequest
-	(*PreviewEquipmentCraftResponse)(nil),             // 42: PreviewEquipmentCraftResponse
-	(*CommitEquipmentCraftRequest)(nil),               // 43: CommitEquipmentCraftRequest
-	(*CommitEquipmentCraftResponse)(nil),              // 44: CommitEquipmentCraftResponse
-	(*EquipmentMaterialRewardSnapshot)(nil),           // 45: EquipmentMaterialRewardSnapshot
-	(*GetEquipmentMaterialRewardRequest)(nil),         // 46: GetEquipmentMaterialRewardRequest
-	(*GetEquipmentMaterialRewardResponse)(nil),        // 47: GetEquipmentMaterialRewardResponse
-	(*ClaimEquipmentMaterialRewardRequest)(nil),       // 48: ClaimEquipmentMaterialRewardRequest
-	(*ClaimEquipmentMaterialRewardResponse)(nil),      // 49: ClaimEquipmentMaterialRewardResponse
-	(*component.CurrencyComp)(nil),                    // 50: CurrencyComp
-	(*base.TipInfoMessage)(nil),                       // 51: TipInfoMessage
+	(EquipLoadoutSlotStatus)(0),                       // 0: EquipLoadoutSlotStatus
+	(EquipmentCraftChoice_Operation)(0),               // 1: EquipmentCraftChoice.Operation
+	(CommitEquipmentCraftResponse_Outcome)(0),         // 2: CommitEquipmentCraftResponse.Outcome
+	(ClaimEquipmentMaterialRewardResponse_Outcome)(0), // 3: ClaimEquipmentMaterialRewardResponse.Outcome
+	(UnlockEquipLoadoutResponse_Outcome)(0),           // 4: UnlockEquipLoadoutResponse.Outcome
+	(*EquipAttrLineInfo)(nil),                         // 5: EquipAttrLineInfo
+	(*EquipSlotInfo)(nil),                             // 6: EquipSlotInfo
+	(*EquipGemSocketInfo)(nil),                        // 7: EquipGemSocketInfo
+	(*EquipEnhancePreview)(nil),                       // 8: EquipEnhancePreview
+	(*BagItemInfo)(nil),                               // 9: BagItemInfo
+	(*BagSlotInfo)(nil),                               // 10: BagSlotInfo
+	(*BagLayoutInfo)(nil),                             // 11: BagLayoutInfo
+	(*BagHeldItemInfo)(nil),                           // 12: BagHeldItemInfo
+	(*BagInfo)(nil),                                   // 13: BagInfo
+	(*GetBagRequest)(nil),                             // 14: GetBagRequest
+	(*GetBagResponse)(nil),                            // 15: GetBagResponse
+	(*SortBagRequest)(nil),                            // 16: SortBagRequest
+	(*SortBagResponse)(nil),                           // 17: SortBagResponse
+	(*EquipItemRequest)(nil),                          // 18: EquipItemRequest
+	(*EquipItemResponse)(nil),                         // 19: EquipItemResponse
+	(*UnequipItemRequest)(nil),                        // 20: UnequipItemRequest
+	(*UnequipItemResponse)(nil),                       // 21: UnequipItemResponse
+	(*GmGrantItemRequest)(nil),                        // 22: GmGrantItemRequest
+	(*GmGrantItemResponse)(nil),                       // 23: GmGrantItemResponse
+	(*EnhanceEquipRequest)(nil),                       // 24: EnhanceEquipRequest
+	(*EnhanceEquipResponse)(nil),                      // 25: EnhanceEquipResponse
+	(*InlayGemRequest)(nil),                           // 26: InlayGemRequest
+	(*InlayGemResponse)(nil),                          // 27: InlayGemResponse
+	(*RemoveGemRequest)(nil),                          // 28: RemoveGemRequest
+	(*RemoveGemResponse)(nil),                         // 29: RemoveGemResponse
+	(*RetrieveTemporaryItemsRequest)(nil),             // 30: RetrieveTemporaryItemsRequest
+	(*RetrieveTemporaryItemsResponse)(nil),            // 31: RetrieveTemporaryItemsResponse
+	(*EquipFixedAffixInfo)(nil),                       // 32: EquipFixedAffixInfo
+	(*EquipAffixQualityInfo)(nil),                     // 33: EquipAffixQualityInfo
+	(*CraftMasteryInfo)(nil),                          // 34: CraftMasteryInfo
+	(*EquipFixedAffixSlotInfo)(nil),                   // 35: EquipFixedAffixSlotInfo
+	(*EquipArtifactInfo)(nil),                         // 36: EquipArtifactInfo
+	(*EquipmentCraftChoice)(nil),                      // 37: EquipmentCraftChoice
+	(*EquipmentCraftMaterial)(nil),                    // 38: EquipmentCraftMaterial
+	(*EquipmentCraftRecipe)(nil),                      // 39: EquipmentCraftRecipe
+	(*GetEquipmentCraftRulesRequest)(nil),             // 40: GetEquipmentCraftRulesRequest
+	(*GetEquipmentCraftRulesResponse)(nil),            // 41: GetEquipmentCraftRulesResponse
+	(*EquipmentCraftPreview)(nil),                     // 42: EquipmentCraftPreview
+	(*PreviewEquipmentCraftRequest)(nil),              // 43: PreviewEquipmentCraftRequest
+	(*PreviewEquipmentCraftResponse)(nil),             // 44: PreviewEquipmentCraftResponse
+	(*CommitEquipmentCraftRequest)(nil),               // 45: CommitEquipmentCraftRequest
+	(*CommitEquipmentCraftResponse)(nil),              // 46: CommitEquipmentCraftResponse
+	(*EquipmentMaterialRewardSnapshot)(nil),           // 47: EquipmentMaterialRewardSnapshot
+	(*GetEquipmentMaterialRewardRequest)(nil),         // 48: GetEquipmentMaterialRewardRequest
+	(*GetEquipmentMaterialRewardResponse)(nil),        // 49: GetEquipmentMaterialRewardResponse
+	(*ClaimEquipmentMaterialRewardRequest)(nil),       // 50: ClaimEquipmentMaterialRewardRequest
+	(*ClaimEquipmentMaterialRewardResponse)(nil),      // 51: ClaimEquipmentMaterialRewardResponse
+	(*EquipLoadoutSlotView)(nil),                      // 52: EquipLoadoutSlotView
+	(*EquipLoadoutSchemeInfo)(nil),                    // 53: EquipLoadoutSchemeInfo
+	(*EquipLoadoutLinkedOption)(nil),                  // 54: EquipLoadoutLinkedOption
+	(*EquipLoadoutSnapshot)(nil),                      // 55: EquipLoadoutSnapshot
+	(*GetEquipLoadoutsRequest)(nil),                   // 56: GetEquipLoadoutsRequest
+	(*GetEquipLoadoutsResponse)(nil),                  // 57: GetEquipLoadoutsResponse
+	(*SaveEquipLoadoutRequest)(nil),                   // 58: SaveEquipLoadoutRequest
+	(*SaveEquipLoadoutResponse)(nil),                  // 59: SaveEquipLoadoutResponse
+	(*SwitchEquipLoadoutRequest)(nil),                 // 60: SwitchEquipLoadoutRequest
+	(*SwitchEquipLoadoutResponse)(nil),                // 61: SwitchEquipLoadoutResponse
+	(*UnlockEquipLoadoutRequest)(nil),                 // 62: UnlockEquipLoadoutRequest
+	(*UnlockEquipLoadoutResponse)(nil),                // 63: UnlockEquipLoadoutResponse
+	(*component.CurrencyComp)(nil),                    // 64: CurrencyComp
+	(*base.TipInfoMessage)(nil),                       // 65: TipInfoMessage
+	(*component.EquipLoadoutSlotBinding)(nil),         // 66: EquipLoadoutSlotBinding
 }
 var file_proto_scene_player_bag_proto_depIdxs = []int32{
-	3,  // 0: EquipGemSocketInfo.attr:type_name -> EquipAttrLineInfo
-	3,  // 1: BagItemInfo.base_attrs:type_name -> EquipAttrLineInfo
-	3,  // 2: BagItemInfo.affixes:type_name -> EquipAttrLineInfo
-	6,  // 3: BagItemInfo.enhance_next:type_name -> EquipEnhancePreview
-	5,  // 4: BagItemInfo.gem_sockets:type_name -> EquipGemSocketInfo
-	3,  // 5: BagItemInfo.gem_attr:type_name -> EquipAttrLineInfo
-	33, // 6: BagItemInfo.fixed_affix_slots:type_name -> EquipFixedAffixSlotInfo
-	34, // 7: BagItemInfo.artifact:type_name -> EquipArtifactInfo
-	8,  // 8: BagLayoutInfo.slots:type_name -> BagSlotInfo
-	4,  // 9: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
-	7,  // 10: BagInfo.items:type_name -> BagItemInfo
-	9,  // 11: BagInfo.layout:type_name -> BagLayoutInfo
-	50, // 12: BagInfo.currency:type_name -> CurrencyComp
-	10, // 13: BagInfo.held_items:type_name -> BagHeldItemInfo
-	51, // 14: GetBagResponse.error_message:type_name -> TipInfoMessage
-	11, // 15: GetBagResponse.bag:type_name -> BagInfo
-	51, // 16: SortBagResponse.error_message:type_name -> TipInfoMessage
-	11, // 17: SortBagResponse.bag:type_name -> BagInfo
-	51, // 18: EquipItemResponse.error_message:type_name -> TipInfoMessage
-	11, // 19: EquipItemResponse.bag:type_name -> BagInfo
-	11, // 20: EquipItemResponse.equipment:type_name -> BagInfo
-	51, // 21: UnequipItemResponse.error_message:type_name -> TipInfoMessage
-	11, // 22: UnequipItemResponse.bag:type_name -> BagInfo
-	11, // 23: UnequipItemResponse.equipment:type_name -> BagInfo
-	51, // 24: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
-	11, // 25: GmGrantItemResponse.bag:type_name -> BagInfo
-	51, // 26: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
-	11, // 27: EnhanceEquipResponse.bag:type_name -> BagInfo
-	11, // 28: EnhanceEquipResponse.equipment:type_name -> BagInfo
-	51, // 29: InlayGemResponse.error_message:type_name -> TipInfoMessage
-	11, // 30: InlayGemResponse.bag:type_name -> BagInfo
-	11, // 31: InlayGemResponse.equipment:type_name -> BagInfo
-	51, // 32: RemoveGemResponse.error_message:type_name -> TipInfoMessage
-	11, // 33: RemoveGemResponse.bag:type_name -> BagInfo
-	11, // 34: RemoveGemResponse.equipment:type_name -> BagInfo
-	51, // 35: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
-	11, // 36: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
-	11, // 37: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
-	30, // 38: EquipFixedAffixSlotInfo.selected:type_name -> EquipFixedAffixInfo
-	0,  // 39: EquipmentCraftChoice.operation:type_name -> EquipmentCraftChoice.Operation
-	7,  // 40: EquipmentCraftRecipe.product:type_name -> BagItemInfo
-	51, // 41: GetEquipmentCraftRulesResponse.error_message:type_name -> TipInfoMessage
-	37, // 42: GetEquipmentCraftRulesResponse.recipes:type_name -> EquipmentCraftRecipe
-	30, // 43: GetEquipmentCraftRulesResponse.affixes:type_name -> EquipFixedAffixInfo
-	31, // 44: GetEquipmentCraftRulesResponse.quality_tiers:type_name -> EquipAffixQualityInfo
-	32, // 45: GetEquipmentCraftRulesResponse.forge_mastery:type_name -> CraftMasteryInfo
-	35, // 46: EquipmentCraftPreview.choice:type_name -> EquipmentCraftChoice
-	7,  // 47: EquipmentCraftPreview.result:type_name -> BagItemInfo
-	36, // 48: EquipmentCraftPreview.material:type_name -> EquipmentCraftMaterial
-	36, // 49: EquipmentCraftPreview.extra_material:type_name -> EquipmentCraftMaterial
-	35, // 50: PreviewEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
-	51, // 51: PreviewEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
-	40, // 52: PreviewEquipmentCraftResponse.preview:type_name -> EquipmentCraftPreview
-	35, // 53: CommitEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
-	51, // 54: CommitEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
-	1,  // 55: CommitEquipmentCraftResponse.outcome:type_name -> CommitEquipmentCraftResponse.Outcome
-	11, // 56: CommitEquipmentCraftResponse.bag:type_name -> BagInfo
-	11, // 57: CommitEquipmentCraftResponse.equipment:type_name -> BagInfo
-	32, // 58: CommitEquipmentCraftResponse.forge_mastery:type_name -> CraftMasteryInfo
-	36, // 59: EquipmentMaterialRewardSnapshot.crafting_material:type_name -> EquipmentCraftMaterial
-	36, // 60: EquipmentMaterialRewardSnapshot.enhancement_stone:type_name -> EquipmentCraftMaterial
-	51, // 61: GetEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
-	45, // 62: GetEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
-	51, // 63: ClaimEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
-	2,  // 64: ClaimEquipmentMaterialRewardResponse.outcome:type_name -> ClaimEquipmentMaterialRewardResponse.Outcome
-	11, // 65: ClaimEquipmentMaterialRewardResponse.bag:type_name -> BagInfo
-	45, // 66: ClaimEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
-	12, // 67: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
-	14, // 68: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
-	16, // 69: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
-	18, // 70: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
-	20, // 71: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
-	22, // 72: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
-	24, // 73: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
-	26, // 74: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
-	28, // 75: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
-	38, // 76: SceneBagClientPlayer.GetEquipmentCraftRules:input_type -> GetEquipmentCraftRulesRequest
-	41, // 77: SceneBagClientPlayer.PreviewEquipmentCraft:input_type -> PreviewEquipmentCraftRequest
-	43, // 78: SceneBagClientPlayer.CommitEquipmentCraft:input_type -> CommitEquipmentCraftRequest
-	46, // 79: SceneBagClientPlayer.GetEquipmentMaterialReward:input_type -> GetEquipmentMaterialRewardRequest
-	48, // 80: SceneBagClientPlayer.ClaimEquipmentMaterialReward:input_type -> ClaimEquipmentMaterialRewardRequest
-	13, // 81: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
-	15, // 82: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
-	17, // 83: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
-	19, // 84: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
-	21, // 85: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
-	23, // 86: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
-	25, // 87: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
-	27, // 88: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
-	29, // 89: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
-	39, // 90: SceneBagClientPlayer.GetEquipmentCraftRules:output_type -> GetEquipmentCraftRulesResponse
-	42, // 91: SceneBagClientPlayer.PreviewEquipmentCraft:output_type -> PreviewEquipmentCraftResponse
-	44, // 92: SceneBagClientPlayer.CommitEquipmentCraft:output_type -> CommitEquipmentCraftResponse
-	47, // 93: SceneBagClientPlayer.GetEquipmentMaterialReward:output_type -> GetEquipmentMaterialRewardResponse
-	49, // 94: SceneBagClientPlayer.ClaimEquipmentMaterialReward:output_type -> ClaimEquipmentMaterialRewardResponse
-	81, // [81:95] is the sub-list for method output_type
-	67, // [67:81] is the sub-list for method input_type
-	67, // [67:67] is the sub-list for extension type_name
-	67, // [67:67] is the sub-list for extension extendee
-	0,  // [0:67] is the sub-list for field type_name
+	5,   // 0: EquipGemSocketInfo.attr:type_name -> EquipAttrLineInfo
+	5,   // 1: BagItemInfo.base_attrs:type_name -> EquipAttrLineInfo
+	5,   // 2: BagItemInfo.affixes:type_name -> EquipAttrLineInfo
+	8,   // 3: BagItemInfo.enhance_next:type_name -> EquipEnhancePreview
+	7,   // 4: BagItemInfo.gem_sockets:type_name -> EquipGemSocketInfo
+	5,   // 5: BagItemInfo.gem_attr:type_name -> EquipAttrLineInfo
+	35,  // 6: BagItemInfo.fixed_affix_slots:type_name -> EquipFixedAffixSlotInfo
+	36,  // 7: BagItemInfo.artifact:type_name -> EquipArtifactInfo
+	10,  // 8: BagLayoutInfo.slots:type_name -> BagSlotInfo
+	6,   // 9: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
+	9,   // 10: BagInfo.items:type_name -> BagItemInfo
+	11,  // 11: BagInfo.layout:type_name -> BagLayoutInfo
+	64,  // 12: BagInfo.currency:type_name -> CurrencyComp
+	12,  // 13: BagInfo.held_items:type_name -> BagHeldItemInfo
+	65,  // 14: GetBagResponse.error_message:type_name -> TipInfoMessage
+	13,  // 15: GetBagResponse.bag:type_name -> BagInfo
+	65,  // 16: SortBagResponse.error_message:type_name -> TipInfoMessage
+	13,  // 17: SortBagResponse.bag:type_name -> BagInfo
+	65,  // 18: EquipItemResponse.error_message:type_name -> TipInfoMessage
+	13,  // 19: EquipItemResponse.bag:type_name -> BagInfo
+	13,  // 20: EquipItemResponse.equipment:type_name -> BagInfo
+	65,  // 21: UnequipItemResponse.error_message:type_name -> TipInfoMessage
+	13,  // 22: UnequipItemResponse.bag:type_name -> BagInfo
+	13,  // 23: UnequipItemResponse.equipment:type_name -> BagInfo
+	65,  // 24: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
+	13,  // 25: GmGrantItemResponse.bag:type_name -> BagInfo
+	65,  // 26: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
+	13,  // 27: EnhanceEquipResponse.bag:type_name -> BagInfo
+	13,  // 28: EnhanceEquipResponse.equipment:type_name -> BagInfo
+	65,  // 29: InlayGemResponse.error_message:type_name -> TipInfoMessage
+	13,  // 30: InlayGemResponse.bag:type_name -> BagInfo
+	13,  // 31: InlayGemResponse.equipment:type_name -> BagInfo
+	65,  // 32: RemoveGemResponse.error_message:type_name -> TipInfoMessage
+	13,  // 33: RemoveGemResponse.bag:type_name -> BagInfo
+	13,  // 34: RemoveGemResponse.equipment:type_name -> BagInfo
+	65,  // 35: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
+	13,  // 36: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
+	13,  // 37: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
+	32,  // 38: EquipFixedAffixSlotInfo.selected:type_name -> EquipFixedAffixInfo
+	1,   // 39: EquipmentCraftChoice.operation:type_name -> EquipmentCraftChoice.Operation
+	9,   // 40: EquipmentCraftRecipe.product:type_name -> BagItemInfo
+	65,  // 41: GetEquipmentCraftRulesResponse.error_message:type_name -> TipInfoMessage
+	39,  // 42: GetEquipmentCraftRulesResponse.recipes:type_name -> EquipmentCraftRecipe
+	32,  // 43: GetEquipmentCraftRulesResponse.affixes:type_name -> EquipFixedAffixInfo
+	33,  // 44: GetEquipmentCraftRulesResponse.quality_tiers:type_name -> EquipAffixQualityInfo
+	34,  // 45: GetEquipmentCraftRulesResponse.forge_mastery:type_name -> CraftMasteryInfo
+	37,  // 46: EquipmentCraftPreview.choice:type_name -> EquipmentCraftChoice
+	9,   // 47: EquipmentCraftPreview.result:type_name -> BagItemInfo
+	38,  // 48: EquipmentCraftPreview.material:type_name -> EquipmentCraftMaterial
+	38,  // 49: EquipmentCraftPreview.extra_material:type_name -> EquipmentCraftMaterial
+	37,  // 50: PreviewEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
+	65,  // 51: PreviewEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
+	42,  // 52: PreviewEquipmentCraftResponse.preview:type_name -> EquipmentCraftPreview
+	37,  // 53: CommitEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
+	65,  // 54: CommitEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
+	2,   // 55: CommitEquipmentCraftResponse.outcome:type_name -> CommitEquipmentCraftResponse.Outcome
+	13,  // 56: CommitEquipmentCraftResponse.bag:type_name -> BagInfo
+	13,  // 57: CommitEquipmentCraftResponse.equipment:type_name -> BagInfo
+	34,  // 58: CommitEquipmentCraftResponse.forge_mastery:type_name -> CraftMasteryInfo
+	38,  // 59: EquipmentMaterialRewardSnapshot.crafting_material:type_name -> EquipmentCraftMaterial
+	38,  // 60: EquipmentMaterialRewardSnapshot.enhancement_stone:type_name -> EquipmentCraftMaterial
+	65,  // 61: GetEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
+	47,  // 62: GetEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
+	65,  // 63: ClaimEquipmentMaterialRewardResponse.error_message:type_name -> TipInfoMessage
+	3,   // 64: ClaimEquipmentMaterialRewardResponse.outcome:type_name -> ClaimEquipmentMaterialRewardResponse.Outcome
+	13,  // 65: ClaimEquipmentMaterialRewardResponse.bag:type_name -> BagInfo
+	47,  // 66: ClaimEquipmentMaterialRewardResponse.snapshot:type_name -> EquipmentMaterialRewardSnapshot
+	0,   // 67: EquipLoadoutSlotView.status:type_name -> EquipLoadoutSlotStatus
+	9,   // 68: EquipLoadoutSlotView.item:type_name -> BagItemInfo
+	52,  // 69: EquipLoadoutSchemeInfo.slots:type_name -> EquipLoadoutSlotView
+	53,  // 70: EquipLoadoutSnapshot.schemes:type_name -> EquipLoadoutSchemeInfo
+	54,  // 71: EquipLoadoutSnapshot.skill_schemes:type_name -> EquipLoadoutLinkedOption
+	54,  // 72: EquipLoadoutSnapshot.attribute_schemes:type_name -> EquipLoadoutLinkedOption
+	65,  // 73: GetEquipLoadoutsResponse.error_message:type_name -> TipInfoMessage
+	55,  // 74: GetEquipLoadoutsResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	66,  // 75: SaveEquipLoadoutRequest.slots:type_name -> EquipLoadoutSlotBinding
+	65,  // 76: SaveEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
+	55,  // 77: SaveEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	65,  // 78: SwitchEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
+	13,  // 79: SwitchEquipLoadoutResponse.bag:type_name -> BagInfo
+	13,  // 80: SwitchEquipLoadoutResponse.equipment:type_name -> BagInfo
+	55,  // 81: SwitchEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	65,  // 82: UnlockEquipLoadoutResponse.error_message:type_name -> TipInfoMessage
+	4,   // 83: UnlockEquipLoadoutResponse.outcome:type_name -> UnlockEquipLoadoutResponse.Outcome
+	13,  // 84: UnlockEquipLoadoutResponse.bag:type_name -> BagInfo
+	55,  // 85: UnlockEquipLoadoutResponse.snapshot:type_name -> EquipLoadoutSnapshot
+	14,  // 86: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
+	16,  // 87: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
+	18,  // 88: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
+	20,  // 89: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
+	22,  // 90: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
+	24,  // 91: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
+	26,  // 92: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
+	28,  // 93: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
+	30,  // 94: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
+	40,  // 95: SceneBagClientPlayer.GetEquipmentCraftRules:input_type -> GetEquipmentCraftRulesRequest
+	43,  // 96: SceneBagClientPlayer.PreviewEquipmentCraft:input_type -> PreviewEquipmentCraftRequest
+	45,  // 97: SceneBagClientPlayer.CommitEquipmentCraft:input_type -> CommitEquipmentCraftRequest
+	48,  // 98: SceneBagClientPlayer.GetEquipmentMaterialReward:input_type -> GetEquipmentMaterialRewardRequest
+	50,  // 99: SceneBagClientPlayer.ClaimEquipmentMaterialReward:input_type -> ClaimEquipmentMaterialRewardRequest
+	56,  // 100: SceneBagClientPlayer.GetEquipLoadouts:input_type -> GetEquipLoadoutsRequest
+	58,  // 101: SceneBagClientPlayer.SaveEquipLoadout:input_type -> SaveEquipLoadoutRequest
+	60,  // 102: SceneBagClientPlayer.SwitchEquipLoadout:input_type -> SwitchEquipLoadoutRequest
+	62,  // 103: SceneBagClientPlayer.UnlockEquipLoadout:input_type -> UnlockEquipLoadoutRequest
+	15,  // 104: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
+	17,  // 105: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
+	19,  // 106: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
+	21,  // 107: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
+	23,  // 108: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
+	25,  // 109: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
+	27,  // 110: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
+	29,  // 111: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
+	31,  // 112: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
+	41,  // 113: SceneBagClientPlayer.GetEquipmentCraftRules:output_type -> GetEquipmentCraftRulesResponse
+	44,  // 114: SceneBagClientPlayer.PreviewEquipmentCraft:output_type -> PreviewEquipmentCraftResponse
+	46,  // 115: SceneBagClientPlayer.CommitEquipmentCraft:output_type -> CommitEquipmentCraftResponse
+	49,  // 116: SceneBagClientPlayer.GetEquipmentMaterialReward:output_type -> GetEquipmentMaterialRewardResponse
+	51,  // 117: SceneBagClientPlayer.ClaimEquipmentMaterialReward:output_type -> ClaimEquipmentMaterialRewardResponse
+	57,  // 118: SceneBagClientPlayer.GetEquipLoadouts:output_type -> GetEquipLoadoutsResponse
+	59,  // 119: SceneBagClientPlayer.SaveEquipLoadout:output_type -> SaveEquipLoadoutResponse
+	61,  // 120: SceneBagClientPlayer.SwitchEquipLoadout:output_type -> SwitchEquipLoadoutResponse
+	63,  // 121: SceneBagClientPlayer.UnlockEquipLoadout:output_type -> UnlockEquipLoadoutResponse
+	104, // [104:122] is the sub-list for method output_type
+	86,  // [86:104] is the sub-list for method input_type
+	86,  // [86:86] is the sub-list for extension type_name
+	86,  // [86:86] is the sub-list for extension extendee
+	0,   // [0:86] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_bag_proto_init() }
@@ -4652,8 +5909,8 @@ func file_proto_scene_player_bag_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_bag_proto_rawDesc), len(file_proto_scene_player_bag_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   47,
+			NumEnums:      5,
+			NumMessages:   59,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

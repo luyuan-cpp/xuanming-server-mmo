@@ -446,20 +446,24 @@ func (x *PlayerAppearanceInfo) GetEquippedSkillVfx() map[uint32]uint32 {
 
 // 灵宠幻化目录项（纯外观表现，零战斗/成长属性）。
 type PetCosmeticEntry struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	ConfigId         uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`                             // PetCosmetic.id(永久主键)
-	CosmeticKey      string                 `protobuf:"bytes,2,opt,name=cosmetic_key,json=cosmeticKey,proto3" json:"cosmetic_key,omitempty"`                     // 稳定外观标识键
-	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                      // 中文展示名
-	TargetPetTableId uint32                 `protobuf:"varint,4,opt,name=target_pet_table_id,json=targetPetTableId,proto3" json:"target_pet_table_id,omitempty"` // 适用灵宠种类 ID(0 = 通用)
-	VisualPetTableId uint32                 `protobuf:"varint,5,opt,name=visual_pet_table_id,json=visualPetTableId,proto3" json:"visual_pet_table_id,omitempty"` // 表现复用灵宠种类 ID
-	VisualArtKey     string                 `protobuf:"bytes,6,opt,name=visual_art_key,json=visualArtKey,proto3" json:"visual_art_key,omitempty"`                // 客户端外观资源键
-	SortOrder        uint32                 `protobuf:"varint,7,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`                          // 展示排序(升序)
-	Owned            bool                   `protobuf:"varint,8,opt,name=owned,proto3" json:"owned,omitempty"`                                                   // 是否已永久拥有
-	MallSkuId        uint64                 `protobuf:"varint,9,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`                        // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
-	AcquireHint      string                 `protobuf:"bytes,10,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`                    // 未拥有且未上架时展示的取得条件
-	Desc             string                 `protobuf:"bytes,11,opt,name=desc,proto3" json:"desc,omitempty"`                                                     // 外观简述
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ConfigId          uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`                                 // PetCosmetic.id(永久主键)
+	CosmeticKey       string                 `protobuf:"bytes,2,opt,name=cosmetic_key,json=cosmeticKey,proto3" json:"cosmetic_key,omitempty"`                         // 稳定外观标识键
+	Name              string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                          // 中文展示名
+	TargetPetTableId  uint32                 `protobuf:"varint,4,opt,name=target_pet_table_id,json=targetPetTableId,proto3" json:"target_pet_table_id,omitempty"`     // 适用灵宠种类 ID(0 = 通用)
+	VisualPetTableId  uint32                 `protobuf:"varint,5,opt,name=visual_pet_table_id,json=visualPetTableId,proto3" json:"visual_pet_table_id,omitempty"`     // 表现复用灵宠种类 ID
+	VisualArtKey      string                 `protobuf:"bytes,6,opt,name=visual_art_key,json=visualArtKey,proto3" json:"visual_art_key,omitempty"`                    // 客户端外观资源键
+	SortOrder         uint32                 `protobuf:"varint,7,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`                              // 展示排序(升序)
+	Owned             bool                   `protobuf:"varint,8,opt,name=owned,proto3" json:"owned,omitempty"`                                                       // 是否已永久拥有
+	MallSkuId         uint64                 `protobuf:"varint,9,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`                            // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
+	AcquireHint       string                 `protobuf:"bytes,10,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`                        // 未拥有且未上架时展示的取得条件
+	Desc              string                 `protobuf:"bytes,11,opt,name=desc,proto3" json:"desc,omitempty"`                                                         // 外观简述
+	CardItemId        uint32                 `protobuf:"varint,12,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"`                        // 解锁券道具 ID(0 = 仅专属获取;非 0 = 允许耗券永久解锁)
+	CardItemCount     uint32                 `protobuf:"varint,13,opt,name=card_item_count,json=cardItemCount,proto3" json:"card_item_count,omitempty"`               // 每次解锁消耗券张数
+	OwnedCardCount    uint32                 `protobuf:"varint,14,opt,name=owned_card_count,json=ownedCardCount,proto3" json:"owned_card_count,omitempty"`            // 玩家背包当前可用解锁券张数(已扣预留)
+	SpiritShopGoodsId uint32                 `protobuf:"varint,15,opt,name=spirit_shop_goods_id,json=spiritShopGoodsId,proto3" json:"spirit_shop_goods_id,omitempty"` // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁售卖)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PetCosmeticEntry) Reset() {
@@ -569,6 +573,34 @@ func (x *PetCosmeticEntry) GetDesc() string {
 	return ""
 }
 
+func (x *PetCosmeticEntry) GetCardItemId() uint32 {
+	if x != nil {
+		return x.CardItemId
+	}
+	return 0
+}
+
+func (x *PetCosmeticEntry) GetCardItemCount() uint32 {
+	if x != nil {
+		return x.CardItemCount
+	}
+	return 0
+}
+
+func (x *PetCosmeticEntry) GetOwnedCardCount() uint32 {
+	if x != nil {
+		return x.OwnedCardCount
+	}
+	return 0
+}
+
+func (x *PetCosmeticEntry) GetSpiritShopGoodsId() uint32 {
+	if x != nil {
+		return x.SpiritShopGoodsId
+	}
+	return 0
+}
+
 // 单只灵宠实例当前的权威幻化穿戴状态。
 type PetEquippedCosmetic struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -624,22 +656,26 @@ func (x *PetEquippedCosmetic) GetCosmeticId() uint32 {
 
 // 技能特效目录项（纯战斗画面表现，零数值/机制变更）。
 type SkillVfxCosmeticEntry struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ConfigId       uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`                    // SkillVfxCosmetic.id(永久主键)
-	VfxKey         string                 `protobuf:"bytes,2,opt,name=vfx_key,json=vfxKey,proto3" json:"vfx_key,omitempty"`                           // 稳定特效标识键
-	Name           string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                             // 中文展示名
-	SkillTableId   uint32                 `protobuf:"varint,4,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`      // 适用技能 ID(Skill.id)
-	FxId           string                 `protobuf:"bytes,5,opt,name=fx_id,json=fxId,proto3" json:"fx_id,omitempty"`                                 // 主特效帧条 ID
-	ProjectileFxId string                 `protobuf:"bytes,6,opt,name=projectile_fx_id,json=projectileFxId,proto3" json:"projectile_fx_id,omitempty"` // 可选飞行段帧条 ID
-	TelegraphFxId  string                 `protobuf:"bytes,7,opt,name=telegraph_fx_id,json=telegraphFxId,proto3" json:"telegraph_fx_id,omitempty"`    // 可选预示段帧条 ID
-	TintHex        string                 `protobuf:"bytes,8,opt,name=tint_hex,json=tintHex,proto3" json:"tint_hex,omitempty"`                        // 可选色调覆盖(#RRGGBB)
-	SortOrder      uint32                 `protobuf:"varint,9,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`                 // 展示排序(升序)
-	Owned          bool                   `protobuf:"varint,10,opt,name=owned,proto3" json:"owned,omitempty"`                                         // 是否已永久拥有
-	MallSkuId      uint64                 `protobuf:"varint,11,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`              // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
-	AcquireHint    string                 `protobuf:"bytes,12,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`           // 未拥有且未上架时展示的取得条件
-	Desc           string                 `protobuf:"bytes,13,opt,name=desc,proto3" json:"desc,omitempty"`                                            // 特效简述
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ConfigId          uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`                                 // SkillVfxCosmetic.id(永久主键)
+	VfxKey            string                 `protobuf:"bytes,2,opt,name=vfx_key,json=vfxKey,proto3" json:"vfx_key,omitempty"`                                        // 稳定特效标识键
+	Name              string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                          // 中文展示名
+	SkillTableId      uint32                 `protobuf:"varint,4,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`                   // 适用技能 ID(Skill.id)
+	FxId              string                 `protobuf:"bytes,5,opt,name=fx_id,json=fxId,proto3" json:"fx_id,omitempty"`                                              // 主特效帧条 ID
+	ProjectileFxId    string                 `protobuf:"bytes,6,opt,name=projectile_fx_id,json=projectileFxId,proto3" json:"projectile_fx_id,omitempty"`              // 可选飞行段帧条 ID
+	TelegraphFxId     string                 `protobuf:"bytes,7,opt,name=telegraph_fx_id,json=telegraphFxId,proto3" json:"telegraph_fx_id,omitempty"`                 // 可选预示段帧条 ID
+	TintHex           string                 `protobuf:"bytes,8,opt,name=tint_hex,json=tintHex,proto3" json:"tint_hex,omitempty"`                                     // 可选色调覆盖(#RRGGBB)
+	SortOrder         uint32                 `protobuf:"varint,9,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`                              // 展示排序(升序)
+	Owned             bool                   `protobuf:"varint,10,opt,name=owned,proto3" json:"owned,omitempty"`                                                      // 是否已永久拥有
+	MallSkuId         uint64                 `protobuf:"varint,11,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`                           // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
+	AcquireHint       string                 `protobuf:"bytes,12,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`                        // 未拥有且未上架时展示的取得条件
+	Desc              string                 `protobuf:"bytes,13,opt,name=desc,proto3" json:"desc,omitempty"`                                                         // 特效简述
+	CardItemId        uint32                 `protobuf:"varint,14,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"`                        // 解锁券道具 ID(0 = 仅专属获取;非 0 = 允许耗券永久解锁)
+	CardItemCount     uint32                 `protobuf:"varint,15,opt,name=card_item_count,json=cardItemCount,proto3" json:"card_item_count,omitempty"`               // 每次解锁消耗券张数
+	OwnedCardCount    uint32                 `protobuf:"varint,16,opt,name=owned_card_count,json=ownedCardCount,proto3" json:"owned_card_count,omitempty"`            // 玩家背包当前可用解锁券张数(已扣预留)
+	SpiritShopGoodsId uint32                 `protobuf:"varint,17,opt,name=spirit_shop_goods_id,json=spiritShopGoodsId,proto3" json:"spirit_shop_goods_id,omitempty"` // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁售卖)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *SkillVfxCosmeticEntry) Reset() {
@@ -763,12 +799,41 @@ func (x *SkillVfxCosmeticEntry) GetDesc() string {
 	return ""
 }
 
-// 为指定灵宠实例穿戴或清除幻化外观（cosmetic_id = 0 表示恢复原形；纯幂等收敛）。
+func (x *SkillVfxCosmeticEntry) GetCardItemId() uint32 {
+	if x != nil {
+		return x.CardItemId
+	}
+	return 0
+}
+
+func (x *SkillVfxCosmeticEntry) GetCardItemCount() uint32 {
+	if x != nil {
+		return x.CardItemCount
+	}
+	return 0
+}
+
+func (x *SkillVfxCosmeticEntry) GetOwnedCardCount() uint32 {
+	if x != nil {
+		return x.OwnedCardCount
+	}
+	return 0
+}
+
+func (x *SkillVfxCosmeticEntry) GetSpiritShopGoodsId() uint32 {
+	if x != nil {
+		return x.SpiritShopGoodsId
+	}
+	return 0
+}
+
+// 为指定灵宠实例穿戴或清除幻化外观（cosmetic_id = 0 表示恢复原形；未拥有且 expect_free_equip=false 且配表开放券解锁时原子耗券解锁并穿戴）。
 type EquipPetCosmeticRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0
 	PetId           uint64                 `protobuf:"varint,2,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                                 // 目标灵宠实例永久 ID
 	CosmeticId      uint32                 `protobuf:"varint,3,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`                  // 目标 PetCosmetic.id；0 = 恢复原形
+	ExpectFreeEquip bool                   `protobuf:"varint,4,opt,name=expect_free_equip,json=expectFreeEquip,proto3" json:"expect_free_equip,omitempty"` // true = 仅限已拥有免费穿戴(未拥有拒回,绝不误扣券); false = 允许耗券解锁并穿戴
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -822,6 +887,13 @@ func (x *EquipPetCosmeticRequest) GetCosmeticId() uint32 {
 		return x.CosmeticId
 	}
 	return 0
+}
+
+func (x *EquipPetCosmeticRequest) GetExpectFreeEquip() bool {
+	if x != nil {
+		return x.ExpectFreeEquip
+	}
+	return false
 }
 
 type EquipPetCosmeticResponse struct {
@@ -900,12 +972,13 @@ func (x *EquipPetCosmeticResponse) GetReplayed() bool {
 	return false
 }
 
-// 为指定技能启用或恢复默认特效（cosmetic_id = 0 表示恢复默认；纯幂等收敛）。
+// 为指定技能启用或恢复默认特效（cosmetic_id = 0 表示恢复默认；未拥有且 expect_free_equip=false 且配表开放券解锁时原子耗券解锁并穿戴）。
 type EquipSkillVfxRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0
 	SkillTableId    uint32                 `protobuf:"varint,2,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`          // 目标技能 ID(Skill.id)
 	CosmeticId      uint32                 `protobuf:"varint,3,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`                  // 目标 SkillVfxCosmetic.id；0 = 恢复默认
+	ExpectFreeEquip bool                   `protobuf:"varint,4,opt,name=expect_free_equip,json=expectFreeEquip,proto3" json:"expect_free_equip,omitempty"` // true = 仅限已拥有免费启用(未拥有拒回,绝不误扣券); false = 允许耗券解锁并启用
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -959,6 +1032,13 @@ func (x *EquipSkillVfxRequest) GetCosmeticId() uint32 {
 		return x.CosmeticId
 	}
 	return 0
+}
+
+func (x *EquipSkillVfxRequest) GetExpectFreeEquip() bool {
+	if x != nil {
+		return x.ExpectFreeEquip
+	}
+	return false
 }
 
 type EquipSkillVfxResponse struct {
@@ -1638,7 +1718,7 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"\x12equipped_skill_vfx\x18\x15 \x03(\v2+.PlayerAppearanceInfo.EquippedSkillVfxEntryR\x10equippedSkillVfx\x1aC\n" +
 	"\x15EquippedSkillVfxEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xf6\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x9b\x04\n" +
 	"\x10PetCosmeticEntry\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12!\n" +
 	"\fcosmetic_key\x18\x02 \x01(\tR\vcosmeticKey\x12\x12\n" +
@@ -1652,11 +1732,16 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"\vmall_sku_id\x18\t \x01(\x04R\tmallSkuId\x12!\n" +
 	"\facquire_hint\x18\n" +
 	" \x01(\tR\vacquireHint\x12\x12\n" +
-	"\x04desc\x18\v \x01(\tR\x04desc\"M\n" +
+	"\x04desc\x18\v \x01(\tR\x04desc\x12 \n" +
+	"\fcard_item_id\x18\f \x01(\rR\n" +
+	"cardItemId\x12&\n" +
+	"\x0fcard_item_count\x18\r \x01(\rR\rcardItemCount\x12(\n" +
+	"\x10owned_card_count\x18\x0e \x01(\rR\x0eownedCardCount\x12/\n" +
+	"\x14spirit_shop_goods_id\x18\x0f \x01(\rR\x11spiritShopGoodsId\"M\n" +
 	"\x13PetEquippedCosmetic\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x1f\n" +
 	"\vcosmetic_id\x18\x02 \x01(\rR\n" +
-	"cosmeticId\"\x95\x03\n" +
+	"cosmeticId\"\xba\x04\n" +
 	"\x15SkillVfxCosmeticEntry\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x17\n" +
 	"\avfx_key\x18\x02 \x01(\tR\x06vfxKey\x12\x12\n" +
@@ -1672,23 +1757,30 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	" \x01(\bR\x05owned\x12\x1e\n" +
 	"\vmall_sku_id\x18\v \x01(\x04R\tmallSkuId\x12!\n" +
 	"\facquire_hint\x18\f \x01(\tR\vacquireHint\x12\x12\n" +
-	"\x04desc\x18\r \x01(\tR\x04desc\"}\n" +
+	"\x04desc\x18\r \x01(\tR\x04desc\x12 \n" +
+	"\fcard_item_id\x18\x0e \x01(\rR\n" +
+	"cardItemId\x12&\n" +
+	"\x0fcard_item_count\x18\x0f \x01(\rR\rcardItemCount\x12(\n" +
+	"\x10owned_card_count\x18\x10 \x01(\rR\x0eownedCardCount\x12/\n" +
+	"\x14spirit_shop_goods_id\x18\x11 \x01(\rR\x11spiritShopGoodsId\"\xa9\x01\n" +
 	"\x17EquipPetCosmeticRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12\x15\n" +
 	"\x06pet_id\x18\x02 \x01(\x04R\x05petId\x12\x1f\n" +
 	"\vcosmetic_id\x18\x03 \x01(\rR\n" +
-	"cosmeticId\"\xe0\x01\n" +
+	"cosmeticId\x12*\n" +
+	"\x11expect_free_equip\x18\x04 \x01(\bR\x0fexpectFreeEquip\"\xe0\x01\n" +
 	"\x18EquipPetCosmeticResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
 	"\x04info\x18\x02 \x01(\v2\x15.PlayerAppearanceInfoR\x04info\x12\x15\n" +
 	"\x06pet_id\x18\x03 \x01(\x04R\x05petId\x120\n" +
 	"\x14equipped_cosmetic_id\x18\x04 \x01(\rR\x12equippedCosmeticId\x12\x1a\n" +
-	"\breplayed\x18\x05 \x01(\bR\breplayed\"\x89\x01\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed\"\xb5\x01\n" +
 	"\x14EquipSkillVfxRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x1f\n" +
 	"\vcosmetic_id\x18\x03 \x01(\rR\n" +
-	"cosmeticId\"\xec\x01\n" +
+	"cosmeticId\x12*\n" +
+	"\x11expect_free_equip\x18\x04 \x01(\bR\x0fexpectFreeEquip\"\xec\x01\n" +
 	"\x15EquipSkillVfxResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
 	"\x04info\x18\x02 \x01(\v2\x15.PlayerAppearanceInfoR\x04info\x12$\n" +

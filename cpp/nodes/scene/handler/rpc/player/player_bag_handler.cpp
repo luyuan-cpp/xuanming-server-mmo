@@ -11,6 +11,7 @@
 #include "player_gm_guard.h"        // GM 客户端指令的 scene 侧第二道锁
 #include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/player_equip.h"
+#include "services/scene/player/system/player_equip_loadout.h"
 #include "services/scene/player/system/player_equipment_v1.h"
 #include "services/scene/player/system/player_equipment_material_reward.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
@@ -358,6 +359,43 @@ void SceneBagClientPlayerHandler::ClaimEquipmentMaterialReward(entt::entity play
 {
 ///<<< BEGIN WRITING YOUR CODE
     PlayerEquipmentMaterialRewardSystem::Claim(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneBagClientPlayerHandler::GetEquipLoadouts(entt::entity player,const ::GetEquipLoadoutsRequest* request,
+	::GetEquipLoadoutsResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    (void)request;
+    PlayerEquipLoadoutSystem::Get(player, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneBagClientPlayerHandler::SaveEquipLoadout(entt::entity player,const ::SaveEquipLoadoutRequest* request,
+	::SaveEquipLoadoutResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PlayerEquipLoadoutSystem::Save(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneBagClientPlayerHandler::SwitchEquipLoadout(entt::entity player,const ::SwitchEquipLoadoutRequest* request,
+	::SwitchEquipLoadoutResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PlayerEquipLoadoutSystem::Switch(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneBagClientPlayerHandler::UnlockEquipLoadout(entt::entity player,const ::UnlockEquipLoadoutRequest* request,
+	::UnlockEquipLoadoutResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PlayerEquipLoadoutSystem::Unlock(player, *request, *response);
 ///<<< END WRITING YOUR CODE
 
 }

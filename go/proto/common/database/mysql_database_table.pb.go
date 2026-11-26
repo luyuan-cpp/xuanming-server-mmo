@@ -576,9 +576,13 @@ type PlayerDatabase struct {
 	// 游历手记双轨进度、典藏买断态、每期位图领取掩码与零战力纪念头像框/称谓（docs/design/activity-travel-pass-and-showcase-v1.md）。
 	// 放 WALLET 组：与货币、客户端幂等账本同行，与背包同一次存盘同事务提交（满足 I3 原子性）。
 	// 旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 35，后续从 36 起。
-	TravelPass    *component.PlayerTravelPassComp `protobuf:"bytes,35,opt,name=travel_pass,json=travelPass,proto3" json:"travel_pass,omitempty"` // WALLET
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	TravelPass *component.PlayerTravelPassComp `protobuf:"bytes,35,opt,name=travel_pass,json=travelPass,proto3" json:"travel_pass,omitempty"` // WALLET
+	// 装备流派方案预设（一键多套换装 + 付费扩展套位，docs/planning/equipment-loadout-presets-v1.md）。
+	// 放 GROWTH 组：与技能、加点、手艺同组，存盘时与背包/货币/幂等账本同事务提交（满足 I3 原子性）。
+	// 旧存档缺失默认按 1 套免费方案处理合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 36，后续从 37 起。
+	EquipLoadoutComponent *component.PlayerEquipLoadoutComp `protobuf:"bytes,36,opt,name=equip_loadout_component,json=equipLoadoutComponent,proto3" json:"equip_loadout_component,omitempty"` // GROWTH
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -828,6 +832,13 @@ func (x *PlayerDatabase) GetTravelPass() *component.PlayerTravelPassComp {
 	return nil
 }
 
+func (x *PlayerDatabase) GetEquipLoadoutComponent() *component.PlayerEquipLoadoutComp {
+	if x != nil {
+		return x.EquipLoadoutComponent
+	}
+	return nil
+}
+
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:
 // kind 0 是写权行,其余每个 kind 一行(player_store.PlayerStoreKind),payload 是 player_database
 // 按字段投影出来的一段序列化结果。一条语句就能读出一个玩家的全部行。
@@ -1041,7 +1052,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a/proto/common/component/player_season_comp.proto\x1a6proto/common/component/player_trial_journal_comp.proto\x1a.proto/common/component/player_craft_comp.proto\x1a7proto/common/component/player_festival_beast_comp.proto\x1a4proto/common/component/player_spirit_shop_comp.proto\x1a4proto/common/component/player_travel_pass_comp.proto\x1a&proto/common/component/time_comp.proto\x1a&proto/common/component/buff_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a/proto/common/component/player_season_comp.proto\x1a6proto/common/component/player_trial_journal_comp.proto\x1a.proto/common/component/player_craft_comp.proto\x1a7proto/common/component/player_festival_beast_comp.proto\x1a4proto/common/component/player_spirit_shop_comp.proto\x1a4proto/common/component/player_travel_pass_comp.proto\x1a6proto/common/component/player_equip_loadout_comp.proto\x1a&proto/common/component/time_comp.proto\x1a&proto/common/component/buff_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -1081,7 +1092,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe3\x10\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbb\x11\n" +
 	"\x0fplayer_database\x12\"\n" +
 	"\tplayer_id\x18\x01 \x01(\x04B\x05\xc8\xfe\xa4\x02\x00R\bplayerId\x12/\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -1122,7 +1133,8 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\vspirit_shop\x18\" \x01(\v2\x15.PlayerSpiritShopCompB\x05\xc8\xfe\xa4\x02\aR\n" +
 	"spiritShop\x12=\n" +
 	"\vtravel_pass\x18# \x01(\v2\x15.PlayerTravelPassCompB\x05\xc8\xfe\xa4\x02\aR\n" +
-	"travelPass:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
+	"travelPass\x12V\n" +
+	"\x17equip_loadout_component\x18$ \x01(\v2\x17.PlayerEquipLoadoutCompB\x05\xc8\xfe\xa4\x02\x03R\x15equipLoadoutComponent:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
 	"\x10\vJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14\"\xbc\x02\n" +
 	"\fplayer_store\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
@@ -1201,6 +1213,7 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.PlayerFestivalBeastComp)(nil),   // 38: PlayerFestivalBeastComp
 	(*component.PlayerSpiritShopComp)(nil),      // 39: PlayerSpiritShopComp
 	(*component.PlayerTravelPassComp)(nil),      // 40: PlayerTravelPassComp
+	(*component.PlayerEquipLoadoutComp)(nil),    // 41: PlayerEquipLoadoutComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	10, // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -1234,11 +1247,12 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	38, // 28: player_database.festival_beast_component:type_name -> PlayerFestivalBeastComp
 	39, // 29: player_database.spirit_shop:type_name -> PlayerSpiritShopComp
 	40, // 30: player_database.travel_pass:type_name -> PlayerTravelPassComp
-	31, // [31:31] is the sub-list for method output_type
-	31, // [31:31] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	41, // 31: player_database.equip_loadout_component:type_name -> PlayerEquipLoadoutComp
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

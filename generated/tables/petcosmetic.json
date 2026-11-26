@@ -1,7 +1,9 @@
 {
  "data": [
   {
-   "acquire_hint": "官方永久衣柜直售（敬请期待上架）",
+   "acquire_hint": "百宝阁购「灵宠幻化符」解锁（120灵石）",
+   "card_item_count": 1,
+   "card_item_id": 3411,
    "cosmetic_key": "pet_morph_cangzhanglin",
    "desc": "幻化仅改变外观，将当前灵宠化作苍嶂麟仪态，不影响资质、技能与任何战斗数值。",
    "enabled": 1,
@@ -9,12 +11,15 @@
    "mall_sku_id": 0,
    "name": "苍嶂麟",
    "sort_order": 10,
+   "spirit_shop_goods_id": 303,
    "target_pet_table_id": 0,
    "visual_art_key": "07-cangzhanglin",
    "visual_pet_table_id": 12
   },
   {
-   "acquire_hint": "官方永久衣柜直售（敬请期待上架）",
+   "acquire_hint": "百宝阁购「灵宠幻化符」解锁（120灵石）",
+   "card_item_count": 1,
+   "card_item_id": 3411,
    "cosmetic_key": "pet_morph_feierling",
    "desc": "幻化仅改变外观，将当前灵宠化作绯耳灵仪态，不影响资质、技能与任何战斗数值。",
    "enabled": 1,
@@ -22,12 +27,15 @@
    "mall_sku_id": 0,
    "name": "绯耳灵",
    "sort_order": 20,
+   "spirit_shop_goods_id": 303,
    "target_pet_table_id": 0,
    "visual_art_key": "14-feierling",
    "visual_pet_table_id": 18
   },
   {
-   "acquire_hint": "赛季荣誉或官方永久衣柜获取",
+   "acquire_hint": "赛季荣誉或活动专属解锁",
+   "card_item_count": 0,
+   "card_item_id": 0,
    "cosmetic_key": "pet_morph_yuexianshi",
    "desc": "幻化仅改变外观，将当前灵宠化作月弦师仪态，不影响资质、技能与任何战斗数值。",
    "enabled": 1,
@@ -35,6 +43,7 @@
    "mall_sku_id": 0,
    "name": "月弦师",
    "sort_order": 30,
+   "spirit_shop_goods_id": 0,
    "target_pet_table_id": 0,
    "visual_art_key": "12-yuexianshi",
    "visual_pet_table_id": 16

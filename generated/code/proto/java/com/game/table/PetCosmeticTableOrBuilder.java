@@ -105,4 +105,22 @@ public interface PetCosmeticTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 card_item_id = 12;</code>
+   * @return The cardItemId.
+   */
+  int getCardItemId();
+
+  /**
+   * <code>uint32 card_item_count = 13;</code>
+   * @return The cardItemCount.
+   */
+  int getCardItemCount();
+
+  /**
+   * <code>uint32 spirit_shop_goods_id = 14;</code>
+   * @return The spiritShopGoodsId.
+   */
+  int getSpiritShopGoodsId();
 }

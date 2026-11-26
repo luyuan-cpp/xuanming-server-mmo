@@ -31,6 +31,7 @@
 #include "table/code/petcosmetic_table.h"
 #include "table/code/skill_table.h"
 #include "table/code/skillvfxcosmetic_table.h"
+#include "table/code/spiritshopgoods_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/pet_error_tip.pb.h"
@@ -121,6 +122,7 @@ protected:
 		AppearanceRuleTableManager::Instance().Load();
 		PetCosmeticTableManager::Instance().Load();
 		SkillVfxCosmeticTableManager::Instance().Load();
+		SpiritShopGoodsTableManager::Instance().Load();
 		ASSERT_TRUE(PlayerAppearanceSystem::ValidateTables());
 
 		const auto &ruleRow = *AppearanceRuleTableManager::Instance().FindAll().data().begin();
@@ -577,14 +579,18 @@ TEST_F(PlayerAppearanceSystemTest, PetCosmeticGrantEquipClearAndPerInstanceIsola
 	pet2->set_pet_id(70002);
 	pet2->set_pet_table_id(5); // 烛翎
 
-	// 未拥有时拒绝穿戴，不改灵宠实例。
+	// 未拥有且 expect_free_equip=true 时拒绝穿戴，不改灵宠实例；expect_free_equip=false 但无幻化符时返 kAppearanceNoCard。
 	EquipPetCosmeticRequest req;
 	req.set_client_request_id(8001);
 	req.set_pet_id(70001);
 	req.set_cosmetic_id(1);
+	req.set_expect_free_equip(true);
 	EquipPetCosmeticResponse resp;
 	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 1, resp),
 			  static_cast<uint32_t>(kAppearanceNotOwned));
+	req.set_expect_free_equip(false);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, req, kNowSec + 1, resp),
+			  static_cast<uint32_t>(kAppearanceNoCard));
 
 	// 不存在的灵宠实例拒绝。
 	req.set_pet_id(99999);
@@ -649,26 +655,30 @@ TEST_F(PlayerAppearanceSystemTest, SkillVfxGrantEquipClearAndBattleSnapshotPropa
 	cls.set_class_(2); // 玄霄
 	auto &skills = tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player);
 
-	// 未拥有时拒绝启用。
+	// 未拥有且 expect_free_equip=true 时拒绝启用；未习得技能前优先拒回 kAppearanceInvalid，避免误扣券。
 	EquipSkillVfxRequest req;
 	req.set_client_request_id(9001);
 	req.set_skill_table_id(1201);
 	req.set_cosmetic_id(1);
+	req.set_expect_free_equip(true);
 	EquipSkillVfxResponse resp;
 	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 1, resp),
-			  static_cast<uint32_t>(kAppearanceNotOwned));
-
-	// 授予技能特效 id=1(适用于 1201 玄符落曜)，尚未习得技能前仍拒绝启用。
-	bool alreadyOwned = true;
-	ASSERT_EQ(PlayerAppearanceSystem::GrantSkillVfx(player, 1, kNowSec + 2, &alreadyOwned), kSuccess);
-	EXPECT_FALSE(alreadyOwned);
-	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 3, resp),
 			  static_cast<uint32_t>(kAppearanceInvalid));
 
-	// 习得 1201 一重后，错配技能号 1202 仍拒绝；正确技能号 1201 成功启用并透传战斗快照。
+	// 习得 1201 一重后，未拥有且 expect_free_equip=true 拒回 kAppearanceNotOwned，expect_free_equip=false 无券拒回 kAppearanceNoCard。
 	auto *learned = skills.add_skill_list();
 	learned->set_skill_table_id(1201);
 	learned->set_rank(1);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 1, resp),
+			  static_cast<uint32_t>(kAppearanceNotOwned));
+	req.set_expect_free_equip(false);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, req, kNowSec + 1, resp),
+			  static_cast<uint32_t>(kAppearanceNoCard));
+
+	// 授予技能特效 id=1(适用于 1201 玄符落曜)，错配技能号 1202 仍拒绝；正确技能号 1201 成功启用并透传战斗快照。
+	bool alreadyOwned = true;
+	ASSERT_EQ(PlayerAppearanceSystem::GrantSkillVfx(player, 1, kNowSec + 2, &alreadyOwned), kSuccess);
+	EXPECT_FALSE(alreadyOwned);
 
 	req.set_client_request_id(9002);
 	req.set_skill_table_id(1202);
@@ -706,5 +716,97 @@ TEST_F(PlayerAppearanceSystemTest, SkillVfxGrantEquipClearAndBattleSnapshotPropa
 
 	PlayerAppearanceSystem::FillBattleSkillVfx(player, battleSnap);
 	EXPECT_TRUE(battleSnap.equipped_skill_vfx().empty());
+}
+
+TEST_F(PlayerAppearanceSystemTest, PetAndSkillCosmeticVoucherUnlockIdempotencyAndExclusiveGuard)
+{
+	auto &petComp = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+	auto *pet1 = petComp.add_pets();
+	pet1->set_pet_id(71001);
+	pet1->set_pet_table_id(6);
+	auto &cls = tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player);
+	cls.set_class_(2);
+	auto &skills = tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player);
+	auto *learned = skills.add_skill_list();
+	learned->set_skill_table_id(1201);
+	learned->set_rank(1);
+
+	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+	bags.bags[kInventory].InsertItemForRestore((uint64_t{1} << 60) + 9101, 3411, 2, 0);
+	bags.bags[kInventory].InsertItemForRestore((uint64_t{1} << 60) + 9102, 3412, 2, 0);
+
+	PlayerAppearanceInfo info;
+	PlayerAppearanceSystem::FillInfo(player, kNowSec, info);
+	ASSERT_GE(info.pet_cosmetics_size(), 3);
+	EXPECT_EQ(info.pet_cosmetics(0).card_item_id(), 3411u);
+	EXPECT_EQ(info.pet_cosmetics(0).card_item_count(), 1u);
+	EXPECT_EQ(info.pet_cosmetics(0).owned_card_count(), 2u);
+	EXPECT_EQ(info.pet_cosmetics(0).spirit_shop_goods_id(), 303u);
+	EXPECT_EQ(info.pet_cosmetics(2).card_item_id(), 0u);
+	ASSERT_GE(info.skill_vfx_cosmetics_size(), 3);
+	EXPECT_EQ(info.skill_vfx_cosmetics(0).card_item_id(), 3412u);
+	EXPECT_EQ(info.skill_vfx_cosmetics(0).owned_card_count(), 2u);
+	EXPECT_EQ(info.skill_vfx_cosmetics(0).spirit_shop_goods_id(), 304u);
+	EXPECT_EQ(info.skill_vfx_cosmetics(2).card_item_id(), 0u);
+
+	// 专属灵宠幻化(id=3 card_item_id=0)不允许耗券解锁，绝不扣券。
+	EquipPetCosmeticRequest petReq;
+	petReq.set_client_request_id(9501);
+	petReq.set_pet_id(71001);
+	petReq.set_cosmetic_id(3);
+	petReq.set_expect_free_equip(false);
+	EquipPetCosmeticResponse petResp;
+	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, petReq, kNowSec + 1, petResp),
+			  static_cast<uint32_t>(kAppearanceNotCardUnlockable));
+	EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3411), 2u);
+
+	// 耗 1 张 3411 解锁并穿戴灵宠幻化 id=1，同键重放不二次扣券，换参拒回 kInvalidParameter。
+	petReq.set_client_request_id(9502);
+	petReq.set_cosmetic_id(1);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, petReq, kNowSec + 2, petResp), kSuccess);
+	EXPECT_FALSE(petResp.replayed());
+	EXPECT_EQ(petResp.equipped_cosmetic_id(), 1u);
+	EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3411), 1u);
+	EXPECT_EQ(petResp.info().pet_cosmetics(0).owned_card_count(), 1u);
+	EXPECT_TRUE(petResp.info().pet_cosmetics(0).owned());
+
+	ASSERT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, petReq, kNowSec + 3, petResp), kSuccess);
+	EXPECT_TRUE(petResp.replayed());
+	EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3411), 1u);
+
+	EquipPetCosmeticRequest badPetReq = petReq;
+	badPetReq.set_cosmetic_id(2);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipPetCosmetic(player, badPetReq, kNowSec + 4, petResp), kInvalidParameter);
+
+	// 专属技能特效(id=3 对应 1203)及耗券解锁技能特效 id=1(3412) + 幂等重放。
+	auto *learned3 = skills.add_skill_list();
+	learned3->set_skill_table_id(1203);
+	learned3->set_rank(1);
+	EquipSkillVfxRequest vfxReq;
+	vfxReq.set_client_request_id(9601);
+	vfxReq.set_skill_table_id(1203);
+	vfxReq.set_cosmetic_id(3);
+	vfxReq.set_expect_free_equip(false);
+	EquipSkillVfxResponse vfxResp;
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, vfxReq, kNowSec + 5, vfxResp),
+			  static_cast<uint32_t>(kAppearanceNotCardUnlockable));
+	EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3412), 2u);
+
+	vfxReq.set_client_request_id(9602);
+	vfxReq.set_skill_table_id(1201);
+	vfxReq.set_cosmetic_id(1);
+	ASSERT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, vfxReq, kNowSec + 6, vfxResp), kSuccess);
+	EXPECT_FALSE(vfxResp.replayed());
+	EXPECT_EQ(vfxResp.equipped_cosmetic_id(), 1u);
+	EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3412), 1u);
+	EXPECT_TRUE(vfxResp.info().skill_vfx_cosmetics(0).owned());
+
+	ASSERT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, vfxReq, kNowSec + 7, vfxResp), kSuccess);
+	EXPECT_TRUE(vfxResp.replayed());
+	EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3412), 1u);
+
+	EquipSkillVfxRequest badVfxReq = vfxReq;
+	badVfxReq.set_cosmetic_id(0);
+	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, badVfxReq, kNowSec + 8, vfxResp), kInvalidParameter);
 }
 } // namespace

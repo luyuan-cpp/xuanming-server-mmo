@@ -797,7 +797,7 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
 	const bool classHasClassSkills = ClassHasClassSkills(classId);
-	const uint64_t balance = CurrencySystem::GetBalance(player, kCurrencyGold);
+	const uint64_t balance = CurrencySystem::GetSpendableGoldWithBind(player);
 
 	// skill_list 只放现在能用的条目:robot / 旧客户端拿它当"可施放技能",不生效的条目放进去会被拿去施放然后被拒。
 	// 字段本身必须在场(哪怕是空表):robot 把缺字段读成"技能被清空"。
@@ -1006,7 +1006,7 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 	const auto level = PlayerLevel(player);
 	const auto rankLimit = classskill::RankLimit(level, row->unlock_level(), row->max_rank());
 	const auto plan = classskill::PlanUpgrade(storedRank, row->max_rank(), rankLimit, row->unlock_level(),
-											  CurrencySystem::GetBalance(player, kCurrencyGold), request.count());
+											  CurrencySystem::GetSpendableGoldWithBind(player), request.count());
 	if (plan.steps == 0)
 	{
 		finish(StopTipOf(plan.stop));
@@ -1015,8 +1015,8 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 
 	// 扣费与改等级在同一个 scene 回调里先后完成:扣费失败(冻结 / 封禁 / 余额被并发花掉)什么都不改;
 	// 扣费成功之后改等级不会失败。两者同属一条 player_database 记录,由常规存盘一起落库。
-	if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(plan.totalCost),
-														 TX_CURRENCY_DEDUCT, row->id());
+	if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(plan.totalCost),
+															  TX_CURRENCY_DEDUCT, row->id());
 		err != kSuccess)
 	{
 		finish(err);
@@ -1445,4 +1445,47 @@ void PlayerSkillSystem::SwitchLoadout(entt::entity player, const SwitchSkillLoad
 			 << " scheme_id=" << request.scheme_id()
 			 << " version=" << list.loadout_state_version();
 	finish(0);
+}
+
+uint32_t PlayerSkillSystem::UnlockedLoadoutSchemeCount(entt::entity player)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return skillloadout::kBaseMaxSchemes;
+	}
+	return UnlockedSchemesFor(player);
+}
+
+bool PlayerSkillSystem::TrySwitchLinkedLoadout(entt::entity player, uint32_t schemeId, std::string &notice)
+{
+	notice.clear();
+	if (schemeId == 0)
+	{
+		return true;
+	}
+	if (!tlsEcs.actorRegistry.valid(player) || !tlsEcs.actorRegistry.all_of<PlayerSkillListComp>(player))
+	{
+		notice = "联动战法方案暂不可用，本次仅完成装备切换";
+		return false;
+	}
+	const uint32_t unlocked = UnlockedSchemesFor(player);
+	if (!skillloadout::ValidSchemeId(schemeId, unlocked))
+	{
+		notice = "联动战法方案未解锁，本次仅完成装备切换";
+		return false;
+	}
+	auto &list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
+	if (list.active_loadout_scheme_id() == schemeId)
+	{
+		return true;
+	}
+	FindOrCreateLoadoutScheme(list, schemeId);
+	list.set_active_loadout_scheme_id(schemeId);
+	if (list.loadout_state_version() < std::numeric_limits<uint64_t>::max())
+	{
+		list.set_loadout_state_version(skillloadout::Version(list.loadout_state_version()) + 1);
+	}
+	LOG_INFO << "[PlayerSkill] Linked loadout switched: player_id=" << GuidForLog(player)
+			 << " scheme_id=" << schemeId << " version=" << list.loadout_state_version();
+	return true;
 }

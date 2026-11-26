@@ -197,8 +197,9 @@ inline bool ResolveBattleLookupKey(const ::BattleSettlementData& settlement,
 		settlement.fled()) {
 		return false;
 	}
-	// 瑞兽迎春按契约关闭普通经验与银两。
-	if (settlement.has_festival_beast() && settlement.festival_beast().activity_instance_id() != 0) {
+	// 瑞兽迎春与归元城演武木桩/残局/人物奇谈按契约关闭普通战斗经验与银两，防零成本无限刷取。
+	if ((settlement.has_festival_beast() && settlement.festival_beast().activity_instance_id() != 0) ||
+		(settlement.boss_trial_kind() >= 9u && settlement.boss_trial_kind() <= 11u)) {
 		return false;
 	}
 	const uint32_t mode = settlement.match_mode();

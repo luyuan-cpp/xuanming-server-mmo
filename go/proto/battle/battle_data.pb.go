@@ -87,6 +87,7 @@ const (
 	EBattleActionType_BATTLE_ACTION_FLEE       EBattleActionType = 5 // 逃跑(PVE 可用;成功率基于速度差)
 	EBattleActionType_BATTLE_ACTION_CAPTURE    EBattleActionType = 6 // 捕捉消耗本回合行动，由服务端判定。
 	EBattleActionType_BATTLE_ACTION_RECALL_PET EBattleActionType = 7 // 主人消耗正常行动，召回已过劝退等待期的本人宝宝。
+	EBattleActionType_BATTLE_ACTION_SUMMON_PET EBattleActionType = 8 // 论剑 V5 临阵唤灵：第 2 回合起单局限 1 次，主人消耗本回合行动唤出备选灵宠。
 )
 
 // Enum value maps for EBattleActionType.
@@ -100,6 +101,7 @@ var (
 		5: "BATTLE_ACTION_FLEE",
 		6: "BATTLE_ACTION_CAPTURE",
 		7: "BATTLE_ACTION_RECALL_PET",
+		8: "BATTLE_ACTION_SUMMON_PET",
 	}
 	EBattleActionType_value = map[string]int32{
 		"BATTLE_ACTION_NONE":       0,
@@ -110,6 +112,7 @@ var (
 		"BATTLE_ACTION_FLEE":       5,
 		"BATTLE_ACTION_CAPTURE":    6,
 		"BATTLE_ACTION_RECALL_PET": 7,
+		"BATTLE_ACTION_SUMMON_PET": 8,
 	}
 )
 
@@ -168,6 +171,7 @@ const (
 	EBattleEventType_BATTLE_EVENT_ARTIFACT       EBattleEventType = 21 // 法宝产生实际收益或消耗概率判定次数。
 	EBattleEventType_BATTLE_EVENT_BOSS_MECHANIC  EBattleEventType = 22 // 首领试炼 V2 破招/阶段/联防/蓄势演出事件（mechanic_kind 标明子类型）。
 	EBattleEventType_BATTLE_EVENT_WUXING_SYNERGY EBattleEventType = 23 // 人宠五行相生每 3 回合触发的合击共鸣事件。
+	EBattleEventType_BATTLE_EVENT_SUMMON_PET     EBattleEventType = 24 // 论剑 V5 临阵唤灵：主人唤出备选灵宠替换/补位事件（skill_table_id 携带新宠 pet_table_id）。
 )
 
 // Enum value maps for EBattleEventType.
@@ -197,6 +201,7 @@ var (
 		21: "BATTLE_EVENT_ARTIFACT",
 		22: "BATTLE_EVENT_BOSS_MECHANIC",
 		23: "BATTLE_EVENT_WUXING_SYNERGY",
+		24: "BATTLE_EVENT_SUMMON_PET",
 	}
 	EBattleEventType_value = map[string]int32{
 		"BATTLE_EVENT_NONE":           0,
@@ -223,6 +228,7 @@ var (
 		"BATTLE_EVENT_ARTIFACT":       21,
 		"BATTLE_EVENT_BOSS_MECHANIC":  22,
 		"BATTLE_EVENT_WUXING_SYNERGY": 23,
+		"BATTLE_EVENT_SUMMON_PET":     24,
 	}
 )
 
@@ -2051,6 +2057,7 @@ type BattleAction struct {
 	SkillTableId  uint32                 `protobuf:"varint,2,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"` // SKILL 时有效
 	TargetId      uint64                 `protobuf:"varint,3,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`               // ATTACK/SKILL/ITEM 的目标
 	ItemTableId   uint32                 `protobuf:"varint,4,opt,name=item_table_id,json=itemTableId,proto3" json:"item_table_id,omitempty"`    // ITEM 时有效
+	SummonPetId   uint64                 `protobuf:"varint,5,opt,name=summon_pet_id,json=summonPetId,proto3" json:"summon_pet_id,omitempty"`    // SUMMON_PET 时有效：待唤出的本人备选灵宠 pet_id
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2109,6 +2116,13 @@ func (x *BattleAction) GetTargetId() uint64 {
 func (x *BattleAction) GetItemTableId() uint32 {
 	if x != nil {
 		return x.ItemTableId
+	}
+	return 0
+}
+
+func (x *BattleAction) GetSummonPetId() uint64 {
+	if x != nil {
+		return x.SummonPetId
 	}
 	return 0
 }
@@ -5465,13 +5479,14 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12last_trigger_round\x18\x03 \x01(\rR\x10lastTriggerRound\x12.\n" +
 	"\x13round_trigger_count\x18\x04 \x01(\rR\x11roundTriggerCount\x120\n" +
 	"\x14pending_ailment_kind\x18\x05 \x01(\rR\x12pendingAilmentKind\x12#\n" +
-	"\rpending_round\x18\x06 \x01(\rR\fpendingRound\"\xaa\x01\n" +
+	"\rpending_round\x18\x06 \x01(\rR\fpendingRound\"\xce\x01\n" +
 	"\fBattleAction\x123\n" +
 	"\vaction_type\x18\x01 \x01(\x0e2\x12.eBattleActionTypeR\n" +
 	"actionType\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x1b\n" +
 	"\ttarget_id\x18\x03 \x01(\x04R\btargetId\x12\"\n" +
-	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\x92\b\n" +
+	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\x12\"\n" +
+	"\rsummon_pet_id\x18\x05 \x01(\x04R\vsummonPetId\"\x92\b\n" +
 	"\x0fBattleEventItem\x120\n" +
 	"\n" +
 	"event_type\x18\x01 \x01(\x0e2\x11.eBattleEventTypeR\teventType\x12\x1b\n" +
@@ -5808,7 +5823,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_ACTOR_TYPE_MONSTER\x10\x02\x12\x19\n" +
-	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xe1\x01\n" +
+	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xff\x01\n" +
 	"\x11eBattleActionType\x12\x16\n" +
 	"\x12BATTLE_ACTION_NONE\x10\x00\x12\x18\n" +
 	"\x14BATTLE_ACTION_ATTACK\x10\x01\x12\x17\n" +
@@ -5817,7 +5832,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12BATTLE_ACTION_ITEM\x10\x04\x12\x16\n" +
 	"\x12BATTLE_ACTION_FLEE\x10\x05\x12\x19\n" +
 	"\x15BATTLE_ACTION_CAPTURE\x10\x06\x12\x1c\n" +
-	"\x18BATTLE_ACTION_RECALL_PET\x10\a*\x80\x05\n" +
+	"\x18BATTLE_ACTION_RECALL_PET\x10\a\x12\x1c\n" +
+	"\x18BATTLE_ACTION_SUMMON_PET\x10\b*\x9d\x05\n" +
 	"\x10eBattleEventType\x12\x15\n" +
 	"\x11BATTLE_EVENT_NONE\x10\x00\x12\x17\n" +
 	"\x13BATTLE_EVENT_ATTACK\x10\x01\x12\x16\n" +
@@ -5843,7 +5859,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x13BATTLE_EVENT_SHIELD\x10\x14\x12\x19\n" +
 	"\x15BATTLE_EVENT_ARTIFACT\x10\x15\x12\x1e\n" +
 	"\x1aBATTLE_EVENT_BOSS_MECHANIC\x10\x16\x12\x1f\n" +
-	"\x1bBATTLE_EVENT_WUXING_SYNERGY\x10\x17*\x9c\x01\n" +
+	"\x1bBATTLE_EVENT_WUXING_SYNERGY\x10\x17\x12\x1b\n" +
+	"\x17BATTLE_EVENT_SUMMON_PET\x10\x18*\x9c\x01\n" +
 	"\x0eeBattleHitKind\x12\x15\n" +
 	"\x11BATTLE_HIT_NORMAL\x10\x00\x12\x14\n" +
 	"\x10BATTLE_HIT_COMBO\x10\x01\x12\x16\n" +

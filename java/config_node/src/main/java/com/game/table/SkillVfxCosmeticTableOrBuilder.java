@@ -135,4 +135,22 @@ public interface SkillVfxCosmeticTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 card_item_id = 14;</code>
+   * @return The cardItemId.
+   */
+  int getCardItemId();
+
+  /**
+   * <code>uint32 card_item_count = 15;</code>
+   * @return The cardItemCount.
+   */
+  int getCardItemCount();
+
+  /**
+   * <code>uint32 spirit_shop_goods_id = 16;</code>
+   * @return The spiritShopGoodsId.
+   */
+  int getSpiritShopGoodsId();
 }

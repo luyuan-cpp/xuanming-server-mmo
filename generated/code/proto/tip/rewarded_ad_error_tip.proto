@@ -1,0 +1,38 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum rewarded_ad_error {
+  kRewarded_ad_errorOK = 0;
+
+  kRewardedAdUnavailable = 39000;
+
+  kRewardedAdDisabled = 39001;
+
+  kRewardedAdPlatformUnsupported = 39002;
+
+  kRewardedAdLevelNotEnough = 39003;
+
+  kRewardedAdDailyLimitReached = 39004;
+
+  kRewardedAdCooldown = 39005;
+
+  kRewardedAdSessionInvalid = 39006;
+
+  kRewardedAdSessionExpired = 39007;
+
+  kRewardedAdWatchTooShort = 39008;
+
+  kRewardedAdCurrencyBlocked = 39009;
+
+  kRewardedAdInBattle = 39010;
+
+  kRewardedAdFrozen = 39011;
+
+  kRewardedAdSsvRequired = 39012;
+
+};

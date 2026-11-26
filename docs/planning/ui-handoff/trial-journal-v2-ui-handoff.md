@@ -9,13 +9,13 @@
 
 ## 1. 功能与技术红线（非美术风格要求）
 
-1. **格式规范**：全部切片必须为 PNG-32 透明底（背景及外缘 Alpha = 0，无实色底或棋盘格底）；**严禁在任何切片上带文字、字母或数字**，所有需要叠字的区域必须留空给 Unity 运行时动态渲染。
+1. **格式规范**：全部切片必须为 PNG-32 透明底（背景及外缘 Alpha = 0，无实色底或棋盘格底）；**严禁在任何切片上带文字、字母或数字**，所有需要叠字的区域必须留空给运行时动态渲染。
 2. **布局与安全区**：
    - 基准画布 `1920×1080` 横屏，并同步核查 `1280×720` 与移动端窄横屏（`896×414`）排版；
-   - 适配手机 `Screen.safeArea` 与小游戏右上角胶囊避让区（右上预留 `≥140px` 宽无交互区域，窄屏关闭按钮可移至左上）；
+   - 适配手机刘海安全区与小游戏右上角胶囊避让区（右上预留 `≥140px` 宽无交互区域，窄屏关闭按钮可移至左上）；
    - 触控优先，不依赖鼠标悬停提示，可点击控件高度 `≥44px`。
 3. **动态画像槽位留空**：
-   - 首领/护卫头像与 M901「星阵宗师」角色立绘均由客户端运行时从现有角色库与灵宠库动态加载，切片只需提供头像框与立绘底座，不得把具体怪物或角色画死在 UI 底板上。
+   - 首领/护卫头像与 M901「星阵宗师」角色立绘均由运行时从现有角色库与灵宠库动态加载，切片只需提供头像框与立绘底座，不得把具体怪物或角色画死在 UI 底板上。
 4. **入口约束**：主城 HUD 不加催促红点；入口位于「首领试炼备战页」「主城闲时卡」「赛季印页签」与「战斗结算页行内提示条」。
 
 ---
@@ -30,7 +30,7 @@
   2. 分节标题条（程序叠放当前分页标题）+ 右侧简短说明。
   3. 中间可滚动列表：
      - **关卡列表模式**（共 12 格：卷一 5 格含 105「困难·双卫同阵」、卷二 4 格、卷三 3 格）：每行含首领头像框（普通/困难单卫在右下叠 1 枚护卫小头像位，105「困难·双卫同阵」在左下与右下叠 2 枚护卫小头像位；PVP 格显示玩法文字标）、关卡名、难度标签、2–3 枚战法印状态徽标（分类「通/守/巧/速」，区分已点亮与未点亮）、进度数值与挑战按钮；选中行向下展开逐条战法印触发条件、单人最佳回合与配装复盘（灵宠+法宝+赛季印）、好友合战纪录（队友名+人数）或未解锁提示。
-     - **里程碑列表模式**（共 11 档：M101–M105、M201–M203、M901、301–302）：含徽章的档位左侧留 `56×56` 徽章槽位（6 枚独立徽章 PNG 已入库 `Assets/Resources/UI/Ugui/TrialJournal/Badges/`，无需重画），右侧展示达成进度、奖励明细（仅自用重铸砂、自用法宝拓印、名片印戳、专属形象或评语标题）、领取按钮（未达标 / 收取 / 已领取）以及已解锁评语的「读评语」按钮。
+     - **里程碑列表模式**（共 11 档：M101–M105、M201–M203、M901、301–302）：含徽章的档位左侧留 `56×56` 徽章槽位（6 枚独立徽章图已存在，无需重画），右侧展示达成进度、奖励明细（仅自用重铸砂、自用法宝拓印、名片印戳、专属形象或评语标题）、领取按钮（未达标 / 收取 / 已领取）以及已解锁评语的「读评语」按钮。
   4. 底部「法宝凭券」八选一横条：展示当前凭券数与状态文案、8 件自用法宝选择格（选中态 + 已持有数量角标）与「兑换所选法宝」按钮。
 - **右侧固定栏（M901 宗师里程碑置顶区）**：
   - 顶部标题与「M901」标识；
@@ -51,7 +51,7 @@
 
 ## 3. 需交付的透明 PNG-32 切片清单
 
-输出路径：`D:\work\image\designs\trial-journal-v2\assets\`（导入 Unity 后对应 `Assets/Resources/UI/Ugui/TrialJournalV2/`）：
+输出路径：`D:\work\image\designs\trial-journal-v2\assets\`（与游戏引擎/客户端工程完全无关）：
 
 | # | 文件名 | 像素尺寸 | 界面显示尺寸 | 是否可拉伸 / 9-slice 留白 | 用途与留空说明（全部严禁带文字） |
 |---|---|---:|---:|---|---|
@@ -94,8 +94,8 @@
 
 ---
 
-## 5. 程序端接线与零改代码自动生效说明
+## 5. 本机研发导入备忘（仅本机工程留档，严禁发给 Codex）
 
 - 客户端 `TrialJournalUiArt.DedicatedSkinRoot` 已绑定 `UI/Ugui/TrialJournalV2/`，并覆盖上表全部 20 张切片（`main_frame`、`title_plate`、`close_btn`、`rail_tab_idle`、`rail_tab_selected`、`metric_card`、`section_plate`、`entry_row_idle`、`entry_row_selected`、`portrait_frame`、`seal_medallion_dim`、`seal_medallion_lit`、`artifact_tray`、`artifact_slot_idle`、`artifact_slot_selected`、`grandmaster_pedestal`、`btn_primary`、`btn_secondary`、`modal_panel`、`battle_result_hint_bar`）。
-- 缺图时自动回落至既有共享界面切片；Codex 交付上述 20 张 PNG-32 并导入 `mmorpg-client/Assets/Resources/UI/Ugui/TrialJournalV2/`（补齐 `.meta` 与 9-slice `spriteBorder`）后即自动生效，无需再改业务逻辑。
-- 6 枚里程碑名片印戳图标（`badge_trial_sword`、`badge_trial_master`、`badge_trial_dual_guard`、`badge_trial_three_bosses`、`badge_trial_grandmaster`、`badge_season_s1_trial`）已就绪于 `Assets/Resources/UI/Ugui/TrialJournal/Badges/` 并已接入里程碑列表渲染，无需重画。
+- 缺图时自动回落至既有共享界面切片；Codex 在图仓 `D:\work\image\designs\trial-journal-v2\assets\` 交付后，由本机研发导入 `mmorpg-client/Assets/Resources/UI/Ugui/TrialJournalV2/`（补齐 `.meta` 与 9-slice 边距）后即自动生效，无需再改业务逻辑。
+- 6 枚里程碑名片印戳图标（`badge_trial_sword`、`badge_trial_master`、`badge_trial_dual_guard`、`badge_trial_three_bosses`、`badge_trial_grandmaster`、`badge_season_s1_trial`）已就绪于 `Assets/Resources/UI/Ugui/TrialJournal/Badges/`，无需重画。

@@ -199,6 +199,7 @@ BattleEvaluation EvaluateBattle(const BattleSettlementData& settlement) {
     BattleEvaluation eval;
     if (settlement.battle_id() == 0 || settlement.player_id() == 0 || settlement.fled() ||
         settlement.total_rounds() == 0 || settlement.player_team_index() > 1 ||
+        (settlement.boss_trial_kind() >= 9u && settlement.boss_trial_kind() <= 11u) ||
         (settlement.outcome() != BATTLE_OUTCOME_SIDE_A_WIN && settlement.outcome() != BATTLE_OUTCOME_SIDE_B_WIN &&
          settlement.outcome() != BATTLE_OUTCOME_DRAW)) {
         return eval;

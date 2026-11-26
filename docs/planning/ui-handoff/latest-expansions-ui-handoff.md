@@ -1,27 +1,25 @@
 # 近期新玩法剩余增量 UI 切片需求清单（论剑 V4 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉 / 野外栖息地）
 
-> 用途：汇总除《群仙问道赛》V3+V4（29 枚，见 [season-team-tournament-v3-ui-handoff.md](season-team-tournament-v3-ui-handoff.md)）外，当前 Unity 客户端已预留加载路径、尚未产出正式切图的 **4 组共 47 枚增量 PNG 切片**（`WuxingExpansionsV1` 18 枚、`PaymentCashierV1` 12 枚、`CombatPetSkillUi` 54 枚与 `guild-newplay-review-20261125` 69 枚均已导入客户端，不再列出）。
-> **视觉风格、画法、配色、材质与字体完全以 `D:\work\image` 仓库既有参考图与规范为准，本文档不定义任何美术风格。**
+> 用途：汇总除《群仙问道赛》V3+V4（29 枚，见 [season-team-tournament-v3-ui-handoff.md](season-team-tournament-v3-ui-handoff.md)）外，当前尚未产出的 **4 组共 47 枚增量 PNG 切片**；全部输出到图仓 `D:\work\image\designs\` 下各自新建的专题目录，与游戏引擎/客户端代码完全无关。
+> **本文档不定义任何画风、风格词、材质或色号，请按项目既有的统一 UI 美术风格执行。**
 
 ---
 
-## 1. 通用交付技术规范（不含风格要求）
+## 1. 通用交付技术规范（不含风格要求，与游戏引擎无关）
 
 1. **格式**：全部为 PNG-32 透明底（边缘 `alpha = 0`，无棋盘格、无白边、无杂底）。
-2. **无字原则**：本文清单中 **全部 47 枚切片均不含任何文字、字母或数字**；所有标题、数值、状态、按钮文案均由 Unity 运行时动态叠加，底板/按钮/卡片/标签中部必须保留清晰可读的文本承载区。
+2. **无字原则**：本文清单中 **全部 47 枚切片均不含任何文字、字母或数字**；所有标题、数值、状态、按钮文案均由运行时动态叠加，底板/按钮/卡片/标签中部必须保留清晰可读的文本承载区。
 3. **拉伸规范**：
-   - 标明「九宫格拉伸」的窗框、面板、卡片，需保持四边边框均匀、中心区域平缓，便于配置 Unity `spriteBorder`；
+   - 标明「九宫格拉伸」的窗框、面板、卡片，需保持四边边框均匀、中心区域平缓；
    - 标明「横向三段拉伸」的进度条轨与填充条，需保持左右端帽清晰、中段可水平拉伸；
-   - 标明「等比图标」的切片按 `preserveAspect = true` 展示，主体居中并保留约 8%～12% 安全留边。
+   - 标明「等比图标」的切片按原比例展示，主体居中并保留约 8%～12% 安全留边。
 4. **交互与安全区**：适配 `1920×1080` 与 `2400×1080` 横屏，右上角预留 `140px` 小游戏胶囊避让区，不依赖鼠标悬停展示信息。
 
 ---
 
 ## 2. 清单 A · 论剑 / 人宠会武 V4（12 枚）
 
-- 对应代码：`BattleScreen.cs`、`BattleUnitView.cs`、`RankedSettlementPanel.cs`、`RankedModels.cs`、`SeasonEconomyUiArt.cs`
-- 输出目录：`D:\work\image\designs\ranked-play-v4\assets\`
-- Unity 导入路径：`Assets/Resources/UI/Ugui/RankedPlayV4/`
+- 图仓输出目录：`D:\work\image\designs\ranked-play-v4\assets\`
 
 | # | 相对路径 | 像素尺寸 | 展示尺寸 / 拉伸 | 用途说明（全部无字） |
 |---|---|---:|---|---|
@@ -42,9 +40,7 @@
 
 ## 3. 清单 B · 官方灵石百宝阁 V1（16 枚）
 
-- 对应代码：`Assets/Scripts/UI/Ugui/SpiritShop/SpiritShopWindow.cs`、配表 `SpiritShopGoods.xlsx`
-- 输出目录：`D:\work\image\designs\spirit-shop-v1\assets\`
-- Unity 导入路径：`Assets/Resources/UI/Ugui/SpiritShopV1/`（其中第 16 枚放 `Assets/Resources/UI/Icons/item_rename_card.png`）
+- 图仓输出目录：`D:\work\image\designs\spirit-shop-v1\assets\`
 
 | # | 相对路径 | 像素尺寸 | 展示尺寸 / 拉伸 | 用途说明（全部无字） |
 |---|---|---:|---|---|
@@ -63,15 +59,13 @@
 | 13 | `pack_starter_60.png` | `128×128` | `112×112` 等比图标 | 商品图标：初阶修行提速包（60 份装） |
 | 14 | `pack_starter_180.png` | `128×128` | `112×112` 等比图标 | 商品图标：中阶修行提速包（180 份装，规格高于初阶） |
 | 15 | `pack_starter_300.png` | `128×128` | `112×112` 等比图标 | 商品图标：半套毕业提速包（300 份装，三档中规格最高） |
-| 16 | `icons_global/item_rename_card.png` | `128×128` | `112×112` 等比图标 | 通用道具图标：角色改名卡（导入 `Assets/Resources/UI/Icons/item_rename_card.png`） |
+| 16 | `icons_global/item_rename_card.png` | `128×128` | `112×112` 等比图标 | 通用道具图标：角色改名卡 |
 
 ---
 
 ## 4. 清单 C · 青云游历手记 TravelPass V1（9 枚）
 
-- 对应代码：`Assets/Scripts/UI/Ugui/TravelPass/TravelPassWindow.cs`、`GameplayWindow.Activities.cs`（并见 [activity-travel-pass-ui-handoff.md](activity-travel-pass-ui-handoff.md)）
-- 输出目录：`D:\work\image\designs\travel-pass-v1\assets\`
-- Unity 导入路径：`Assets/Resources/UI/Ugui/TravelPassV1/`
+- 图仓输出目录：`D:\work\image\designs\travel-pass-v1\assets\`（并见 [activity-travel-pass-ui-handoff.md](activity-travel-pass-ui-handoff.md)）
 
 | # | 相对路径 | 像素尺寸 | 展示尺寸 / 拉伸 | 用途说明（全部无字） |
 |---|---|---:|---|---|
@@ -89,18 +83,26 @@
 
 ## 5. 清单 D · 首领周常词缀、赛季永久荣誉与野外灵宠栖息地小补件（10 枚）
 
-- 对应代码：`BossTrialPrepPanel.cs`、`SeasonSealPanel.cs`、`CityTravelUiRoot.cs`（并见 [world-map-habitat-ui-handoff.md](world-map-habitat-ui-handoff.md)）
-- 输出目录：`D:\work\image\designs\weekly-affix-honors-and-habitat\assets\`
+- 图仓输出目录：`D:\work\image\designs\weekly-affix-honors-and-habitat\assets\`（并见 [world-map-habitat-ui-handoff.md](world-map-habitat-ui-handoff.md)）
 
-| # | 相对路径 | 像素尺寸 | Unity 导入目录 | 用途说明（全部无字） |
-|---|---|---:|---|---|
-| 1 | `coreloopv2/icon_weekly_affix_metal.png` | `128×128` | `Assets/Resources/UI/Ugui/CoreLoopV2/` | 首领试炼周常词缀：金 · 锋芒破阵（展示 52×52） |
-| 2 | `coreloopv2/icon_weekly_affix_wood.png` | `128×128` | `Assets/Resources/UI/Ugui/CoreLoopV2/` | 首领试炼周常词缀：木 · 灵脉涤尘（展示 52×52） |
-| 3 | `coreloopv2/icon_weekly_affix_water.png` | `128×128` | `Assets/Resources/UI/Ugui/CoreLoopV2/` | 首领试炼周常词缀：水 · 蓄势聚灵（展示 52×52） |
-| 4 | `coreloopv2/icon_weekly_affix_fire.png` | `128×128` | `Assets/Resources/UI/Ugui/CoreLoopV2/` | 首领试炼周常词缀：火 · 烈焰连携（展示 52×52） |
-| 5 | `coreloopv2/icon_weekly_affix_earth.png` | `128×128` | `Assets/Resources/UI/Ugui/CoreLoopV2/` | 首领试炼周常词缀：土 · 守御反震（展示 52×52） |
-| 6 | `season_honors/honor_s1_pozhen.png` | `128×128` | `Assets/Resources/UI/SeasonHonors/` | 赛季满级永久纪念徽章（零数值）：S1「破阵宗师」（展示 48/64px） |
-| 7 | `season_honors/honor_s2_xuanmai.png` | `128×128` | `Assets/Resources/UI/SeasonHonors/` | 赛季满级永久纪念徽章（零数值）：S2「玄脉行者」（展示 48/64px） |
-| 8 | `worldmapv2/wild_habitat_bar.png` | `800×76` | `Assets/Resources/UI/Ugui/WorldMapV2/` | 野外地图底部「寻宠遇敌」栖息地浮条底板（九宫格，左图标/中文案/右按钮） |
-| 9 | `worldmapv2/wild_habitat_icon.png` | `96×96` | `Assets/Resources/UI/Ugui/WorldMapV2/` | 野外栖息地浮条左侧灵宠生态图标（展示 48×48） |
-| 10 | `worldmapv2/wild_habitat_btn.png` | `190×50` | `Assets/Resources/UI/Ugui/WorldMapV2/` | 野外栖息地浮条右侧「寻宠遇敌」按钮底图（横向三段） |
+| # | 相对路径 | 像素尺寸 | 用途说明（全部无字） |
+|---|---|---:|---|
+| 1 | `coreloopv2/icon_weekly_affix_metal.png` | `128×128` | 首领试炼周常词缀：金 · 锋芒破阵（展示 52×52） |
+| 2 | `coreloopv2/icon_weekly_affix_wood.png` | `128×128` | 首领试炼周常词缀：木 · 灵脉涤尘（展示 52×52） |
+| 3 | `coreloopv2/icon_weekly_affix_water.png` | `128×128` | 首领试炼周常词缀：水 · 蓄势聚灵（展示 52×52） |
+| 4 | `coreloopv2/icon_weekly_affix_fire.png` | `128×128` | 首领试炼周常词缀：火 · 烈焰连携（展示 52×52） |
+| 5 | `coreloopv2/icon_weekly_affix_earth.png` | `128×128` | 首领试炼周常词缀：土 · 守御反震（展示 52×52） |
+| 6 | `season_honors/honor_s1_pozhen.png` | `128×128` | 赛季满级永久纪念徽章（零数值）：S1「破阵宗师」（展示 48/64px） |
+| 7 | `season_honors/honor_s2_xuanmai.png` | `128×128` | 赛季满级永久纪念徽章（零数值）：S2「玄脉行者」（展示 48/64px） |
+| 8 | `worldmapv2/wild_habitat_bar.png` | `800×76` | 野外地图底部「寻宠遇敌」栖息地浮条底板（九宫格，左图标/中文案/右按钮） |
+| 9 | `worldmapv2/wild_habitat_icon.png` | `96×96` | 野外栖息地浮条左侧灵宠生态图标（展示 48×48） |
+| 10 | `worldmapv2/wild_habitat_btn.png` | `190×50` | 野外栖息地浮条右侧「寻宠遇敌」按钮底图（横向三段） |
+
+---
+
+## 6. 本机研发导入备忘（仅本机工程留档，严禁发给 Codex）
+
+- 清单 A（`ranked-play-v4\assets\`）→ `mmorpg-client/Assets/Resources/UI/Ugui/RankedPlayV4/`（`BattleScreen.cs`、`BattleUnitView.cs`、`RankedSettlementPanel.cs`、`RankedModels.cs`、`SeasonEconomyUiArt.cs`）
+- 清单 B（`spirit-shop-v1\assets\`）→ `mmorpg-client/Assets/Resources/UI/Ugui/SpiritShopV1/`（第 16 枚 `item_rename_card.png` 放 `Assets/Resources/UI/Icons/item_rename_card.png`；`SpiritShopWindow.cs`、`SpiritShopGoods.xlsx`）
+- 清单 C（`travel-pass-v1\assets\`）→ `mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/`（`TravelPassWindow.cs`、`GameplayWindow.Activities.cs`）
+- 清单 D（`weekly-affix-honors-and-habitat\assets\`）→ `coreloopv2/` 导入 `Assets/Resources/UI/Ugui/CoreLoopV2/`、`season_honors/` 导入 `Assets/Resources/UI/SeasonHonors/`、`worldmapv2/` 导入 `Assets/Resources/UI/Ugui/WorldMapV2/`（`BossTrialPrepPanel.cs`、`SeasonSealPanel.cs`、`CityTravelUiRoot.cs`）

@@ -119,6 +119,12 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.scrollCraftRevision = record->scroll_craft_revision();
 	result.scrollBonusFragments = record->scroll_bonus_fragments();
 	result.travelPassClaimedCount = record->travel_pass_claimed_count();
+	result.equipLoadoutUnlockedCount = record->equip_loadout_unlocked_count();
+	result.equipLoadoutUsedItemId = record->equip_loadout_used_item_id();
+	result.equipLoadoutSpentBindDiamond = record->equip_loadout_spent_bind_diamond();
+	result.equipLoadoutSpentDiamond = record->equip_loadout_spent_diamond();
+	result.rewardedAdCurrencyType = record->rewarded_ad_currency_type();
+	result.rewardedAdAmount = record->rewarded_ad_amount();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -166,6 +172,12 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_scroll_craft_revision(result.scrollCraftRevision);
 	record->set_scroll_bonus_fragments(result.scrollBonusFragments);
 	record->set_travel_pass_claimed_count(result.travelPassClaimedCount);
+	record->set_equip_loadout_unlocked_count(result.equipLoadoutUnlockedCount);
+	record->set_equip_loadout_used_item_id(result.equipLoadoutUsedItemId);
+	record->set_equip_loadout_spent_bind_diamond(result.equipLoadoutSpentBindDiamond);
+	record->set_equip_loadout_spent_diamond(result.equipLoadoutSpentDiamond);
+	record->set_rewarded_ad_currency_type(result.rewardedAdCurrencyType);
+	record->set_rewarded_ad_amount(result.rewardedAdAmount);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }

@@ -20,4 +20,5 @@ enum CurrencyType {
   CURRENCY_TYPE_GOLD = 0;         // 银两
   CURRENCY_TYPE_DIAMOND = 1;      // 灵石
   CURRENCY_TYPE_BIND_DIAMOND = 2; // 绑定灵石
+  CURRENCY_TYPE_BIND_GOLD = 3;    // 绑定银两（仅个人绑定养成消耗，严禁流通交易）
 }

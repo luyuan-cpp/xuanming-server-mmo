@@ -94,6 +94,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	RankedPresetTable = NewObject<URankedPresetTable>(this);
 	RankedRuleTable = NewObject<URankedRuleTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
+	RewardedAdSlotTable = NewObject<URewardedAdSlotTable>(this);
 	RoleNameRuleTable = NewObject<URoleNameRuleTable>(this);
 	SeasonRuleTable = NewObject<USeasonRuleTable>(this);
 	SeasonSealTable = NewObject<USeasonSealTable>(this);
@@ -179,6 +180,7 @@ void UConfigSubsystem::Deinitialize()
 	RankedPresetTable = nullptr;
 	RankedRuleTable = nullptr;
 	RewardTable = nullptr;
+	RewardedAdSlotTable = nullptr;
 	RoleNameRuleTable = nullptr;
 	SeasonRuleTable = nullptr;
 	SeasonSealTable = nullptr;
@@ -269,6 +271,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		URankedPresetTable::FileName(),
 		URankedRuleTable::FileName(),
 		URewardTable::FileName(),
+		URewardedAdSlotTable::FileName(),
 		URoleNameRuleTable::FileName(),
 		USeasonRuleTable::FileName(),
 		USeasonSealTable::FileName(),
@@ -1146,6 +1149,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!RewardTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (RewardedAdSlotTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RewardedAdSlot] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!RewardedAdSlotTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2679,6 +2696,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!RewardTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (RewardedAdSlotTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RewardedAdSlot] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(URewardedAdSlotTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RewardedAdSlot] 取不到 %s"), URewardedAdSlotTable::FileName());
+		bAllOk = false;
+	}
+	else if (!RewardedAdSlotTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

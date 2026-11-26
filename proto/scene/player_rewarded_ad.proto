@@ -1,0 +1,85 @@
+syntax = "proto3";
+option go_package = "scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 零拒审激励视频广告系统(docs/design/rewarded-ad-system.md):
+// 发放物理不可交易的绑定银两(CURRENCY_TYPE_BIND_GOLD = 3),服务端总开关默认关闭(enabled = 0),
+// 客户端零配表、未就绪彻底隐藏入口,会话随 WALLET 组落盘抗 30 秒看广告断线重连。
+
+enum AdClientPlatform {
+  AD_CLIENT_PLATFORM_UNSPECIFIED = 0;
+  AD_CLIENT_PLATFORM_WECHAT_MINIGAME = 1; // 对应 platform_mask bit 0 (1)
+  AD_CLIENT_PLATFORM_DOUYIN_MINIGAME = 2; // 对应 platform_mask bit 1 (2)
+  AD_CLIENT_PLATFORM_IOS_APP = 3;         // 对应 platform_mask bit 2 (4)
+  AD_CLIENT_PLATFORM_ANDROID_APP = 4;     // 对应 platform_mask bit 3 (8)
+}
+
+message RewardedAdSlotView {
+  uint32 slot_id = 1;
+  bool enabled = 2;                // 服务端结合总开关、platform_mask、角色等级算出的当前是否可用
+  uint32 min_level = 3;
+  uint32 daily_limit = 4;
+  uint32 claimed_today = 5;
+  uint64 next_reset_ms = 6;        // 下次切日时间戳(UTC+8 05:00,毫秒)
+  uint64 cooldown_until_ms = 7;    // 冷却结束时间戳(0 = 无冷却)
+  uint32 currency_type = 8;        // CurrencyType(默认 3 = CURRENCY_TYPE_BIND_GOLD)
+  uint64 reward_amount = 9;
+}
+
+message GetRewardedAdInfoRequest {
+  uint32 client_platform = 1;      // AdClientPlatform
+}
+
+message GetRewardedAdInfoResponse {
+  TipInfoMessage error_message = 1;
+  uint64 server_time_ms = 2;
+  uint64 bind_gold_balance = 3;    // 当前绑定银两余额
+  uint64 gold_balance = 4;         // 当前流通银两余额
+  repeated RewardedAdSlotView slots = 5;
+}
+
+message BeginRewardedAdSessionRequest {
+  uint32 slot_id = 1;
+  uint32 client_platform = 2;      // AdClientPlatform
+}
+
+message BeginRewardedAdSessionResponse {
+  TipInfoMessage error_message = 1;
+  uint64 ad_session_id = 2;        // 服务端签发的一次性随机非 0 会话号
+  uint64 expires_at_ms = 3;
+}
+
+message ClaimRewardedAdRequest {
+  uint64 client_request_id = 1;    // 必填非 0 客户端幂等键
+  uint32 slot_id = 2;
+  uint64 ad_session_id = 3;        // BeginRewardedAdSession 签发的会话号
+  string ssv_proof = 4;            // V1 留空;V2 强制 SSV 模式用于传递平台回执标识
+}
+
+message ClaimRewardedAdResponse {
+  TipInfoMessage error_message = 1;
+  uint32 currency_type = 2;
+  uint64 reward_amount = 3;
+  uint64 currency_balance = 4;     // 领奖后该币种(绑定银两)最新余额
+  uint64 gold_balance = 5;         // 当前流通银两余额
+  RewardedAdSlotView slot = 6;     // 领奖后最新槽位状态
+  bool replayed = 7;               // true = 幂等重放命中首次记录
+}
+
+service SceneRewardedAdClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  // 查询当前可用激励视频槽位与双银两余额。纯读取。
+  rpc GetRewardedAdInfo (GetRewardedAdInfoRequest) returns (GetRewardedAdInfoResponse);
+  // 观看前向服务端申请短效一次性广告会话(落盘抗 30 秒看广告断线重连)。
+  rpc BeginRewardedAdSession (BeginRewardedAdSessionRequest) returns (BeginRewardedAdSessionResponse);
+  // 完整观看后幂等核销会话、发放绑定银两并触发关键进度存盘。
+  rpc ClaimRewardedAd (ClaimRewardedAdRequest) returns (ClaimRewardedAdResponse);
+  // ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+}

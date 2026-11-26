@@ -94,6 +94,7 @@ set(SOURCE_FILES
     handler/rpc/player/player_mystery_merchant_handler.cpp
     handler/rpc/player/player_afk_pass_handler.cpp
     handler/rpc/player/player_spirit_shop_handler.cpp
+    handler/rpc/player/player_rewarded_ad_handler.cpp
     handler/rpc/player/player_appearance_handler.cpp
     handler/rpc/player/player_season_handler.cpp
     handler/rpc/player/player_trial_journal_handler.cpp

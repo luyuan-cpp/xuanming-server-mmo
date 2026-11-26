@@ -4,6 +4,7 @@ option go_package = "robot/proto/scene";
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/component/currency_comp.proto";
+import "proto/common/component/player_equip_loadout_comp.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -466,6 +467,125 @@ message ClaimEquipmentMaterialRewardResponse {
   EquipmentMaterialRewardSnapshot snapshot = 9;
 }
 
+// ── 装备流派方案预设（一键多套换装 + 付费扩展套位，docs/planning/equipment-loadout-presets-v1.md）──
+// 实例与布局严格分离：方案只记录 8 槽真实装备 guid 引用，未穿戴副套装备保留在人物背包 kInventory。
+
+enum EquipLoadoutSlotStatus {
+  EQUIP_LOADOUT_SLOT_EMPTY = 0;              // 该槽位未绑定任何装备
+  EQUIP_LOADOUT_SLOT_EQUIPPED = 1;           // 所绑装备当前正穿在身上（kEquipment）
+  EQUIP_LOADOUT_SLOT_IN_BAG = 2;             // 所绑装备当前在人物背包中（kInventory）
+  EQUIP_LOADOUT_SLOT_MISSING_OR_STORED = 3;  // 所绑装备已不在身上和背包（已出售/存仓/分解等）
+}
+
+message EquipLoadoutSlotView {
+  uint32 slot = 1;                    // EquipSlot.xlsx 正式槽位号（3..10）
+  string slot_name = 2;               // 部位显示名（武器/帽子/衣服/鞋子/首饰一/首饰二/法宝一/法宝二）
+  uint32 equip_kind = 3;              // 该槽位接受的 equip_kind
+  uint64 item_guid = 4;               // 方案绑定的装备永久 guid（0 表示留空）
+  EquipLoadoutSlotStatus status = 5;  // 实时状态
+  BagItemInfo item = 6;               // 存在时的道具简要预览（缺失或留空不填）
+}
+
+message EquipLoadoutSchemeInfo {
+  uint32 scheme_id = 1;                      // 1..5 显式方案号
+  bool unlocked = 2;                         // 是否已解锁
+  string name = 3;                           // 自定义方案名（空则展示默认「方案一..五」）
+  uint32 role_tag = 4;                       // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
+  repeated EquipLoadoutSlotView slots = 5;   // 8 个正式槽位按 slot 升序
+  uint32 linked_skill_scheme_id = 6;         // 0 = 不联动；>0 = 关联战法方案号
+  uint32 linked_attribute_scheme_id = 7;     // 0 = 不联动；>0 = 关联属性加点方案号
+  uint32 missing_count = 8;                  // 实时缺失槽位数
+}
+
+message EquipLoadoutLinkedOption {
+  uint32 scheme_id = 1;
+  string name = 2;
+  uint32 role_tag = 3;
+}
+
+message EquipLoadoutSnapshot {
+  uint32 unlocked_scheme_count = 1;                         // 已解锁套数（1..5）
+  uint32 max_scheme_count = 2;                              // 套位总上限（固定 5）
+  uint32 active_scheme_id = 3;                              // 当前激活方案号（1..unlocked）
+  uint64 state_version = 4;                                 // 乐观锁版本号
+  repeated EquipLoadoutSchemeInfo schemes = 5;              // 1..5 全部套位，按 scheme_id 升序
+  uint64 next_unlock_cost_diamond = 6;                      // 下一套解锁灵石价格（已满为 0）
+  bool next_unlock_allow_bind_diamond = 7;                  // 下一套是否允许优先使用绑定灵石（仅第 2 套为 true）
+  uint32 unlock_item_config_id = 8;                         // 装备方案扩容符配置号（3413）
+  uint64 unlock_item_owned = 9;                             // 背包当前可用的扩容符数量
+  uint64 diamond_balance = 10;                              // 当前非绑灵石余额
+  uint64 bind_diamond_balance = 11;                         // 当前绑定灵石余额
+  repeated EquipLoadoutLinkedOption skill_schemes = 12;     // 可选联动的战法方案列表
+  repeated EquipLoadoutLinkedOption attribute_schemes = 13; // 可选联动的属性加点方案列表
+}
+
+message GetEquipLoadoutsRequest {}
+message GetEquipLoadoutsResponse {
+  TipInfoMessage error_message = 1;
+  EquipLoadoutSnapshot snapshot = 2;
+}
+
+message SaveEquipLoadoutRequest {
+  uint32 scheme_id = 1;                       // 1..unlocked_scheme_count
+  string name = 2;                            // UTF-8 1..12 字符（空则使用默认名）
+  uint32 role_tag = 3;                        // 0..4
+  repeated EquipLoadoutSlotBinding slots = 4; // capture_current_equipped=false 时生效
+  bool capture_current_equipped = 5;          // true = 一键保存当前身上 8 槽装备
+  uint32 linked_skill_scheme_id = 6;          // 0 = 不联动
+  uint32 linked_attribute_scheme_id = 7;      // 0 = 不联动
+  uint64 state_version = 8;                   // 乐观锁版本号
+  string request_id = 9;                      // 16..64 字节 ASCII 幂等键
+}
+message SaveEquipLoadoutResponse {
+  TipInfoMessage error_message = 1;
+  EquipLoadoutSnapshot snapshot = 2;
+  string request_id = 3;
+  bool replayed = 4;
+}
+
+message SwitchEquipLoadoutRequest {
+  uint32 scheme_id = 1;            // 1..unlocked_scheme_count
+  bool apply_linked_schemes = 2;   // 是否一键联动切换关联战法/加点方案
+  uint64 state_version = 3;        // 乐观锁版本号
+  string request_id = 4;           // 16..64 字节 ASCII 幂等键
+}
+message SwitchEquipLoadoutResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;                    // 最新人物背包全量
+  BagInfo equipment = 3;              // 最新装备栏全量
+  EquipLoadoutSnapshot snapshot = 4;  // 最新方案快照
+  repeated uint32 missing_slots = 5;  // 因装备缺失而被跳过保持原状的槽位号
+  repeated string linked_notices = 6; // 联动切换提示（如加点冷却中未切提示）
+  string request_id = 7;
+  bool replayed = 8;
+}
+
+// 发送前须经 DurableRequestFileStore 持久保存原字节；超时/断线仅重放原请求。
+message UnlockEquipLoadoutRequest {
+  uint64 client_request_id = 1;       // 持久化幂等键（必须非 0）
+  uint32 expected_unlocked_count = 2; // 客户端看到的当前已解锁套数（防连点连买两套）
+  bool use_bind_diamond_first = 3;    // 仅第 2 套生效：无扩容符时优先扣绑定灵石并用非绑灵石补足
+}
+message UnlockEquipLoadoutResponse {
+  enum Outcome {
+    UNKNOWN = 0;   // 含旧回执已淘汰或存盘未定，不可换键重发
+    REJECTED = 1;  // 提交前明确拒绝，无扣费/扣符
+    APPLIED = 2;   // 已生效（仅 durable=true 后才确认落盘）
+  }
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  Outcome outcome = 3;
+  bool durable = 4;                  // 仅确认提交的本代次完整存档包含新套数时为 true
+  bool replayed = 5;
+  uint32 result_unlocked_count = 6;  // 本次解锁后的套数（2..5）
+  uint32 current_unlocked_count = 7; // 服务端当前最新套数
+  uint32 used_item_config_id = 8;    // 若消耗扩容符则为 3413，否则为 0
+  uint64 spent_bind_diamond = 9;     // 本次实扣绑定灵石
+  uint64 spent_diamond = 10;         // 本次实扣非绑灵石
+  BagInfo bag = 11;                  // 最新人物背包全量（含货币与道具扣减）
+  EquipLoadoutSnapshot snapshot = 12;
+}
+
 service SceneBagClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -491,4 +611,9 @@ service SceneBagClientPlayer {
   rpc CommitEquipmentCraft (CommitEquipmentCraftRequest) returns (CommitEquipmentCraftResponse);
   rpc GetEquipmentMaterialReward (GetEquipmentMaterialRewardRequest) returns (GetEquipmentMaterialRewardResponse);
   rpc ClaimEquipmentMaterialReward (ClaimEquipmentMaterialRewardRequest) returns (ClaimEquipmentMaterialRewardResponse);
+  // ── 装备流派方案预设（method index 14..17，严禁重排）──
+  rpc GetEquipLoadouts (GetEquipLoadoutsRequest) returns (GetEquipLoadoutsResponse);
+  rpc SaveEquipLoadout (SaveEquipLoadoutRequest) returns (SaveEquipLoadoutResponse);
+  rpc SwitchEquipLoadout (SwitchEquipLoadoutRequest) returns (SwitchEquipLoadoutResponse);
+  rpc UnlockEquipLoadout (UnlockEquipLoadoutRequest) returns (UnlockEquipLoadoutResponse);
 }

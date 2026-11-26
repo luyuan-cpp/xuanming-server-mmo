@@ -64,6 +64,10 @@ enum class ClientRequestKind : uint8_t
 	kBuySpiritShopGoods = 15,         // SceneSpiritShopClientPlayer.BuySpiritShopGoods:官方灵石百宝阁购买
 	kUnlockTravelPassPremium = 16,    // SceneActivityClientPlayer.UnlockTravelPassPremium:解锁游历手记典藏轨
 	kClaimTravelPassReward = 17,      // SceneActivityClientPlayer.ClaimTravelPassReward:领取游历手记奖励
+	kEquipPetCosmetic = 18,           // SceneAppearanceClientPlayer.EquipPetCosmetic:耗券永久解锁并穿戴灵宠幻化
+	kEquipSkillVfx = 19,              // SceneAppearanceClientPlayer.EquipSkillVfx:耗券永久解锁并启用技能特效
+	kEquipLoadoutUnlock = 20,         // SceneBagClientPlayer.UnlockEquipLoadout:付费或耗扩容符解锁装备方案位
+	kClaimRewardedAd = 21,            // SceneRewardedAdClientPlayer.ClaimRewardedAd:激励视频完播领绑定银两
 	kCount
 };
 
@@ -85,7 +89,9 @@ inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhanc
 														  "redeem_bound_artifact_voucher", "skill_scroll_craft",
 														  "learn_skill_book", "dismantle_skill_book",
 														  "buy_spirit_shop_goods",
-														  "unlock_travel_pass_premium", "claim_travel_pass_reward"};
+														  "unlock_travel_pass_premium", "claim_travel_pass_reward",
+														  "equip_pet_cosmetic", "equip_skill_vfx",
+														  "equip_loadout_unlock", "claim_rewarded_ad"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -136,6 +142,12 @@ struct ClientRequestResult
 	uint64_t scrollCraftRevision{0};
 	uint32_t scrollBonusFragments{0};
 	uint32_t travelPassClaimedCount{0};
+	uint32_t equipLoadoutUnlockedCount{0};
+	uint32_t equipLoadoutUsedItemId{0};
+	uint64_t equipLoadoutSpentBindDiamond{0};
+	uint64_t equipLoadoutSpentDiamond{0};
+	uint32_t rewardedAdCurrencyType{0};
+	uint64_t rewardedAdAmount{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

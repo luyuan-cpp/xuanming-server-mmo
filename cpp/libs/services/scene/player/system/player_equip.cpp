@@ -1352,9 +1352,11 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 			}
 		}
 	}
-	// 8. 金币。cost == 0 不问(CanAfford 对 <= 0 打 ERROR);超过 int64 上限的表值转过去是负数,直接按付不起拒。
+	// 8. 银两：已绑定(B)装备强化允许优先消耗绑定银两；可交易(T)装备严格只扣流通银两(防绑定染毒与洗白)。
 	if (costGold > 0 && (costGold > kMaxPayableGold ||
-						 !CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(costGold)))) {
+						 !(equipCurrentlyBound
+							   ? CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(costGold))
+							   : CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(costGold))))) {
 		return kEquipEnhanceGoldNotEnough;
 	}
 	Bag& holder = located.bag->get();
@@ -1372,11 +1374,12 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 												",\"pity_triggered\":" + (roll.triggeredByPity ? "true" : "false"))
 											 : std::string{}) +
 							  "}";
-	// 10. 扣金币。失败 = 什么都没动。
+	// 10. 扣银两。失败 = 什么都没动。
 	if (costGold > 0) {
-		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(costGold),
-															TX_EQUIP_ENHANCE, itemId);
-			err != kSuccess) {
+		const auto err = equipCurrentlyBound
+			? CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(costGold), TX_EQUIP_ENHANCE, itemId)
+			: CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(costGold), TX_EQUIP_ENHANCE, itemId);
+		if (err != kSuccess) {
 			LOG_ERROR << "[PlayerEquip] Enhance failed (gold deduction), nothing changed: player_id=" << tlsEcs.GetPlayerId(player)
 					  << " guid=" << itemId << " config=" << configId << " target_level=" << targetLevel
 					  << " cost_gold=" << costGold << " err=" << err;

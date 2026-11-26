@@ -665,7 +665,7 @@ uint32_t PetSystem::BuildSkillBook(entt::entity player, uint64_t petId, ListSkil
 	const auto* species = PetRow(pet->pet_table_id());
 	if (species == nullptr) return kPetTableRowMissing;
 	const auto level = PetEffectiveLevel(*pet, species);
-	const auto balance = CurrencySystem::GetBalance(player, kCurrencyGold);
+	const auto balance = CurrencySystem::GetSpendableGoldWithBind(player);
 	response.set_player_level(level);
 	response.set_currency_balance(balance);
 	auto* owned = response.mutable_skill_list();
@@ -728,13 +728,13 @@ void PetSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest& req
 	if (request.expected_rank() != rank) { finish(kSkillRankChanged); return; }
 	const auto plan = classskill::PlanUpgrade(rank, row->max_rank(),
 		classskill::RankLimit(level, row->unlock_level(), row->max_rank()), row->unlock_level(),
-		CurrencySystem::GetBalance(player, kCurrencyGold), request.count());
+		CurrencySystem::GetSpendableGoldWithBind(player), request.count());
 	const auto stopTip = plan.stop == classskill::UpgradeStop::kMaxRank ? kSkillMaxRankReached :
 		plan.stop == classskill::UpgradeStop::kLevelLimit ? kSkillLevelNotEnough :
 		plan.stop == classskill::UpgradeStop::kGold ? kSkillGoldNotEnough : 0u;
 	if (plan.steps == 0) { finish(stopTip); return; }
 	const auto before = ComputeDerived(*pet, *species, *pool);
-	if (const auto error = CurrencySystem::DeductCurrency(player, kCurrencyGold,
+	if (const auto error = CurrencySystem::DeductGoldPreferBind(player,
 		static_cast<int64_t>(plan.totalCost), TX_CURRENCY_DEDUCT, row->id()); error != kSuccess) { finish(error); return; }
 	// 等级与货币同属玩家存盘；旧 ID 和未知等级键保留，不能因当前表解释不了而删资产。
 	(*pet->mutable_skill_ranks())[row->id()] = plan.finalRank;
@@ -918,10 +918,10 @@ uint32_t PetSystem::Reset(entt::entity player, uint64_t petId) {
 	// 费用与列表下发的 reset_cost_gold 同一个函数:加点不生效时免费。
 	const auto cost = ResetCostFor(*pet, *pool, state);
 	if (cost > 0) {
-		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
+		if (!CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(cost))) {
 			return kPetGoldNotEnough;
 		}
-		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(cost));
+		if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(cost));
 			err != kSuccess) {
 			return err;
 		}
@@ -1037,11 +1037,11 @@ uint32_t RenamePet(entt::entity player, uint64_t petId, const std::string& name,
 	const auto* rule = RuleRow();
 	const uint64_t cost = rule != nullptr ? rule->rename_cost_gold() : 0;
 	if (cost > 0) {
-		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
+		if (!CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(cost))) {
 			return kPetGoldNotEnough;
 		}
 		if (step == RenameStep::kApply) {
-			if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(cost));
+			if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(cost));
 				err != kSuccess) {
 				return err;
 			}
@@ -1352,11 +1352,11 @@ uint32_t PetSystem::BuyPet(entt::entity player, uint32_t petTableId, uint64_t se
         return kServiceUnavailable;
     if (*level < row->unlock_level()) return kPetOwnerLevelNotEnough;
     if (!HasNormalPetSlot(*comp)) return kPetSlotFull;
-    if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(priceGold))) return kPetGoldNotEnough;
+    if (!CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(priceGold))) return kPetGoldNotEnough;
     PetInstance candidate;
     if (const auto err = PrepareNewPet(player, *row, *pool, *level, candidate); err != kSuccess) return err;
-    // 扣款前完成发号与候选构造，扣款成功之后只有同一逻辑线程上的无失败提交。
-    if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(priceGold),
+    // 扣款前完成发号与候选构造，扣款成功之后只有同一逻辑线程上的无失败提交（transfer_policy==0 不可转让宠允许优先扣绑银）。
+    if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(priceGold),
             TX_SHOP_BUY, candidate.pet_id()); err != kSuccess) return err;
     petIdOut = candidate.pet_id();
     *comp->add_pets() = std::move(candidate);

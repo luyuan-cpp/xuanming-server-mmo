@@ -582,6 +582,26 @@ state=bootstrap
 1=PlayerBattleResult#44 optional uint64 battle_silver_weekly_used
 1=PlayerBattleResult#45 optional uint64 battle_silver_weekly_soft_cap
 1=PlayerBattleResult#46 optional bool battle_silver_diminished
+1=ClientRequestRecord#31 optional uint32 equip_loadout_unlocked_count
+1=ClientRequestRecord#32 optional uint32 equip_loadout_used_item_id
+1=ClientRequestRecord#33 optional uint64 equip_loadout_spent_bind_diamond
+1=ClientRequestRecord#34 optional uint64 equip_loadout_spent_diamond
+1=EquipLoadoutScheme#1 optional uint32 scheme_id
+1=EquipLoadoutScheme#2 optional string name
+1=EquipLoadoutScheme#3 optional uint32 role_tag
+1=EquipLoadoutScheme#4 repeated EquipLoadoutSlotBinding slots
+1=EquipLoadoutScheme#5 optional uint32 linked_skill_scheme_id
+1=EquipLoadoutScheme#6 optional uint32 linked_attribute_scheme_id
+1=EquipLoadoutSlotBinding#1 optional uint32 slot
+1=EquipLoadoutSlotBinding#2 optional uint64 item_guid
+1=PlayerEquipLoadoutComp#1 optional uint32 unlocked_scheme_count
+1=PlayerEquipLoadoutComp#2 optional uint32 active_scheme_id
+1=PlayerEquipLoadoutComp#3 repeated EquipLoadoutScheme schemes
+1=PlayerEquipLoadoutComp#4 optional uint64 state_version
+1=PlayerEquipLoadoutComp#5 optional string last_request_id
+1=PlayerEquipLoadoutComp#6 optional uint64 last_base_version
+1=PlayerEquipLoadoutComp#7 optional uint32 last_scheme_id
+1=player_database#36 optional PlayerEquipLoadoutComp equip_loadout_component group=3
 
 retired=player_database#10
 retired=player_database#17

@@ -275,6 +275,160 @@
    "round_limit": 15,
    "scene_id": 5,
    "time_limit": 900
+  },
+  {
+   "allow_pet_capture": 1,
+   "boss_trial_kind": 0,
+   "difficulty": 0,
+   "id": 212,
+   "max_team_size": 1,
+   "monster": [
+    211,
+    212,
+    213
+   ],
+   "round_limit": 15,
+   "scene_id": 2,
+   "time_limit": 900
+  },
+  {
+   "allow_pet_capture": 1,
+   "boss_trial_kind": 0,
+   "difficulty": 0,
+   "id": 213,
+   "max_team_size": 1,
+   "monster": [
+    214,
+    215,
+    216
+   ],
+   "round_limit": 15,
+   "scene_id": 3,
+   "time_limit": 900
+  },
+  {
+   "allow_pet_capture": 1,
+   "boss_trial_kind": 0,
+   "difficulty": 0,
+   "id": 215,
+   "max_team_size": 1,
+   "monster": [
+    217,
+    218,
+    219
+   ],
+   "round_limit": 15,
+   "scene_id": 5,
+   "time_limit": 900
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 9,
+   "difficulty": 1,
+   "id": 301,
+   "max_team_size": 1,
+   "monster": [
+    301
+   ],
+   "round_limit": 8,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 9,
+   "difficulty": 2,
+   "id": 302,
+   "max_team_size": 1,
+   "monster": [
+    302,
+    303,
+    304
+   ],
+   "round_limit": 8,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 10,
+   "difficulty": 1,
+   "id": 311,
+   "max_team_size": 1,
+   "monster": [
+    311,
+    312
+   ],
+   "round_limit": 5,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 10,
+   "difficulty": 1,
+   "id": 312,
+   "max_team_size": 1,
+   "monster": [
+    313,
+    314
+   ],
+   "round_limit": 5,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 10,
+   "difficulty": 1,
+   "id": 313,
+   "max_team_size": 1,
+   "monster": [
+    315,
+    316
+   ],
+   "round_limit": 5,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 11,
+   "difficulty": 1,
+   "id": 321,
+   "max_team_size": 1,
+   "monster": [
+    321
+   ],
+   "round_limit": 10,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 11,
+   "difficulty": 1,
+   "id": 322,
+   "max_team_size": 1,
+   "monster": [
+    322
+   ],
+   "round_limit": 10,
+   "scene_id": 1,
+   "time_limit": 600
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 11,
+   "difficulty": 1,
+   "id": 323,
+   "max_team_size": 1,
+   "monster": [
+    323
+   ],
+   "round_limit": 10,
+   "scene_id": 1,
+   "time_limit": 600
   }
  ]
 }

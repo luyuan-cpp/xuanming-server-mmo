@@ -153,6 +153,8 @@ enum TransactionType
   // correlation_id = client_request_id。只追加,不复用旧编号。
   TX_TRAVEL_PASS_UNLOCK = 45;
   TX_TRAVEL_PASS_REWARD = 46;
+  // 装备流派方案位付费扩容（消耗 3413 装备方案扩容符或扣灵石/绑定灵石，correlation_id = client_request_id）。
+  TX_EQUIP_LOADOUT_UNLOCK = 47;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

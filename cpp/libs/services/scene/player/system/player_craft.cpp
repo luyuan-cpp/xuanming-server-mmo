@@ -460,9 +460,13 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
         effectiveScrollTier = equipcraft::kMasteryMaster;
     }
 
-    const uint64_t totalGold = baseGoldCost + proxyFeeGold;
-    if (totalGold > 0 && (totalGold > kMaxPayableGold ||
-                          !CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(totalGold)))) {
+    // 防洗白硬隔离：代工费(proxyFeeGold)永远只扣流通银两(kCurrencyGold)；
+    // 仅稀世绝学定向制书(TARGETED_RARE，产物必定永久绑定)的系统手续费允许优先抵扣绑定银两。
+    const bool allowBindForBaseFee = (mode == CraftSkillBookRequest::TARGETED_RARE);
+    const uint64_t strictGold = proxyFeeGold + (allowBindForBaseFee ? 0u : baseGoldCost);
+    const uint64_t preferBindGold = allowBindForBaseFee ? baseGoldCost : 0u;
+    if ((strictGold > 0 || preferBindGold > 0) &&
+        !CurrencySystem::CanAffordSplitGold(player, strictGold, preferBindGold)) {
         fail(kSkillGoldNotEnough);
         return;
     }
@@ -508,8 +512,8 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
                 CheckWritable(player) != kSuccess) {
                 return kFeatureUnavailable;
             }
-            if (totalGold > 0 && (totalGold > kMaxPayableGold ||
-                                  !CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(totalGold)))) {
+            if ((strictGold > 0 || preferBindGold > 0) &&
+                !CurrencySystem::CanAffordSplitGold(player, strictGold, preferBindGold)) {
                 return kSkillGoldNotEnough;
             }
             entt::entity proxyMaster = entt::null;
@@ -556,10 +560,9 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
                 !client_request_ledger::Validate(nextLedger).empty()) {
                 return kServiceUnavailable;
             }
-            if (totalGold > 0) {
-                const auto deductErr = CurrencySystem::DeductCurrency(
-                    player, kCurrencyGold, static_cast<int64_t>(totalGold),
-                    TX_SKILL_SCROLL_CRAFT, request.client_request_id());
+            if (strictGold > 0 || preferBindGold > 0) {
+                const auto deductErr = CurrencySystem::DeductSplitGold(
+                    player, strictGold, preferBindGold, TX_SKILL_SCROLL_CRAFT, request.client_request_id());
                 if (deductErr != kSuccess) return kSkillGoldNotEnough;
             }
             if (proxyMaster != entt::null && proxyNetGold > 0) {

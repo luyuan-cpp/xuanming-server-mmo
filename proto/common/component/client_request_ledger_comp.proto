@@ -52,7 +52,13 @@ message ClientRequestRecord {
   uint32 crafted_skill_table_id = 27;        // 技能制书：首次产出的技能表 ID。
   uint64 scroll_craft_revision = 28;         // 技能制书/拆页：首次成功后的水位。
   uint32 scroll_bonus_fragments = 29;        // 技能制书/拆页：首次额外返还或拆解得到的残页数。
-  uint32 travel_pass_claimed_count = 30;     // 游历手记领奖：首次实际领取的档位轨数。
+  uint32 travel_pass_claimed_count = 30;        // 游历手记领奖：首次实际领取的档位轨数。
+  uint32 equip_loadout_unlocked_count = 31;     // 装备流派方案扩容：首次解锁后的已解锁套数（2..5）。
+  uint32 equip_loadout_used_item_id = 32;       // 装备流派方案扩容：首次消耗的扩容符道具 ID（3413；未用符为 0）。
+  uint64 equip_loadout_spent_bind_diamond = 33; // 装备流派方案扩容：首次消耗的绑定灵石数。
+  uint64 equip_loadout_spent_diamond = 34;      // 装备流派方案扩容：首次消耗的非绑灵石数。
+  uint32 rewarded_ad_currency_type = 35;        // 激励视频领奖：首次实际发放币种（默认 3 = 绑定银两）。
+  uint64 rewarded_ad_amount = 36;               // 激励视频领奖：首次实际发放金额。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。
@@ -83,6 +89,18 @@ message BattleEconomyLedger {
   uint64 battle_exp_this_week = 3;    // 本周战斗累计入账经验（统计监控用）
 }
 
+// 激励视频广告日账本与短效挂起会话（docs/design/rewarded-ad-system.md §3.4）：
+// 与 CurrencyComp 同在 WALLET 存盘组原子提交，抗 30 秒全屏视频暂停心跳引发的断线重连丢会话。
+message RewardedAdLedger {
+  uint64 day_starts_at_ms = 1;         // 当前游戏日起点（UTC+8 05:00，抗时钟回拨）
+  uint32 claimed_today = 2;            // 今日已成功领取次数
+  uint64 last_claim_at_ms = 3;         // 最近一次成功领取时间（UTC 毫秒）
+  uint64 total_claimed_lifetime = 4;   // 终身累计成功次数（仅监控统计）
+  uint64 active_session_id = 5;        // 当前待核销的短效会话号（0 = 无）
+  uint64 active_session_issued_ms = 6; // 会话签发时刻（UTC 毫秒）
+  uint32 active_session_slot_id = 7;   // 会话对应广告位 ID
+}
+
 message ClientRequestLedgerComp {
   // 条目之间无序,按 key 找;同一个 key 至多一条。
   repeated ClientRequestRecord records = 1;
@@ -93,4 +111,5 @@ message ClientRequestLedgerComp {
   uint64 forge_revision = 3;
   EquipmentMaterialRewardLedger material_reward = 4;
   BattleEconomyLedger battle_economy = 5;
+  RewardedAdLedger rewarded_ad = 6;
 }

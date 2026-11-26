@@ -534,3 +534,7 @@
 533=BattleClientPlayerNotifyBattlePing
 534=MatchServiceBanTournamentLeyline
 535=MatchServiceGetTournamentHighlights
+536=SceneBagClientPlayerGetEquipLoadouts
+537=SceneBagClientPlayerSaveEquipLoadout
+538=SceneBagClientPlayerSwitchEquipLoadout
+539=SceneBagClientPlayerUnlockEquipLoadout

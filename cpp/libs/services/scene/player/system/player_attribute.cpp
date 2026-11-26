@@ -1094,10 +1094,10 @@ uint32_t PlayerAttributeSystem::Reset(entt::entity player, uint32_t poolId) {
 	// 费用与面板下发的 reset_cost_gold 同一个函数:池不生效时免费。
 	const auto cost = ResetCostFor(player, *pool, state);
 	if (cost > 0) {
-		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
+		if (!CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(cost))) {
 			return kAttributeGoldNotEnough;
 		}
-		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(cost));
+		if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(cost));
 			err != kSuccess) {
 			return err;
 		}
@@ -1200,10 +1200,10 @@ uint32_t PlayerAttributeSystem::CreateScheme(entt::entity player, const std::str
 	}
 	const auto cost = CreateSchemeCostFor(comp);
 	if (cost > 0) {
-		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
+		if (!CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(cost))) {
 			return kAttributeGoldNotEnough;
 		}
-		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(cost));
+		if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(cost));
 			err != kSuccess) {
 			return err;
 		}
@@ -1218,7 +1218,7 @@ uint32_t PlayerAttributeSystem::CreateScheme(entt::entity player, const std::str
 	return kSuccess;
 }
 
-uint32_t PlayerAttributeSystem::SwitchScheme(entt::entity player, uint32_t schemeId) {
+uint32_t PlayerAttributeSystem::SwitchScheme(entt::entity player, uint32_t schemeId, bool recalculate) {
 	if (const auto err = CheckWritable(player); err != kSuccess) {
 		return err;
 	}
@@ -1240,7 +1240,9 @@ uint32_t PlayerAttributeSystem::SwitchScheme(entt::entity player, uint32_t schem
 	}
 	comp.set_active_scheme_id(schemeId);
 	comp.set_last_switch_time(now);
-	Recalculate(player, RecalcReason::kSchemeSwitch);
+	if (recalculate) {
+		Recalculate(player, RecalcReason::kSchemeSwitch);
+	}
 	LOG_INFO << "[PlayerAttribute] Scheme switched: player_id=" << tlsEcs.GetPlayerId(player) << " scheme=" << schemeId;
 	return kSuccess;
 }

@@ -192,6 +192,8 @@ set(SOURCE_FILES
     common/component/player_spirit_shop_comp.pb.cc
     scene/player_spirit_shop.pb.cc
     common/component/player_travel_pass_comp.pb.cc
+    common/component/player_equip_loadout_comp.pb.cc
+    scene/player_rewarded_ad.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

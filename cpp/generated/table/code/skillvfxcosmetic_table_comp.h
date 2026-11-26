@@ -66,6 +66,18 @@ struct SkillVfxCosmeticDescComp {
     std::string_view value;
 };
 
+struct SkillVfxCosmeticCard_item_idComp {
+    uint32_t value;
+};
+
+struct SkillVfxCosmeticCard_item_countComp {
+    uint32_t value;
+};
+
+struct SkillVfxCosmeticSpirit_shop_goods_idComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -109,4 +121,13 @@ inline SkillVfxCosmeticAcquire_hintComp MakeSkillVfxCosmeticAcquire_hintComp(con
 }
 inline SkillVfxCosmeticDescComp MakeSkillVfxCosmeticDescComp(const SkillVfxCosmeticTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline SkillVfxCosmeticCard_item_idComp MakeSkillVfxCosmeticCard_item_idComp(const SkillVfxCosmeticTable& row) {
+    return { row.card_item_id() };
+}
+inline SkillVfxCosmeticCard_item_countComp MakeSkillVfxCosmeticCard_item_countComp(const SkillVfxCosmeticTable& row) {
+    return { row.card_item_count() };
+}
+inline SkillVfxCosmeticSpirit_shop_goods_idComp MakeSkillVfxCosmeticSpirit_shop_goods_idComp(const SkillVfxCosmeticTable& row) {
+    return { row.spirit_shop_goods_id() };
 }

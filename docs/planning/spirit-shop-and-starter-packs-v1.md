@@ -473,17 +473,15 @@ service SceneSpiritShopClientPlayer {
 > 说明：客户端可交互 uGUI（`Assets/Scripts/UI/Ugui/SpiritShop/SpiritShopWindow.cs`）已先复用 `GameplayUiArt` 完整跑通全部功能与联调，并预留了 `Assets/Resources/UI/Ugui/SpiritShopV1/` 自动换肤槽位。若需升级为专属切图，可直接将下面纯功能作图清单发给 Codex 制作切图并落入对应路径即可生效，无需改动业务代码。
 
 ```text
-请按项目既有的统一 UI 美术风格，为「灵石百宝阁」产出以下透明背景 PNG 切图（PNG-32，背景完全透明，严禁带任何文字、字母或数字，不出现抽奖转盘或 VIP 充值返利元素）：
-1. ui/window_frame.png | 9-slice 可拉伸 | 百宝阁主弹窗外框底图（中心留空给程序布局内容）
-2. ui/title_plate.png | 横向 9-slice 可拉伸 | 弹窗顶部「灵石百宝阁」标题牌匾无字底板
-3. ui/content_panel.png | 9-slice 可拉伸 | 主内容区底板
-4. ui/tab_active.png & ui/tab_inactive.png | 横向 9-slice 可拉伸 | 顶部分页按钮的选中态与未选中态无字底板
-5. ui/card_bg_normal.png & ui/card_bg_featured.png | 9-slice 可拉伸 | 普通商品卡底板与重点推荐礼包/月卡底板
+请为「灵石百宝阁」产出以下透明背景 PNG 切图（PNG-32，背景完全透明，严禁带任何文字、字母或数字，不出现抽奖转盘或 VIP 充值返利元素），输出到图仓目录 D:\work\image\designs\spirit-shop-v1\：
+1. ui/window_frame.png | 四边可拉伸 | 百宝阁主弹窗外框底图（中心留空用于叠放内容）
+2. ui/title_plate.png | 横向可拉伸 | 弹窗顶部「灵石百宝阁」标题牌匾无字底板
+3. ui/content_panel.png | 四边可拉伸 | 主内容区底板
+4. ui/tab_active.png & ui/tab_inactive.png | 横向可拉伸 | 顶部分页按钮的选中态与未选中态无字底板
+5. ui/card_bg_normal.png & ui/card_bg_featured.png | 四边可拉伸 | 普通商品卡底板与重点推荐礼包/月卡底板
 6. ui/quota_bar_bg.png & ui/quota_bar_fill.png | 横向拉伸 | 首套 300 份终身共享限额进度条底槽与填充条
-7. ui/btn_buy_primary.png & ui/btn_recharge_gold.png | 横向 9-slice 可拉伸 | 购买主按钮与灵石不足充值按钮的无字底板
-8. ui/hud_entry_spirit_shop.png | 512x512 | 主城 HUD「百宝阁」入口图标（透明底无文字）
-9. pack_starter_60.png、pack_starter_180.png、pack_starter_300.png | 各 512x512 | 初阶/中阶/半套三档修行提速礼包图标（放在 SpiritShopV1/ 根目录，三档视觉体量逐级递进，透明底无文字）
-10. ui/badge_ribbon.png | 可选预留 | 商品卡右上角角标底图（透明底无文字，留空给程序叠放短字）
-
-产出后放到 Assets/Resources/UI/Ugui/SpiritShopV1/ 对应路径即可（零代码改动自动加载）。
+7. ui/btn_buy_primary.png & ui/btn_recharge_gold.png | 横向可拉伸 | 购买主按钮与灵石不足充值按钮的无字底板
+8. ui/hud_entry_spirit_shop.png | 512x512 | 主城「百宝阁」入口图标（透明底无文字）
+9. pack_starter_60.png、pack_starter_180.png、pack_starter_300.png | 各 512x512 | 初阶/中阶/半套三档修行提速礼包图标（放在目录根下，三档视觉体量逐级递进，透明底无文字）
+10. ui/badge_ribbon.png | 可选预留 | 商品卡右上角角标底图（透明底无文字，留空给后续叠放短字）
 ```

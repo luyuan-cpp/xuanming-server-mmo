@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17petcosmetic_table.proto\"\xf2\x01\n\x10PetCosmeticTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x14\n\x0c\x63osmetic_key\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x1b\n\x13target_pet_table_id\x18\x04 \x01(\r\x12\x1b\n\x13visual_pet_table_id\x18\x05 \x01(\r\x12\x16\n\x0evisual_art_key\x18\x06 \x01(\t\x12\x0f\n\x07\x65nabled\x18\x07 \x01(\r\x12\x12\n\nsort_order\x18\x08 \x01(\r\x12\x13\n\x0bmall_sku_id\x18\t \x01(\x04\x12\x14\n\x0c\x61\x63quire_hint\x18\n \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x0b \x01(\t\"7\n\x14PetCosmeticTableData\x12\x1f\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x11.PetCosmeticTableBB\n\x0e\x63om.game.tableB\x1aPetCosmeticTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17petcosmetic_table.proto\"\xbf\x02\n\x10PetCosmeticTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x14\n\x0c\x63osmetic_key\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x1b\n\x13target_pet_table_id\x18\x04 \x01(\r\x12\x1b\n\x13visual_pet_table_id\x18\x05 \x01(\r\x12\x16\n\x0evisual_art_key\x18\x06 \x01(\t\x12\x0f\n\x07\x65nabled\x18\x07 \x01(\r\x12\x12\n\nsort_order\x18\x08 \x01(\r\x12\x13\n\x0bmall_sku_id\x18\t \x01(\x04\x12\x14\n\x0c\x61\x63quire_hint\x18\n \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x0b \x01(\t\x12\x14\n\x0c\x63\x61rd_item_id\x18\x0c \x01(\r\x12\x17\n\x0f\x63\x61rd_item_count\x18\r \x01(\r\x12\x1c\n\x14spirit_shop_goods_id\x18\x0e \x01(\r\"7\n\x14PetCosmeticTableData\x12\x1f\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x11.PetCosmeticTableBB\n\x0e\x63om.game.tableB\x1aPetCosmeticTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\032PetCosmeticTableOuterClassP\001Z\022generated/pb/table'
   _globals['_PETCOSMETICTABLE']._serialized_start=28
-  _globals['_PETCOSMETICTABLE']._serialized_end=270
-  _globals['_PETCOSMETICTABLEDATA']._serialized_start=272
-  _globals['_PETCOSMETICTABLEDATA']._serialized_end=327
+  _globals['_PETCOSMETICTABLE']._serialized_end=347
+  _globals['_PETCOSMETICTABLEDATA']._serialized_start=349
+  _globals['_PETCOSMETICTABLEDATA']._serialized_end=404
 # @@protoc_insertion_point(module_scope)

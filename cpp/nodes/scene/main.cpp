@@ -47,6 +47,7 @@
 #include "player/system/player_trial_journal.h"
 #include "player/system/player_craft.h"
 #include "player/system/player_spirit_shop.h"
+#include "player/system/player_rewarded_ad.h"
 #include "player/system/player_travel_pass.h"
 #include "player/system/player_rename.h"
 
@@ -160,6 +161,11 @@ namespace
                     err = "scene SpiritShopLimitGroup / SpiritShopGoods table validation failed";
                     return false;
                 }
+                if (!PlayerRewardedAdSystem::ValidateTables())
+                {
+                    err = "scene RewardedAdSlot table validation failed";
+                    return false;
+                }
                 if (!rankedpreset::ValidateTables())
                 {
                     err = "scene RankedRule / RankedPreset table validation failed";
@@ -186,6 +192,7 @@ namespace
                 PlayerTrialJournalSystem::ValidateTables();
                 PlayerCraftSystem::ValidateTables();
                 PlayerSpiritShopSystem::ValidateTables();
+                PlayerRewardedAdSystem::ValidateTables();
                 PlayerTravelPassSystem::ValidateTables();
                 rankedpreset::ValidateTables();
                 PlayerAttributeSystem::ValidateProgressionTables();

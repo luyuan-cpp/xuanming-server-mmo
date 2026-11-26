@@ -63,6 +63,8 @@ inline constexpr uint32_t kMinWinStreakHighlight = 3;
 inline constexpr uint32_t kClutchComebackMinEscalationStacks = 2;
 inline constexpr uint32_t kClutchComebackLowHpDenominator = 4; // hp * 4 < max_hp (< 25%)
 inline constexpr uint32_t kHighlightControlMinCount = 2;
+// 论剑 V5 临阵唤灵：正式自养竞技第 2 回合起解锁，每人整局严格限 1 次唤出备选灵宠。
+inline constexpr uint32_t kPvpSummonPetUnlockRound = 2;
 
 // 赛季首领试炼与轮换娱乐玩法类型（对应 DungeonTable.boss_trial_kind）
 inline constexpr uint32_t kBossTrialKindNone = 0;
@@ -74,10 +76,25 @@ inline constexpr uint32_t kBossTrialKindGuardianRescue = 5;  // 护卫救援（8
 inline constexpr uint32_t kBossTrialKindPolarity5v5 = 6;     // 物法易势 5V5（每2回合切换物理/法术+15%，16回合平局）
 inline constexpr uint32_t kBossTrialKindFestivalBeast = 7;   // 瑞兽迎春（单人携宠12回合，R2/5/8/11预告、R3/6/9/12慢速180%物理重击）
 inline constexpr uint32_t kBossTrialKindBreakDualGuard = 8;  // 破阵·双卫同阵（困难终极合阵：回春+护势同场交织）
+inline constexpr uint32_t kBossTrialKindPracticeDummy = 9;   // 归元城演武试招木桩（强制本人养成、满血蓝隔离、零战损零资源产出）
+inline constexpr uint32_t kBossTrialKindTacticalPuzzle = 10; // 归元城演武回合残局考题（支持本人养成或免费预设、零刷取隔离）
+inline constexpr uint32_t kBossTrialKindCharacterTale = 11;  // 归元城人物奇谈短案（支持本人养成或免费预设试演、零刷取隔离）
 
 constexpr bool IsBossTrialKind(uint32_t kind) {
     return (kind >= kBossTrialKindBreakRejuv && kind <= kBossTrialKindVenom) ||
            kind == kBossTrialKindBreakDualGuard;
+}
+
+constexpr bool IsPracticeDummyKind(uint32_t kind) {
+    return kind == kBossTrialKindPracticeDummy;
+}
+
+constexpr bool IsNpcIsolatedEncounterKind(uint32_t kind) {
+    return kind >= kBossTrialKindPracticeDummy && kind <= kBossTrialKindCharacterTale;
+}
+
+constexpr bool AllowsOptionalFreePresetKind(uint32_t kind) {
+    return kind == kBossTrialKindTacticalPuzzle || kind == kBossTrialKindCharacterTale;
 }
 
 constexpr bool IsBossTrialOrRescueKind(uint32_t kind) {

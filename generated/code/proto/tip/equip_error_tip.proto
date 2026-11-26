@@ -71,4 +71,20 @@ enum equip_error {
 
   kEquipProxyMasterUnavailable = 28030;
 
+  kEquipLoadoutSchemeInvalid = 28031;
+
+  kEquipLoadoutMaxUnlocked = 28032;
+
+  kEquipLoadoutVersionChanged = 28033;
+
+  kEquipLoadoutDiamondNotEnough = 28034;
+
+  kEquipLoadoutNameInvalid = 28035;
+
+  kEquipLoadoutDuplicateItem = 28036;
+
+  kEquipLoadoutSlotUnavailable = 28037;
+
+  kEquipLoadoutUnlockCountChanged = 28038;
+
 };

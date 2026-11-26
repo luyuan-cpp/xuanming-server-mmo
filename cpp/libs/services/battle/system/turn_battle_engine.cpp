@@ -462,6 +462,9 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     prepActive = false;
     nextPetActorIndex = 0;
     prepOptionsByPlayer.clear();
+    validatedPetsByPlayer.clear();
+    standbyPetPoolByPlayer.clear();
+    summonPetRemainingByPlayer.clear();
 
     if (!InitPlayers(request)) {
         return false;
@@ -509,6 +512,7 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     BindDungeonMonsterAis();
     // 战前 15 秒明牌变阵期间延迟到 FinalizePrepPhase 锁阵后再初始化开场光环/被动，防止替换首发宠残留旧光环。
     if (!prepActive) {
+        RebuildMidBattleStandbyPools();
         InitializeConfiguredAbilities();
     }
     InitSpecialEncounterState();
@@ -1103,6 +1107,8 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
             pet->fled() && !pet->is_dead() && pet->withdraw_until_round() > 0 &&
             roundIndex >= pet->withdraw_until_round() ? kSuccess : kInvalidParameter;
     }
+    case BATTLE_ACTION_SUMMON_PET:
+        return CheckSummonPet(actor, action.summon_pet_id());
     case BATTLE_ACTION_FLEE: {
         // PVE 可逃,PVP 一期不可逃(设计文档 §5.1)
         return IsPveMatch() ? kSuccess : kInvalidParameter;
@@ -2145,6 +2151,9 @@ void TurnBattleEngine::ExecuteAction(BattleActorState& actor, const BattleAction
         // 本轮出手表已冻结,召回不插入行动,不重置冷却、被动或每战次数。
         break;
     }
+    case BATTLE_ACTION_SUMMON_PET:
+        ExecuteSummonPet(actor, action.summon_pet_id(), result);
+        break;
     case BATTLE_ACTION_FLEE:
         ExecuteFlee(actor, result);
         break;
@@ -6193,6 +6202,9 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     if (const uint32_t surrenderUnlock = SurrenderUnlockRound(); surrenderUnlock > 0) {
         state.set_surrender_unlock_round(surrenderUnlock);
     }
+    if (const uint32_t summonUnlock = SummonPetUnlockRound(); summonUnlock > 0u) {
+        state.set_summon_pet_unlock_round(summonUnlock);
+    }
     if (createRequest.has_tournament_context() && createRequest.tournament_context().match_id() != 0) {
         *state.mutable_tournament_context() = createRequest.tournament_context();
     }
@@ -6505,6 +6517,9 @@ void TurnBattleEngine::FillSurrenderVoteForViewer(BattleStateS2C& state, uint64_
 bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
     prepActive = false;
     prepOptionsByPlayer.clear();
+    validatedPetsByPlayer.clear();
+    standbyPetPoolByPlayer.clear();
+    summonPetRemainingByPlayer.clear();
 
     // 仅正式自养论剑与赛季战队锦标赛开启战前 15 秒明牌变阵；PVE / 免费预设娱乐场 / 切磋 / 帮战零打扰。
     const bool modeEligible =
@@ -6597,6 +6612,9 @@ bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
             (opt.availableSeals.size() > 1 || opt.availablePets.size() > 1 ||
              (opt.selectedPetId == 0 && !opt.availablePets.empty()))) {
             hasAnyChoice = true;
+        }
+        if (!opt.aiControlled && !opt.availablePets.empty()) {
+            validatedPetsByPlayer[snapshot.player_id()] = opt.availablePets;
         }
         prepOptionsByPlayer.emplace(snapshot.player_id(), std::move(opt));
     }
@@ -6749,9 +6767,193 @@ bool TurnBattleEngine::FinalizePrepPhase() {
 
     prepActive = false;
     roundPingCountByPlayer.clear();
+    RebuildMidBattleStandbyPools();
     // 在最终亮牌阵容上一次性初始化全部开场光环/成长被动，杜绝被换掉宠物的残留光环。
     InitializeConfiguredAbilities();
     return true;
+}
+
+void TurnBattleEngine::PopulatePetOption(const BattlePetSnapshot& pet, BattlePrepPetOption& dst) {
+    dst.set_pet_id(pet.pet_id());
+    dst.set_pet_table_id(pet.pet_table_id());
+    dst.set_pet_name(pet.pet_name());
+    dst.set_level(pet.level());
+    dst.set_max_health(FallbackMax(pet.max_health(), pet.base_attributes().health()));
+    dst.set_speed(pet.base_attributes().speed());
+    dst.set_physical_attack(pet.physical_attack());
+    dst.set_magic_attack(pet.magic_attack());
+    dst.set_defense(pet.defense());
+    for (const auto skillId : pet.skill_table_ids()) {
+        dst.add_skill_table_ids(skillId);
+    }
+}
+
+void TurnBattleEngine::RebuildMidBattleStandbyPools() {
+    standbyPetPoolByPlayer.clear();
+    summonPetRemainingByPlayer.clear();
+    if (!IsSummonPetEnabled()) {
+        return;
+    }
+    for (const auto& [playerId, allPets] : validatedPetsByPlayer) {
+        uint64_t activePetId = 0;
+        for (const auto& actor : actors) {
+            if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET && actor.owner_player_id() == playerId &&
+                actor.pet_id() != 0) {
+                activePetId = actor.pet_id();
+                break;
+            }
+        }
+        std::vector<BattlePetSnapshot> reserve;
+        for (const auto& pet : allPets) {
+            if (pet.pet_id() != 0 && pet.pet_id() != activePetId) {
+                reserve.push_back(pet);
+            }
+        }
+        if (!reserve.empty()) {
+            standbyPetPoolByPlayer.emplace(playerId, std::move(reserve));
+            summonPetRemainingByPlayer[playerId] = 1u;
+        }
+    }
+}
+
+uint32_t TurnBattleEngine::SummonPetRemaining(uint64_t playerId) const {
+    if (prepActive || !IsSummonPetEnabled()) {
+        return 0u;
+    }
+    const auto it = summonPetRemainingByPlayer.find(playerId);
+    return it == summonPetRemainingByPlayer.end() ? 0u : it->second;
+}
+
+uint32_t TurnBattleEngine::CheckSummonPet(const BattleActorState& actor, uint64_t summonPetId) const {
+    if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER) {
+        return kInvalidParameter;
+    }
+    if (!IsSummonPetEnabled() || roundIndex < kPvpSummonPetUnlockRound) {
+        return kFeatureUnavailable;
+    }
+    if (SummonPetRemaining(actor.actor_id()) == 0u) {
+        return kFeatureUnavailable;
+    }
+    if (summonPetId == 0u) {
+        return kInvalidParameter;
+    }
+    const auto poolIt = standbyPetPoolByPlayer.find(actor.actor_id());
+    if (poolIt == standbyPetPoolByPlayer.end()) {
+        return kFeatureUnavailable;
+    }
+    const bool inPool = std::any_of(poolIt->second.begin(), poolIt->second.end(),
+                                    [summonPetId](const BattlePetSnapshot& pet) {
+                                        return pet.pet_id() == summonPetId;
+                                    });
+    if (!inPool) {
+        return kInvalidParameter;
+    }
+    for (const auto& other : actors) {
+        if (other.actor_type() == BATTLE_ACTOR_TYPE_PET && other.owner_player_id() == actor.actor_id() &&
+            other.pet_id() == summonPetId) {
+            return kInvalidParameter;
+        }
+    }
+    return kSuccess;
+}
+
+void TurnBattleEngine::ExecuteSummonPet(BattleActorState& actor, uint64_t summonPetId,
+                                        TurnResultS2C& result) {
+    if (CheckSummonPet(actor, summonPetId) != kSuccess) {
+        return;
+    }
+    const uint64_t ownerId = actor.actor_id();
+    const uint32_t ownerTeam = actor.team_index();
+
+    const BattlePlayerSnapshot* ownerSnap = nullptr;
+    for (const auto& snap : createRequest.players()) {
+        if (snap.player_id() == ownerId) {
+            ownerSnap = &snap;
+            break;
+        }
+    }
+    if (ownerSnap == nullptr) {
+        return;
+    }
+
+    const auto poolIt = standbyPetPoolByPlayer.find(ownerId);
+    if (poolIt == standbyPetPoolByPlayer.end()) {
+        return;
+    }
+    BattlePetSnapshot chosenPet;
+    bool foundPet = false;
+    for (const auto& pet : poolIt->second) {
+        if (pet.pet_id() == summonPetId) {
+            chosenPet = pet;
+            foundPet = true;
+            break;
+        }
+    }
+    if (!foundPet) {
+        return;
+    }
+
+    size_t existingIndex = actors.size();
+    for (size_t i = 0; i < actors.size(); ++i) {
+        if (actors[i].actor_type() == BATTLE_ACTOR_TYPE_PET && actors[i].owner_player_id() == ownerId) {
+            existingIndex = i;
+            break;
+        }
+    }
+    const uint32_t formationSlot = existingIndex < actors.size()
+        ? actors[existingIndex].formation_slot()
+        : NextFormationSlot(ownerTeam);
+    const uint64_t newActorId = kPetActorIdBase + nextPetActorIndex;
+
+    BattleActorState rebuilt;
+    if (!BuildPetActor(*ownerSnap, chosenPet, newActorId, formationSlot, rebuilt)) {
+        return;
+    }
+    ++nextPetActorIndex;
+
+    BattleActorState* summonedActor = nullptr;
+    if (existingIndex < actors.size()) {
+        // 清理旧宠可能已提交的本回合行动，并用全新 actor_id 原位替换（旧宠 require_living_caster 光环同步失效）。
+        pendingActions.erase(actors[existingIndex].actor_id());
+        actors[existingIndex] = std::move(rebuilt);
+        summonedActor = &actors[existingIndex];
+    } else {
+        actors.emplace_back(std::move(rebuilt));
+        summonedActor = &actors.back();
+    }
+
+    summonPetRemainingByPlayer[ownerId] = 0u;
+    standbyPetPoolByPlayer.erase(ownerId);
+    effectiveContributionPlayers.insert(ownerId);
+
+    auto* ev = AppendEvent(result, BATTLE_EVENT_SUMMON_PET, ownerId, newActorId);
+    ev->set_skill_table_id(summonedActor->pet_table_id());
+    ev->set_success(true);
+    ev->set_target_health_after(summonedActor->attributes().health());
+    ev->set_target_mana_after(summonedActor->attributes().mana());
+
+    // 仅初始化新唤出灵宠的运行技能与开场被动/光环，新宠从下一回合起按速度正常排表出手。
+    InitializeConfiguredAbilitiesForActor(*summonedActor, result);
+}
+
+void TurnBattleEngine::FillSummonStateForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const {
+    state.clear_self_standby_pets();
+    state.clear_self_summon_pet_remaining();
+    if (viewerPlayerId == 0u || prepActive || !IsSummonPetEnabled()) {
+        return;
+    }
+    const uint32_t remaining = SummonPetRemaining(viewerPlayerId);
+    state.set_self_summon_pet_remaining(remaining);
+    if (remaining == 0u) {
+        return;
+    }
+    const auto poolIt = standbyPetPoolByPlayer.find(viewerPlayerId);
+    if (poolIt == standbyPetPoolByPlayer.end()) {
+        return;
+    }
+    for (const auto& pet : poolIt->second) {
+        PopulatePetOption(pet, *state.add_self_standby_pets());
+    }
 }
 
 void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t viewerPlayerId,
@@ -6780,19 +6982,7 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
         dst->set_name(seal.name());
     }
     for (const auto& pet : selfOpt.availablePets) {
-        auto* dst = out.add_self_available_pets();
-        dst->set_pet_id(pet.pet_id());
-        dst->set_pet_table_id(pet.pet_table_id());
-        dst->set_pet_name(pet.pet_name());
-        dst->set_level(pet.level());
-        dst->set_max_health(FallbackMax(pet.max_health(), pet.base_attributes().health()));
-        dst->set_speed(pet.base_attributes().speed());
-        dst->set_physical_attack(pet.physical_attack());
-        dst->set_magic_attack(pet.magic_attack());
-        dst->set_defense(pet.defense());
-        for (const auto skillId : pet.skill_table_ids()) {
-            dst->add_skill_table_ids(skillId);
-        }
+        PopulatePetOption(pet, *out.add_self_available_pets());
     }
 
     // 同队互见、对手严密盲选：仅投影与收信者同 teamIndex 的成员状态。

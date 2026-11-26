@@ -33,7 +33,7 @@
 |------|--------|----------|
 | [`rules/`](rules/) | 根 `AGENTS.md` 拆出的各章节完整规范（协议配表、位图与删 ID、压测、不变量、命名与权限、AI 协作、工程原则、C++ 运行时与构建命令） | 具体服务的单次设计方案、流水账 |
 | [`planning/`](planning/) | 玩法策划、数值/经济/商业化设计、核心循环、赛季/帮战/首领/世界地图策划及成套技能策划（`skill-planning/`） | 底层网络/存储/K8s 技术架构文档 |
-| [`planning/ui-handoff/`](planning/ui-handoff/) | 交付异机 Codex 的纯功能 UI 切图清单（注：只告诉 Codex 做什么 UI，严禁给 GPT 定画风/材质/色号；落盘后须在回复直接提供可复制正文） | 服务端技术设计、代码实现清单或自编画风/色号 |
+| [`planning/ui-handoff/`](planning/ui-handoff/) | 交付异机 Codex 的纯功能 UI 切图清单（只告诉 Codex 做什么 UI，严禁给 GPT 定画风/色号；输出目录一律放 `D:\work\image\designs\<新专题目录>\` 且与 Unity 完全无关；落盘后须在回复直接提供可复制正文） | 服务端技术设计、Unity/代码路径或自编画风/色号 |
 | [`design/`](design/) | 技术架构与各服务工程设计决策:为什么这么做、协议/存储/分布式接口与不变量、落码记录 | 玩法策划、UI 美术交接、压测数据、交接说明、与本项目无关的学习笔记 |
 | [`ops/`](ops/) | 运维手册(runbook)、事故复盘、发布检查清单 | 设计推导 |
 | [`stress/`](stress/) | 每一轮压测的复盘,以及作为对比基线的 `prev-summary*.txt` | 压测方法论(那是 `design/` 或 `ops/` 的事) |
@@ -110,6 +110,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [ranked-play-v2-overhaul.md](planning/ranked-play-v2-overhaul.md) — 《论剑 / 人宠会武》V2 玩法体验重做与双服客户端落地设计
 - [ranked-play-v3-tactical-prep.md](planning/ranked-play-v3-tactical-prep.md) — 《论剑 / 人宠会武》V3 扩展设计：战前 15 秒明牌变阵（换赛季印 / 换首发宠）
 - [ranked-play-v4-team-tactics-and-highlights.md](planning/ranked-play-v4-team-tactics-and-highlights.md) — 《论剑 / 人宠会武》V4 扩展设计：队内一键战术标点、本局战术复盘徽记与连胜破势
+- [ranked-play-v5-midbattle-summon.md](planning/ranked-play-v5-midbattle-summon.md) — 《论剑 / 人宠会武》V5 扩展设计：临阵唤灵（单局限 1 次替补灵宠召唤 / 临场换宠）
 - [season-pvp-lunjian-v1-repaired.md](planning/season-pvp-lunjian-v1-repaired.md) — 《论剑 / 人宠会武》PVP 玩法设计体检、修复方案与 UI 补全清单（V1 修复版）
 - [season-skills-and-seal-design.md](planning/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
 - [season-team-tournament-v1.md](planning/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
@@ -131,6 +132,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### 未分类
 
 - [growing-passive-skills-v2.md](planning/growing-passive-skills-v2.md) — 率土式叠加成长战法 V2 扩展设计（《兵法叠势卷》6 项永久成长被动）
+- [guiyuan-city-npcs-and-character-play-v1.md](planning/guiyuan-city-npcs-and-character-play-v1.md) — 《五行奇谈》归元城全仓去问道化、8 位原创场景 NPC 与人物系统联动玩法设计（V1）
+- [rewarded-ad-compliance-and-economy-v1.md](planning/rewarded-ad-compliance-and-economy-v1.md) — 《五行奇谈》零拒审激励视频广告与绑定银两（双银两）合规创收策划方案（V1）
 
 #### 成套策划
 
@@ -148,6 +151,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md) — 率土式叠加成长战法 V2（《兵法叠势卷》）纯功能图标交接单
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v2-ui-handoff.md](planning/ui-handoff/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
+- [guiyuan-city-npcs-ui-handoff.md](planning/ui-handoff/guiyuan-city-npcs-ui-handoff.md) — 归元城 8 位原创核心 NPC 与人物联动玩法 UI / 立绘作图交接单（交付异机 Codex）
 - [latest-expansions-ui-handoff.md](planning/ui-handoff/latest-expansions-ui-handoff.md) — 近期新玩法剩余增量 UI 切片需求清单（论剑 V4 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉 / 野外栖息地）
 - [official-passport-ui-handoff.md](planning/ui-handoff/official-passport-ui-handoff.md) — 官方通行证与账号注册 · Unity UI 异机交接
 - [ranked-play-v2-ui-handoff.md](planning/ui-handoff/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
@@ -155,6 +159,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [season-team-tournament-v2-ui-handoff.md](planning/ui-handoff/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
 - [season-team-tournament-v3-ui-handoff.md](planning/ui-handoff/season-team-tournament-v3-ui-handoff.md) — 《群仙问道赛》V3+V4 增量 UI 需求清单（模块 D / E / F / G / H / I / J）
 - [trial-journal-v2-ui-handoff.md](planning/ui-handoff/trial-journal-v2-ui-handoff.md) — 《五行试炼志 V2》UI 功能需求与作图清单
+- [wardrobe-cosmetic-vouchers-ui-handoff.md](planning/ui-handoff/wardrobe-cosmetic-vouchers-ui-handoff.md) — 衣柜外观解锁券（灵宠幻化符 / 技能特效卷）UI 纯功能作图交接清单
+- [wardrobe-cosmetics-assets-handoff.md](planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md) — 衣柜外观券、专属技能特效帧条与百宝阁切片纯功能作图交接清单
 - [world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md) — 大世界野外灵宠栖息地 HUD 浮条 UI 美术作图交接清单
 
 ### 技术与架构设计文档(`design/`)
@@ -429,6 +435,10 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 - [xuanming-port-decisions-20260910.md](design/xuanming-port-decisions-20260910.md) — 玄冥移植:开工前决策记录(2026-09-10)
 - [xuanming-port-feasibility-20260902.md](design/xuanming-port-feasibility-20260902.md) — XuanMing-Server → mmorpg/go 移植可行性定谳（2026-09-02）
+
+#### 未分类
+
+- [rewarded-ad-system.md](design/rewarded-ad-system.md) — 激励视频广告与绑定银两（`CURRENCY_TYPE_BIND_GOLD`）全端技术与零拒审工程设计
 
 #### 成套技术设计
 

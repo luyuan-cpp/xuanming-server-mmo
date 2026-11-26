@@ -39,6 +39,7 @@
 #include "proto/scene/player_movement.pb.h"
 #include "proto/scene/player_mystery_merchant.pb.h"
 #include "proto/scene/player_pet.pb.h"
+#include "proto/scene/player_rewarded_ad.pb.h"
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
@@ -92,6 +93,7 @@
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "rpc/service_metadata/player_mystery_merchant_service_metadata.h"
 #include "rpc/service_metadata/player_pet_service_metadata.h"
+#include "rpc/service_metadata/player_rewarded_ad_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "rpc/service_metadata/player_season_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
@@ -459,7 +461,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 536,
+static_assert(kMaxRpcMethodCount == 543,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1979,6 +1981,26 @@ void InitMessageInfo()
         std::make_unique<::ClaimEquipmentMaterialRewardRequest>(),
         std::make_unique<::ClaimEquipmentMaterialRewardResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerGetEquipLoadoutsMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "GetEquipLoadouts",
+        std::make_unique<::GetEquipLoadoutsRequest>(),
+        std::make_unique<::GetEquipLoadoutsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerSaveEquipLoadoutMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "SaveEquipLoadout",
+        std::make_unique<::SaveEquipLoadoutRequest>(),
+        std::make_unique<::SaveEquipLoadoutResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerSwitchEquipLoadoutMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "SwitchEquipLoadout",
+        std::make_unique<::SwitchEquipLoadoutRequest>(),
+        std::make_unique<::SwitchEquipLoadoutResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerUnlockEquipLoadoutMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "UnlockEquipLoadout",
+        std::make_unique<::UnlockEquipLoadoutRequest>(),
+        std::make_unique<::UnlockEquipLoadoutResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneActivityClientPlayer ---
     gRpcMethodRegistry[SceneActivityClientPlayerGetActivityListMessageId] = RpcMethodMeta{
@@ -2360,6 +2382,23 @@ void InitMessageInfo()
         "ScenePetClientPlayer", "AscendPetTier",
         std::make_unique<::AscendPetTierRequest>(),
         std::make_unique<::AscendPetTierResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneRewardedAdClientPlayer ---
+    gRpcMethodRegistry[SceneRewardedAdClientPlayerGetRewardedAdInfoMessageId] = RpcMethodMeta{
+        "SceneRewardedAdClientPlayer", "GetRewardedAdInfo",
+        std::make_unique<::GetRewardedAdInfoRequest>(),
+        std::make_unique<::GetRewardedAdInfoResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneRewardedAdClientPlayerBeginRewardedAdSessionMessageId] = RpcMethodMeta{
+        "SceneRewardedAdClientPlayer", "BeginRewardedAdSession",
+        std::make_unique<::BeginRewardedAdSessionRequest>(),
+        std::make_unique<::BeginRewardedAdSessionResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneRewardedAdClientPlayerClaimRewardedAdMessageId] = RpcMethodMeta{
+        "SceneRewardedAdClientPlayer", "ClaimRewardedAd",
+        std::make_unique<::ClaimRewardedAdRequest>(),
+        std::make_unique<::ClaimRewardedAdResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSceneClientPlayer ---
@@ -3211,6 +3250,10 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerCommitEquipmentCraftMessageId:
 	case SceneBagClientPlayerGetEquipmentMaterialRewardMessageId:
 	case SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId:
+	case SceneBagClientPlayerGetEquipLoadoutsMessageId:
+	case SceneBagClientPlayerSaveEquipLoadoutMessageId:
+	case SceneBagClientPlayerSwitchEquipLoadoutMessageId:
+	case SceneBagClientPlayerUnlockEquipLoadoutMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
 	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
 	case SceneActivityClientPlayerGetFestivalBeastDetailMessageId:
@@ -3271,6 +3314,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case ScenePetClientPlayerSavePetEntriesMessageId:
 	case ScenePetClientPlayerSwitchPetEntryPresetMessageId:
 	case ScenePetClientPlayerAscendPetTierMessageId:
+	case SceneRewardedAdClientPlayerGetRewardedAdInfoMessageId:
+	case SceneRewardedAdClientPlayerBeginRewardedAdSessionMessageId:
+	case SceneRewardedAdClientPlayerClaimRewardedAdMessageId:
 	case SceneSceneClientPlayerEnterSceneMessageId:
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:

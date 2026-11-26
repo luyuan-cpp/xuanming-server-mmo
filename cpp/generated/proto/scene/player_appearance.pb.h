@@ -850,6 +850,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillVfxCosmeticEntry final : publi
     kSortOrderFieldNumber = 9,
     kOwnedFieldNumber = 10,
     kMallSkuIdFieldNumber = 11,
+    kCardItemIdFieldNumber = 14,
+    kCardItemCountFieldNumber = 15,
+    kOwnedCardCountFieldNumber = 16,
+    kSpiritShopGoodsIdFieldNumber = 17,
   };
   // string vfx_key = 2;
   void clear_vfx_key() ;
@@ -1021,12 +1025,52 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillVfxCosmeticEntry final : publi
   void _internal_set_mall_sku_id(::uint64_t value);
 
   public:
+  // uint32 card_item_id = 14;
+  void clear_card_item_id() ;
+  [[nodiscard]] ::uint32_t card_item_id() const;
+  void set_card_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_card_item_id() const;
+  void _internal_set_card_item_id(::uint32_t value);
+
+  public:
+  // uint32 card_item_count = 15;
+  void clear_card_item_count() ;
+  [[nodiscard]] ::uint32_t card_item_count() const;
+  void set_card_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_card_item_count() const;
+  void _internal_set_card_item_count(::uint32_t value);
+
+  public:
+  // uint32 owned_card_count = 16;
+  void clear_owned_card_count() ;
+  [[nodiscard]] ::uint32_t owned_card_count() const;
+  void set_owned_card_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_owned_card_count() const;
+  void _internal_set_owned_card_count(::uint32_t value);
+
+  public:
+  // uint32 spirit_shop_goods_id = 17;
+  void clear_spirit_shop_goods_id() ;
+  [[nodiscard]] ::uint32_t spirit_shop_goods_id() const;
+  void set_spirit_shop_goods_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_spirit_shop_goods_id() const;
+  void _internal_set_spirit_shop_goods_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillVfxCosmeticEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
-                          0, 109,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 117,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1067,6 +1111,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillVfxCosmeticEntry final : publi
     ::uint32_t sort_order_;
     bool owned_;
     ::uint64_t mall_sku_id_;
+    ::uint32_t card_item_id_;
+    ::uint32_t card_item_count_;
+    ::uint32_t owned_card_count_;
+    ::uint32_t spirit_shop_goods_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1495,6 +1543,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetCosmeticEntry final : public ::g
     kSortOrderFieldNumber = 7,
     kMallSkuIdFieldNumber = 9,
     kOwnedFieldNumber = 8,
+    kCardItemIdFieldNumber = 12,
+    kCardItemCountFieldNumber = 13,
+    kOwnedCardCountFieldNumber = 14,
+    kSpiritShopGoodsIdFieldNumber = 15,
   };
   // string cosmetic_key = 2;
   void clear_cosmetic_key() ;
@@ -1631,11 +1683,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetCosmeticEntry final : public ::g
   void _internal_set_owned(bool value);
 
   public:
+  // uint32 card_item_id = 12;
+  void clear_card_item_id() ;
+  [[nodiscard]] ::uint32_t card_item_id() const;
+  void set_card_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_card_item_id() const;
+  void _internal_set_card_item_id(::uint32_t value);
+
+  public:
+  // uint32 card_item_count = 13;
+  void clear_card_item_count() ;
+  [[nodiscard]] ::uint32_t card_item_count() const;
+  void set_card_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_card_item_count() const;
+  void _internal_set_card_item_count(::uint32_t value);
+
+  public:
+  // uint32 owned_card_count = 14;
+  void clear_owned_card_count() ;
+  [[nodiscard]] ::uint32_t owned_card_count() const;
+  void set_owned_card_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_owned_card_count() const;
+  void _internal_set_owned_card_count(::uint32_t value);
+
+  public:
+  // uint32 spirit_shop_goods_id = 15;
+  void clear_spirit_shop_goods_id() ;
+  [[nodiscard]] ::uint32_t spirit_shop_goods_id() const;
+  void set_spirit_shop_goods_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_spirit_shop_goods_id() const;
+  void _internal_set_spirit_shop_goods_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetCosmeticEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           0, 79,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1675,6 +1767,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetCosmeticEntry final : public ::g
     ::uint32_t sort_order_;
     ::uint64_t mall_sku_id_;
     bool owned_;
+    ::uint32_t card_item_id_;
+    ::uint32_t card_item_count_;
+    ::uint32_t owned_card_count_;
+    ::uint32_t spirit_shop_goods_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1971,6 +2067,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSkillVfxRequest final : public
     kClientRequestIdFieldNumber = 1,
     kSkillTableIdFieldNumber = 2,
     kCosmeticIdFieldNumber = 3,
+    kExpectFreeEquipFieldNumber = 4,
   };
   // uint64 client_request_id = 1;
   void clear_client_request_id() ;
@@ -2002,11 +2099,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSkillVfxRequest final : public
   void _internal_set_cosmetic_id(::uint32_t value);
 
   public:
+  // bool expect_free_equip = 4;
+  void clear_expect_free_equip() ;
+  [[nodiscard]] bool expect_free_equip() const;
+  void set_expect_free_equip(bool value);
+
+  private:
+  bool _internal_expect_free_equip() const;
+  void _internal_set_expect_free_equip(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipSkillVfxRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2038,6 +2145,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSkillVfxRequest final : public
     ::uint64_t client_request_id_;
     ::uint32_t skill_table_id_;
     ::uint32_t cosmetic_id_;
+    bool expect_free_equip_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2196,6 +2304,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipPetCosmeticRequest final : pub
     kClientRequestIdFieldNumber = 1,
     kPetIdFieldNumber = 2,
     kCosmeticIdFieldNumber = 3,
+    kExpectFreeEquipFieldNumber = 4,
   };
   // uint64 client_request_id = 1;
   void clear_client_request_id() ;
@@ -2227,11 +2336,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipPetCosmeticRequest final : pub
   void _internal_set_cosmetic_id(::uint32_t value);
 
   public:
+  // bool expect_free_equip = 4;
+  void clear_expect_free_equip() ;
+  [[nodiscard]] bool expect_free_equip() const;
+  void set_expect_free_equip(bool value);
+
+  private:
+  bool _internal_expect_free_equip() const;
+  void _internal_set_expect_free_equip(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipPetCosmeticRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2263,6 +2382,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipPetCosmeticRequest final : pub
     ::uint64_t client_request_id_;
     ::uint64_t pet_id_;
     ::uint32_t cosmetic_id_;
+    bool expect_free_equip_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7783,6 +7903,102 @@ inline void PetCosmeticEntry::set_allocated_desc(::std::string* PROTOBUF_NULLABL
   // @@protoc_insertion_point(field_set_allocated:PetCosmeticEntry.desc)
 }
 
+// uint32 card_item_id = 12;
+inline void PetCosmeticEntry::clear_card_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t PetCosmeticEntry::card_item_id() const {
+  // @@protoc_insertion_point(field_get:PetCosmeticEntry.card_item_id)
+  return _internal_card_item_id();
+}
+inline void PetCosmeticEntry::set_card_item_id(::uint32_t value) {
+  _internal_set_card_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:PetCosmeticEntry.card_item_id)
+}
+inline ::uint32_t PetCosmeticEntry::_internal_card_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.card_item_id_;
+}
+inline void PetCosmeticEntry::_internal_set_card_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_id_ = value;
+}
+
+// uint32 card_item_count = 13;
+inline void PetCosmeticEntry::clear_card_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t PetCosmeticEntry::card_item_count() const {
+  // @@protoc_insertion_point(field_get:PetCosmeticEntry.card_item_count)
+  return _internal_card_item_count();
+}
+inline void PetCosmeticEntry::set_card_item_count(::uint32_t value) {
+  _internal_set_card_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:PetCosmeticEntry.card_item_count)
+}
+inline ::uint32_t PetCosmeticEntry::_internal_card_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.card_item_count_;
+}
+inline void PetCosmeticEntry::_internal_set_card_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_count_ = value;
+}
+
+// uint32 owned_card_count = 14;
+inline void PetCosmeticEntry::clear_owned_card_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_card_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t PetCosmeticEntry::owned_card_count() const {
+  // @@protoc_insertion_point(field_get:PetCosmeticEntry.owned_card_count)
+  return _internal_owned_card_count();
+}
+inline void PetCosmeticEntry::set_owned_card_count(::uint32_t value) {
+  _internal_set_owned_card_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:PetCosmeticEntry.owned_card_count)
+}
+inline ::uint32_t PetCosmeticEntry::_internal_owned_card_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owned_card_count_;
+}
+inline void PetCosmeticEntry::_internal_set_owned_card_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_card_count_ = value;
+}
+
+// uint32 spirit_shop_goods_id = 15;
+inline void PetCosmeticEntry::clear_spirit_shop_goods_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spirit_shop_goods_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t PetCosmeticEntry::spirit_shop_goods_id() const {
+  // @@protoc_insertion_point(field_get:PetCosmeticEntry.spirit_shop_goods_id)
+  return _internal_spirit_shop_goods_id();
+}
+inline void PetCosmeticEntry::set_spirit_shop_goods_id(::uint32_t value) {
+  _internal_set_spirit_shop_goods_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:PetCosmeticEntry.spirit_shop_goods_id)
+}
+inline ::uint32_t PetCosmeticEntry::_internal_spirit_shop_goods_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spirit_shop_goods_id_;
+}
+inline void PetCosmeticEntry::_internal_set_spirit_shop_goods_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spirit_shop_goods_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // PetEquippedCosmetic
@@ -8471,6 +8687,102 @@ inline void SkillVfxCosmeticEntry::set_allocated_desc(::std::string* PROTOBUF_NU
   // @@protoc_insertion_point(field_set_allocated:SkillVfxCosmeticEntry.desc)
 }
 
+// uint32 card_item_id = 14;
+inline void SkillVfxCosmeticEntry::clear_card_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t SkillVfxCosmeticEntry::card_item_id() const {
+  // @@protoc_insertion_point(field_get:SkillVfxCosmeticEntry.card_item_id)
+  return _internal_card_item_id();
+}
+inline void SkillVfxCosmeticEntry::set_card_item_id(::uint32_t value) {
+  _internal_set_card_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:SkillVfxCosmeticEntry.card_item_id)
+}
+inline ::uint32_t SkillVfxCosmeticEntry::_internal_card_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.card_item_id_;
+}
+inline void SkillVfxCosmeticEntry::_internal_set_card_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_id_ = value;
+}
+
+// uint32 card_item_count = 15;
+inline void SkillVfxCosmeticEntry::clear_card_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t SkillVfxCosmeticEntry::card_item_count() const {
+  // @@protoc_insertion_point(field_get:SkillVfxCosmeticEntry.card_item_count)
+  return _internal_card_item_count();
+}
+inline void SkillVfxCosmeticEntry::set_card_item_count(::uint32_t value) {
+  _internal_set_card_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:SkillVfxCosmeticEntry.card_item_count)
+}
+inline ::uint32_t SkillVfxCosmeticEntry::_internal_card_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.card_item_count_;
+}
+inline void SkillVfxCosmeticEntry::_internal_set_card_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_item_count_ = value;
+}
+
+// uint32 owned_card_count = 16;
+inline void SkillVfxCosmeticEntry::clear_owned_card_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_card_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t SkillVfxCosmeticEntry::owned_card_count() const {
+  // @@protoc_insertion_point(field_get:SkillVfxCosmeticEntry.owned_card_count)
+  return _internal_owned_card_count();
+}
+inline void SkillVfxCosmeticEntry::set_owned_card_count(::uint32_t value) {
+  _internal_set_owned_card_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:SkillVfxCosmeticEntry.owned_card_count)
+}
+inline ::uint32_t SkillVfxCosmeticEntry::_internal_owned_card_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owned_card_count_;
+}
+inline void SkillVfxCosmeticEntry::_internal_set_owned_card_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_card_count_ = value;
+}
+
+// uint32 spirit_shop_goods_id = 17;
+inline void SkillVfxCosmeticEntry::clear_spirit_shop_goods_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spirit_shop_goods_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t SkillVfxCosmeticEntry::spirit_shop_goods_id() const {
+  // @@protoc_insertion_point(field_get:SkillVfxCosmeticEntry.spirit_shop_goods_id)
+  return _internal_spirit_shop_goods_id();
+}
+inline void SkillVfxCosmeticEntry::set_spirit_shop_goods_id(::uint32_t value) {
+  _internal_set_spirit_shop_goods_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:SkillVfxCosmeticEntry.spirit_shop_goods_id)
+}
+inline ::uint32_t SkillVfxCosmeticEntry::_internal_spirit_shop_goods_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spirit_shop_goods_id_;
+}
+inline void SkillVfxCosmeticEntry::_internal_set_spirit_shop_goods_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spirit_shop_goods_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // EquipPetCosmeticRequest
@@ -8545,6 +8857,30 @@ inline ::uint32_t EquipPetCosmeticRequest::_internal_cosmetic_id() const {
 inline void EquipPetCosmeticRequest::_internal_set_cosmetic_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cosmetic_id_ = value;
+}
+
+// bool expect_free_equip = 4;
+inline void EquipPetCosmeticRequest::clear_expect_free_equip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expect_free_equip_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool EquipPetCosmeticRequest::expect_free_equip() const {
+  // @@protoc_insertion_point(field_get:EquipPetCosmeticRequest.expect_free_equip)
+  return _internal_expect_free_equip();
+}
+inline void EquipPetCosmeticRequest::set_expect_free_equip(bool value) {
+  _internal_set_expect_free_equip(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:EquipPetCosmeticRequest.expect_free_equip)
+}
+inline bool EquipPetCosmeticRequest::_internal_expect_free_equip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expect_free_equip_;
+}
+inline void EquipPetCosmeticRequest::_internal_set_expect_free_equip(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expect_free_equip_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -8888,6 +9224,30 @@ inline ::uint32_t EquipSkillVfxRequest::_internal_cosmetic_id() const {
 inline void EquipSkillVfxRequest::_internal_set_cosmetic_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cosmetic_id_ = value;
+}
+
+// bool expect_free_equip = 4;
+inline void EquipSkillVfxRequest::clear_expect_free_equip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expect_free_equip_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool EquipSkillVfxRequest::expect_free_equip() const {
+  // @@protoc_insertion_point(field_get:EquipSkillVfxRequest.expect_free_equip)
+  return _internal_expect_free_equip();
+}
+inline void EquipSkillVfxRequest::set_expect_free_equip(bool value) {
+  _internal_set_expect_free_equip(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:EquipSkillVfxRequest.expect_free_equip)
+}
+inline bool EquipSkillVfxRequest::_internal_expect_free_equip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expect_free_equip_;
+}
+inline void EquipSkillVfxRequest::_internal_set_expect_free_equip(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expect_free_equip_ = value;
 }
 
 // -------------------------------------------------------------------

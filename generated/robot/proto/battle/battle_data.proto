@@ -220,6 +220,7 @@ enum eBattleActionType {
   BATTLE_ACTION_FLEE = 5;    // 逃跑(PVE 可用;成功率基于速度差)
   BATTLE_ACTION_CAPTURE = 6; // 捕捉消耗本回合行动，由服务端判定。
   BATTLE_ACTION_RECALL_PET = 7; // 主人消耗正常行动，召回已过劝退等待期的本人宝宝。
+  BATTLE_ACTION_SUMMON_PET = 8; // 论剑 V5 临阵唤灵：第 2 回合起单局限 1 次，主人消耗本回合行动唤出备选灵宠。
 }
 
 message BattleAction {
@@ -227,6 +228,7 @@ message BattleAction {
   uint32 skill_table_id = 2;  // SKILL 时有效
   uint64 target_id = 3;       // ATTACK/SKILL/ITEM 的目标
   uint32 item_table_id = 4;   // ITEM 时有效
+  uint64 summon_pet_id = 5;   // SUMMON_PET 时有效：待唤出的本人备选灵宠 pet_id
 }
 
 // ---- 回合结算事件(客户端按序播表现;确定性事件流,观战/回放的载体) ----
@@ -255,6 +257,7 @@ enum eBattleEventType {
   BATTLE_EVENT_ARTIFACT = 21; // 法宝产生实际收益或消耗概率判定次数。
   BATTLE_EVENT_BOSS_MECHANIC = 22; // 首领试炼 V2 破招/阶段/联防/蓄势演出事件（mechanic_kind 标明子类型）。
   BATTLE_EVENT_WUXING_SYNERGY = 23; // 人宠五行相生每 3 回合触发的合击共鸣事件。
+  BATTLE_EVENT_SUMMON_PET = 24; // 论剑 V5 临阵唤灵：主人唤出备选灵宠替换/补位事件（skill_table_id 携带新宠 pet_table_id）。
 }
 
 // 一段伤害 / 出手是怎么来的(equipment-attributes.md §4.5)。0 = 普通,老客户端不读也不影响演出。

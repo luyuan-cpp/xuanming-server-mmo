@@ -94,6 +94,14 @@ enum equip_error : int {
   kEquipPolishPityChanged = 28028,
   kEquipCraftGoldNotEnough = 28029,
   kEquipProxyMasterUnavailable = 28030,
+  kEquipLoadoutSchemeInvalid = 28031,
+  kEquipLoadoutMaxUnlocked = 28032,
+  kEquipLoadoutVersionChanged = 28033,
+  kEquipLoadoutDiamondNotEnough = 28034,
+  kEquipLoadoutNameInvalid = 28035,
+  kEquipLoadoutDuplicateItem = 28036,
+  kEquipLoadoutSlotUnavailable = 28037,
+  kEquipLoadoutUnlockCountChanged = 28038,
   equip_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   equip_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -104,11 +112,11 @@ extern const uint32_t equip_error_internal_data_[];
 inline constexpr equip_error equip_error_MIN =
     static_cast<equip_error>(0);
 inline constexpr equip_error equip_error_MAX =
-    static_cast<equip_error>(28030);
+    static_cast<equip_error>(28038);
 [[nodiscard]] inline bool equip_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, equip_error_internal_data_);
 }
-inline constexpr int equip_error_ARRAYSIZE = 28030 + 1;
+inline constexpr int equip_error_ARRAYSIZE = 28038 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 equip_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(equip_error) {

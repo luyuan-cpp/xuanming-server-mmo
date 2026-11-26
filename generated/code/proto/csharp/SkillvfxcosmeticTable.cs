@@ -22,20 +22,22 @@ public static partial class SkillvfxcosmeticTableReflection {
   static SkillvfxcosmeticTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Chxza2lsbHZmeGNvc21ldGljX3RhYmxlLnByb3RvIowCChVTa2lsbFZmeENv",
+          "Chxza2lsbHZmeGNvc21ldGljX3RhYmxlLnByb3RvItkCChVTa2lsbFZmeENv",
           "c21ldGljVGFibGUSCgoCaWQYASABKA0SDwoHdmZ4X2tleRgCIAEoCRIMCgRu",
           "YW1lGAMgASgJEhYKDnNraWxsX3RhYmxlX2lkGAQgASgNEg0KBWZ4X2lkGAUg",
           "ASgJEhgKEHByb2plY3RpbGVfZnhfaWQYBiABKAkSFwoPdGVsZWdyYXBoX2Z4",
           "X2lkGAcgASgJEhAKCHRpbnRfaGV4GAggASgJEg8KB2VuYWJsZWQYCSABKA0S",
           "EgoKc29ydF9vcmRlchgKIAEoDRITCgttYWxsX3NrdV9pZBgLIAEoBBIUCgxh",
-          "Y3F1aXJlX2hpbnQYDCABKAkSDAoEZGVzYxgNIAEoCSJBChlTa2lsbFZmeENv",
-          "c21ldGljVGFibGVEYXRhEiQKBGRhdGEYASADKAsyFi5Ta2lsbFZmeENvc21l",
-          "dGljVGFibGVCRwoOY29tLmdhbWUudGFibGVCH1NraWxsVmZ4Q29zbWV0aWNU",
-          "YWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "Y3F1aXJlX2hpbnQYDCABKAkSDAoEZGVzYxgNIAEoCRIUCgxjYXJkX2l0ZW1f",
+          "aWQYDiABKA0SFwoPY2FyZF9pdGVtX2NvdW50GA8gASgNEhwKFHNwaXJpdF9z",
+          "aG9wX2dvb2RzX2lkGBAgASgNIkEKGVNraWxsVmZ4Q29zbWV0aWNUYWJsZURh",
+          "dGESJAoEZGF0YRgBIAMoCzIWLlNraWxsVmZ4Q29zbWV0aWNUYWJsZUJHCg5j",
+          "b20uZ2FtZS50YWJsZUIfU2tpbGxWZnhDb3NtZXRpY1RhYmxlT3V0ZXJDbGFz",
+          "c1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::SkillVfxCosmeticTable), global::SkillVfxCosmeticTable.Parser, new[]{ "Id", "VfxKey", "Name", "SkillTableId", "FxId", "ProjectileFxId", "TelegraphFxId", "TintHex", "Enabled", "SortOrder", "MallSkuId", "AcquireHint", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SkillVfxCosmeticTable), global::SkillVfxCosmeticTable.Parser, new[]{ "Id", "VfxKey", "Name", "SkillTableId", "FxId", "ProjectileFxId", "TelegraphFxId", "TintHex", "Enabled", "SortOrder", "MallSkuId", "AcquireHint", "Desc", "CardItemId", "CardItemCount", "SpiritShopGoodsId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SkillVfxCosmeticTableData), global::SkillVfxCosmeticTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -91,6 +93,9 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
     mallSkuId_ = other.mallSkuId_;
     acquireHint_ = other.acquireHint_;
     desc_ = other.desc_;
+    cardItemId_ = other.cardItemId_;
+    cardItemCount_ = other.cardItemCount_;
+    spiritShopGoodsId_ = other.spiritShopGoodsId_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -256,6 +261,42 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
     }
   }
 
+  /// <summary>Field number for the "card_item_id" field.</summary>
+  public const int CardItemIdFieldNumber = 14;
+  private uint cardItemId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CardItemId {
+    get { return cardItemId_; }
+    set {
+      cardItemId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "card_item_count" field.</summary>
+  public const int CardItemCountFieldNumber = 15;
+  private uint cardItemCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CardItemCount {
+    get { return cardItemCount_; }
+    set {
+      cardItemCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "spirit_shop_goods_id" field.</summary>
+  public const int SpiritShopGoodsIdFieldNumber = 16;
+  private uint spiritShopGoodsId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SpiritShopGoodsId {
+    get { return spiritShopGoodsId_; }
+    set {
+      spiritShopGoodsId_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -284,6 +325,9 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
     if (MallSkuId != other.MallSkuId) return false;
     if (AcquireHint != other.AcquireHint) return false;
     if (Desc != other.Desc) return false;
+    if (CardItemId != other.CardItemId) return false;
+    if (CardItemCount != other.CardItemCount) return false;
+    if (SpiritShopGoodsId != other.SpiritShopGoodsId) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -304,6 +348,9 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
     if (MallSkuId != 0UL) hash ^= MallSkuId.GetHashCode();
     if (AcquireHint.Length != 0) hash ^= AcquireHint.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (CardItemId != 0) hash ^= CardItemId.GetHashCode();
+    if (CardItemCount != 0) hash ^= CardItemCount.GetHashCode();
+    if (SpiritShopGoodsId != 0) hash ^= SpiritShopGoodsId.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -374,6 +421,18 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
       output.WriteRawTag(106);
       output.WriteString(Desc);
     }
+    if (CardItemId != 0) {
+      output.WriteRawTag(112);
+      output.WriteUInt32(CardItemId);
+    }
+    if (CardItemCount != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(CardItemCount);
+    }
+    if (SpiritShopGoodsId != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(SpiritShopGoodsId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -436,6 +495,18 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
       output.WriteRawTag(106);
       output.WriteString(Desc);
     }
+    if (CardItemId != 0) {
+      output.WriteRawTag(112);
+      output.WriteUInt32(CardItemId);
+    }
+    if (CardItemCount != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(CardItemCount);
+    }
+    if (SpiritShopGoodsId != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(SpiritShopGoodsId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -484,6 +555,15 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (CardItemId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CardItemId);
+    }
+    if (CardItemCount != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CardItemCount);
+    }
+    if (SpiritShopGoodsId != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SpiritShopGoodsId);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -535,6 +615,15 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.CardItemId != 0) {
+      CardItemId = other.CardItemId;
+    }
+    if (other.CardItemCount != 0) {
+      CardItemCount = other.CardItemCount;
+    }
+    if (other.SpiritShopGoodsId != 0) {
+      SpiritShopGoodsId = other.SpiritShopGoodsId;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -607,6 +696,18 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
           Desc = input.ReadString();
           break;
         }
+        case 112: {
+          CardItemId = input.ReadUInt32();
+          break;
+        }
+        case 120: {
+          CardItemCount = input.ReadUInt32();
+          break;
+        }
+        case 128: {
+          SpiritShopGoodsId = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -676,6 +777,18 @@ public sealed partial class SkillVfxCosmeticTable : pb::IMessage<SkillVfxCosmeti
         }
         case 106: {
           Desc = input.ReadString();
+          break;
+        }
+        case 112: {
+          CardItemId = input.ReadUInt32();
+          break;
+        }
+        case 120: {
+          CardItemCount = input.ReadUInt32();
+          break;
+        }
+        case 128: {
+          SpiritShopGoodsId = input.ReadUInt32();
           break;
         }
       }

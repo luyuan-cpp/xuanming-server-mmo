@@ -12,6 +12,7 @@ enum CurrencyType : uint32_t
     kCurrencyGold = static_cast<uint32_t>(common::base::CURRENCY_TYPE_GOLD),
     kCurrencyDiamond = static_cast<uint32_t>(common::base::CURRENCY_TYPE_DIAMOND),
     kCurrencyBindDiamond = static_cast<uint32_t>(common::base::CURRENCY_TYPE_BIND_DIAMOND),
+    kCurrencyBindGold = static_cast<uint32_t>(common::base::CURRENCY_TYPE_BIND_GOLD),
     kCurrencyMax = static_cast<uint32_t>(common::base::CurrencyType_ARRAYSIZE)
 };
 

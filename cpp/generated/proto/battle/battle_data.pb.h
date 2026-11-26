@@ -534,6 +534,7 @@ enum eBattleActionType : int {
   BATTLE_ACTION_FLEE = 5,
   BATTLE_ACTION_CAPTURE = 6,
   BATTLE_ACTION_RECALL_PET = 7,
+  BATTLE_ACTION_SUMMON_PET = 8,
   eBattleActionType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   eBattleActionType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -544,11 +545,11 @@ extern const uint32_t eBattleActionType_internal_data_[];
 inline constexpr eBattleActionType eBattleActionType_MIN =
     static_cast<eBattleActionType>(0);
 inline constexpr eBattleActionType eBattleActionType_MAX =
-    static_cast<eBattleActionType>(7);
+    static_cast<eBattleActionType>(8);
 [[nodiscard]] inline bool eBattleActionType_IsValid(int value) {
-  return 0 <= value && value <= 7;
+  return 0 <= value && value <= 8;
 }
-inline constexpr int eBattleActionType_ARRAYSIZE = 7 + 1;
+inline constexpr int eBattleActionType_ARRAYSIZE = 8 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleActionType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eBattleActionType) {
@@ -563,7 +564,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& eBattleActionType_Name(eBattleActionType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<eBattleActionType_descriptor, 0, 7>(
+  return ::google::protobuf::internal::NameOfDenseEnum<eBattleActionType_descriptor, 0, 8>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool eBattleActionType_Parse(
@@ -596,6 +597,7 @@ enum eBattleEventType : int {
   BATTLE_EVENT_ARTIFACT = 21,
   BATTLE_EVENT_BOSS_MECHANIC = 22,
   BATTLE_EVENT_WUXING_SYNERGY = 23,
+  BATTLE_EVENT_SUMMON_PET = 24,
   eBattleEventType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   eBattleEventType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -606,11 +608,11 @@ extern const uint32_t eBattleEventType_internal_data_[];
 inline constexpr eBattleEventType eBattleEventType_MIN =
     static_cast<eBattleEventType>(0);
 inline constexpr eBattleEventType eBattleEventType_MAX =
-    static_cast<eBattleEventType>(23);
+    static_cast<eBattleEventType>(24);
 [[nodiscard]] inline bool eBattleEventType_IsValid(int value) {
-  return 0 <= value && value <= 23;
+  return 0 <= value && value <= 24;
 }
-inline constexpr int eBattleEventType_ARRAYSIZE = 23 + 1;
+inline constexpr int eBattleEventType_ARRAYSIZE = 24 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleEventType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eBattleEventType) {
@@ -625,7 +627,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& eBattleEventType_Name(eBattleEventType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<eBattleEventType_descriptor, 0, 23>(
+  return ::google::protobuf::internal::NameOfDenseEnum<eBattleEventType_descriptor, 0, 24>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool eBattleEventType_Parse(
@@ -9133,6 +9135,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAction final : public ::googl
     kActionTypeFieldNumber = 1,
     kSkillTableIdFieldNumber = 2,
     kTargetIdFieldNumber = 3,
+    kSummonPetIdFieldNumber = 5,
     kItemTableIdFieldNumber = 4,
   };
   // .eBattleActionType action_type = 1;
@@ -9165,6 +9168,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAction final : public ::googl
   void _internal_set_target_id(::uint64_t value);
 
   public:
+  // uint64 summon_pet_id = 5;
+  void clear_summon_pet_id() ;
+  [[nodiscard]] ::uint64_t summon_pet_id() const;
+  void set_summon_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_summon_pet_id() const;
+  void _internal_set_summon_pet_id(::uint64_t value);
+
+  public:
   // uint32 item_table_id = 4;
   void clear_item_table_id() ;
   [[nodiscard]] ::uint32_t item_table_id() const;
@@ -9179,7 +9192,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAction final : public ::googl
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -9211,6 +9224,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAction final : public ::googl
     int action_type_;
     ::uint32_t skill_table_id_;
     ::uint64_t target_id_;
+    ::uint64_t summon_pet_id_;
     ::uint32_t item_table_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -18631,7 +18645,7 @@ inline void BattleAction::_internal_set_target_id(::uint64_t value) {
 inline void BattleAction::clear_item_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t BattleAction::item_table_id() const {
   // @@protoc_insertion_point(field_get:BattleAction.item_table_id)
@@ -18639,7 +18653,7 @@ inline ::uint32_t BattleAction::item_table_id() const {
 }
 inline void BattleAction::set_item_table_id(::uint32_t value) {
   _internal_set_item_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattleAction.item_table_id)
 }
 inline ::uint32_t BattleAction::_internal_item_table_id() const {
@@ -18649,6 +18663,30 @@ inline ::uint32_t BattleAction::_internal_item_table_id() const {
 inline void BattleAction::_internal_set_item_table_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_table_id_ = value;
+}
+
+// uint64 summon_pet_id = 5;
+inline void BattleAction::clear_summon_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.summon_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t BattleAction::summon_pet_id() const {
+  // @@protoc_insertion_point(field_get:BattleAction.summon_pet_id)
+  return _internal_summon_pet_id();
+}
+inline void BattleAction::set_summon_pet_id(::uint64_t value) {
+  _internal_set_summon_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattleAction.summon_pet_id)
+}
+inline ::uint64_t BattleAction::_internal_summon_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.summon_pet_id_;
+}
+inline void BattleAction::_internal_set_summon_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.summon_pet_id_ = value;
 }
 
 // -------------------------------------------------------------------

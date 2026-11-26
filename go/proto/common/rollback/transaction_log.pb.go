@@ -125,6 +125,8 @@ const (
 	// correlation_id = client_request_id。只追加,不复用旧编号。
 	TransactionType_TX_TRAVEL_PASS_UNLOCK TransactionType = 45
 	TransactionType_TX_TRAVEL_PASS_REWARD TransactionType = 46
+	// 装备流派方案位付费扩容（消耗 3413 装备方案扩容符或扣灵石/绑定灵石，correlation_id = client_request_id）。
+	TransactionType_TX_EQUIP_LOADOUT_UNLOCK TransactionType = 47
 )
 
 // Enum value maps for TransactionType.
@@ -177,6 +179,7 @@ var (
 		44: "TX_SPIRIT_SHOP_BUY",
 		45: "TX_TRAVEL_PASS_UNLOCK",
 		46: "TX_TRAVEL_PASS_REWARD",
+		47: "TX_EQUIP_LOADOUT_UNLOCK",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":                 0,
@@ -226,6 +229,7 @@ var (
 		"TX_SPIRIT_SHOP_BUY":         44,
 		"TX_TRAVEL_PASS_UNLOCK":      45,
 		"TX_TRAVEL_PASS_REWARD":      46,
+		"TX_EQUIP_LOADOUT_UNLOCK":    47,
 	}
 )
 
@@ -497,7 +501,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xc4\b\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xe1\b\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -547,7 +551,8 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x16TX_GUILD_BOUNTY_PAYOUT\x10+\x12\x16\n" +
 	"\x12TX_SPIRIT_SHOP_BUY\x10,\x12\x19\n" +
 	"\x15TX_TRAVEL_PASS_UNLOCK\x10-\x12\x19\n" +
-	"\x15TX_TRAVEL_PASS_REWARD\x10.B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x15TX_TRAVEL_PASS_REWARD\x10.\x12\x1b\n" +
+	"\x17TX_EQUIP_LOADOUT_UNLOCK\x10/B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

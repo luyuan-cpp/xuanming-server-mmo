@@ -400,11 +400,11 @@ constexpr SkillVfxCosmeticEntry::ParseTableT_ SkillVfxCosmeticEntry::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -467,6 +467,34 @@ constexpr SkillVfxCosmeticEntry::ParseTableT_ SkillVfxCosmeticEntry::InternalGen
       {::_pbi::TcParser::FastUS1,
        {106, 7, 0,
         PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.desc_)}},
+      // uint32 card_item_id = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillVfxCosmeticEntry, _impl_.card_item_id_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.card_item_id_)}},
+      // uint32 card_item_count = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillVfxCosmeticEntry, _impl_.card_item_count_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.card_item_count_)}},
+      // uint32 owned_card_count = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.owned_card_count_)}},
+      // uint32 spirit_shop_goods_id = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.spirit_shop_goods_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -498,10 +526,18 @@ constexpr SkillVfxCosmeticEntry::ParseTableT_ SkillVfxCosmeticEntry::InternalGen
       {PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.acquire_hint_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string desc = 13;
       {PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.desc_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 card_item_id = 14;
+      {PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.card_item_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 card_item_count = 15;
+      {PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.card_item_count_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 owned_card_count = 16;
+      {PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.owned_card_count_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 spirit_shop_goods_id = 17;
+      {PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.spirit_shop_goods_id_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\25\0\7\4\0\5\20\17\10\0\0\0\14\4\0\0"
+      "\25\0\7\4\0\5\20\17\10\0\0\0\14\4\0\0\0\0\0\0\0\0\0\0"
       "SkillVfxCosmeticEntry"
       "vfx_key"
       "name"
@@ -548,7 +584,11 @@ inline constexpr SkillVfxCosmeticEntry::Impl_::Impl_(
         skill_table_id_{0u},
         sort_order_{0u},
         owned_{false},
-        mall_sku_id_{::uint64_t{0u}} {}
+        mall_sku_id_{::uint64_t{0u}},
+        card_item_id_{0u},
+        card_item_count_{0u},
+        owned_card_count_{0u},
+        spirit_shop_goods_id_{0u} {}
 
 template <typename>
 constexpr SkillVfxCosmeticEntry::SkillVfxCosmeticEntry(::_pbi::ConstantInitialized,
@@ -935,11 +975,11 @@ constexpr PetCosmeticEntry::ParseTableT_ PetCosmeticEntry::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
+      15,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -994,10 +1034,22 @@ constexpr PetCosmeticEntry::ParseTableT_ PetCosmeticEntry::InternalGenerateParse
       {::_pbi::TcParser::FastUS1,
        {90, 4, 0,
         PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.desc_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 card_item_id = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetCosmeticEntry, _impl_.card_item_id_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.card_item_id_)}},
+      // uint32 card_item_count = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetCosmeticEntry, _impl_.card_item_count_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.card_item_count_)}},
+      // uint32 owned_card_count = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetCosmeticEntry, _impl_.owned_card_count_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.owned_card_count_)}},
+      // uint32 spirit_shop_goods_id = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetCosmeticEntry, _impl_.spirit_shop_goods_id_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.spirit_shop_goods_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1023,6 +1075,14 @@ constexpr PetCosmeticEntry::ParseTableT_ PetCosmeticEntry::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.acquire_hint_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string desc = 11;
       {PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.desc_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 card_item_id = 12;
+      {PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.card_item_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 card_item_count = 13;
+      {PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.card_item_count_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 owned_card_count = 14;
+      {PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.owned_card_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 spirit_shop_goods_id = 15;
+      {PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.spirit_shop_goods_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1062,7 +1122,11 @@ inline constexpr PetCosmeticEntry::Impl_::Impl_(
         visual_pet_table_id_{0u},
         sort_order_{0u},
         mall_sku_id_{::uint64_t{0u}},
-        owned_{false} {}
+        owned_{false},
+        card_item_id_{0u},
+        card_item_count_{0u},
+        owned_card_count_{0u},
+        spirit_shop_goods_id_{0u} {}
 
 template <typename>
 constexpr PetCosmeticEntry::PetCosmeticEntry(::_pbi::ConstantInitialized,
@@ -1292,11 +1356,11 @@ constexpr EquipSkillVfxRequest::ParseTableT_ EquipSkillVfxRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1306,7 +1370,10 @@ constexpr EquipSkillVfxRequest::ParseTableT_ EquipSkillVfxRequest::InternalGener
       ::_pbi::TcParser::GetTable<::EquipSkillVfxRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool expect_free_equip = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipSkillVfxRequest, _impl_.expect_free_equip_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.expect_free_equip_)}},
       // uint64 client_request_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipSkillVfxRequest, _impl_.client_request_id_), 0>(),
        {8, 0, 0,
@@ -1328,6 +1395,8 @@ constexpr EquipSkillVfxRequest::ParseTableT_ EquipSkillVfxRequest::InternalGener
       {PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cosmetic_id = 3;
       {PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.cosmetic_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool expect_free_equip = 4;
+      {PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.expect_free_equip_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1342,7 +1411,8 @@ inline constexpr EquipSkillVfxRequest::Impl_::Impl_(
       : _cached_size_{0},
         client_request_id_{::uint64_t{0u}},
         skill_table_id_{0u},
-        cosmetic_id_{0u} {}
+        cosmetic_id_{0u},
+        expect_free_equip_{false} {}
 
 template <typename>
 constexpr EquipSkillVfxRequest::EquipSkillVfxRequest(::_pbi::ConstantInitialized,
@@ -1448,11 +1518,11 @@ constexpr EquipPetCosmeticRequest::ParseTableT_ EquipPetCosmeticRequest::Interna
     {
       PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1462,7 +1532,10 @@ constexpr EquipPetCosmeticRequest::ParseTableT_ EquipPetCosmeticRequest::Interna
       ::_pbi::TcParser::GetTable<::EquipPetCosmeticRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool expect_free_equip = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipPetCosmeticRequest, _impl_.expect_free_equip_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.expect_free_equip_)}},
       // uint64 client_request_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipPetCosmeticRequest, _impl_.client_request_id_), 0>(),
        {8, 0, 0,
@@ -1484,6 +1557,8 @@ constexpr EquipPetCosmeticRequest::ParseTableT_ EquipPetCosmeticRequest::Interna
       {PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.pet_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 cosmetic_id = 3;
       {PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.cosmetic_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool expect_free_equip = 4;
+      {PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.expect_free_equip_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1498,7 +1573,8 @@ inline constexpr EquipPetCosmeticRequest::Impl_::Impl_(
       : _cached_size_{0},
         client_request_id_{::uint64_t{0u}},
         pet_id_{::uint64_t{0u}},
-        cosmetic_id_{0u} {}
+        cosmetic_id_{0u},
+        expect_free_equip_{false} {}
 
 template <typename>
 constexpr EquipPetCosmeticRequest::EquipPetCosmeticRequest(::_pbi::ConstantInitialized,
@@ -3955,7 +4031,7 @@ const ::uint32_t
         20,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_._has_bits_),
-        14, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.config_id_),
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.cosmetic_key_),
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.name_),
@@ -3967,6 +4043,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.mall_sku_id_),
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.acquire_hint_),
         PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.card_item_id_),
+        PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.card_item_count_),
+        PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.owned_card_count_),
+        PROTOBUF_FIELD_OFFSET(::PetCosmeticEntry, _impl_.spirit_shop_goods_id_),
         5,
         0,
         1,
@@ -3978,6 +4058,10 @@ const ::uint32_t
         9,
         3,
         4,
+        11,
+        12,
+        13,
+        14,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetEquippedCosmetic, _impl_._has_bits_),
         5, // hasbit index offset
@@ -3987,7 +4071,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_._has_bits_),
-        16, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.config_id_),
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.vfx_key_),
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.name_),
@@ -4001,6 +4085,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.mall_sku_id_),
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.acquire_hint_),
         PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.card_item_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.card_item_count_),
+        PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.owned_card_count_),
+        PROTOBUF_FIELD_OFFSET(::SkillVfxCosmeticEntry, _impl_.spirit_shop_goods_id_),
         8,
         0,
         1,
@@ -4014,15 +4102,21 @@ const ::uint32_t
         12,
         6,
         7,
+        13,
+        14,
+        15,
+        16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipPetCosmeticRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipPetCosmeticRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::EquipPetCosmeticRequest, _impl_.pet_id_),
         PROTOBUF_FIELD_OFFSET(::EquipPetCosmeticRequest, _impl_.cosmetic_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipPetCosmeticRequest, _impl_.expect_free_equip_),
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipPetCosmeticResponse, _impl_._has_bits_),
         8, // hasbit index offset
@@ -4038,13 +4132,15 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipSkillVfxRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipSkillVfxRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::EquipSkillVfxRequest, _impl_.skill_table_id_),
         PROTOBUF_FIELD_OFFSET(::EquipSkillVfxRequest, _impl_.cosmetic_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipSkillVfxRequest, _impl_.expect_free_equip_),
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipSkillVfxResponse, _impl_._has_bits_),
         8, // hasbit index offset
@@ -4137,22 +4233,22 @@ static const ::_pbi::MigrationSchema
         {42, sizeof(::PlayerAppearanceInfo_EquippedSkillVfxEntry_DoNotUse)},
         {49, sizeof(::PlayerAppearanceInfo)},
         {94, sizeof(::PetCosmeticEntry)},
-        {119, sizeof(::PetEquippedCosmetic)},
-        {126, sizeof(::SkillVfxCosmeticEntry)},
-        {155, sizeof(::EquipPetCosmeticRequest)},
-        {164, sizeof(::EquipPetCosmeticResponse)},
-        {177, sizeof(::EquipSkillVfxRequest)},
-        {186, sizeof(::EquipSkillVfxResponse)},
-        {199, sizeof(::GetAppearanceInfoRequest)},
-        {200, sizeof(::GetAppearanceInfoResponse)},
-        {207, sizeof(::SwitchAppearanceRequest)},
-        {216, sizeof(::SwitchAppearanceResponse)},
-        {225, sizeof(::StartAppearanceTrialRequest)},
-        {232, sizeof(::StartAppearanceTrialResponse)},
-        {241, sizeof(::CancelAppearanceTrialRequest)},
-        {242, sizeof(::CancelAppearanceTrialResponse)},
-        {249, sizeof(::ActorAppearanceChangedS2C)},
-        {262, sizeof(::AppearanceStateNotify)},
+        {127, sizeof(::PetEquippedCosmetic)},
+        {134, sizeof(::SkillVfxCosmeticEntry)},
+        {171, sizeof(::EquipPetCosmeticRequest)},
+        {182, sizeof(::EquipPetCosmeticResponse)},
+        {195, sizeof(::EquipSkillVfxRequest)},
+        {206, sizeof(::EquipSkillVfxResponse)},
+        {219, sizeof(::GetAppearanceInfoRequest)},
+        {220, sizeof(::GetAppearanceInfoResponse)},
+        {227, sizeof(::SwitchAppearanceRequest)},
+        {236, sizeof(::SwitchAppearanceResponse)},
+        {245, sizeof(::StartAppearanceTrialRequest)},
+        {252, sizeof(::StartAppearanceTrialResponse)},
+        {261, sizeof(::CancelAppearanceTrialRequest)},
+        {262, sizeof(::CancelAppearanceTrialResponse)},
+        {269, sizeof(::ActorAppearanceChangedS2C)},
+        {282, sizeof(::AppearanceStateNotify)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4214,75 +4310,81 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fappearance_2eproto
     "icEntry\022G\n\022equipped_skill_vfx\030\025 \003(\0132+.Pl"
     "ayerAppearanceInfo.EquippedSkillVfxEntry"
     "\0327\n\025EquippedSkillVfxEntry\022\013\n\003key\030\001 \001(\r\022\r"
-    "\n\005value\030\002 \001(\r:\0028\001\"\367\001\n\020PetCosmeticEntry\022\021"
+    "\n\005value\030\002 \001(\r:\0028\001\"\336\002\n\020PetCosmeticEntry\022\021"
     "\n\tconfig_id\030\001 \001(\r\022\024\n\014cosmetic_key\030\002 \001(\t\022"
     "\014\n\004name\030\003 \001(\t\022\033\n\023target_pet_table_id\030\004 \001"
     "(\r\022\033\n\023visual_pet_table_id\030\005 \001(\r\022\026\n\016visua"
     "l_art_key\030\006 \001(\t\022\022\n\nsort_order\030\007 \001(\r\022\r\n\005o"
     "wned\030\010 \001(\010\022\023\n\013mall_sku_id\030\t \001(\004\022\024\n\014acqui"
-    "re_hint\030\n \001(\t\022\014\n\004desc\030\013 \001(\t\":\n\023PetEquipp"
-    "edCosmetic\022\016\n\006pet_id\030\001 \001(\004\022\023\n\013cosmetic_i"
-    "d\030\002 \001(\r\"\221\002\n\025SkillVfxCosmeticEntry\022\021\n\tcon"
-    "fig_id\030\001 \001(\r\022\017\n\007vfx_key\030\002 \001(\t\022\014\n\004name\030\003 "
-    "\001(\t\022\026\n\016skill_table_id\030\004 \001(\r\022\r\n\005fx_id\030\005 \001"
-    "(\t\022\030\n\020projectile_fx_id\030\006 \001(\t\022\027\n\017telegrap"
-    "h_fx_id\030\007 \001(\t\022\020\n\010tint_hex\030\010 \001(\t\022\022\n\nsort_"
-    "order\030\t \001(\r\022\r\n\005owned\030\n \001(\010\022\023\n\013mall_sku_i"
-    "d\030\013 \001(\004\022\024\n\014acquire_hint\030\014 \001(\t\022\014\n\004desc\030\r "
-    "\001(\t\"Y\n\027EquipPetCosmeticRequest\022\031\n\021client"
-    "_request_id\030\001 \001(\004\022\016\n\006pet_id\030\002 \001(\004\022\023\n\013cos"
-    "metic_id\030\003 \001(\r\"\247\001\n\030EquipPetCosmeticRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022#\n\004info\030\002 \001(\0132\025.PlayerAppearanceInfo"
-    "\022\016\n\006pet_id\030\003 \001(\004\022\034\n\024equipped_cosmetic_id"
-    "\030\004 \001(\r\022\020\n\010replayed\030\005 \001(\010\"^\n\024EquipSkillVf"
-    "xRequest\022\031\n\021client_request_id\030\001 \001(\004\022\026\n\016s"
-    "kill_table_id\030\002 \001(\r\022\023\n\013cosmetic_id\030\003 \001(\r"
-    "\"\254\001\n\025EquipSkillVfxResponse\022&\n\rerror_mess"
-    "age\030\001 \001(\0132\017.TipInfoMessage\022#\n\004info\030\002 \001(\013"
-    "2\025.PlayerAppearanceInfo\022\026\n\016skill_table_i"
-    "d\030\003 \001(\r\022\034\n\024equipped_cosmetic_id\030\004 \001(\r\022\020\n"
-    "\010replayed\030\005 \001(\010\"\032\n\030GetAppearanceInfoRequ"
-    "est\"h\n\031GetAppearanceInfoResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022#\n\004info"
-    "\030\002 \001(\0132\025.PlayerAppearanceInfo\"g\n\027SwitchA"
-    "ppearanceRequest\022\031\n\021client_request_id\030\001 "
-    "\001(\004\022\025\n\rappearance_id\030\002 \001(\t\022\032\n\022expect_fre"
-    "e_switch\030\003 \001(\010\"y\n\030SwitchAppearanceRespon"
-    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
-    "ge\022#\n\004info\030\002 \001(\0132\025.PlayerAppearanceInfo\022"
-    "\020\n\010replayed\030\003 \001(\010\"O\n\033StartAppearanceTria"
-    "lRequest\022\031\n\021client_request_id\030\001 \001(\004\022\025\n\ra"
-    "ppearance_id\030\002 \001(\t\"}\n\034StartAppearanceTri"
-    "alResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022#\n\004info\030\002 \001(\0132\025.PlayerAppeara"
-    "nceInfo\022\020\n\010replayed\030\003 \001(\010\"\036\n\034CancelAppea"
-    "ranceTrialRequest\"l\n\035CancelAppearanceTri"
-    "alResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022#\n\004info\030\002 \001(\0132\025.PlayerAppeara"
-    "nceInfo\"\201\001\n\031ActorAppearanceChangedS2C\022\016\n"
-    "\006entity\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\025\n\rappe"
-    "arance_id\030\003 \001(\t\022\020\n\010is_trial\030\004 \001(\010\022\030\n\020tri"
-    "al_expires_at\030\005 \001(\004\"S\n\025AppearanceStateNo"
-    "tify\022#\n\004info\030\001 \001(\0132\025.PlayerAppearanceInf"
-    "o\022\025\n\rtrial_expired\030\002 \001(\0102\377\004\n\033SceneAppear"
-    "anceClientPlayer\022J\n\021GetAppearanceInfo\022\031."
-    "GetAppearanceInfoRequest\032\032.GetAppearance"
-    "InfoResponse\022G\n\020SwitchAppearance\022\030.Switc"
-    "hAppearanceRequest\032\031.SwitchAppearanceRes"
-    "ponse\022S\n\024StartAppearanceTrial\022\034.StartApp"
-    "earanceTrialRequest\032\035.StartAppearanceTri"
-    "alResponse\022V\n\025CancelAppearanceTrial\022\035.Ca"
-    "ncelAppearanceTrialRequest\032\036.CancelAppea"
-    "ranceTrialResponse\022I\n\034NotifyActorAppeara"
-    "nceChanged\022\032.ActorAppearanceChangedS2C\032\006"
-    ".Empty\"\005\210\231\310\001\002\022>\n\025NotifyAppearanceState\022\026"
-    ".AppearanceStateNotify\032\006.Empty\"\005\210\231\310\001\002\022G\n"
-    "\020EquipPetCosmetic\022\030.EquipPetCosmeticRequ"
-    "est\032\031.EquipPetCosmeticResponse\022>\n\rEquipS"
-    "killVfx\022\025.EquipSkillVfxRequest\032\026.EquipSk"
-    "illVfxResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324"
-    "a\003b\006proto3"
+    "re_hint\030\n \001(\t\022\014\n\004desc\030\013 \001(\t\022\024\n\014card_item"
+    "_id\030\014 \001(\r\022\027\n\017card_item_count\030\r \001(\r\022\030\n\020ow"
+    "ned_card_count\030\016 \001(\r\022\034\n\024spirit_shop_good"
+    "s_id\030\017 \001(\r\":\n\023PetEquippedCosmetic\022\016\n\006pet"
+    "_id\030\001 \001(\004\022\023\n\013cosmetic_id\030\002 \001(\r\"\370\002\n\025Skill"
+    "VfxCosmeticEntry\022\021\n\tconfig_id\030\001 \001(\r\022\017\n\007v"
+    "fx_key\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\026\n\016skill_tabl"
+    "e_id\030\004 \001(\r\022\r\n\005fx_id\030\005 \001(\t\022\030\n\020projectile_"
+    "fx_id\030\006 \001(\t\022\027\n\017telegraph_fx_id\030\007 \001(\t\022\020\n\010"
+    "tint_hex\030\010 \001(\t\022\022\n\nsort_order\030\t \001(\r\022\r\n\005ow"
+    "ned\030\n \001(\010\022\023\n\013mall_sku_id\030\013 \001(\004\022\024\n\014acquir"
+    "e_hint\030\014 \001(\t\022\014\n\004desc\030\r \001(\t\022\024\n\014card_item_"
+    "id\030\016 \001(\r\022\027\n\017card_item_count\030\017 \001(\r\022\030\n\020own"
+    "ed_card_count\030\020 \001(\r\022\034\n\024spirit_shop_goods"
+    "_id\030\021 \001(\r\"t\n\027EquipPetCosmeticRequest\022\031\n\021"
+    "client_request_id\030\001 \001(\004\022\016\n\006pet_id\030\002 \001(\004\022"
+    "\023\n\013cosmetic_id\030\003 \001(\r\022\031\n\021expect_free_equi"
+    "p\030\004 \001(\010\"\247\001\n\030EquipPetCosmeticResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022#\n\004"
+    "info\030\002 \001(\0132\025.PlayerAppearanceInfo\022\016\n\006pet"
+    "_id\030\003 \001(\004\022\034\n\024equipped_cosmetic_id\030\004 \001(\r\022"
+    "\020\n\010replayed\030\005 \001(\010\"y\n\024EquipSkillVfxReques"
+    "t\022\031\n\021client_request_id\030\001 \001(\004\022\026\n\016skill_ta"
+    "ble_id\030\002 \001(\r\022\023\n\013cosmetic_id\030\003 \001(\r\022\031\n\021exp"
+    "ect_free_equip\030\004 \001(\010\"\254\001\n\025EquipSkillVfxRe"
+    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
+    "essage\022#\n\004info\030\002 \001(\0132\025.PlayerAppearanceI"
+    "nfo\022\026\n\016skill_table_id\030\003 \001(\r\022\034\n\024equipped_"
+    "cosmetic_id\030\004 \001(\r\022\020\n\010replayed\030\005 \001(\010\"\032\n\030G"
+    "etAppearanceInfoRequest\"h\n\031GetAppearance"
+    "InfoResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022#\n\004info\030\002 \001(\0132\025.PlayerAppea"
+    "ranceInfo\"g\n\027SwitchAppearanceRequest\022\031\n\021"
+    "client_request_id\030\001 \001(\004\022\025\n\rappearance_id"
+    "\030\002 \001(\t\022\032\n\022expect_free_switch\030\003 \001(\010\"y\n\030Sw"
+    "itchAppearanceResponse\022&\n\rerror_message\030"
+    "\001 \001(\0132\017.TipInfoMessage\022#\n\004info\030\002 \001(\0132\025.P"
+    "layerAppearanceInfo\022\020\n\010replayed\030\003 \001(\010\"O\n"
+    "\033StartAppearanceTrialRequest\022\031\n\021client_r"
+    "equest_id\030\001 \001(\004\022\025\n\rappearance_id\030\002 \001(\t\"}"
+    "\n\034StartAppearanceTrialResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022#\n\004info\030\002"
+    " \001(\0132\025.PlayerAppearanceInfo\022\020\n\010replayed\030"
+    "\003 \001(\010\"\036\n\034CancelAppearanceTrialRequest\"l\n"
+    "\035CancelAppearanceTrialResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022#\n\004info\030\002"
+    " \001(\0132\025.PlayerAppearanceInfo\"\201\001\n\031ActorApp"
+    "earanceChangedS2C\022\016\n\006entity\030\001 \001(\004\022\021\n\tpla"
+    "yer_id\030\002 \001(\004\022\025\n\rappearance_id\030\003 \001(\t\022\020\n\010i"
+    "s_trial\030\004 \001(\010\022\030\n\020trial_expires_at\030\005 \001(\004\""
+    "S\n\025AppearanceStateNotify\022#\n\004info\030\001 \001(\0132\025"
+    ".PlayerAppearanceInfo\022\025\n\rtrial_expired\030\002"
+    " \001(\0102\377\004\n\033SceneAppearanceClientPlayer\022J\n\021"
+    "GetAppearanceInfo\022\031.GetAppearanceInfoReq"
+    "uest\032\032.GetAppearanceInfoResponse\022G\n\020Swit"
+    "chAppearance\022\030.SwitchAppearanceRequest\032\031"
+    ".SwitchAppearanceResponse\022S\n\024StartAppear"
+    "anceTrial\022\034.StartAppearanceTrialRequest\032"
+    "\035.StartAppearanceTrialResponse\022V\n\025Cancel"
+    "AppearanceTrial\022\035.CancelAppearanceTrialR"
+    "equest\032\036.CancelAppearanceTrialResponse\022I"
+    "\n\034NotifyActorAppearanceChanged\022\032.ActorAp"
+    "pearanceChangedS2C\032\006.Empty\"\005\210\231\310\001\002\022>\n\025Not"
+    "ifyAppearanceState\022\026.AppearanceStateNoti"
+    "fy\032\006.Empty\"\005\210\231\310\001\002\022G\n\020EquipPetCosmetic\022\030."
+    "EquipPetCosmeticRequest\032\031.EquipPetCosmet"
+    "icResponse\022>\n\rEquipSkillVfx\022\025.EquipSkill"
+    "VfxRequest\032\026.EquipSkillVfxResponse\032\n\200\250\303\001"
+    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fappearance_2eproto_deps[3] = {
@@ -4294,7 +4396,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fappearance_2e
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fappearance_2eproto = {
     false,
     false,
-    4090,
+    4350,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fappearance_2eproto,
     "proto/scene/player_appearance.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fappearance_2eproto_once,
@@ -6155,9 +6257,9 @@ PetCosmeticEntry::PetCosmeticEntry(
                offsetof(Impl_, config_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, config_id_),
-           offsetof(Impl_, owned_) -
+           offsetof(Impl_, spirit_shop_goods_id_) -
                offsetof(Impl_, config_id_) +
-               sizeof(Impl_::owned_));
+               sizeof(Impl_::spirit_shop_goods_id_));
 
   // @@protoc_insertion_point(copy_constructor:PetCosmeticEntry)
 }
@@ -6176,9 +6278,9 @@ inline void PetCosmeticEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, config_id_),
            0,
-           offsetof(Impl_, owned_) -
+           offsetof(Impl_, spirit_shop_goods_id_) -
                offsetof(Impl_, config_id_) +
-               sizeof(Impl_::owned_));
+               sizeof(Impl_::spirit_shop_goods_id_));
 }
 PetCosmeticEntry::~PetCosmeticEntry() {
   // @@protoc_insertion_point(destructor:PetCosmeticEntry)
@@ -6255,10 +6357,10 @@ PROTOBUF_NOINLINE void PetCosmeticEntry::Clear() {
         reinterpret_cast<char*>(&_impl_.visual_pet_table_id_) -
         reinterpret_cast<char*>(&_impl_.config_id_)) + sizeof(_impl_.visual_pet_table_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     ::memset(&_impl_.sort_order_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.owned_) -
-        reinterpret_cast<char*>(&_impl_.sort_order_)) + sizeof(_impl_.owned_));
+        reinterpret_cast<char*>(&_impl_.spirit_shop_goods_id_) -
+        reinterpret_cast<char*>(&_impl_.sort_order_)) + sizeof(_impl_.spirit_shop_goods_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6387,6 +6489,42 @@ PROTOBUF_NOINLINE void PetCosmeticEntry::Clear() {
     }
   }
 
+  // uint32 card_item_id = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_card_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_card_item_id(), target);
+    }
+  }
+
+  // uint32 card_item_count = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_card_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_card_item_count(), target);
+    }
+  }
+
+  // uint32 owned_card_count = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_owned_card_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_owned_card_count(), target);
+    }
+  }
+
+  // uint32 spirit_shop_goods_id = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_spirit_shop_goods_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_spirit_shop_goods_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6470,7 +6608,7 @@ PROTOBUF_NOINLINE void PetCosmeticEntry::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint32 sort_order = 7;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_sort_order() != 0) {
@@ -6489,6 +6627,34 @@ PROTOBUF_NOINLINE void PetCosmeticEntry::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_owned() != 0) {
         total_size += 2;
+      }
+    }
+    // uint32 card_item_id = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_card_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_card_item_id());
+      }
+    }
+    // uint32 card_item_count = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_card_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_card_item_count());
+      }
+    }
+    // uint32 owned_card_count = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_owned_card_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_owned_card_count());
+      }
+    }
+    // uint32 spirit_shop_goods_id = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_spirit_shop_goods_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_spirit_shop_goods_id());
       }
     }
   }
@@ -6571,7 +6737,7 @@ void PetCosmeticEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_sort_order() != 0) {
         _this->_impl_.sort_order_ = from._impl_.sort_order_;
@@ -6585,6 +6751,26 @@ void PetCosmeticEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_owned() != 0) {
         _this->_impl_.owned_ = from._impl_.owned_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_card_item_id() != 0) {
+        _this->_impl_.card_item_id_ = from._impl_.card_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_card_item_count() != 0) {
+        _this->_impl_.card_item_count_ = from._impl_.card_item_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_owned_card_count() != 0) {
+        _this->_impl_.owned_card_count_ = from._impl_.owned_card_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_spirit_shop_goods_id() != 0) {
+        _this->_impl_.spirit_shop_goods_id_ = from._impl_.spirit_shop_goods_id_;
       }
     }
   }
@@ -6613,8 +6799,8 @@ void PetCosmeticEntry::InternalSwap(PetCosmeticEntry* PROTOBUF_RESTRICT PROTOBUF
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.acquire_hint_, &other->_impl_.acquire_hint_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.owned_)
-      + sizeof(PetCosmeticEntry::_impl_.owned_)
+      PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.spirit_shop_goods_id_)
+      + sizeof(PetCosmeticEntry::_impl_.spirit_shop_goods_id_)
       - PROTOBUF_FIELD_OFFSET(PetCosmeticEntry, _impl_.config_id_)>(
           reinterpret_cast<char*>(&_impl_.config_id_),
           reinterpret_cast<char*>(&other->_impl_.config_id_));
@@ -6895,9 +7081,9 @@ SkillVfxCosmeticEntry::SkillVfxCosmeticEntry(
                offsetof(Impl_, config_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, config_id_),
-           offsetof(Impl_, mall_sku_id_) -
+           offsetof(Impl_, spirit_shop_goods_id_) -
                offsetof(Impl_, config_id_) +
-               sizeof(Impl_::mall_sku_id_));
+               sizeof(Impl_::spirit_shop_goods_id_));
 
   // @@protoc_insertion_point(copy_constructor:SkillVfxCosmeticEntry)
 }
@@ -6919,9 +7105,9 @@ inline void SkillVfxCosmeticEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, config_id_),
            0,
-           offsetof(Impl_, mall_sku_id_) -
+           offsetof(Impl_, spirit_shop_goods_id_) -
                offsetof(Impl_, config_id_) +
-               sizeof(Impl_::mall_sku_id_));
+               sizeof(Impl_::spirit_shop_goods_id_));
 }
 SkillVfxCosmeticEntry::~SkillVfxCosmeticEntry() {
   // @@protoc_insertion_point(destructor:SkillVfxCosmeticEntry)
@@ -7005,11 +7191,12 @@ PROTOBUF_NOINLINE void SkillVfxCosmeticEntry::Clear() {
       _impl_.desc_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.config_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.mall_sku_id_) -
-        reinterpret_cast<char*>(&_impl_.config_id_)) + sizeof(_impl_.mall_sku_id_));
+        reinterpret_cast<char*>(&_impl_.owned_card_count_) -
+        reinterpret_cast<char*>(&_impl_.config_id_)) + sizeof(_impl_.owned_card_count_));
   }
+  _impl_.spirit_shop_goods_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -7158,6 +7345,42 @@ PROTOBUF_NOINLINE void SkillVfxCosmeticEntry::Clear() {
     }
   }
 
+  // uint32 card_item_id = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_card_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_card_item_id(), target);
+    }
+  }
+
+  // uint32 card_item_count = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_card_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_card_item_count(), target);
+    }
+  }
+
+  // uint32 owned_card_count = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_owned_card_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_owned_card_count(), target);
+    }
+  }
+
+  // uint32 spirit_shop_goods_id = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_spirit_shop_goods_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_spirit_shop_goods_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7241,7 +7464,7 @@ PROTOBUF_NOINLINE void SkillVfxCosmeticEntry::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 config_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_config_id() != 0) {
@@ -7274,6 +7497,36 @@ PROTOBUF_NOINLINE void SkillVfxCosmeticEntry::Clear() {
       if (this_._internal_mall_sku_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_mall_sku_id());
+      }
+    }
+    // uint32 card_item_id = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_card_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_card_item_id());
+      }
+    }
+    // uint32 card_item_count = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_card_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_card_item_count());
+      }
+    }
+    // uint32 owned_card_count = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_owned_card_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_owned_card_count());
+      }
+    }
+  }
+   {
+    // uint32 spirit_shop_goods_id = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_spirit_shop_goods_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_spirit_shop_goods_id());
       }
     }
   }
@@ -7368,7 +7621,7 @@ void SkillVfxCosmeticEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_config_id() != 0) {
         _this->_impl_.config_id_ = from._impl_.config_id_;
@@ -7393,6 +7646,26 @@ void SkillVfxCosmeticEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       if (from._internal_mall_sku_id() != 0) {
         _this->_impl_.mall_sku_id_ = from._impl_.mall_sku_id_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_card_item_id() != 0) {
+        _this->_impl_.card_item_id_ = from._impl_.card_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_card_item_count() != 0) {
+        _this->_impl_.card_item_count_ = from._impl_.card_item_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_owned_card_count() != 0) {
+        _this->_impl_.owned_card_count_ = from._impl_.owned_card_count_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_spirit_shop_goods_id() != 0) {
+      _this->_impl_.spirit_shop_goods_id_ = from._impl_.spirit_shop_goods_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -7423,8 +7696,8 @@ void SkillVfxCosmeticEntry::InternalSwap(SkillVfxCosmeticEntry* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.acquire_hint_, &other->_impl_.acquire_hint_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.mall_sku_id_)
-      + sizeof(SkillVfxCosmeticEntry::_impl_.mall_sku_id_)
+      PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.spirit_shop_goods_id_)
+      + sizeof(SkillVfxCosmeticEntry::_impl_.spirit_shop_goods_id_)
       - PROTOBUF_FIELD_OFFSET(SkillVfxCosmeticEntry, _impl_.config_id_)>(
           reinterpret_cast<char*>(&_impl_.config_id_),
           reinterpret_cast<char*>(&other->_impl_.config_id_));
@@ -7465,9 +7738,9 @@ inline void EquipPetCosmeticRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, client_request_id_),
            0,
-           offsetof(Impl_, cosmetic_id_) -
+           offsetof(Impl_, expect_free_equip_) -
                offsetof(Impl_, client_request_id_) +
-               sizeof(Impl_::cosmetic_id_));
+               sizeof(Impl_::expect_free_equip_));
 }
 EquipPetCosmeticRequest::~EquipPetCosmeticRequest() {
   // @@protoc_insertion_point(destructor:EquipPetCosmeticRequest)
@@ -7517,10 +7790,10 @@ PROTOBUF_NOINLINE void EquipPetCosmeticRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cosmetic_id_) -
-        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.cosmetic_id_));
+        reinterpret_cast<char*>(&_impl_.expect_free_equip_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.expect_free_equip_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -7572,6 +7845,15 @@ PROTOBUF_NOINLINE void EquipPetCosmeticRequest::Clear() {
     }
   }
 
+  // bool expect_free_equip = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_expect_free_equip() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_expect_free_equip(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7597,7 +7879,7 @@ PROTOBUF_NOINLINE void EquipPetCosmeticRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint64 client_request_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_client_request_id() != 0) {
@@ -7619,6 +7901,12 @@ PROTOBUF_NOINLINE void EquipPetCosmeticRequest::Clear() {
             this_._internal_cosmetic_id());
       }
     }
+    // bool expect_free_equip = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_expect_free_equip() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -7637,7 +7925,7 @@ void EquipPetCosmeticRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_client_request_id() != 0) {
         _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
@@ -7651,6 +7939,11 @@ void EquipPetCosmeticRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_cosmetic_id() != 0) {
         _this->_impl_.cosmetic_id_ = from._impl_.cosmetic_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_expect_free_equip() != 0) {
+        _this->_impl_.expect_free_equip_ = from._impl_.expect_free_equip_;
       }
     }
   }
@@ -7672,8 +7965,8 @@ void EquipPetCosmeticRequest::InternalSwap(EquipPetCosmeticRequest* PROTOBUF_RES
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.cosmetic_id_)
-      + sizeof(EquipPetCosmeticRequest::_impl_.cosmetic_id_)
+      PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.expect_free_equip_)
+      + sizeof(EquipPetCosmeticRequest::_impl_.expect_free_equip_)
       - PROTOBUF_FIELD_OFFSET(EquipPetCosmeticRequest, _impl_.client_request_id_)>(
           reinterpret_cast<char*>(&_impl_.client_request_id_),
           reinterpret_cast<char*>(&other->_impl_.client_request_id_));
@@ -8047,9 +8340,9 @@ inline void EquipSkillVfxRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, client_request_id_),
            0,
-           offsetof(Impl_, cosmetic_id_) -
+           offsetof(Impl_, expect_free_equip_) -
                offsetof(Impl_, client_request_id_) +
-               sizeof(Impl_::cosmetic_id_));
+               sizeof(Impl_::expect_free_equip_));
 }
 EquipSkillVfxRequest::~EquipSkillVfxRequest() {
   // @@protoc_insertion_point(destructor:EquipSkillVfxRequest)
@@ -8099,10 +8392,10 @@ PROTOBUF_NOINLINE void EquipSkillVfxRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cosmetic_id_) -
-        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.cosmetic_id_));
+        reinterpret_cast<char*>(&_impl_.expect_free_equip_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.expect_free_equip_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -8154,6 +8447,15 @@ PROTOBUF_NOINLINE void EquipSkillVfxRequest::Clear() {
     }
   }
 
+  // bool expect_free_equip = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_expect_free_equip() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_expect_free_equip(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -8179,7 +8481,7 @@ PROTOBUF_NOINLINE void EquipSkillVfxRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint64 client_request_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_client_request_id() != 0) {
@@ -8201,6 +8503,12 @@ PROTOBUF_NOINLINE void EquipSkillVfxRequest::Clear() {
             this_._internal_cosmetic_id());
       }
     }
+    // bool expect_free_equip = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_expect_free_equip() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -8219,7 +8527,7 @@ void EquipSkillVfxRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_client_request_id() != 0) {
         _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
@@ -8233,6 +8541,11 @@ void EquipSkillVfxRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_cosmetic_id() != 0) {
         _this->_impl_.cosmetic_id_ = from._impl_.cosmetic_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_expect_free_equip() != 0) {
+        _this->_impl_.expect_free_equip_ = from._impl_.expect_free_equip_;
       }
     }
   }
@@ -8254,8 +8567,8 @@ void EquipSkillVfxRequest::InternalSwap(EquipSkillVfxRequest* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.cosmetic_id_)
-      + sizeof(EquipSkillVfxRequest::_impl_.cosmetic_id_)
+      PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.expect_free_equip_)
+      + sizeof(EquipSkillVfxRequest::_impl_.expect_free_equip_)
       - PROTOBUF_FIELD_OFFSET(EquipSkillVfxRequest, _impl_.client_request_id_)>(
           reinterpret_cast<char*>(&_impl_.client_request_id_),
           reinterpret_cast<char*>(&other->_impl_.client_request_id_));

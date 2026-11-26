@@ -1,5 +1,6 @@
-// 率土式“每回合叠加至战斗结束（5 层封顶）”3 个永久成长战法战斗引擎单测：
-// 12020 愈战愈勇（物理直伤）、12021 深谋远虑（法术直伤）、12022 步步为营（自身防御）。
+// 率土式持续叠加至战斗结束永久成长战法战斗引擎单测：
+// 卷 3 原有（每回合 +5%、5 层封顶）：12020 愈战愈勇、12021 深谋远虑、12022 步步为营；
+// 卷 7 新增（交互触发每层 +1%、伤害类 300 层 / 机制类 40~50 层封顶）：12023 承锋蓄势、12024 循隙破甲、12025 蚀骨愈深、12026 磐石道心、12027 厚泽蓄灵、12028 兽威渐盛。
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -386,6 +387,7 @@ TEST_F(GrowingPassiveSkillTest, UndispellableByA34AndPausesWhileDeadThenKeepsSta
 }
 
 TEST_F(GrowingPassiveSkillTest, TakeMomentumStacksOnEnemyDirectAndShareDamageAndCapsAtFive) {
+    ASSERT_EQ(300u, data->FindBuff(kBuffTakeMomentum)->stack_limit());
     auto req = BaseRequest();
     (*req.mutable_players(0)->mutable_skill_ranks())[kSkillTakeMomentum] = 1;
     (*req.mutable_players(0)->mutable_skill_ranks())[kSkillA36] = 1;
@@ -424,25 +426,32 @@ TEST_F(GrowingPassiveSkillTest, TakeMomentumStacksOnEnemyDirectAndShareDamageAnd
     res = engine.ResolveCurrentRound();
     EXPECT_EQ(2u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffTakeMomentum));
 
-    // 第 4..7 回合连续受击叠至 5 层封顶（+30% -> 600*1.30=780），第 7 回合满层不再增加。
-    for (int r = 4; r <= 7; ++r) {
+    // 第 4..8 回合连续受击：第 7 回合出手吃 5 层（+5%=630）并受击叠至 6 层，第 8 回合出手吃 6 层（+6%=636）并叠至 7 层。
+    for (int r = 4; r <= 8; ++r) {
         engine.SubmitAction(kHero, Cast(kTestPhysStrike, kEnemy));
         engine.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
         engine.SubmitAction(kEnemy, Cast(kTestPhysStrike, kHero));
         engine.SubmitAction(202, Cast(kTestIdleSkill, 202));
         res = engine.ResolveCurrentRound();
         if (r == 7) {
-            EXPECT_EQ(5u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffTakeMomentum));
-            EXPECT_EQ(780u, FirstDamageTo(res, kHero, kEnemy));
+            EXPECT_EQ(630u, FirstDamageTo(res, kHero, kEnemy));
+            EXPECT_EQ(6u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffTakeMomentum));
+        }
+        if (r == 8) {
+            EXPECT_EQ(636u, FirstDamageTo(res, kHero, kEnemy));
+            EXPECT_EQ(7u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffTakeMomentum));
         }
     }
 }
 
 TEST_F(GrowingPassiveSkillTest, DefensePenetrationStacksOnDirectAttackAndPiercesHighDefense) {
+    ASSERT_EQ(50u, data->FindBuff(kBuffPenetration)->stack_limit());
     auto req = BaseRequest();
     (*req.mutable_players(0)->mutable_skill_ranks())[kSkillPenetration] = 1;
-    // 给敌方较高防御（2400，未达 60% 封顶线），精确观测穿防提升的直伤。
+    // 给敌方较高防御（2400，未达 60% 封顶线）与高血量，精确观测穿防叠至 50 层（50% 穿防）封顶。
     req.mutable_players(2)->set_defense(2400);
+    req.mutable_players(2)->set_max_health(100000);
+    req.mutable_players(2)->mutable_base_attributes()->set_health(100000);
 
     TurnBattleEngine engine(data);
     ASSERT_TRUE(engine.Initialize(req));
@@ -461,26 +470,27 @@ TEST_F(GrowingPassiveSkillTest, DefensePenetrationStacksOnDirectAttackAndPierces
     res = engine.ResolveCurrentRound();
     EXPECT_EQ(1u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffPenetration));
 
-    // 第 3..8 回合用技能攻击敌方：第 3 回合吃 1 层穿防，第 7 回合吃满 5 层（20% 穿防），第 8 回合封顶不变。
+    // 第 3..53 回合用技能攻击敌方：第 3 回合吃 1 层穿防，第 52 回合吃满 50 层（50% 穿防），第 53 回合封顶不变。
     uint64_t r3Dmg = 0;
-    uint64_t r7Dmg = 0;
-    uint64_t r8Dmg = 0;
-    for (int r = 3; r <= 8; ++r) {
+    uint64_t r52Dmg = 0;
+    uint64_t r53Dmg = 0;
+    for (int r = 3; r <= 53; ++r) {
         engine.SubmitAction(kHero, Cast(kTestPhysStrike, kEnemy));
         engine.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
         engine.SubmitAction(kEnemy, Cast(kTestIdleSkill, kEnemy));
         res = engine.ResolveCurrentRound();
         const uint64_t dmg = FirstDamageTo(res, kHero, kEnemy);
         if (r == 3) r3Dmg = dmg;
-        if (r == 7) r7Dmg = dmg;
-        if (r == 8) r8Dmg = dmg;
+        if (r == 52) r52Dmg = dmg;
+        if (r == 53) r53Dmg = dmg;
     }
-    EXPECT_EQ(5u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffPenetration));
-    EXPECT_GT(r7Dmg, r3Dmg);
-    EXPECT_EQ(r7Dmg, r8Dmg);
+    EXPECT_EQ(50u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffPenetration));
+    EXPECT_GT(r52Dmg, r3Dmg);
+    EXPECT_EQ(r52Dmg, r53Dmg);
 }
 
 TEST_F(GrowingPassiveSkillTest, PeriodicGrowthStacksOnDotTicksAndScalesSubsequentTicksToFiveCap) {
+    ASSERT_EQ(300u, data->FindBuff(kBuffDotGrowth)->stack_limit());
     auto req = BaseRequest();
     (*req.mutable_players(0)->mutable_skill_ranks())[kSkillDotGrowth] = 1;
     (*req.mutable_players(0)->mutable_skill_ranks())[kTestPoisonSkill] = 1;
@@ -489,7 +499,7 @@ TEST_F(GrowingPassiveSkillTest, PeriodicGrowthStacksOnDotTicksAndScalesSubsequen
     TurnBattleEngine engine(data);
     ASSERT_TRUE(engine.Initialize(req));
 
-    // 第 1 回合施加 6 跳固定 100 伤灼烧：第 1 跳（0 层）100 -> 叠至 1 层；后续第 2..6 跳依次吃 1..5 层（+6%..+30%），ceil(100*(1+0.06*2))=113。
+    // 第 1 回合施加 6 跳固定 100 伤灼烧：第 1 跳（0 层）100 -> 叠至 1 层；第 2..6 跳依次吃 1..5 层（+1%..+5%），并在第 6 跳后叠至 6 层（突破旧 5 层上限）。
     engine.SubmitAction(kHero, Cast(kTestPoisonSkill, kEnemy));
     engine.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
     engine.SubmitAction(kEnemy, Cast(kTestIdleSkill, kEnemy));
@@ -497,26 +507,28 @@ TEST_F(GrowingPassiveSkillTest, PeriodicGrowthStacksOnDotTicksAndScalesSubsequen
     EXPECT_EQ(100u, FirstPeriodicDamageTo(res, kHero, kEnemy));
     EXPECT_EQ(1u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffDotGrowth));
 
-    const std::array<uint64_t, 5> expectedTicks = {106, 113, 118, 124, 130};
+    const std::array<uint64_t, 5> expectedTicks = {101, 102, 103, 104, 105};
     for (int i = 0; i < 5; ++i) {
         engine.SubmitAction(kHero, Cast(kTestIdleSkill, kHero));
         engine.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
         engine.SubmitAction(kEnemy, Cast(kTestIdleSkill, kEnemy));
         res = engine.ResolveCurrentRound();
         EXPECT_EQ(expectedTicks[i], FirstPeriodicDamageTo(res, kHero, kEnemy)) << "tick=" << (i + 2);
-        const uint32_t expectedStacks = std::min<uint32_t>(5u, static_cast<uint32_t>(i + 2));
-        EXPECT_EQ(expectedStacks, FindBuffStacks(FindActorState(res.state(), kHero), kBuffDotGrowth));
+        EXPECT_EQ(static_cast<uint32_t>(i + 2), FindBuffStacks(FindActorState(res.state(), kHero), kBuffDotGrowth));
     }
 }
 
 TEST_F(GrowingPassiveSkillTest, AllControlResistAndShieldGrowthTriggerInteractivelyToFiveCap) {
-    // 1. 验证厚泽蓄灵（12027）：待机不白嫖叠层，主动施放护盾/治疗后每轮叠 1 层（+5% 护盾容量，5 层封顶 +25%）。
+    // 1. 验证厚泽蓄灵（12027）：待机不白嫖叠层，主动施放护盾/治疗后每轮叠 1 层（+1% 护盾容量，50 层封顶 +50%）。
+    ASSERT_EQ(50u, data->FindBuff(kBuffShieldGrow)->stack_limit());
+    ASSERT_EQ(40u, data->FindBuff(kBuffCtrlResist)->stack_limit());
     auto shieldReq = BaseRequest();
     (*shieldReq.mutable_players(0)->mutable_skill_ranks())[kSkillShieldGrow] = 1;
     (*shieldReq.mutable_players(0)->mutable_skill_ranks())[kSkillA40] = 1;
     shieldReq.mutable_players(0)->add_skill_table_ids(kSkillA40);
     auto testData = std::make_shared<MemoryBattleDataProvider>(*data);
     testData->AddSkill(kSkillA40).set_cooldown_rounds(0);
+    testData->AddSkill(kSkillA40).set_mana_percent(0.0);
 
     TurnBattleEngine shieldEngine(testData);
     ASSERT_TRUE(shieldEngine.Initialize(shieldReq));
@@ -527,31 +539,33 @@ TEST_F(GrowingPassiveSkillTest, AllControlResistAndShieldGrowthTriggerInteractiv
     auto idleRes = shieldEngine.ResolveCurrentRound();
     EXPECT_EQ(0u, FindBuffStacks(FindActorState(idleRes.state(), kHero), kBuffShieldGrow));
 
-    // 第 2..8 回合连续施放 A40：第 2 回合 0 层底值 -> 叠至 1 层；第 7 回合吃满 5 层（+25%）；第 8 回合封顶不变。
+    // 第 2..53 回合连续施放 A40：第 2 回合 0 层底值 -> 叠至 1 层；第 52 回合吃满 50 层（+50%）；第 53 回合封顶不变。
     uint64_t r2Shield = 0;
-    uint64_t r7Shield = 0;
-    uint64_t r8Shield = 0;
-    for (int r = 2; r <= 8; ++r) {
+    uint64_t r52Shield = 0;
+    uint64_t r53Shield = 0;
+    for (int r = 2; r <= 53; ++r) {
         shieldEngine.SubmitAction(kHero, Cast(kSkillA40, kHero));
         shieldEngine.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
         shieldEngine.SubmitAction(kEnemy, Cast(kTestIdleSkill, kEnemy));
         const auto res = shieldEngine.ResolveCurrentRound();
         const uint64_t cap = FindShieldCapacity(FindActorState(res.state(), kHero), kSkillA40);
         if (r == 2) r2Shield = cap;
-        if (r == 7) r7Shield = cap;
-        if (r == 8) r8Shield = cap;
-        EXPECT_EQ(std::min<uint32_t>(5u, static_cast<uint32_t>(r - 1)),
+        if (r == 52) r52Shield = cap;
+        if (r == 53) r53Shield = cap;
+        EXPECT_EQ(std::min<uint32_t>(50u, static_cast<uint32_t>(r - 1)),
                   FindBuffStacks(FindActorState(res.state(), kHero), kBuffShieldGrow));
     }
-    EXPECT_GT(r7Shield, r2Shield);
-    EXPECT_EQ(r7Shield, r8Shield);
+    EXPECT_GT(r52Shield, r2Shield);
+    EXPECT_EQ(r52Shield, r53Shield);
 
-    // 2. 验证磐石道心（12026）：未受敌方控场针对维持 0 层；每回合遭敌方行动控制尝试叠 1 层（命中或抵抗皆计），满 5 层（+25%）显著压低封主动命中率。
+    // 2. 验证磐石道心（12026）：未受敌方控场针对维持 0 层；每回合遭敌方行动控制尝试叠 1 层（+1%），满 40 层（+40%）封顶并显著压低封主动命中率。
     auto runControlTrials = [&](bool withCtrlResist) {
         uint32_t landed = 0;
         for (uint32_t seed = 1; seed <= 40; ++seed) {
             auto req = BaseRequest();
             req.set_seed(9000 + seed);
+            req.mutable_players(2)->set_max_health(200000);
+            req.mutable_players(2)->mutable_base_attributes()->set_health(200000);
             if (withCtrlResist) (*req.mutable_players(0)->mutable_skill_ranks())[kSkillCtrlResist] = 1;
             (*req.mutable_players(2)->mutable_skill_ranks())[kTestSealActiveSkill] = 1;
             req.mutable_players(2)->add_skill_table_ids(kTestSealActiveSkill);
@@ -565,20 +579,20 @@ TEST_F(GrowingPassiveSkillTest, AllControlResistAndShieldGrowthTriggerInteractiv
             if (withCtrlResist) {
                 EXPECT_EQ(0u, FindBuffStacks(FindActorState(r1.state(), kHero), kBuffCtrlResist));
             }
-            // 第 2..6 回合敌方连续对 Hero 施放封主动，叠至满 5 层。
-            for (int r = 2; r <= 6; ++r) {
+            // 第 2..41 回合敌方连续对 Hero 施放封主动，叠至满 40 层封顶。
+            for (int r = 2; r <= 41; ++r) {
                 eng.SubmitAction(kHero, BasicAttack(kEnemy));
                 eng.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
                 eng.SubmitAction(kEnemy, Cast(kTestSealActiveSkill, kHero));
                 eng.ResolveCurrentRound();
             }
-            // 第 7 回合检验满 5 层（+25% 抗控）对封主动命中的实际压制。
+            // 第 42 回合检验满 40 层（+40% 抗控）封顶与对封主动命中的实际压制。
             eng.SubmitAction(kHero, BasicAttack(kEnemy));
             eng.SubmitAction(kAlly, Cast(kTestIdleSkill, kAlly));
             eng.SubmitAction(kEnemy, Cast(kTestSealActiveSkill, kHero));
             const auto res = eng.ResolveCurrentRound();
             if (withCtrlResist) {
-                EXPECT_EQ(5u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffCtrlResist));
+                EXPECT_EQ(40u, FindBuffStacks(FindActorState(res.state(), kHero), kBuffCtrlResist));
             }
             if (HasBuff(FindActorState(res.state(), kHero), kTestSealActiveSkill)) ++landed;
         }
@@ -590,6 +604,7 @@ TEST_F(GrowingPassiveSkillTest, AllControlResistAndShieldGrowthTriggerInteractiv
 }
 
 TEST_F(GrowingPassiveSkillTest, PetGrowthIsPetOnlyAndClearsStacksOnDeathOrRetreatThenRestacks) {
+    ASSERT_EQ(300u, data->FindBuff(kBuffPetGrowth)->stack_limit());
     // 1. 人物非法挂载 12028 兽威渐盛必须不生效（caster_mask=2 宝宝专属）。
     auto heroReq = BaseRequest();
     (*heroReq.mutable_players(0)->mutable_skill_ranks())[kSkillPetGrowth] = 1;
@@ -630,7 +645,7 @@ TEST_F(GrowingPassiveSkillTest, PetGrowthIsPetOnlyAndClearsStacksOnDeathOrRetrea
     }
     ASSERT_NE(petActorId, 0u);
 
-    // 第 1、2 回合宝宝攻击命中敌方 -> 叠到 2 层（+12% -> 第 2 回合吃 1 层 636，第 3 回合吃 2 层 672）。
+    // 第 1、2 回合宝宝攻击命中敌方 -> 叠到 2 层（第 2 回合吃 1 层 +1% = 606）。
     for (int r = 1; r <= 2; ++r) {
         engine.SubmitAction(kHero, Cast(kTestIdleSkill, kHero));
         engine.SubmitActorAction(kHero, petActorId, Cast(kTestPhysStrike, kEnemy));
@@ -638,7 +653,7 @@ TEST_F(GrowingPassiveSkillTest, PetGrowthIsPetOnlyAndClearsStacksOnDeathOrRetrea
         engine.SubmitAction(kEnemy, Cast(kTestIdleSkill, kEnemy));
         const auto res = engine.ResolveCurrentRound();
         EXPECT_EQ(static_cast<uint32_t>(r), FindBuffStacks(FindActorState(res.state(), petActorId), kBuffPetGrowth));
-        if (r == 2) EXPECT_EQ(636u, FirstDamageTo(res, petActorId, kEnemy));
+        if (r == 2) EXPECT_EQ(606u, FirstDamageTo(res, petActorId, kEnemy));
     }
 
     // 第 3 回合宝宝被敌方秒杀：层数清零为 0，但被动本体仍在。

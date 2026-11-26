@@ -193,10 +193,15 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
     const auto& monsters = MonsterTableManager::Instance().FindAll().data();
     ASSERT_GT(monsters.size(), 0) << "Monster 表为空 = PVE 全靠引擎回退常量";
     std::vector<uint32_t> festivalBeastMonsters;
+    std::vector<uint32_t> npcIsolatedMonsters;
     for (const auto& dungeon : DungeonTableManager::Instance().FindAll().data()) {
         if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindFestivalBeast) {
             for (const uint32_t id : provider.GetDungeonMonsterIds(dungeon.id())) {
                 festivalBeastMonsters.push_back(id);
+            }
+        } else if (turnbattle::IsNpcIsolatedEncounterKind(dungeon.boss_trial_kind())) {
+            for (const uint32_t id : provider.GetDungeonMonsterIds(dungeon.id())) {
+                npcIsolatedMonsters.push_back(id);
             }
         }
     }
@@ -214,6 +219,17 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
             EXPECT_EQ(found->gold_reward(), 0u) << "瑞兽迎春首领不应配置普通银两 id=" << row.id();
             EXPECT_EQ(found->critchance(), 0u) << "瑞兽迎春首领首发暴击应为 0 id=" << row.id();
             EXPECT_EQ(found->capture_pet_table_id(), 0u) << "瑞兽迎春首领不应可捕捉 id=" << row.id();
+            continue;
+        }
+        const bool isNpcIsolated =
+            std::find(npcIsolatedMonsters.begin(), npcIsolatedMonsters.end(), row.id()) !=
+            npcIsolatedMonsters.end();
+        if (isNpcIsolated) {
+            // 归元城原创 NPC 演武木桩 / 残局 / 奇谈怪物必须零普通经验、零银两、不可捕捉，防零成本刷取。
+            EXPECT_GT(found->strength(), 0u) << "0 力量怪物打不出伤害 id=" << row.id();
+            EXPECT_EQ(found->exp_reward(), 0u) << "归元城NPC隔离玩法怪不应配置普通经验 id=" << row.id();
+            EXPECT_EQ(found->gold_reward(), 0u) << "归元城NPC隔离玩法怪不应配置普通银两 id=" << row.id();
+            EXPECT_EQ(found->capture_pet_table_id(), 0u) << "归元城NPC隔离玩法怪不应可捕捉 id=" << row.id();
             continue;
         }
         EXPECT_GT(found->strength(), 0u) << "0 力量怪物打不出伤害 id=" << row.id();

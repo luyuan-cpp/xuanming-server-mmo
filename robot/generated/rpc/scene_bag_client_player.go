@@ -353,3 +353,95 @@ func (sceneBagClientPlayerRpc) decodeClaimEquipmentMaterialReward(reply *base.Me
 	}
 	return resp, nil
 }
+
+// GetEquipLoadouts 异步调用 SceneBagClientPlayer.GetEquipLoadouts(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) GetEquipLoadouts(c *pkg.GameClient, req *scene.GetEquipLoadoutsRequest, timeout time.Duration, done func(*scene.GetEquipLoadoutsResponse, error)) {
+	c.Call(game.SceneBagClientPlayerGetEquipLoadoutsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetEquipLoadouts(reply, err))
+	})
+}
+
+// GetEquipLoadoutsSync 同步调用 SceneBagClientPlayer.GetEquipLoadouts(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) GetEquipLoadoutsSync(ctx context.Context, c *pkg.GameClient, req *scene.GetEquipLoadoutsRequest, timeout time.Duration) (*scene.GetEquipLoadoutsResponse, error) {
+	return r.decodeGetEquipLoadouts(c.CallSync(ctx, game.SceneBagClientPlayerGetEquipLoadoutsMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeGetEquipLoadouts(reply *base.MessageContent, err error) (*scene.GetEquipLoadoutsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetEquipLoadoutsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.GetEquipLoadouts reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SaveEquipLoadout 异步调用 SceneBagClientPlayer.SaveEquipLoadout(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) SaveEquipLoadout(c *pkg.GameClient, req *scene.SaveEquipLoadoutRequest, timeout time.Duration, done func(*scene.SaveEquipLoadoutResponse, error)) {
+	c.Call(game.SceneBagClientPlayerSaveEquipLoadoutMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSaveEquipLoadout(reply, err))
+	})
+}
+
+// SaveEquipLoadoutSync 同步调用 SceneBagClientPlayer.SaveEquipLoadout(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) SaveEquipLoadoutSync(ctx context.Context, c *pkg.GameClient, req *scene.SaveEquipLoadoutRequest, timeout time.Duration) (*scene.SaveEquipLoadoutResponse, error) {
+	return r.decodeSaveEquipLoadout(c.CallSync(ctx, game.SceneBagClientPlayerSaveEquipLoadoutMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeSaveEquipLoadout(reply *base.MessageContent, err error) (*scene.SaveEquipLoadoutResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SaveEquipLoadoutResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.SaveEquipLoadout reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SwitchEquipLoadout 异步调用 SceneBagClientPlayer.SwitchEquipLoadout(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) SwitchEquipLoadout(c *pkg.GameClient, req *scene.SwitchEquipLoadoutRequest, timeout time.Duration, done func(*scene.SwitchEquipLoadoutResponse, error)) {
+	c.Call(game.SceneBagClientPlayerSwitchEquipLoadoutMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSwitchEquipLoadout(reply, err))
+	})
+}
+
+// SwitchEquipLoadoutSync 同步调用 SceneBagClientPlayer.SwitchEquipLoadout(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) SwitchEquipLoadoutSync(ctx context.Context, c *pkg.GameClient, req *scene.SwitchEquipLoadoutRequest, timeout time.Duration) (*scene.SwitchEquipLoadoutResponse, error) {
+	return r.decodeSwitchEquipLoadout(c.CallSync(ctx, game.SceneBagClientPlayerSwitchEquipLoadoutMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeSwitchEquipLoadout(reply *base.MessageContent, err error) (*scene.SwitchEquipLoadoutResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SwitchEquipLoadoutResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.SwitchEquipLoadout reply: %w", err)
+	}
+	return resp, nil
+}
+
+// UnlockEquipLoadout 异步调用 SceneBagClientPlayer.UnlockEquipLoadout(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) UnlockEquipLoadout(c *pkg.GameClient, req *scene.UnlockEquipLoadoutRequest, timeout time.Duration, done func(*scene.UnlockEquipLoadoutResponse, error)) {
+	c.Call(game.SceneBagClientPlayerUnlockEquipLoadoutMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUnlockEquipLoadout(reply, err))
+	})
+}
+
+// UnlockEquipLoadoutSync 同步调用 SceneBagClientPlayer.UnlockEquipLoadout(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) UnlockEquipLoadoutSync(ctx context.Context, c *pkg.GameClient, req *scene.UnlockEquipLoadoutRequest, timeout time.Duration) (*scene.UnlockEquipLoadoutResponse, error) {
+	return r.decodeUnlockEquipLoadout(c.CallSync(ctx, game.SceneBagClientPlayerUnlockEquipLoadoutMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeUnlockEquipLoadout(reply *base.MessageContent, err error) (*scene.UnlockEquipLoadoutResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.UnlockEquipLoadoutResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.UnlockEquipLoadout reply: %w", err)
+	}
+	return resp, nil
+}

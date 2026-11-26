@@ -221,9 +221,9 @@ TEST_F(PlayerSpiritShopTest, FillInfoListsFinalizedShelfAndDualBalances)
 	EXPECT_EQ(1u, info.limit_groups(0).group_id());
 	EXPECT_EQ(300u, info.limit_groups(0).max_weight());
 	EXPECT_EQ(0u, info.limit_groups(0).used_weight());
-	ASSERT_EQ(7, info.goods_size());
+	ASSERT_EQ(9, info.goods_size());
 
-	// 核对定案单价:101=60, 102=180, 103=300, 201=60, 202=180, 301=100, 302=100
+	// 核对定案单价:101=60, 102=180, 103=300, 201=60, 202=180, 301=100, 302=100, 303=120, 304=180
 	auto priceOf = [&](uint32_t id) -> uint64_t {
 		for (const auto &g : info.goods())
 		{
@@ -238,6 +238,8 @@ TEST_F(PlayerSpiritShopTest, FillInfoListsFinalizedShelfAndDualBalances)
 	EXPECT_EQ(180u, priceOf(202));
 	EXPECT_EQ(100u, priceOf(301));
 	EXPECT_EQ(100u, priceOf(302));
+	EXPECT_EQ(120u, priceOf(303));
+	EXPECT_EQ(180u, priceOf(304));
 }
 
 TEST_F(PlayerSpiritShopTest, SharedStarterPackComboCapAt300AndStrictBoundStacks)

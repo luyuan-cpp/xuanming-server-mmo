@@ -65,6 +65,18 @@ type SkillVfxCosmeticDescComp struct {
     Value string
 }
 
+type SkillVfxCosmeticCard_item_idComp struct {
+    Value uint32
+}
+
+type SkillVfxCosmeticCard_item_countComp struct {
+    Value uint32
+}
+
+type SkillVfxCosmeticSpirit_shop_goods_idComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -120,5 +132,17 @@ func MakeSkillVfxCosmeticAcquire_hintComp(row *pb.SkillVfxCosmeticTable) SkillVf
 
 func MakeSkillVfxCosmeticDescComp(row *pb.SkillVfxCosmeticTable) SkillVfxCosmeticDescComp {
     return SkillVfxCosmeticDescComp{Value: row.Desc}
+}
+
+func MakeSkillVfxCosmeticCard_item_idComp(row *pb.SkillVfxCosmeticTable) SkillVfxCosmeticCard_item_idComp {
+    return SkillVfxCosmeticCard_item_idComp{Value: row.CardItemId}
+}
+
+func MakeSkillVfxCosmeticCard_item_countComp(row *pb.SkillVfxCosmeticTable) SkillVfxCosmeticCard_item_countComp {
+    return SkillVfxCosmeticCard_item_countComp{Value: row.CardItemCount}
+}
+
+func MakeSkillVfxCosmeticSpirit_shop_goods_idComp(row *pb.SkillVfxCosmeticTable) SkillVfxCosmeticSpirit_shop_goods_idComp {
+    return SkillVfxCosmeticSpirit_shop_goods_idComp{Value: row.SpiritShopGoodsId}
 }
 

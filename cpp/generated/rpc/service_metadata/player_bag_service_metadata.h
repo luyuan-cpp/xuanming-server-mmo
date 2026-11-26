@@ -58,3 +58,19 @@ constexpr uint32_t SceneBagClientPlayerGetEquipmentMaterialRewardIndex = 12;
 constexpr uint32_t SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId = 408;
 constexpr uint32_t SceneBagClientPlayerClaimEquipmentMaterialRewardIndex = 13;
 #define SceneBagClientPlayerClaimEquipmentMaterialRewardMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(13)
+
+constexpr uint32_t SceneBagClientPlayerGetEquipLoadoutsMessageId = 536;
+constexpr uint32_t SceneBagClientPlayerGetEquipLoadoutsIndex = 14;
+#define SceneBagClientPlayerGetEquipLoadoutsMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(14)
+
+constexpr uint32_t SceneBagClientPlayerSaveEquipLoadoutMessageId = 537;
+constexpr uint32_t SceneBagClientPlayerSaveEquipLoadoutIndex = 15;
+#define SceneBagClientPlayerSaveEquipLoadoutMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(15)
+
+constexpr uint32_t SceneBagClientPlayerSwitchEquipLoadoutMessageId = 538;
+constexpr uint32_t SceneBagClientPlayerSwitchEquipLoadoutIndex = 16;
+#define SceneBagClientPlayerSwitchEquipLoadoutMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(16)
+
+constexpr uint32_t SceneBagClientPlayerUnlockEquipLoadoutMessageId = 539;
+constexpr uint32_t SceneBagClientPlayerUnlockEquipLoadoutIndex = 17;
+#define SceneBagClientPlayerUnlockEquipLoadoutMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(17)

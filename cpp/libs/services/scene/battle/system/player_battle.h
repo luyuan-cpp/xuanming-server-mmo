@@ -115,6 +115,9 @@ public:
 	// 失败:response.error_message 填拒绝原因,不留任何冻结痕迹。
 	static void PrepareBattle(const ::PrepareBattleRequest& request, ::PrepareBattleResponse& response);
 
+	// 判定指定 UTC 秒时刻某野外地图是否处于灵潮珍兽激活窗口(与 Go world_map_overview.go / Java 同口径)。
+	static bool IsWorldTideActiveOnScene(uint64_t nowUnixSec, uint32_t sceneConfigId);
+
 	// match -> scene:gather 失败补偿。battle_id 与 InBattleComp 匹配且 state==PREPARING 才
 	// 摘组件 + 条件删锁;不匹配(迟到取消)忽略;已 FIGHTING(确认已到 = 房间建成过)拒绝并记
 	// metric=battle_cancel_rejected_fighting —— 这是 match CreateBattle 超时后的过期回滚,解冻会让

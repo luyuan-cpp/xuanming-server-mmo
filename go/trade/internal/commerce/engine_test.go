@@ -18,11 +18,13 @@ func TestSelectionBoundsAllStackedItemsBeforeEscrow(t *testing.T) {
 // 绑定灵石不论 Currencies 怎么配都不可交易:配置校验(config.IsTradableCurrency)本就拒绝它进白名单,
 // 这里绕过配置直接把它配进去,托管选择与报价仍按不可交易拒绝。用例只点名取值表常量,不写币种数字。
 func TestBindDiamondIsNotTradableEvenWhenConfigured(t *testing.T) {
-	p := Policy{Currencies: []uint32{currencytype.Gold, currencytype.Diamond, currencytype.BindDiamond}}
+	p := Policy{Currencies: []uint32{currencytype.Gold, currencytype.Diamond, currencytype.BindDiamond, currencytype.BindGold}}
 	require.NoError(t, p.Selection(&tradepb.TradeAssetSelection{CurrencyType: currencytype.Diamond, CurrencyAmount: 5}))
 	require.ErrorIs(t, p.Selection(&tradepb.TradeAssetSelection{CurrencyType: currencytype.BindDiamond, CurrencyAmount: 5}), ErrNotTradable)
+	require.ErrorIs(t, p.Selection(&tradepb.TradeAssetSelection{CurrencyType: currencytype.BindGold, CurrencyAmount: 5}), ErrNotTradable)
 	require.True(t, validPrice(5, currencytype.Diamond, p))
 	require.False(t, validPrice(5, currencytype.BindDiamond, p))
+	require.False(t, validPrice(5, currencytype.BindGold, p))
 	require.False(t, validPrice(5, currencytype.Gold, Policy{Currencies: []uint32{currencytype.Diamond}}), "不在白名单里的币种照旧不能报价")
 }
 

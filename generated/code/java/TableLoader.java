@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "194fb8bba93c9b8d";
+    public static final String SCHEMA_DIGEST = "8a563f7a854d5bc4";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -32,6 +32,7 @@ public class TableLoader {
             "MysteryMerchantGoods",
             "MysteryMerchantRule",
             "PlayerLevelExp",
+            "RewardedAdSlot",
             "SeasonRule",
             "SeasonSeal",
             "Skill",
@@ -180,6 +181,8 @@ public class TableLoader {
 
         RewardTableManager.getInstance().load(configDir, useBinary);
 
+        RewardedAdSlotTableManager.getInstance().load(configDir, useBinary);
+
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
 
         SeasonRuleTableManager.getInstance().load(configDir, useBinary);
@@ -235,7 +238,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(81);
+        CountDownLatch latch = new CountDownLatch(82);
 
         new Thread(() -> {
             try {
@@ -849,6 +852,16 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                RewardedAdSlotTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load RewardedAdSlot table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load RoleNameRule table", e);
@@ -1188,6 +1201,8 @@ public class TableLoader {
         RankedRuleTableManager.getInstance().load(configDir, useBinary);
 
         RewardTableManager.getInstance().load(configDir, useBinary);
+
+        RewardedAdSlotTableManager.getInstance().load(configDir, useBinary);
 
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
 

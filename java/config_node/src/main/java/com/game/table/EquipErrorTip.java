@@ -159,6 +159,38 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEquipProxyMasterUnavailable = 28030;</code>
      */
     kEquipProxyMasterUnavailable(28030),
+    /**
+     * <code>kEquipLoadoutSchemeInvalid = 28031;</code>
+     */
+    kEquipLoadoutSchemeInvalid(28031),
+    /**
+     * <code>kEquipLoadoutMaxUnlocked = 28032;</code>
+     */
+    kEquipLoadoutMaxUnlocked(28032),
+    /**
+     * <code>kEquipLoadoutVersionChanged = 28033;</code>
+     */
+    kEquipLoadoutVersionChanged(28033),
+    /**
+     * <code>kEquipLoadoutDiamondNotEnough = 28034;</code>
+     */
+    kEquipLoadoutDiamondNotEnough(28034),
+    /**
+     * <code>kEquipLoadoutNameInvalid = 28035;</code>
+     */
+    kEquipLoadoutNameInvalid(28035),
+    /**
+     * <code>kEquipLoadoutDuplicateItem = 28036;</code>
+     */
+    kEquipLoadoutDuplicateItem(28036),
+    /**
+     * <code>kEquipLoadoutSlotUnavailable = 28037;</code>
+     */
+    kEquipLoadoutSlotUnavailable(28037),
+    /**
+     * <code>kEquipLoadoutUnlockCountChanged = 28038;</code>
+     */
+    kEquipLoadoutUnlockCountChanged(28038),
     UNRECOGNIZED(-1),
     ;
 
@@ -299,6 +331,38 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEquipProxyMasterUnavailable = 28030;</code>
      */
     public static final int kEquipProxyMasterUnavailable_VALUE = 28030;
+    /**
+     * <code>kEquipLoadoutSchemeInvalid = 28031;</code>
+     */
+    public static final int kEquipLoadoutSchemeInvalid_VALUE = 28031;
+    /**
+     * <code>kEquipLoadoutMaxUnlocked = 28032;</code>
+     */
+    public static final int kEquipLoadoutMaxUnlocked_VALUE = 28032;
+    /**
+     * <code>kEquipLoadoutVersionChanged = 28033;</code>
+     */
+    public static final int kEquipLoadoutVersionChanged_VALUE = 28033;
+    /**
+     * <code>kEquipLoadoutDiamondNotEnough = 28034;</code>
+     */
+    public static final int kEquipLoadoutDiamondNotEnough_VALUE = 28034;
+    /**
+     * <code>kEquipLoadoutNameInvalid = 28035;</code>
+     */
+    public static final int kEquipLoadoutNameInvalid_VALUE = 28035;
+    /**
+     * <code>kEquipLoadoutDuplicateItem = 28036;</code>
+     */
+    public static final int kEquipLoadoutDuplicateItem_VALUE = 28036;
+    /**
+     * <code>kEquipLoadoutSlotUnavailable = 28037;</code>
+     */
+    public static final int kEquipLoadoutSlotUnavailable_VALUE = 28037;
+    /**
+     * <code>kEquipLoadoutUnlockCountChanged = 28038;</code>
+     */
+    public static final int kEquipLoadoutUnlockCountChanged_VALUE = 28038;
 
 
     public final int getNumber() {
@@ -357,6 +421,14 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
         case 28028: return kEquipPolishPityChanged;
         case 28029: return kEquipCraftGoldNotEnough;
         case 28030: return kEquipProxyMasterUnavailable;
+        case 28031: return kEquipLoadoutSchemeInvalid;
+        case 28032: return kEquipLoadoutMaxUnlocked;
+        case 28033: return kEquipLoadoutVersionChanged;
+        case 28034: return kEquipLoadoutDiamondNotEnough;
+        case 28035: return kEquipLoadoutNameInvalid;
+        case 28036: return kEquipLoadoutDuplicateItem;
+        case 28037: return kEquipLoadoutSlotUnavailable;
+        case 28038: return kEquipLoadoutUnlockCountChanged;
         default: return null;
       }
     }
@@ -422,7 +494,7 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025equip_error_tip.proto*\222\007\n\013equip_error\022" +
+      "\n\025equip_error_tip.proto*\251\t\n\013equip_error\022" +
       "\022\n\016kEquip_errorOK\020\000\022\030\n\022kEquipItemNotFoun" +
       "d\020\340\332\001\022\030\n\022kEquipNotEquipment\020\341\332\001\022\032\n\024kEqui" +
       "pLevelNotEnough\020\342\332\001\022\031\n\023kEquipClassMismat" +
@@ -445,8 +517,15 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
       "Same\020\372\332\001\022\037\n\031kEquipBindConfirmRequired\020\373\332" +
       "\001\022\035\n\027kEquipPolishPityChanged\020\374\332\001\022\036\n\030kEqu" +
       "ipCraftGoldNotEnough\020\375\332\001\022\"\n\034kEquipProxyM" +
-      "asterUnavailable\020\376\332\001B$\n\016com.game.tableZ\022" +
-      "generated/pb/tableb\006proto3"
+      "asterUnavailable\020\376\332\001\022 \n\032kEquipLoadoutSch" +
+      "emeInvalid\020\377\332\001\022\036\n\030kEquipLoadoutMaxUnlock" +
+      "ed\020\200\333\001\022!\n\033kEquipLoadoutVersionChanged\020\201\333" +
+      "\001\022#\n\035kEquipLoadoutDiamondNotEnough\020\202\333\001\022\036" +
+      "\n\030kEquipLoadoutNameInvalid\020\203\333\001\022 \n\032kEquip" +
+      "LoadoutDuplicateItem\020\204\333\001\022\"\n\034kEquipLoadou" +
+      "tSlotUnavailable\020\205\333\001\022%\n\037kEquipLoadoutUnl" +
+      "ockCountChanged\020\206\333\001B$\n\016com.game.tableZ\022g" +
+      "enerated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

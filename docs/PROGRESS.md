@@ -5278,7 +5278,13 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **Unity 客户端与 UGUI（`mmorpg-client`）**：
   - 纯 C# 层（`TournamentModels.cs`、`TournamentClient.cs`、`TournamentUiModel.cs`、`TournamentClientTests.cs`、`TournamentUiModelTests.cs`）：新增 6 枚荣耀铭牌目录、`TournamentHighlightsSnapshot`、`BanLeyline`/`RequestHighlights` RPC、`CanBanLeyline` 守卫与 V4 弹窗态及 EditMode 单测。
   - UGUI 层（`TournamentArtCatalog.cs`、`TournamentWindow.cs`、`TournamentUiRoot.cs`）：追加 9 个 V4 资源键（V3+V4 合计 29 枚，缺图自动优雅降级），接入战队页 6 枚可点击荣耀铭牌展条、对阵树 BO3 队长「灵脉禁选」入口与禁选弹窗、榜单栏「本季名局录」入口与 Top 10 回放墙弹窗，以及冠军殿堂铭牌展示。
-- **验证边界（按负责人分工要求）**：本轮仅执行轻量只读静态门禁；V3+V4 统一导表/生成、`ContractSync`、C++/Go/Java/Unity 编译与单测已整理为完整命令块移交 Gemini；V3+V4 合并 29 枚 PNG 美术切片移交 Codex；未执行 `git commit` / `git push`。
+- **全链路生成、编译与单测实测验收（2026-11-26）**：
+  - **主仓生成**：`gen_schema_index.py` + `dev.bat export`（`TournamentRule.pb` v4 / `TournamentReward.pb` 9 档 / `Tip.xlsx` 与客户端裁剪表）+ `dev_tools.ps1 -Command proto-gen-run` **exit=0**；6 条新 RPC 正式发号：`511..514`（V3）与 `534..535`（V4）。
+  - **C++ 战斗引擎**：`/m:1` 编译 `turn_battle_engine_test.exe`、`battle.exe`、`rpc.lib` **0 错误**；`turn_battle_engine_test.exe --gtest_filter="TurnBattleEngineTest.TournamentV2*:TurnBattleEngineTest.TournamentV3*"` **2/2 PASS**（37 ms）；注：`gate.exe` 因同机并行会话正在运行 `MSBuild`/`cl` 锁住 `core.tlog` 未强行重链。
+  - **Go `match` 服务端**：`go test ./...` 全量 **24+ 包 100% PASS（exit=0）**（含 `internal/tournament` 8/8、`internal/constants` 3/3、`internal/authority`、`internal/logic`、`internal/server`、`internal/svc`）。
+  - **Java 独立服务端**：`ContractSync` 与 `--check` **exit=0**（`proto=147, schema=81, data=81`）；14 模块 `clean install` **BUILD SUCCESS**；`game-battle-engine` `TournamentLeylineBattleEngineTest` **2/2 PASS**；`game-match` `MatchMethodsTest`（5/5）+ `MatchClientMessageServiceTest`（18/18）+ `TournamentParityTest`（3/3）+ `MatchApplicationContextTest`（25/25）= **51/51 PASS**；`game-gate` `MessageRoutesTest` 中 `MatchService` 全部 42 条路由（`148..535`）断言通过（另 5 条失败均属同批契约同步带入的其他并行功能 `BattleClientPlayer` `532/533` 与 `ClientPlayerTeam` 新方法）。
+  - **Unity 客户端**：`sync_tables.ps1`（81 表）+ `gen_proto.ps1`（88 proto）+ `gen_messageids.ps1`（200 条）**exit=0**；`client_compile_check.ps1` **exit=0（782 files, 0 errors）**；EditMode `TournamentClientTests`（5/5）+ `TournamentUiModelTests`（6/6）= **11/11 PASS**。
+  - **未执行范围**：29 枚 V3+V4 增量 PNG 美术切片待 Codex 交付后导入 `Assets/Resources/UI/Ugui/TournamentV3/`；未跑多进程真库联机与 Unity Editor 实机截图验收；未执行 `git commit` / `git push`。
 
 
 ## 2026-11-25 官方灵石百宝阁与绑定/终身限购首套提速包 V1 全链路落码与三仓验收（C++/Go 权威服 + Java 独立服 + Unity 客户端及 uGUI）
@@ -5380,7 +5386,11 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - Java（`xuanming-server-mmo`）：精准同步 4 张 `.pb` 与 `manifest.json` 对应条目；`game-scene-manager` `WorldMapOverviewTest` **PASS**、`game-table` 全套 **PASS**、`game-battle-engine` `TableBattleDataTest` **PASS**、`game-scene` `PrepareBattleTest#野外灵宠栖息地必须在对应野外图备战_主城演练不受限` **1/1 PASS**（全类 48/49 PASS，唯一 1 错为并行会话未 install 的 `game-proto` `SupportEffectSummaryOrBuilder`）；已更新 `PARITY.md`。
   - Unity：`client_compile_check.ps1` **exit 0（780 文件 0 错误）**；`MmorpgClient.Tests.EditMode.Tianyong` **66 个测试文件 0 错误编译**；.NET 实跑 `WorldMapOverviewTests` 4 组纯 C# 用例 **4/4 PASS**。
 - **Codex 专属切图接入与提交状态**：
-  - Codex 交付的 3 张野外栖息地 HUD 专属无字透明切图（Azure `image/main@a9c6026d`，`D:\work\image\designs\world-map-habitat-ui\`）已逐字节 SHA-256 核验落盘至 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}.png`，生成无冲突 Unity `.meta` 并写入 `CONTROL-USAGE.md` 对应 `spriteBorder`（`32/18/32/18`、`24/12/24/12`、`0/0/0/0`）；`CityTravelUiRoot.cs` 按钮文字安全区同步校准为 `(31, 10, 128, 30)`，`WorldMapOverviewTests.cs` 补充三张专属切图名断言；三仓均未执行 `git commit` / `git push`。
+  - Codex 交付的 3 张野外栖息地 HUD 专属无字透明切图（Azure `image/main@a9c6026d`，`D:\work\image\designs\world-map-habitat-ui\`）已逐字节 SHA-256 核验落盘至 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}.png`，生成无冲突 Unity `.meta` 并写入 `CONTROL-USAGE.md` 对应 `spriteBorder`（`32/18/32/18`、`24/12/24/12`、`0/0/0/0`）；`CityTravelUiRoot.cs` 按钮文字安全区同步校准为 `(31, 10, 128, 30)`，`WorldMapOverviewTests.cs` 补充三张专属切图名断言。
+- **M2-Tide 灵潮珍兽潮增量闭环（把灵潮真正打通到野外捕宠生态，零新协议/零新表结构）**：
+  - 复用 `Pet.xlsx` 中全部 3 只 `cultivation_tier=3` 珍稀常规灵宠 + 6 只既有全动画灵宠，向 `Monster.xlsx`（`211..219`，捕获率 `50%–55%`）、`Dungeon.xlsx`（`212` 八景岛·岚铎仙/砚羽灵/绯耳灵、`213` 月汐湾·苍嶂麟/赤砂魁/烛翎、`215` 碧渊水宫·月弦师/霜团貂/绛铃）、`PlayMode.xlsx`（`412/413/415`）追加数据并全量导出（Deploy 14 OK）。
+  - C++ `PlayerBattleSystem::IsWorldTideActiveOnScene` 与 Java `PlayerBattleService.isWorldTideActiveOnScene` 在 `PrepareBattle` 中对 `Dungeon 210..219` 叠加校验灵潮激活窗口（休潮期或非灵潮图回 `kFeatureUnavailable` 零写锁，常态 `202/203/205` 不受限）；Unity `WorldMapOverviewModels`、`CityTravelWindow`、`CityTravelUiRoot` 动态切换大地图抽屉灵潮珍兽预告与野外浮条「灵潮珍兽现身 / 寻潮遇兽」（派发 `212/213/215`，`EndsAtMs` 到点自动切回常态，预接可选 `wild_habitat_{bar,btn,icon}_tide` 切图并缺图自动回落常态 3 图）。
+  - 增量验证：C++ `test_cpp_no_raw_pointer_member.py` 13/13、`check_log_text_english.py` exit 0、`scene.lib` / `scene.exe` / `bag_test.exe` 均 0 错误编译链接、`bag_test.exe` `PrepareWildPetHabitatRequiresMatchingWildScene` 等 5 项备战测试 **5/5 PASS**、`turn_battle_engine_test.exe` `TableBattleDataProviderTest.*` **9/9 PASS**；Go `match/internal/catalog` **PASS**；Java `game-table` / `game-battle-engine` `TableBattleDataTest` / `game-scene` `PrepareBattleTest` 2 项栖息地与灵潮窗口单测 **2/2 PASS**；Unity `sync_tables.ps1` 81/81、`client_compile_check.ps1` **781 文件 0 错误**、Tianyong 66 测试文件 0 错误编译且 .NET 实跑 M2-Tide 全量纯 C# 断言 **PASS**；三仓均未执行 `git commit` / `git push`。
 
 
 ## 2026-11-26 Antigravity：率土式交互叠层成长战法 V2（卷 7《兵法叠势卷》`12023..12028` 6 项被动三端全链路闭环，零新协议 / 零 Schema 变更）
@@ -5399,3 +5409,56 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **Unity 客户端（`mmorpg-client`）**：
   - 同步客户端配置表（`sync_tables.ps1` **81/81 一致**，SHA-256 逐字节对齐）；复用既有全数据驱动 `UI/Skills/12023..12028` 与 `UI/Ugui/Skills/Scrolls/scroll_7` 图标加载与缺图安全回退（零 C# 硬编码改动）；`client_compile_check.ps1` **exit 0（781 文件 0 错误）**。
 - **提交状态**：三仓均未执行 `git commit` / `git push`，待负责人确认。
+
+
+## 2026-11-26 Antigravity：成长被动全员调整为每层 +1%（适配 300 回合上限：伤害类 300 层、机制类 35/40/50 层封顶）
+
+- **配表调整（`xuanming-server-mmo-cpp`）**：
+  - 将卷 3（`12020..12022`）与卷 7（`12023..12028`）全部 9 项成长被动在 `data/Buff.xlsx`（`120200..120280`）统一调整为 `ratio = 0.01`（每层 `+1%`），并按伤害/机制分类设定 `stack_limit`：伤害类 `12020/12021/12023/12025/12028` 上限 `300` 层（适配 `kDefaultMaxRounds = 300`），机制类 `12022 步步为营` 上限 `35` 层（受 60% 减伤红线约束）、`12024 循隙破甲` 上限 `50` 层（对齐引擎 50% 穿防硬上限）、`12026 磐石道心` 上限 `40` 层（`+40%` 全控抵抗）、`12027 厚泽蓄灵` 上限 `50` 层（`+50%` 护盾容量）；同步更新 `data/Skill.xlsx` 描述、`docs/planning/growing-passive-skills-v2.md` 与 `docs/planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md`。
+  - 使用仓内 `libprotoc 35.1` 执行 `python tools/data_table_exporter/run.py`（**exit 0，81 表，Deploy 14 OK / 0 failed**），`skill.pb` / `buff.pb` 三端（C++ / Java / Unity）SHA-256 逐字节一致。
+- **三端回归验收**：
+  - C++：更新 `growing_passive_skill_test.cpp` 覆盖 `+1%` 精准数值与 `35/40/50/300` 封顶验证；串行 MSBuild `/m:1` 编译 0 错误，`GrowingPassiveSkillTest` **9/9 PASS**，`turn_battle_engine_test.exe`（除无关并行 `Monster.xlsx` 303..323 校验用例外）**520/520 PASS（45 套件）**，`check_log_text_english.py` **PASSED**。
+  - Java：更新 `config-data/tables/{skill,buff}.pb`、`manifest.json` 与 `GrowingPassiveSkillTest.java`；`game-battle-engine` `ConfiguredBattleCatalogTest(17) + GrowingPassiveSkillTest(9) + RankedBattleEngineTest(11) + TableBattleDataTest(15)` **52/52 PASS**（`game-scene` 测试编译暂受无关并行 `AppearanceFeatureTest.java:491` 阻塞，本次未改动 `SkillScrollCraft`）；已同步更新 `PARITY.md`。
+  - Unity：`sync_tables.ps1` **81/81 一致**，`client_compile_check.ps1` **exit 0（781 文件 0 错误）**；三仓均未 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：还原卷 3 原有成长被动（`12020..12022`），仅新增卷 7 6 项保持每层 +1%
+
+- **配表与单测回调（`xuanming-server-mmo-cpp` / `xuanming-server-mmo` / `mmorpg-client`）**：
+  - 按负责人要求不改原有技能，将卷 3 原有 3 项（`12020 愈战愈勇`、`12021 深谋远虑`、`12022 步步为营`）在 `Buff.xlsx` / `Skill.xlsx` 与 C++/Java 单测中完整还原为原样（每回合 `+5%`、5 层封顶），仅保留新增卷 7 的 6 项（`12023..12028`）为每层 `+1%`（伤害类 `300` 层，穿防/抗控/护盾 `50/40/50` 层封顶）。
+  - 使用仓内 `libprotoc 35.1` 重新导表（**exit 0，81 表，Deploy 14 OK / 0 failed**），三端 `skill.pb` / `buff.pb` SHA-256 逐字节一致。
+  - 验证：C++ `growing_passive_skill_test.cpp` 单文件编译 0 错误（`turn_battle_engine_test.exe` 整包链接暂受并行会话 `ranked_battle_test.cpp:1282` `set_damage(int)` 阻塞）；Java `game-battle-engine` `ConfiguredBattleCatalogTest(17) + GrowingPassiveSkillTest(9) + RankedBattleEngineTest(11) + TableBattleDataTest(15)` **52/52 PASS**；Unity `sync_tables.ps1` **81/81** + `client_compile_check.ps1` **782 文件 0 错误**；已更新 `growing-passive-skills-v2.md` 与 `PARITY.md`；三仓未 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：衣柜「灵宠幻化 + 技能特效」真实购券闭环、技能面板直达与四仓（C++/Go/Java/Unity/Python）全量验收
+
+- **补齐的 3 处真实闭环缺口（零硬扩展、守纯外观零数值红线）**：
+  1. **真实购券解锁闭环**：`Item.xlsx` 追加绑定自用券 `3411 灵宠幻化符`、`3412 技能特效卷`；`SpiritShopGoods.xlsx`（`tab_id=3`）正式上架 `303 灵宠幻化符（120 灵石）` 与 `304 技能特效卷（180 灵石）`；`PetCosmetic`（`12..14`）与 `SkillVfxCosmetic`（`14..16`）追加 `card_item_id/card_item_count/spirit_shop_goods_id`（`#1/#2` 支持百宝阁购券解锁，`#3 月弦师/寒星流华` 置 `0` 严格禁止券解、保留赛季/活动专属）；`player_appearance.proto` 在 `PetCosmeticEntry`/`SkillVfxCosmeticEntry` 补齐券与百宝阁字段，在 `EquipPetCosmeticRequest`/`EquipSkillVfxRequest` 追加 `expect_free_equip = 4`，服务端在 `EquipPetCosmetic(530)` / `EquipSkillVfx(531)` 内复用幂等账本实现原子耗券解锁并穿戴 + 同键重放 + 换参拒回。
+  2. **客户端入口与刷态补齐**：`SkillPanel.cs` / `SkillPanel.Fidelity.cs` 新增「技能特效」直达按钮（与 `PetPanel.cs`「灵宠幻化」对称）；`SpiritShopUiRoot.cs` 购买成功即时刷新 `AppearanceClient.RequestInfo(force: true)`；`WardrobeCosmeticModels.cs`、`AppearanceClient.cs`、`AppearanceUiRoot.Cosmetics.cs` 完整打通「耗券解锁并穿戴 / 前往百宝阁购券 / 赛季专属禁用」全状态机与超时单次幂等重发。
+  3. **Java 绑定自耗缺陷修复与 Python drop-in 全量对齐**：Java `BagService` 新增 `prepareSelfConsume` 并在 `AppearanceService`（`switchAppearance`/`equipPetCosmetic`/`equipSkillVfx`）启用，修复原 `prepareDebit` 拒绝绑定道具导致百宝阁绑定形象卡/幻化符/特效卷无法自耗的缺陷；`xuanming-server-mmo-python` 全量补齐 `530/531`、5 张表、`scene_appearance.py`、`scene_pets.py`、`scene_battle.py`、`battle.py` 与端到端 pytest。
+- **四仓验证证据（全部由 Gemini subagent 执行）**：
+  - 导表与契约：`data_table_exporter`（81 表 / Deploy 14 OK, 0 failed）、`proto-gen-run`、`gen_schema_index.py --check`、`mmorpg-client` `sync_tables/gen_proto/gen_messageids`、`xuanming-server-mmo` `ContractSync --check`、Python `build_protocol.py` 全 exit 0。
+  - C++/Go（`xuanming-server-mmo-cpp`）：`test_cpp_no_raw_pointer_member.py` **13/13**、`test_cpp_thread_sources.py` **5/5**、`check_log_text_english.py` exit 0；串行 MSBuild `/m:1` `table.lib`/`proto.lib`/`scene.lib`/`bag_test.exe`/`scene.exe` 全 0 错误；`bag_test.exe --gtest_filter="PlayerAppearance*:PlayerSpiritShop*:SpiritShop*"` **21/21 PASS**；Go `shared/generated/{pb,table}` `go build` exit 0。
+  - Java（`xuanming-server-mmo`）：`game-scene` `AppearanceFeatureTest(6) + PlayerAppearanceTest(2) + PetServiceTest(51) + SpiritShopFeatureAndServiceTest(3)` **62/62 PASS**（0 失败/0 跳过），已更新 `PARITY.md`。
+  - Unity（`mmorpg-client`）：`client_compile_check.ps1` **782/782 文件 0 错误**；`WardrobeCosmeticsTests` + `AppearanceClientTests` **17/17 PASS**（1 项 UnityEngine `Resources.Load` 跳过）；`SpiritShopClientTests` **5/5 PASS**。
+  - Python（`xuanming-server-mmo-python`）：`test_cpp_wt_wardrobe_cosmetics.py + test_cpp_wt_spirit_shop.py + test_scene_gm_afk_appearance.py + test_data.py` **23/23 PASS**。
+- **作图交接与提交状态**：衣柜三页签 12 张无字 UI 切片已全量接入无需重画；新增道具图标（`3411/3412`）与可选生产级技能特效帧条/百宝阁切片纯功能交接单已落盘 [docs/planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md](planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md)（零画风词）并更新 `docs/README.md`；四仓均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：卷 7 交互成长战法 Unity 客户端战斗/制书 UI 实缺口补齐与核验
+
+- **客户端 UI 接入复核与补齐（`mmorpg-client`）**：
+  - [BattleUnitStatusInspector.cs](../../mmorpg-client/Assets/Scripts/Game/Battle/BattleUnitStatusInspector.cs) 新增 `RawStacks` 保留权威层数，修复未触发交互成长战法（`stacks=0, layer=1`）在状态详情弹窗被误显为 `×1/300层` 的问题。
+  - [BattleScreen.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Battle/BattleScreen.cs) 对 `BattleOp == 25`（`GrowingAura`）在单位状态详情中精确显示 `0/上限层（待触发）` 或 `×N/上限层 · 属性+X%` 实时累计加成，并将 `InfiniteDuration != 0` 展示为「至战斗结束」；同步修正 [BattleUnitSlot.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Battle/BattleUnitSlot.cs) 优先读取 `buff.Stacks`。
+  - [BattleUnitView.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Battle/BattleUnitView.cs) 战斗内单位头顶 Buff 图标在缺专属 Buff 图时自动回退至来源技能图标（`UI/Skills/{sourceSkillId}`），省去重复画战斗 Buff 图标；成长光环角标按权威 `stacks >= 1` 显示并加宽自适应防 2–3 位层数裁切。
+  - [SkillCraftWindow.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/Skills/SkillCraftWindow.cs) 拓印案台新增选中技能归属标签（`【人物专属】/【灵宠专属】/【人宠共用】`）与效果说明栏，确保选中 `12028 兽威渐盛` 等新技时直观可见机制与灵宠研习对象。
+  - 验证：`client_compile_check.ps1` **exit 0（787 文件 0 错误）**；新增 `BattleUnitStatusInspectorTests#FormatUnitStatusBodyShowsExactZeroAndStackedGrowingAuraBonuses`，pwsh + NUnit 实跑 **2/2 PASS**；三仓均未 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：论剑 / 人宠会武 V5「临阵唤灵」三端逻辑、Codex 切片接入与全端验收
+
+- **玩法与协议落盘**：新增 [docs/planning/ranked-play-v5-midbattle-summon.md](planning/ranked-play-v5-midbattle-summon.md) 并更新 `docs/README.md`；在 `proto/battle/{battle_data,player_battle}.proto` 追加 `BATTLE_ACTION_SUMMON_PET=8`、`BattleAction.summon_pet_id=5`、`BATTLE_EVENT_SUMMON_PET=24` 与 `BattleStateS2C` 字段 `36..38`（零新 RPC / 零新消息号 / 零新库表），同步完成 C++/Go `dev.bat proto`、Java `ContractSync` 与 Unity `gen_proto.ps1`/`gen_messageids.ps1`。
+- **双服务端与客户端接入**：
+  - C++ 权威服：`turn_battle_constants.h`、`configured_battle_effects.cpp`、`turn_battle_engine.{h,cpp}`、`battle_room_manager.cpp`、`ranked_battle_test.cpp`；实现与 V3 变阵联动的中盘备选宠池、第 2 回合解锁、单局限 1 次、全新 `actor_id` 原位替换防光环残留、硬控不扣次与对手/观众严密脱敏；验证：`test_cpp_no_raw_pointer_member.py` **13/13**、`check_log_text_english.py` **PASS**、MSBuild `/m:1`（`battle.lib`/`turn_battle_engine_test.exe`/`battle.exe`）0 错误、`RankedBattleTest.*` **17/17 PASS**、Go `match/internal/ranked` **PASS**。
+  - Java 独立服：`BattleConstants`、`ConfiguredBattle`、`ActionChecks`、`TurnBattleEngine`、`BattleViews`、`BattleRoomServiceImpl`、`RankedBattleEngineTest`、`BattleViewsTest` 与 `PARITY.md`；验证：`mvn -B -pl game-proto,game-battle-engine,game-battle -am test` **28/28 PASS**。
+  - Unity 客户端：导入 Codex `1471b83` 交付的 6 枚 `summon-*.png` 至 `Assets/Resources/UI/Ugui/RankedV4Tactical/ui/`（6/6 SHA-256 一致、0 GUID 冲突），接入 `SeasonEconomyUiArt.cs`、`BattleFidelityArt.cs`、`BattleClient.cs`、`BattleScreen.cs` 与 `BattleClientAutoBattleTests.cs`；验证：`client_compile_check.ps1` **792/792 0 错误**、离线 NUnit **83/83 PASS**（5 项 UnityEngine `GameObject` ECall 需 Unity Editor 运行）；三仓均未执行 `git commit` / `git push`。

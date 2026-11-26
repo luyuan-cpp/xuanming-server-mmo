@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "194fb8bba93c9b8d"
+const SchemaDigest = "8a563f7a854d5bc4"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -31,6 +31,7 @@ var hotReloadableTables = map[string]bool{
 	"MysteryMerchantGoods": true,
 	"MysteryMerchantRule": true,
 	"PlayerLevelExp": true,
+	"RewardedAdSlot": true,
 	"SeasonRule": true,
 	"SeasonSeal": true,
 	"Skill": true,
@@ -107,6 +108,7 @@ var allTableNames = []string{
 	"RankedPreset",
 	"RankedRule",
 	"Reward",
+	"RewardedAdSlot",
 	"RoleNameRule",
 	"SeasonRule",
 	"SeasonSeal",
@@ -214,6 +216,7 @@ type TableSet struct {
 	RankedPreset *RankedPresetTableManager
 	RankedRule *RankedRuleTableManager
 	Reward *RewardTableManager
+	RewardedAdSlot *RewardedAdSlotTableManager
 	RoleNameRule *RoleNameRuleTableManager
 	SeasonRule *SeasonRuleTableManager
 	SeasonSeal *SeasonSealTableManager
@@ -317,6 +320,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		RankedPreset: NewRankedPresetTableManager(),
 		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
+		RewardedAdSlot: NewRewardedAdSlotTableManager(),
 		RoleNameRule: NewRoleNameRuleTableManager(),
 		SeasonRule: NewSeasonRuleTableManager(),
 		SeasonSeal: NewSeasonSealTableManager(),
@@ -520,6 +524,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.Reward.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Reward table failed: %w", err)
+	}
+	if err := ts.RewardedAdSlot.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare RewardedAdSlot table failed: %w", err)
 	}
 	if err := ts.RoleNameRule.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare RoleNameRule table failed: %w", err)
@@ -774,6 +781,9 @@ func Commit(ts *TableSet) {
 	if ts.Reward != nil {
 		RewardTableManagerInstance.swapSnapshot(ts.Reward.snap.Load())
 	}
+	if ts.RewardedAdSlot != nil {
+		RewardedAdSlotTableManagerInstance.swapSnapshot(ts.RewardedAdSlot.snap.Load())
+	}
 	if ts.RoleNameRule != nil {
 		RoleNameRuleTableManagerInstance.swapSnapshot(ts.RoleNameRule.snap.Load())
 	}
@@ -939,6 +949,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		RankedPreset: NewRankedPresetTableManager(),
 		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
+		RewardedAdSlot: NewRewardedAdSlotTableManager(),
 		RoleNameRule: NewRoleNameRuleTableManager(),
 		SeasonRule: NewSeasonRuleTableManager(),
 		SeasonSeal: NewSeasonSealTableManager(),
@@ -961,7 +972,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(81)
+	wg.Add(82)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1326,6 +1337,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.Reward.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load Reward table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.RewardedAdSlot.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load RewardedAdSlot table: %v", err)
 		}
 	}()
 	go func() {

@@ -220,6 +220,83 @@
    "id": 405,
    "match_mode": 4,
    "team_size_max": 1
+  },
+  {
+   "battle_config_id": 212,
+   "enabled": true,
+   "id": 412,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 213,
+   "enabled": true,
+   "id": 413,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 215,
+   "enabled": true,
+   "id": 415,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 301,
+   "enabled": true,
+   "id": 451,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 302,
+   "enabled": true,
+   "id": 452,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 311,
+   "enabled": true,
+   "id": 461,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 312,
+   "enabled": true,
+   "id": 462,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 313,
+   "enabled": true,
+   "id": 463,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 321,
+   "enabled": true,
+   "id": 471,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 322,
+   "enabled": true,
+   "id": 472,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 323,
+   "enabled": true,
+   "id": 473,
+   "match_mode": 4,
+   "team_size_max": 1
   }
  ]
 }

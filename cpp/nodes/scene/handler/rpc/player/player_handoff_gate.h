@@ -35,6 +35,7 @@
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_mission.pb.h"
 #include "proto/scene/player_pet.pb.h"
+#include "proto/scene/player_rewarded_ad.pb.h"
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
@@ -80,7 +81,8 @@ namespace scene_handoff_gate
 			service == SceneAppearanceClientPlayer::descriptor() ||
 			service == SceneSeasonClientPlayer::descriptor() ||
 			service == SceneTrialJournalClientPlayer::descriptor() ||
-			service == SceneSpiritShopClientPlayer::descriptor())
+			service == SceneSpiritShopClientPlayer::descriptor() ||
+			service == SceneRewardedAdClientPlayer::descriptor())
 		{
 			return true;
 		}

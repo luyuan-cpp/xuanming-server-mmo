@@ -78,14 +78,14 @@
 ## 六、可直接复制给 Codex 的纯功能作图清单（不含任何风格与色号）
 
 ```text
-请按项目既有的统一 UI 美术风格，为「官方通行证与账号注册」产出以下透明背景 PNG 切图（PNG-32，背景完全透明，严禁带任何文字、字母或数字）：
+请为「官方通行证与账号注册」产出以下透明背景 PNG 切图（PNG-32，背景完全透明，严禁带任何文字、字母或数字），输出到图仓目录 D:\work\image\designs\official-passport-ui-v1\slices\：
 1. passport_jade_seal.png | 128x128 | 「官方账号登录 / 注册」主按钮左侧的通行证徽章图标（界面显示尺寸 44x44，小尺寸轮廓清晰）
-2. passport_button_normal.png | 600x90 | 官方通行证主按钮常态无字底图（支持 9-slice 横向拉伸，左侧预留图标位，中心留空给程序叠放按钮文字）
-3. passport_button_hover.png | 600x90 | 官方通行证主按钮高亮/悬停态无字底图（与常态同构，支持 9-slice 横向拉伸）
-4. passport_button_disabled.png | 600x90 | 官方通行证主按钮禁用态无字底图（与常态同构，支持 9-slice 横向拉伸）
-5. passport_waiting_badge.png | 160x160 | 浏览器授权等待弹窗中的旋转等待徽标（严格居中对称，便于程序做平滑旋转动画）
+2. passport_button_normal.png | 600x90 | 官方通行证主按钮常态无字底图（支持横向拉伸，左侧预留图标位，中心留空用于叠放按钮文字）
+3. passport_button_hover.png | 600x90 | 官方通行证主按钮高亮/悬停态无字底图（与常态同构，支持横向拉伸）
+4. passport_button_disabled.png | 600x90 | 官方通行证主按钮禁用态无字底图（与常态同构，支持横向拉伸）
+5. passport_waiting_badge.png | 160x160 | 浏览器授权等待弹窗中的旋转等待徽标（严格居中对称，便于做平滑旋转动画）
 6. passport_web_logo.png | 256x256 | 外部浏览器注册/登录页顶部游戏徽标（透明底）
 7. passport_web_bg.png | 1920x1080 | 外部浏览器注册/登录页整屏背景图（无文字，居中留出表单卡片区域）
 
-注：弹窗底框、次级按钮、输入框直接复用客户端既有通用控件，无需重绘。产出放到 designs/official-passport-ui-v1/slices/ 并附尺寸与 9-slice 边距清单即可。
+注：弹窗底框、次级按钮、输入框直接复用既有通用控件，无需重绘。产出放到 D:\work\image\designs\official-passport-ui-v1\slices\ 并附尺寸与拉伸留白清单即可。
 ```

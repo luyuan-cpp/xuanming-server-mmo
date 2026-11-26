@@ -112,6 +112,9 @@ static void SkillVfxCosmeticTableCheckNarrowedRow(const TSharedPtr<FJsonObject>&
 	SkillVfxCosmeticTableCheckNarrowedField(RowObject, TEXT("enabled"), TEXT("enabled"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillVfxCosmeticTableCheckNarrowedField(RowObject, TEXT("sort_order"), TEXT("sort_order"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillVfxCosmeticTableCheckNarrowedField(RowObject, TEXT("mall_sku_id"), TEXT("mall_sku_id"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	SkillVfxCosmeticTableCheckNarrowedField(RowObject, TEXT("card_item_id"), TEXT("card_item_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillVfxCosmeticTableCheckNarrowedField(RowObject, TEXT("card_item_count"), TEXT("card_item_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillVfxCosmeticTableCheckNarrowedField(RowObject, TEXT("spirit_shop_goods_id"), TEXT("spirit_shop_goods_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool USkillVfxCosmeticTable::LoadFromJson(const FString& JsonText, FString& OutError)

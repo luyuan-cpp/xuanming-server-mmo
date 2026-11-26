@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 81;
+        public const int TableCount = 82;
 
         private static Action s_loadSuccessCallback;
 
@@ -99,6 +99,7 @@ namespace MmorpgClient.Table
                 RankedPresetTableManager.FileName(useBinary),
                 RankedRuleTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
+                RewardedAdSlotTableManager.FileName(useBinary),
                 RoleNameRuleTableManager.FileName(useBinary),
                 SeasonRuleTableManager.FileName(useBinary),
                 SeasonSealTableManager.FileName(useBinary),
@@ -187,6 +188,7 @@ namespace MmorpgClient.Table
             RankedPresetTableManager.Instance.Load(configDir, useBinary);
             RankedRuleTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
+            RewardedAdSlotTableManager.Instance.Load(configDir, useBinary);
             RoleNameRuleTableManager.Instance.Load(configDir, useBinary);
             SeasonRuleTableManager.Instance.Load(configDir, useBinary);
             SeasonSealTableManager.Instance.Load(configDir, useBinary);
@@ -353,6 +355,8 @@ namespace MmorpgClient.Table
                 RankedRuleTableManager.Instance.LoadFromBytes, RankedRuleTableManager.Instance.LoadFromJson);
             LoadOne(RewardTableManager.FileName(useBinary), byteProvider, useBinary,
                 RewardTableManager.Instance.LoadFromBytes, RewardTableManager.Instance.LoadFromJson);
+            LoadOne(RewardedAdSlotTableManager.FileName(useBinary), byteProvider, useBinary,
+                RewardedAdSlotTableManager.Instance.LoadFromBytes, RewardedAdSlotTableManager.Instance.LoadFromJson);
             LoadOne(RoleNameRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 RoleNameRuleTableManager.Instance.LoadFromBytes, RoleNameRuleTableManager.Instance.LoadFromJson);
             LoadOne(SeasonRuleTableManager.FileName(useBinary), byteProvider, useBinary,

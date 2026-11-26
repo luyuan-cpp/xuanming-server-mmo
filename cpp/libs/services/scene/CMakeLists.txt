@@ -159,7 +159,9 @@ set(SOURCE_FILES
     player/system/player_activity.cpp
     player/system/player_festival_beast.cpp
     player/system/player_spirit_shop.cpp
+    player/system/player_rewarded_ad.cpp
     player/system/player_travel_pass.cpp
+    player/system/player_equip_loadout.cpp
 )
 
 add_library(scene STATIC ${SOURCE_FILES})

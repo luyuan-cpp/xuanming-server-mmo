@@ -1,0 +1,29 @@
+syntax = "proto3";
+option go_package = "common/component";
+
+// 装备流派方案预设（docs/planning/equipment-loadout-presets-v1.md）。
+// 实例与布局严格分离：方案只记录 8 个正式槽位（EquipSlot.xlsx 3..10）指向的真实装备 guid，
+// 绝不复制 ItemComp、绝不另建隐藏背包；未穿戴副套装备留在人物背包 kInventory。
+message EquipLoadoutSlotBinding {
+  uint32 slot = 1;       // 对应 EquipSlot.xlsx 正式槽位号（3..10）
+  uint64 item_guid = 2;  // 永久物品实例 guid（0 表示该槽位刻意留空/不指定）
+}
+
+message EquipLoadoutScheme {
+  uint32 scheme_id = 1;                         // 1..5 显式方案号
+  string name = 2;                              // UTF-8 1..12 字符（空则显示默认「方案一..五」）
+  uint32 role_tag = 3;                          // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
+  repeated EquipLoadoutSlotBinding slots = 4;   // 按 slot 升序，严禁靠下标承载槽位语义
+  uint32 linked_skill_scheme_id = 5;            // 0 = 不联动；1..6 = 联动 SkillLoadoutScheme
+  uint32 linked_attribute_scheme_id = 6;        // 0 = 不联动；>0 = 联动 AttributeScheme
+}
+
+message PlayerEquipLoadoutComp {
+  uint32 unlocked_scheme_count = 1;             // 已解锁套数（0 兼容按 1 处理，上限 5）
+  uint32 active_scheme_id = 2;                  // 当前激活方案号（0 兼容按 1 处理，1..unlocked）
+  repeated EquipLoadoutScheme schemes = 3;      // 已解锁方案明细（按 scheme_id 升序）
+  uint64 state_version = 4;                     // 乐观锁版本号（0 按 1 计）
+  string last_request_id = 5;                   // 最近一次保存/切换幂等键
+  uint64 last_base_version = 6;                 // 最近一次请求的期望版本
+  uint32 last_scheme_id = 7;                    // 最近一次操作的目标方案号
+}

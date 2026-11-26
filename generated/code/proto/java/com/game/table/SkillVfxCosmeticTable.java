@@ -423,6 +423,39 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int CARD_ITEM_ID_FIELD_NUMBER = 14;
+  private int cardItemId_ = 0;
+  /**
+   * <code>uint32 card_item_id = 14;</code>
+   * @return The cardItemId.
+   */
+  @java.lang.Override
+  public int getCardItemId() {
+    return cardItemId_;
+  }
+
+  public static final int CARD_ITEM_COUNT_FIELD_NUMBER = 15;
+  private int cardItemCount_ = 0;
+  /**
+   * <code>uint32 card_item_count = 15;</code>
+   * @return The cardItemCount.
+   */
+  @java.lang.Override
+  public int getCardItemCount() {
+    return cardItemCount_;
+  }
+
+  public static final int SPIRIT_SHOP_GOODS_ID_FIELD_NUMBER = 16;
+  private int spiritShopGoodsId_ = 0;
+  /**
+   * <code>uint32 spirit_shop_goods_id = 16;</code>
+   * @return The spiritShopGoodsId.
+   */
+  @java.lang.Override
+  public int getSpiritShopGoodsId() {
+    return spiritShopGoodsId_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -476,6 +509,15 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 13, desc_);
     }
+    if (cardItemId_ != 0) {
+      output.writeUInt32(14, cardItemId_);
+    }
+    if (cardItemCount_ != 0) {
+      output.writeUInt32(15, cardItemCount_);
+    }
+    if (spiritShopGoodsId_ != 0) {
+      output.writeUInt32(16, spiritShopGoodsId_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -523,6 +565,18 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(13, desc_);
+    }
+    if (cardItemId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(14, cardItemId_);
+    }
+    if (cardItemCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(15, cardItemCount_);
+    }
+    if (spiritShopGoodsId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(16, spiritShopGoodsId_);
     }
     return size;
   }
@@ -574,6 +628,12 @@ private static final long serialVersionUID = 0L;
         .equals(other.getAcquireHint())) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getCardItemId()
+        != other.getCardItemId()) return false;
+    if (getCardItemCount()
+        != other.getCardItemCount()) return false;
+    if (getSpiritShopGoodsId()
+        != other.getSpiritShopGoodsId()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -612,6 +672,12 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getAcquireHint().hashCode();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + CARD_ITEM_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getCardItemId();
+    hash = (37 * hash) + CARD_ITEM_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getCardItemCount();
+    hash = (37 * hash) + SPIRIT_SHOP_GOODS_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getSpiritShopGoodsId();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -756,6 +822,9 @@ private static final long serialVersionUID = 0L;
       mallSkuId_ = 0L;
       acquireHint_ = "";
       desc_ = "";
+      cardItemId_ = 0;
+      cardItemCount_ = 0;
+      spiritShopGoodsId_ = 0;
       return this;
     }
 
@@ -828,6 +897,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00001000) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00002000) != 0)) {
+        result.cardItemId_ = cardItemId_;
+      }
+      if (((from_bitField0_ & 0x00004000) != 0)) {
+        result.cardItemCount_ = cardItemCount_;
+      }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.spiritShopGoodsId_ = spiritShopGoodsId_;
+      }
     }
 
     @java.lang.Override
@@ -896,6 +974,15 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00001000;
         onChanged();
+      }
+      if (other.getCardItemId() != 0) {
+        setCardItemId(other.getCardItemId());
+      }
+      if (other.getCardItemCount() != 0) {
+        setCardItemCount(other.getCardItemCount());
+      }
+      if (other.getSpiritShopGoodsId() != 0) {
+        setSpiritShopGoodsId(other.getSpiritShopGoodsId());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -988,6 +1075,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00001000;
               break;
             } // case 106
+            case 112: {
+              cardItemId_ = input.readUInt32();
+              bitField0_ |= 0x00002000;
+              break;
+            } // case 112
+            case 120: {
+              cardItemCount_ = input.readUInt32();
+              bitField0_ |= 0x00004000;
+              break;
+            } // case 120
+            case 128: {
+              spiritShopGoodsId_ = input.readUInt32();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 128
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1737,6 +1839,102 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+
+    private int cardItemId_ ;
+    /**
+     * <code>uint32 card_item_id = 14;</code>
+     * @return The cardItemId.
+     */
+    @java.lang.Override
+    public int getCardItemId() {
+      return cardItemId_;
+    }
+    /**
+     * <code>uint32 card_item_id = 14;</code>
+     * @param value The cardItemId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCardItemId(int value) {
+
+      cardItemId_ = value;
+      bitField0_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 card_item_id = 14;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCardItemId() {
+      bitField0_ = (bitField0_ & ~0x00002000);
+      cardItemId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int cardItemCount_ ;
+    /**
+     * <code>uint32 card_item_count = 15;</code>
+     * @return The cardItemCount.
+     */
+    @java.lang.Override
+    public int getCardItemCount() {
+      return cardItemCount_;
+    }
+    /**
+     * <code>uint32 card_item_count = 15;</code>
+     * @param value The cardItemCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCardItemCount(int value) {
+
+      cardItemCount_ = value;
+      bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 card_item_count = 15;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCardItemCount() {
+      bitField0_ = (bitField0_ & ~0x00004000);
+      cardItemCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int spiritShopGoodsId_ ;
+    /**
+     * <code>uint32 spirit_shop_goods_id = 16;</code>
+     * @return The spiritShopGoodsId.
+     */
+    @java.lang.Override
+    public int getSpiritShopGoodsId() {
+      return spiritShopGoodsId_;
+    }
+    /**
+     * <code>uint32 spirit_shop_goods_id = 16;</code>
+     * @param value The spiritShopGoodsId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSpiritShopGoodsId(int value) {
+
+      spiritShopGoodsId_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 spirit_shop_goods_id = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSpiritShopGoodsId() {
+      bitField0_ = (bitField0_ & ~0x00008000);
+      spiritShopGoodsId_ = 0;
       onChanged();
       return this;
     }

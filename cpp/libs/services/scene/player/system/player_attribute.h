@@ -108,7 +108,7 @@ public:
 								 std::map<uint32_t, uint32_t>& suggested);
 
 	static uint32_t CreateScheme(entt::entity player, const std::string& name, uint32_t& schemeId);
-	static uint32_t SwitchScheme(entt::entity player, uint32_t schemeId);
+	static uint32_t SwitchScheme(entt::entity player, uint32_t schemeId, bool recalculate = true);
 	static uint32_t RenameScheme(entt::entity player, uint32_t schemeId, const std::string& name);
 
 	// GM:设等级(1..kMaxLevel,绝对设值),直接重算并推面板与宠物列表。降级不清加点:超额的池按 0 生效,

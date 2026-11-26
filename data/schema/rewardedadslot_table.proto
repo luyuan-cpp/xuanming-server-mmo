@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// RewardedAdSlot 表的权威 schema。源表 data/RewardedAdSlot.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 零拒审激励视频广告位配置表(docs/design/rewarded-ad-system.md §3.3):
+// 仅服务端读取(全列 server owner),客户端零配表;首审默认 enabled = 0 关闭。
+// currency_type 强制限定为 CURRENCY_TYPE_BIND_GOLD(3,绑定银两),物理隔绝流通物价。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message RewardedAdSlotTable {
+  option (cfg_sheet)       = "RewardedAdSlot";
+  option (cfg_source_file) = "RewardedAdSlot.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 广告位业务编号(首批固定 1 = 观影绑定银两小礼)
+  uint32 id = 1 [(cfg_owner) = "server"];
+  // 总开关:0 = 关闭(首审默认态),1 = 开启
+  uint32 enabled = 2 [(cfg_owner) = "server"];
+  // 解锁最低角色等级(默认 10)
+  uint32 min_level = 3 [(cfg_owner) = "server"];
+  // 每日最大领取次数(UTC+8 05:00 切日,默认 2)
+  uint32 daily_limit = 4 [(cfg_owner) = "server"];
+  // 两次成功领取最短冷却秒数(默认 60)
+  uint32 cooldown_sec = 5 [(cfg_owner) = "server"];
+  // 签发会话到领奖的最短观看秒数(默认 15)
+  uint32 min_watch_sec = 6 [(cfg_owner) = "server"];
+  // 会话有效 TTL 秒数(默认 300,容忍看广告 30 秒断线重连补领)
+  uint32 session_ttl_sec = 7 [(cfg_owner) = "server"];
+  // 发放币种(CurrencyType:固定 3 = CURRENCY_TYPE_BIND_GOLD 绑定银两)
+  uint32 currency_type = 8 [(cfg_owner) = "server"];
+  // 单次发放绑定银两数量(默认 300)
+  uint64 reward_amount = 9 [(cfg_owner) = "server"];
+  // 是否强制校验平台 SSV 回调:0 = V1 轻量会话校验,1 = V2 强制 SSV
+  uint32 require_ssv = 10 [(cfg_owner) = "server"];
+  // 允许开启宿主位掩码:1=微信小游戏 2=抖音小游戏 4=iOS App 8=Android App(默认 3 仅小游戏)
+  uint32 platform_mask = 11 [(cfg_owner) = "server"];
+}

@@ -209,6 +209,7 @@ set(SOURCE_FILES
     proto/tip/festival_beast_error_tip.pb.cc
     proto/tip/spirit_shop_error_tip.pb.cc
     proto/tip/travel_pass_error_tip.pb.cc
+    proto/tip/rewarded_ad_error_tip.pb.cc
     proto/tip/chat_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc
@@ -264,6 +265,8 @@ set(SOURCE_FILES
     code/travelpasstier_table.cpp
     code/travelpasstier_table_fk.cpp
     proto/travelpasstier_table.pb.cc
+    code/rewardedadslot_table.cpp
+    proto/rewardedadslot_table.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

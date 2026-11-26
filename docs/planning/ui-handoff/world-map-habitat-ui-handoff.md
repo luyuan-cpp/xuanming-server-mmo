@@ -1,8 +1,8 @@
 # 大世界野外灵宠栖息地 HUD 浮条 UI 美术作图交接清单
 
 > 对应玩法设计：[world-map-play-v2.md](../world-map-play-v2.md)
-> 落盘目标目录：`mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/`（设计效果图与来源目录建议放 `D:\work\image\designs\world-map-habitat-ui\`）
-> 通用要求：请按项目既有的统一 UI 美术风格制作；所有切图均为 **PNG-32 格式、真实透明背景（Alpha 通道完整透明）**，不带纯色外框或背景杂边；切图内**严禁烘焙任何文字或数字**（标题、可捕灵宠列表、按钮文字均由程序运行时动态叠放）。
+> Codex 输出目录：常态版 `D:\work\image\designs\world-map-habitat-ui\`，灵潮变体版 `D:\work\image\designs\world-map-habitat-tide-ui\`（与游戏客户端/Unity 完全无关）
+> 通用要求：所有切图均为 **PNG-32 格式、真实透明背景（Alpha 通道完整透明）**，不带纯色外框或背景杂边；切图内**严禁烘焙任何文字或数字**（标题、可捕灵宠列表、按钮文字均由程序运行时动态叠放）；本文档不指定任何画风、材质或色号。
 
 ## 1. 界面功能与结构说明
 
@@ -24,7 +24,18 @@
 | 3 | `wild_habitat_icon.png` | `128×128` | `48×48` | 浮条左侧野外寻宠/栖息地标识小图标 | PNG-32 透明背景 | 不带文字 | 固定等比，不拉伸 |
 | 4 | `preview_wild_habitat_hud_2560x1080.png`（参考效果图，不进 Resources） | `2560×1080` | 参考审图 | 整屏预览效果图：展示浮条在 `2560×1080` 野外主界面底部的比例、文字可读性与按钮排版 | 整屏 PNG | 示意文案：`八景岛 · 灵宠栖息地 · 灵潮中` / `可捕灵宠：云鹤（10级）、竹风狸、霞角鹿` / 按钮 `寻宠遇敌` | 仅审图用 |
 
-## 3. 程序端接线与缺图回落说明
+## 3. 本机研发导入备忘（仅本机工程留档，严禁发给 Codex）
 
-- `CityTravelUiRoot.cs`（`Assets/Scripts/UI/Ugui/Gameplay/CityTravelUiRoot.cs`）已提前接入 `UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}` 加载路径。
-- 缺图时自动无缝回落至已落盘的既有切图（`world_map_paper_panel`、`tide_quick_travel_btn`、`seal_tide`），功能当前已可直接游玩；Codex 交付上述 3 张无字透明 PNG 并放入 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/`（配齐 Unity `.meta` 与对应 `spriteBorder`）后即自动替换为专属美术表现，无需修改 C# 代码。
+- `CityTravelUiRoot.cs`（`Assets/Scripts/UI/Ugui/Gameplay/CityTravelUiRoot.cs`）已接入常态 3 张切图 `UI/Ugui/WorldMapV2/{wild_habitat_bar,wild_habitat_btn,wild_habitat_icon}`（已导入并核验）以及灵潮态 3 张可选切图 `UI/Ugui/WorldMapV2/{wild_habitat_bar_tide,wild_habitat_btn_tide,wild_habitat_icon_tide}`。
+- 灵潮态切图尚未导入前自动无缝回落至已落盘的常态 3 张切图，功能当前已可直接游玩；Codex 在图仓 `D:\work\image\designs\world-map-habitat-tide-ui\` 交付后，由本机研发导入 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/`（配齐 `.meta` 与拉伸边距）即可生效。
+
+## 4. 灵潮珍兽潮状态变体清单（M2-Tide 可选精修）
+
+当玩家所在野外图正处于「灵潮涌动」40 分钟窗口时，同一位置的底部浮条（`x=880, y=984, w=800, h=76`）会自动切为「灵潮珍兽现身」状态，按钮文案变为「寻潮遇兽」。为让玩家一眼区分常态栖息地与灵潮限定珍兽潮，可选补充以下 3 张状态变体无字透明切图与 1 张整屏审图效果图（建议输出到 `D:\work\image\designs\world-map-habitat-tide-ui\`，同样严格按项目既有的统一 UI 美术风格、PNG-32 透明底、严禁烘焙文字或数字）：
+
+| # | 文件名 | 交付像素尺寸 | 界面显示尺寸 | 用途与交互语义 | 背景与透明要求 | 文字规则 | 拉伸与 9-Slice 规格 |
+|---|---|---:|---:|---|---|---|---|
+| 1 | `wild_habitat_bar_tide.png` | `800×76` | `800×76` | 灵潮珍兽潮激活态 HUD 浮条底板（与常态 `wild_habitat_bar.png` 在视觉层级上有明确区分） | PNG-32 透明外缘 | 不带文字（安全区同常态：上行 `78/8/504/30`，下行 `78/39/504/28`） | 支持 9-slice（左右各留 `32px`，上下各留 `18px`） |
+| 2 | `wild_habitat_btn_tide.png` | `190×50` | `190×50` | 灵潮珍兽潮激活态「寻潮遇兽」主行动按钮底板（比常态按钮更具强调层级） | PNG-32 透明背景 | 不带文字（居中文字安全区同常态 `31/10/128/30`，程序叠放 `寻潮遇兽`） | 支持横向 9-slice（左右各留 `24px`，上下各留 `12px`） |
+| 3 | `wild_habitat_icon_tide.png` | `128×128` | `48×48` | 灵潮珍兽潮激活态左侧标识图标（表达灵潮珍兽现身，与常态图标区分） | PNG-32 透明背景 | 不带文字 | 固定等比，不拉伸 |
+| 4 | `preview_wild_habitat_tide_hud_2560x1080.png`（参考效果图，不进 Resources） | `2560×1080` | 参考审图 | 整屏审图效果图：展示灵潮珍兽潮状态下的浮条与按钮排版 | 整屏 PNG | 示意文案：`月汐湾 · 灵宠栖息地 · 灵潮珍兽现身` / `灵潮珍兽（高捕获率）：苍嶂麟（珍稀）、赤砂魁、烛翎` / 按钮 `寻潮遇兽` | 仅审图用 |

@@ -83,4 +83,22 @@ public final class PetCosmeticTableComp {
         }
     }
 
+    public record Card_item_id(int value) {
+        public static Card_item_id from(PetCosmeticTable row) {
+            return new Card_item_id(row.getCardItemId());
+        }
+    }
+
+    public record Card_item_count(int value) {
+        public static Card_item_count from(PetCosmeticTable row) {
+            return new Card_item_count(row.getCardItemCount());
+        }
+    }
+
+    public record Spirit_shop_goods_id(int value) {
+        public static Spirit_shop_goods_id from(PetCosmeticTable row) {
+            return new Spirit_shop_goods_id(row.getSpiritShopGoodsId());
+        }
+    }
+
 }

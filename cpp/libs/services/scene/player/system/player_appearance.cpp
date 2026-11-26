@@ -43,6 +43,7 @@
 #include "table/code/petcosmetic_table.h"
 #include "table/code/skill_table.h"
 #include "table/code/skillvfxcosmetic_table.h"
+#include "table/code/spiritshopgoods_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/pet_error_tip.pb.h"
@@ -504,6 +505,34 @@ bool PlayerAppearanceSystem::ValidateTables()
 					  << row.cosmetic_key();
 			return false;
 		}
+		if (row.card_item_id() != 0)
+		{
+			if (!ItemTableManager::Instance().Exists(row.card_item_id()) ||
+				row.card_item_count() == 0 || row.card_item_count() > player_appearance::kMaxCardItemCount)
+			{
+				LOG_ERROR << "[PlayerAppearance] table validation failed: invalid PetCosmetic voucher config id="
+						  << row.id() << " card_item_id=" << row.card_item_id()
+						  << " card_item_count=" << row.card_item_count();
+				return false;
+			}
+		}
+		else if (row.card_item_count() != 0)
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: PetCosmetic id=" << row.id()
+					  << " has card_item_count without card_item_id";
+			return false;
+		}
+		if (row.spirit_shop_goods_id() != 0)
+		{
+			const auto *goodsRow = SpiritShopGoodsTableManager::Instance().FindByIdSilent(row.spirit_shop_goods_id()).first;
+			if (goodsRow == nullptr ||
+				(row.card_item_id() != 0 && goodsRow->item_id_1() != row.card_item_id()))
+			{
+				LOG_ERROR << "[PlayerAppearance] table validation failed: PetCosmetic id=" << row.id()
+						  << " references invalid spirit_shop_goods_id=" << row.spirit_shop_goods_id();
+				return false;
+			}
+		}
 	}
 
 	// 校验技能特效目录表(空表允许存在;有行时技能外键、帧条键、色调与 bit_index 必须合法)。
@@ -538,6 +567,34 @@ bool PlayerAppearanceSystem::ValidateTables()
 			LOG_ERROR << "[PlayerAppearance] table validation failed: duplicate enabled SkillVfxCosmetic key="
 					  << row.vfx_key();
 			return false;
+		}
+		if (row.card_item_id() != 0)
+		{
+			if (!ItemTableManager::Instance().Exists(row.card_item_id()) ||
+				row.card_item_count() == 0 || row.card_item_count() > player_appearance::kMaxCardItemCount)
+			{
+				LOG_ERROR << "[PlayerAppearance] table validation failed: invalid SkillVfxCosmetic voucher config id="
+						  << row.id() << " card_item_id=" << row.card_item_id()
+						  << " card_item_count=" << row.card_item_count();
+				return false;
+			}
+		}
+		else if (row.card_item_count() != 0)
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: SkillVfxCosmetic id=" << row.id()
+					  << " has card_item_count without card_item_id";
+			return false;
+		}
+		if (row.spirit_shop_goods_id() != 0)
+		{
+			const auto *goodsRow = SpiritShopGoodsTableManager::Instance().FindByIdSilent(row.spirit_shop_goods_id()).first;
+			if (goodsRow == nullptr ||
+				(row.card_item_id() != 0 && goodsRow->item_id_1() != row.card_item_id()))
+			{
+				LOG_ERROR << "[PlayerAppearance] table validation failed: SkillVfxCosmetic id=" << row.id()
+						  << " references invalid spirit_shop_goods_id=" << row.spirit_shop_goods_id();
+				return false;
+			}
 		}
 	}
 	return true;
@@ -763,6 +820,10 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		uint64_t mallSkuId;
 		std::string acquireHint;
 		std::string desc;
+		uint32_t cardItemId;
+		uint32_t cardItemCount;
+		uint32_t ownedCardCount;
+		uint32_t spiritShopGoodsId;
 	};
 	std::vector<PetCosmeticRow> petCosmetics;
 	const auto &petCosmeticRows = PetCosmeticTableManager::Instance().FindAll().data();
@@ -785,6 +846,10 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 			row.mall_sku_id(),
 			row.acquire_hint(),
 			row.desc(),
+			row.card_item_id(),
+			row.card_item_count(),
+			OwnedCardCount(player, row.card_item_id()),
+			row.spirit_shop_goods_id(),
 		});
 	}
 	std::sort(petCosmetics.begin(), petCosmetics.end(), [](const PetCosmeticRow &a, const PetCosmeticRow &b)
@@ -809,6 +874,10 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		out->set_mall_sku_id(item.mallSkuId);
 		out->set_acquire_hint(item.acquireHint);
 		out->set_desc(item.desc);
+		out->set_card_item_id(item.cardItemId);
+		out->set_card_item_count(item.cardItemCount);
+		out->set_owned_card_count(item.ownedCardCount);
+		out->set_spirit_shop_goods_id(item.spiritShopGoodsId);
 	}
 	if (const auto *pets = registry.valid(player) ? registry.try_get<PlayerPetComp>(player) : nullptr; pets != nullptr)
 	{
@@ -845,6 +914,10 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		uint64_t mallSkuId;
 		std::string acquireHint;
 		std::string desc;
+		uint32_t cardItemId;
+		uint32_t cardItemCount;
+		uint32_t ownedCardCount;
+		uint32_t spiritShopGoodsId;
 	};
 	std::vector<SkillVfxRow> vfxList;
 	const auto &vfxRows = SkillVfxCosmeticTableManager::Instance().FindAll().data();
@@ -869,6 +942,10 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 			row.mall_sku_id(),
 			row.acquire_hint(),
 			row.desc(),
+			row.card_item_id(),
+			row.card_item_count(),
+			OwnedCardCount(player, row.card_item_id()),
+			row.spirit_shop_goods_id(),
 		});
 	}
 	std::sort(vfxList.begin(), vfxList.end(), [](const SkillVfxRow &a, const SkillVfxRow &b)
@@ -895,6 +972,10 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		out->set_mall_sku_id(item.mallSkuId);
 		out->set_acquire_hint(item.acquireHint);
 		out->set_desc(item.desc);
+		out->set_card_item_id(item.cardItemId);
+		out->set_card_item_count(item.cardItemCount);
+		out->set_owned_card_count(item.ownedCardCount);
+		out->set_spirit_shop_goods_id(item.spiritShopGoodsId);
 	}
 	if (profile != nullptr)
 	{
@@ -1371,17 +1452,36 @@ uint32_t PlayerAppearanceSystem::EquipPetCosmetic(entt::entity player,
 	{
 		return kEntityIsNull;
 	}
-	if (request.client_request_id() == 0 || request.pet_id() == 0)
+	const uint64_t clientRequestId = request.client_request_id();
+	if (clientRequestId == 0 || request.pet_id() == 0)
 	{
 		return kInvalidParameter;
 	}
+	std::string fingerprint = ClientRequestFingerprint(request);
+	ClientRequestResult first;
+	switch (client_request_dedup::Check(player, clientRequestId, ClientRequestKind::kEquipPetCosmetic, fingerprint, first))
+	{
+	case ClientRequestVerdict::kReplay:
+		response.set_pet_id(request.pet_id());
+		response.set_equipped_cosmetic_id(request.cosmetic_id());
+		response.set_replayed(true);
+		FillInfo(player, nowUnixSec, *response.mutable_info());
+		return kSuccess;
+	case ClientRequestVerdict::kMismatch:
+		return kInvalidParameter;
+	case ClientRequestVerdict::kUnavailable:
+		return kServiceUnavailable;
+	default:
+		break;
+	}
+
 	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
 	{
 		return mutTip;
 	}
 	const auto *guid = registry.try_get<PlayerGuidComp>(player);
 	const Guid playerId = guid != nullptr ? guid->value : kInvalidGuid;
-	const auto *profile = registry.try_get<PlayerProfileComp>(player);
+	auto *profile = registry.try_get<PlayerProfileComp>(player);
 	auto *petComp = registry.try_get<PlayerPetComp>(player);
 	if (profile == nullptr || petComp == nullptr)
 	{
@@ -1405,6 +1505,10 @@ uint32_t PlayerAppearanceSystem::EquipPetCosmetic(entt::entity player,
 	auto *pet = petComp->mutable_pets(petIndex);
 
 	const uint32_t targetCosmeticId = request.cosmetic_id();
+	bool consumeVoucher = false;
+	uint32_t voucherItemId = 0;
+	uint32_t voucherItemCount = 0;
+	std::string cosmeticKey;
 	if (targetCosmeticId != 0)
 	{
 		const auto *row = PetCosmeticTableManager::Instance().FindByIdSilent(targetCosmeticId).first;
@@ -1418,14 +1522,68 @@ uint32_t PlayerAppearanceSystem::EquipPetCosmetic(entt::entity player,
 					  << " player_id=" << playerId;
 			return static_cast<uint32_t>(kAppearanceUnavailable);
 		}
-		if (!player_appearance::IsPetCosmeticOwned(profile->pet_cosmetic_owned_bits(), row->id()))
-		{
-			return static_cast<uint32_t>(kAppearanceNotOwned);
-		}
 		if (!player_appearance::IsPetSpeciesCompatible(row->target_pet_table_id(), pet->pet_table_id()))
 		{
 			return static_cast<uint32_t>(kAppearanceInvalid);
 		}
+		const bool alreadyOwned = player_appearance::IsPetCosmeticOwned(profile->pet_cosmetic_owned_bits(), row->id());
+		const bool cardUnlockable = row->card_item_id() != 0 && row->card_item_count() > 0;
+		const player_appearance::SwitchPlan plan =
+			player_appearance::PlanSwitch(alreadyOwned, request.expect_free_equip(), cardUnlockable);
+		if (plan == player_appearance::SwitchPlan::kRefuseNotOwned)
+		{
+			return static_cast<uint32_t>(kAppearanceNotOwned);
+		}
+		if (plan == player_appearance::SwitchPlan::kRefuseNotCardUnlockable)
+		{
+			return static_cast<uint32_t>(kAppearanceNotCardUnlockable);
+		}
+		consumeVoucher = (plan == player_appearance::SwitchPlan::kCardUnlock);
+		voucherItemId = row->card_item_id();
+		voucherItemCount = row->card_item_count();
+		cosmeticKey = row->cosmetic_key();
+	}
+
+	if (consumeVoucher)
+	{
+		auto *bags = registry.try_get<PlayerBagsComp>(player);
+		if (bags == nullptr)
+		{
+			LOG_ERROR << "[PlayerAppearance] equip pet cosmetic refused: missing PlayerBagsComp player_id=" << playerId;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		const ItemCountMap consumed{{voucherItemId, voucherItemCount}};
+		if (BagService::CheckRemovable(player, bags->bags[kInventory], consumed) != BagService::RemovalVerdict::kEnough)
+		{
+			return static_cast<uint32_t>(kAppearanceNoCard);
+		}
+		if (const uint32_t removeErr = BagService::RemoveItemsExact(
+				player, bags->bags[kInventory], consumed, TX_APPEARANCE_SWITCH, clientRequestId, cosmeticKey);
+			removeErr != kSuccess)
+		{
+			LOG_ERROR << "[PlayerAppearance] equip pet cosmetic refused: RemoveItemsExact failed player_id="
+					  << playerId << " item_id=" << voucherItemId << " err=" << removeErr;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		if (!player_appearance::MarkPetCosmeticOwned(*profile->mutable_pet_cosmetic_owned_bits(), targetCosmeticId))
+		{
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		pet->set_cosmetic_id(targetCosmeticId);
+		client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kEquipPetCosmetic,
+									   std::move(fingerprint), ClientRequestResult{});
+		RequestSave(player, "pet_cosmetic_unlocked_and_equipped");
+		LOG_INFO << "[PlayerAppearance] metric=pet_cosmetic_unlocked player_id=" << playerId
+				 << " pet_id=" << pet->pet_id() << " cosmetic_id=" << targetCosmeticId
+				 << " card_item_id=" << voucherItemId << " card_count=" << voucherItemCount
+				 << " client_request_id=" << clientRequestId;
+		response.set_pet_id(pet->pet_id());
+		response.set_equipped_cosmetic_id(targetCosmeticId);
+		FillInfo(player, nowUnixSec, *response.mutable_info());
+		AppearanceStateNotify notify;
+		*notify.mutable_info() = response.info();
+		PushStateNotify(player, notify);
+		return kSuccess;
 	}
 
 	response.set_pet_id(pet->pet_id());
@@ -1461,10 +1619,29 @@ uint32_t PlayerAppearanceSystem::EquipSkillVfx(entt::entity player,
 	{
 		return kEntityIsNull;
 	}
-	if (request.client_request_id() == 0 || request.skill_table_id() == 0)
+	const uint64_t clientRequestId = request.client_request_id();
+	if (clientRequestId == 0 || request.skill_table_id() == 0)
 	{
 		return kInvalidParameter;
 	}
+	std::string fingerprint = ClientRequestFingerprint(request);
+	ClientRequestResult first;
+	switch (client_request_dedup::Check(player, clientRequestId, ClientRequestKind::kEquipSkillVfx, fingerprint, first))
+	{
+	case ClientRequestVerdict::kReplay:
+		response.set_skill_table_id(request.skill_table_id());
+		response.set_equipped_cosmetic_id(request.cosmetic_id());
+		response.set_replayed(true);
+		FillInfo(player, nowUnixSec, *response.mutable_info());
+		return kSuccess;
+	case ClientRequestVerdict::kMismatch:
+		return kInvalidParameter;
+	case ClientRequestVerdict::kUnavailable:
+		return kServiceUnavailable;
+	default:
+		break;
+	}
+
 	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
 	{
 		return mutTip;
@@ -1480,6 +1657,10 @@ uint32_t PlayerAppearanceSystem::EquipSkillVfx(entt::entity player,
 
 	const uint32_t skillTableId = request.skill_table_id();
 	const uint32_t targetCosmeticId = request.cosmetic_id();
+	bool consumeVoucher = false;
+	uint32_t voucherItemId = 0;
+	uint32_t voucherItemCount = 0;
+	std::string vfxKey;
 	if (targetCosmeticId != 0)
 	{
 		const auto *row = SkillVfxCosmeticTableManager::Instance().FindByIdSilent(targetCosmeticId).first;
@@ -1493,14 +1674,68 @@ uint32_t PlayerAppearanceSystem::EquipSkillVfx(entt::entity player,
 					  << " player_id=" << playerId;
 			return static_cast<uint32_t>(kAppearanceUnavailable);
 		}
-		if (!player_appearance::IsSkillVfxOwned(profile->skill_vfx_owned_bits(), row->id()))
-		{
-			return static_cast<uint32_t>(kAppearanceNotOwned);
-		}
 		if (!PlayerHasUsableSkill(player, skillTableId))
 		{
 			return static_cast<uint32_t>(kAppearanceInvalid);
 		}
+		const bool alreadyOwned = player_appearance::IsSkillVfxOwned(profile->skill_vfx_owned_bits(), row->id());
+		const bool cardUnlockable = row->card_item_id() != 0 && row->card_item_count() > 0;
+		const player_appearance::SwitchPlan plan =
+			player_appearance::PlanSwitch(alreadyOwned, request.expect_free_equip(), cardUnlockable);
+		if (plan == player_appearance::SwitchPlan::kRefuseNotOwned)
+		{
+			return static_cast<uint32_t>(kAppearanceNotOwned);
+		}
+		if (plan == player_appearance::SwitchPlan::kRefuseNotCardUnlockable)
+		{
+			return static_cast<uint32_t>(kAppearanceNotCardUnlockable);
+		}
+		consumeVoucher = (plan == player_appearance::SwitchPlan::kCardUnlock);
+		voucherItemId = row->card_item_id();
+		voucherItemCount = row->card_item_count();
+		vfxKey = row->vfx_key();
+	}
+
+	if (consumeVoucher)
+	{
+		auto *bags = registry.try_get<PlayerBagsComp>(player);
+		if (bags == nullptr)
+		{
+			LOG_ERROR << "[PlayerAppearance] equip skill vfx refused: missing PlayerBagsComp player_id=" << playerId;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		const ItemCountMap consumed{{voucherItemId, voucherItemCount}};
+		if (BagService::CheckRemovable(player, bags->bags[kInventory], consumed) != BagService::RemovalVerdict::kEnough)
+		{
+			return static_cast<uint32_t>(kAppearanceNoCard);
+		}
+		if (const uint32_t removeErr = BagService::RemoveItemsExact(
+				player, bags->bags[kInventory], consumed, TX_APPEARANCE_SWITCH, clientRequestId, vfxKey);
+			removeErr != kSuccess)
+		{
+			LOG_ERROR << "[PlayerAppearance] equip skill vfx refused: RemoveItemsExact failed player_id="
+					  << playerId << " item_id=" << voucherItemId << " err=" << removeErr;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		if (!player_appearance::MarkSkillVfxOwned(*profile->mutable_skill_vfx_owned_bits(), targetCosmeticId))
+		{
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		(*profile->mutable_equipped_skill_vfx())[skillTableId] = targetCosmeticId;
+		client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kEquipSkillVfx,
+									   std::move(fingerprint), ClientRequestResult{});
+		RequestSave(player, "skill_vfx_unlocked_and_equipped");
+		LOG_INFO << "[PlayerAppearance] metric=skill_vfx_unlocked player_id=" << playerId
+				 << " skill_table_id=" << skillTableId << " cosmetic_id=" << targetCosmeticId
+				 << " card_item_id=" << voucherItemId << " card_count=" << voucherItemCount
+				 << " client_request_id=" << clientRequestId;
+		response.set_skill_table_id(skillTableId);
+		response.set_equipped_cosmetic_id(targetCosmeticId);
+		FillInfo(player, nowUnixSec, *response.mutable_info());
+		AppearanceStateNotify notify;
+		*notify.mutable_info() = response.info();
+		PushStateNotify(player, notify);
+		return kSuccess;
 	}
 
 	const auto it = profile->equipped_skill_vfx().find(skillTableId);

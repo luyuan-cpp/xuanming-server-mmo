@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include <entt/src/entt/entity/entity.hpp>
 
@@ -82,6 +83,9 @@ public:
 		SaveSkillLoadoutResponse& response);
 	static void SwitchLoadout(entt::entity player, const SwitchSkillLoadoutRequest& request,
 		SwitchSkillLoadoutResponse& response);
+	static uint32_t UnlockedLoadoutSchemeCount(entt::entity player);
+	// 供装备流派方案切换联动使用：仅切激活方案与乐观锁版本，不触发属性重算/推面板（由调用方统一做一次）。
+	static bool TrySwitchLinkedLoadout(entt::entity player, uint32_t schemeId, std::string& notice);
 
 	// 修习(学习 = 0 → 1;rank 0 的已有条目原地复用)。整笔拒绝时填 error_message 且不扣钱、不改等级;
 	// 部分成功时 upgraded_count < count、stop_tip_id 说明停在哪。无论成败 state 都是处理之后的完整技能书。

@@ -270,6 +270,7 @@
     <ClInclude Include="proto\tip\festival_beast_error_tip.pb.h" />
     <ClInclude Include="proto\tip\spirit_shop_error_tip.pb.h" />
     <ClInclude Include="proto\tip\travel_pass_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\rewarded_ad_error_tip.pb.h" />
     <ClInclude Include="proto\tip\chat_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
@@ -463,6 +464,7 @@
     <ClCompile Include="proto\tip\festival_beast_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\spirit_shop_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\travel_pass_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\rewarded_ad_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
@@ -739,5 +741,10 @@
     <ClInclude Include="code\battleprogressionrule_table_comp.h" />
     <ClCompile Include="proto\battleprogressionrule_table.pb.cc" />
     <ClInclude Include="proto\battleprogressionrule_table.pb.h" />
+    <ClCompile Include="code\rewardedadslot_table.cpp" />
+    <ClInclude Include="code\rewardedadslot_table.h" />
+    <ClInclude Include="code\rewardedadslot_table_comp.h" />
+    <ClCompile Include="proto\rewardedadslot_table.pb.cc" />
+    <ClInclude Include="proto\rewardedadslot_table.pb.h" />
   </ItemGroup>
 </Project>

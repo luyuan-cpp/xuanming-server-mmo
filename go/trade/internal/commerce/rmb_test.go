@@ -162,9 +162,11 @@ func TestRmbSelectionRejectsMixedKindsBoundCurrencyAndUnconfiguredDiamond(t *tes
 	s.CurrencyTypes = []uint32{currencytype.Gold, currencytype.Diamond}
 	_, err = s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.Diamond}})
 	require.NoError(t, err)
-	// 绑定灵石被配进 CurrencyTypes(配置校验会拒绝,这里绕过它)也不可寄售。
-	s.CurrencyTypes = []uint32{currencytype.Gold, currencytype.Diamond, currencytype.BindDiamond}
+	// 绑定灵石与绑定银两被配进 CurrencyTypes(配置校验会拒绝,这里绕过它)也不可寄售。
+	s.CurrencyTypes = []uint32{currencytype.Gold, currencytype.Diamond, currencytype.BindDiamond, currencytype.BindGold}
 	_, err = s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.BindDiamond}})
+	require.ErrorIs(t, err, ErrNotTradable)
+	_, err = s.selection(&tradepb.CreateRmbConsignmentRequest{Assets: &tradepb.TradeAssetSelection{CurrencyAmount: 1, CurrencyType: currencytype.BindGold}})
 	require.ErrorIs(t, err, ErrNotTradable)
 }
 func TestTiDBRmbRegistersOnlyAfterEscrowAndDeliversOneOriginalCredit(t *testing.T) {

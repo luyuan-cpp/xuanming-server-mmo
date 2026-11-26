@@ -113,8 +113,8 @@ func (s *RmbConsignments) selection(in *tradepb.CreateRmbConsignmentRequest) (st
 	if len(policy.Currencies) == 0 {
 		policy.Currencies = []uint32{currencytype.Gold}
 	}
-	// 绑定灵石不论配置都不可寄售(配置校验 config.IsTradableCurrency 本就拒绝它进 CurrencyTypes)。
-	if v.GetCurrencyType() == currencytype.BindDiamond {
+	// 绑定灵石与绑定银两不论配置都不可寄售(配置校验 config.IsTradableCurrency 本就拒绝它们进 CurrencyTypes)。
+	if currencytype.IsBound(v.GetCurrencyType()) {
 		return "", ErrNotTradable
 	}
 	if err := policy.Selection(v); err != nil {

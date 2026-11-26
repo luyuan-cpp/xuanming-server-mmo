@@ -402,6 +402,170 @@ bool CurrencySystem::CanAfford(entt::entity player, CurrencyType type, int64_t a
 }
 
 // ---------------------------------------------------------------------------
+// 双银两（绑定银两优先抵扣）原语
+// ---------------------------------------------------------------------------
+
+uint64_t CurrencySystem::GetSpendableGoldWithBind(entt::entity player)
+{
+    const uint64_t bindGold = GetBalance(player, kCurrencyBindGold);
+    const uint64_t gold = GetBalance(player, kCurrencyGold);
+    if (gold > std::numeric_limits<uint64_t>::max() - bindGold)
+    {
+        return std::numeric_limits<uint64_t>::max();
+    }
+    return bindGold + gold;
+}
+
+bool CurrencySystem::CanAffordGoldWithBind(entt::entity player, int64_t amount)
+{
+    if (amount <= 0)
+    {
+        LOG_ERROR << "CurrencySystem::CanAffordGoldWithBind: amount must be > 0, got "
+                  << amount << " entity=" << entt::to_integral(player);
+        return false;
+    }
+    return GetSpendableGoldWithBind(player) >= static_cast<uint64_t>(amount);
+}
+
+bool CurrencySystem::CanAffordSplitGold(entt::entity player, uint64_t strictGold, uint64_t preferBindGold)
+{
+    constexpr uint64_t kMaxPayable = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    if (strictGold > kMaxPayable || preferBindGold > kMaxPayable)
+    {
+        return false;
+    }
+    const uint64_t gold = GetBalance(player, kCurrencyGold);
+    if (gold < strictGold)
+    {
+        return false;
+    }
+    if (preferBindGold == 0)
+    {
+        return true;
+    }
+    const uint64_t remainingGold = gold - strictGold;
+    const uint64_t bindGold = GetBalance(player, kCurrencyBindGold);
+    return bindGold >= preferBindGold || (preferBindGold - bindGold) <= remainingGold;
+}
+
+uint32_t CurrencySystem::DeductGoldPreferBind(entt::entity player, int64_t amount,
+                                              TransactionType txType, uint64_t correlationId,
+                                              uint64_t *outSpentBindGold, uint64_t *outSpentGold)
+{
+    if (outSpentBindGold != nullptr)
+    {
+        *outSpentBindGold = 0;
+    }
+    if (outSpentGold != nullptr)
+    {
+        *outSpentGold = 0;
+    }
+    if (amount <= 0)
+    {
+        LOG_ERROR << "CurrencySystem::DeductGoldPreferBind: amount must be > 0, got "
+                  << amount << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
+    return DeductSplitGold(player, 0, static_cast<uint64_t>(amount), txType, correlationId,
+                           outSpentBindGold, outSpentGold);
+}
+
+uint32_t CurrencySystem::DeductSplitGold(entt::entity player, uint64_t strictGold, uint64_t preferBindGold,
+                                         TransactionType txType, uint64_t correlationId,
+                                         uint64_t *outSpentBindGold, uint64_t *outSpentGold)
+{
+    if (outSpentBindGold != nullptr)
+    {
+        *outSpentBindGold = 0;
+    }
+    if (outSpentGold != nullptr)
+    {
+        *outSpentGold = 0;
+    }
+    constexpr uint64_t kMaxPayable = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    if ((strictGold == 0 && preferBindGold == 0) || strictGold > kMaxPayable || preferBindGold > kMaxPayable)
+    {
+        LOG_ERROR << "CurrencySystem::DeductSplitGold: invalid amounts strictGold=" << strictGold
+                  << " preferBindGold=" << preferBindGold << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
+
+    if (PlayerLifecycleSystem::IsPlayerFrozen(player))
+    {
+        LOG_WARN << "CurrencySystem::DeductSplitGold rejected: player frozen for cross-zone migration. "
+                 << "strictGold=" << strictGold << " preferBindGold=" << preferBindGold
+                 << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kAssetFrozen);
+    }
+
+    auto *comp = FindRequiredPlayerCurrencyComp(player, "CurrencySystem::DeductSplitGold");
+    if (comp == nullptr)
+    {
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
+
+    auto *currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
+    if (currency == nullptr)
+    {
+        LOG_ERROR << "CurrencySystem::DeductSplitGold: CurrencyComp missing on entity "
+                  << entt::to_integral(player);
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
+
+    const uint64_t goldAvail = GetBalance(player, kCurrencyGold);
+    const uint64_t bindAvail = GetBalance(player, kCurrencyBindGold);
+    if (goldAvail < strictGold)
+    {
+        LOG_WARN << "CurrencySystem::DeductSplitGold: insufficient tradable gold. gold=" << goldAvail
+                 << " strictGold=" << strictGold << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kAssetCurrencyInsufficient);
+    }
+    const uint64_t remainingGold = goldAvail - strictGold;
+    if (preferBindGold > bindAvail && (preferBindGold - bindAvail) > remainingGold)
+    {
+        LOG_WARN << "CurrencySystem::DeductSplitGold: insufficient combined gold. bindGold=" << bindAvail
+                 << " remainingGold=" << remainingGold << " preferBindGold=" << preferBindGold
+                 << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kAssetCurrencyInsufficient);
+    }
+
+    // 全部前置校验通过后才扩容槽位并原子提交，绝不出现半扣。
+    EnsureCurrencySlots(*currency);
+    auto *values = currency->mutable_values();
+    uint64_t &bindBalance = (*values)[static_cast<uint32_t>(kCurrencyBindGold)];
+    uint64_t &goldBalance = (*values)[static_cast<uint32_t>(kCurrencyGold)];
+
+    const uint64_t spentBind = std::min(bindBalance, preferBindGold);
+    const uint64_t spentGold = strictGold + (preferBindGold - spentBind);
+
+    if (spentBind > 0)
+    {
+        const uint64_t before = bindBalance;
+        bindBalance -= spentBind;
+        TransactionLogSystem::LogCurrencyDeduct(player, kCurrencyBindGold, spentBind, before, bindBalance,
+                                                txType, correlationId);
+    }
+    if (spentGold > 0)
+    {
+        const uint64_t before = goldBalance;
+        goldBalance -= spentGold;
+        TransactionLogSystem::LogCurrencyDeduct(player, kCurrencyGold, spentGold, before, goldBalance,
+                                                txType, correlationId);
+    }
+
+    comp->dirty = true;
+    if (outSpentBindGold != nullptr)
+    {
+        *outSpentBindGold = spentBind;
+    }
+    if (outSpentGold != nullptr)
+    {
+        *outSpentGold = spentGold;
+    }
+    return kSuccess;
+}
+
+// ---------------------------------------------------------------------------
 // AttachDebt (补缴)
 // ---------------------------------------------------------------------------
 

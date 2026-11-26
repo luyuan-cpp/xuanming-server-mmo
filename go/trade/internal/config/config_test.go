@@ -419,7 +419,7 @@ func TestIsTradableCurrencyIsGoldAndDiamondOnly(t *testing.T) {
 			t.Errorf("IsTradableCurrency(%d) = false, want true", c)
 		}
 	}
-	for _, c := range []uint32{currencytype.BindDiamond, uint32(len(basepb.CurrencyType_name)), math.MaxUint32} {
+	for _, c := range []uint32{currencytype.BindDiamond, currencytype.BindGold, uint32(len(basepb.CurrencyType_name)), math.MaxUint32} {
 		if IsTradableCurrency(c) {
 			t.Errorf("IsTradableCurrency(%d) = true, want false", c)
 		}

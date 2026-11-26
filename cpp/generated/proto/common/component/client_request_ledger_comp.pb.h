@@ -85,6 +85,14 @@ extern const ::google::protobuf::internal::ClassDataFull EquipmentMaterialReward
 #else
 extern const EquipmentMaterialRewardLedgerGlobalsTypeInternal EquipmentMaterialRewardLedger_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RewardedAdLedger;
+struct RewardedAdLedgerGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RewardedAdLedgerGlobalsTypeInternal RewardedAdLedger_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RewardedAdLedger_class_data_;
+#else
+extern const RewardedAdLedgerGlobalsTypeInternal RewardedAdLedger_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -94,6 +102,279 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdLedger final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:RewardedAdLedger) */ {
+ public:
+  inline RewardedAdLedger() : RewardedAdLedger(nullptr) {}
+  ~RewardedAdLedger() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RewardedAdLedger* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RewardedAdLedger));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RewardedAdLedger(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RewardedAdLedger(const RewardedAdLedger& from) : RewardedAdLedger(nullptr, from) {}
+  inline RewardedAdLedger(RewardedAdLedger&& from) noexcept : RewardedAdLedger(nullptr, ::std::move(from)) {}
+  inline RewardedAdLedger& operator=(const RewardedAdLedger& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RewardedAdLedger& operator=(RewardedAdLedger&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RewardedAdLedger& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RewardedAdLedger>(&RewardedAdLedger_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(RewardedAdLedger& a, RewardedAdLedger& b) { a.Swap(&b); }
+  inline void Swap(RewardedAdLedger* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RewardedAdLedger* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RewardedAdLedger* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RewardedAdLedger>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RewardedAdLedger& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RewardedAdLedger& from) { RewardedAdLedger::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RewardedAdLedger* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "RewardedAdLedger"; }
+
+  explicit RewardedAdLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RewardedAdLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RewardedAdLedger& from);
+  RewardedAdLedger(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RewardedAdLedger&& from) noexcept
+      : RewardedAdLedger(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDayStartsAtMsFieldNumber = 1,
+    kLastClaimAtMsFieldNumber = 3,
+    kTotalClaimedLifetimeFieldNumber = 4,
+    kClaimedTodayFieldNumber = 2,
+    kActiveSessionSlotIdFieldNumber = 7,
+    kActiveSessionIdFieldNumber = 5,
+    kActiveSessionIssuedMsFieldNumber = 6,
+  };
+  // uint64 day_starts_at_ms = 1;
+  void clear_day_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t day_starts_at_ms() const;
+  void set_day_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_day_starts_at_ms() const;
+  void _internal_set_day_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint64 last_claim_at_ms = 3;
+  void clear_last_claim_at_ms() ;
+  [[nodiscard]] ::uint64_t last_claim_at_ms() const;
+  void set_last_claim_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_claim_at_ms() const;
+  void _internal_set_last_claim_at_ms(::uint64_t value);
+
+  public:
+  // uint64 total_claimed_lifetime = 4;
+  void clear_total_claimed_lifetime() ;
+  [[nodiscard]] ::uint64_t total_claimed_lifetime() const;
+  void set_total_claimed_lifetime(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_total_claimed_lifetime() const;
+  void _internal_set_total_claimed_lifetime(::uint64_t value);
+
+  public:
+  // uint32 claimed_today = 2;
+  void clear_claimed_today() ;
+  [[nodiscard]] ::uint32_t claimed_today() const;
+  void set_claimed_today(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_claimed_today() const;
+  void _internal_set_claimed_today(::uint32_t value);
+
+  public:
+  // uint32 active_session_slot_id = 7;
+  void clear_active_session_slot_id() ;
+  [[nodiscard]] ::uint32_t active_session_slot_id() const;
+  void set_active_session_slot_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_session_slot_id() const;
+  void _internal_set_active_session_slot_id(::uint32_t value);
+
+  public:
+  // uint64 active_session_id = 5;
+  void clear_active_session_id() ;
+  [[nodiscard]] ::uint64_t active_session_id() const;
+  void set_active_session_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_active_session_id() const;
+  void _internal_set_active_session_id(::uint64_t value);
+
+  public:
+  // uint64 active_session_issued_ms = 6;
+  void clear_active_session_issued_ms() ;
+  [[nodiscard]] ::uint64_t active_session_issued_ms() const;
+  void set_active_session_issued_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_active_session_issued_ms() const;
+  void _internal_set_active_session_issued_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:RewardedAdLedger)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RewardedAdLedger& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t day_starts_at_ms_;
+    ::uint64_t last_claim_at_ms_;
+    ::uint64_t total_claimed_lifetime_;
+    ::uint32_t claimed_today_;
+    ::uint32_t active_session_slot_id_;
+    ::uint64_t active_session_id_;
+    ::uint64_t active_session_issued_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final : public ::google::protobuf::Message
@@ -595,6 +876,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kCraftedSkillTableIdFieldNumber = 27,
     kScrollBonusFragmentsFieldNumber = 29,
     kTravelPassClaimedCountFieldNumber = 30,
+    kEquipLoadoutUnlockedCountFieldNumber = 31,
+    kEquipLoadoutSpentBindDiamondFieldNumber = 33,
+    kEquipLoadoutUsedItemIdFieldNumber = 32,
+    kRewardedAdCurrencyTypeFieldNumber = 35,
+    kEquipLoadoutSpentDiamondFieldNumber = 34,
+    kRewardedAdAmountFieldNumber = 36,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -901,13 +1188,73 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_travel_pass_claimed_count(::uint32_t value);
 
   public:
+  // uint32 equip_loadout_unlocked_count = 31;
+  void clear_equip_loadout_unlocked_count() ;
+  [[nodiscard]] ::uint32_t equip_loadout_unlocked_count() const;
+  void set_equip_loadout_unlocked_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equip_loadout_unlocked_count() const;
+  void _internal_set_equip_loadout_unlocked_count(::uint32_t value);
+
+  public:
+  // uint64 equip_loadout_spent_bind_diamond = 33;
+  void clear_equip_loadout_spent_bind_diamond() ;
+  [[nodiscard]] ::uint64_t equip_loadout_spent_bind_diamond() const;
+  void set_equip_loadout_spent_bind_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_equip_loadout_spent_bind_diamond() const;
+  void _internal_set_equip_loadout_spent_bind_diamond(::uint64_t value);
+
+  public:
+  // uint32 equip_loadout_used_item_id = 32;
+  void clear_equip_loadout_used_item_id() ;
+  [[nodiscard]] ::uint32_t equip_loadout_used_item_id() const;
+  void set_equip_loadout_used_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equip_loadout_used_item_id() const;
+  void _internal_set_equip_loadout_used_item_id(::uint32_t value);
+
+  public:
+  // uint32 rewarded_ad_currency_type = 35;
+  void clear_rewarded_ad_currency_type() ;
+  [[nodiscard]] ::uint32_t rewarded_ad_currency_type() const;
+  void set_rewarded_ad_currency_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rewarded_ad_currency_type() const;
+  void _internal_set_rewarded_ad_currency_type(::uint32_t value);
+
+  public:
+  // uint64 equip_loadout_spent_diamond = 34;
+  void clear_equip_loadout_spent_diamond() ;
+  [[nodiscard]] ::uint64_t equip_loadout_spent_diamond() const;
+  void set_equip_loadout_spent_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_equip_loadout_spent_diamond() const;
+  void _internal_set_equip_loadout_spent_diamond(::uint64_t value);
+
+  public:
+  // uint64 rewarded_ad_amount = 36;
+  void clear_rewarded_ad_amount() ;
+  [[nodiscard]] ::uint64_t rewarded_ad_amount() const;
+  void set_rewarded_ad_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rewarded_ad_amount() const;
+  void _internal_set_rewarded_ad_amount(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 30,
+      ::google::protobuf::internal::TcParseTable<5, 36,
                           0, 0,
-                          2>;
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -932,7 +1279,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const ClientRequestRecord& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr fingerprint_;
     ::uint64_t key_;
@@ -964,6 +1311,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint32_t crafted_skill_table_id_;
     ::uint32_t scroll_bonus_fragments_;
     ::uint32_t travel_pass_claimed_count_;
+    ::uint32_t equip_loadout_unlocked_count_;
+    ::uint64_t equip_loadout_spent_bind_diamond_;
+    ::uint32_t equip_loadout_used_item_id_;
+    ::uint32_t rewarded_ad_currency_type_;
+    ::uint64_t equip_loadout_spent_diamond_;
+    ::uint64_t rewarded_ad_amount_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1252,7 +1605,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   [[nodiscard]] static const ClientRequestLedgerComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClientRequestLedgerComp>(&ClientRequestLedgerComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(ClientRequestLedgerComp& a, ClientRequestLedgerComp& b) { a.Swap(&b); }
   inline void Swap(ClientRequestLedgerComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1347,6 +1700,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
     kRecordsFieldNumber = 1,
     kMaterialRewardFieldNumber = 4,
     kBattleEconomyFieldNumber = 5,
+    kRewardedAdFieldNumber = 6,
     kNextSeqFieldNumber = 2,
     kForgeRevisionFieldNumber = 3,
   };
@@ -1403,6 +1757,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   ::BattleEconomyLedger* PROTOBUF_NONNULL _internal_mutable_battle_economy();
 
   public:
+  // .RewardedAdLedger rewarded_ad = 6;
+  [[nodiscard]] bool has_rewarded_ad()
+      const;
+  void clear_rewarded_ad() ;
+  [[nodiscard]] const ::RewardedAdLedger& rewarded_ad() const;
+  [[nodiscard]] ::RewardedAdLedger* PROTOBUF_NULLABLE release_rewarded_ad();
+  ::RewardedAdLedger* PROTOBUF_NONNULL mutable_rewarded_ad();
+  void set_allocated_rewarded_ad(::RewardedAdLedger* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_rewarded_ad(::RewardedAdLedger* PROTOBUF_NULLABLE value);
+  ::RewardedAdLedger* PROTOBUF_NULLABLE unsafe_arena_release_rewarded_ad();
+
+  private:
+  const ::RewardedAdLedger& _internal_rewarded_ad() const;
+  ::RewardedAdLedger* PROTOBUF_NONNULL _internal_mutable_rewarded_ad();
+
+  public:
   // uint64 next_seq = 2;
   void clear_next_seq() ;
   [[nodiscard]] ::uint64_t next_seq() const;
@@ -1427,8 +1797,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          3, 0,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1459,6 +1829,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
     ::google::protobuf::RepeatedPtrField< ::ClientRequestRecord > records_;
     ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE material_reward_;
     ::BattleEconomyLedger* PROTOBUF_NULLABLE battle_economy_;
+    ::RewardedAdLedger* PROTOBUF_NULLABLE rewarded_ad_;
     ::uint64_t next_seq_;
     ::uint64_t forge_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2243,6 +2614,150 @@ inline void ClientRequestRecord::_internal_set_travel_pass_claimed_count(::uint3
   _impl_.travel_pass_claimed_count_ = value;
 }
 
+// uint32 equip_loadout_unlocked_count = 31;
+inline void ClientRequestRecord::clear_equip_loadout_unlocked_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_unlocked_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::uint32_t ClientRequestRecord::equip_loadout_unlocked_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equip_loadout_unlocked_count)
+  return _internal_equip_loadout_unlocked_count();
+}
+inline void ClientRequestRecord::set_equip_loadout_unlocked_count(::uint32_t value) {
+  _internal_set_equip_loadout_unlocked_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equip_loadout_unlocked_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_equip_loadout_unlocked_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_loadout_unlocked_count_;
+}
+inline void ClientRequestRecord::_internal_set_equip_loadout_unlocked_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_unlocked_count_ = value;
+}
+
+// uint32 equip_loadout_used_item_id = 32;
+inline void ClientRequestRecord::clear_equip_loadout_used_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_used_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+}
+inline ::uint32_t ClientRequestRecord::equip_loadout_used_item_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equip_loadout_used_item_id)
+  return _internal_equip_loadout_used_item_id();
+}
+inline void ClientRequestRecord::set_equip_loadout_used_item_id(::uint32_t value) {
+  _internal_set_equip_loadout_used_item_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equip_loadout_used_item_id)
+}
+inline ::uint32_t ClientRequestRecord::_internal_equip_loadout_used_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_loadout_used_item_id_;
+}
+inline void ClientRequestRecord::_internal_set_equip_loadout_used_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_used_item_id_ = value;
+}
+
+// uint64 equip_loadout_spent_bind_diamond = 33;
+inline void ClientRequestRecord::clear_equip_loadout_spent_bind_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_spent_bind_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline ::uint64_t ClientRequestRecord::equip_loadout_spent_bind_diamond() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equip_loadout_spent_bind_diamond)
+  return _internal_equip_loadout_spent_bind_diamond();
+}
+inline void ClientRequestRecord::set_equip_loadout_spent_bind_diamond(::uint64_t value) {
+  _internal_set_equip_loadout_spent_bind_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equip_loadout_spent_bind_diamond)
+}
+inline ::uint64_t ClientRequestRecord::_internal_equip_loadout_spent_bind_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_loadout_spent_bind_diamond_;
+}
+inline void ClientRequestRecord::_internal_set_equip_loadout_spent_bind_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_spent_bind_diamond_ = value;
+}
+
+// uint64 equip_loadout_spent_diamond = 34;
+inline void ClientRequestRecord::clear_equip_loadout_spent_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_spent_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline ::uint64_t ClientRequestRecord::equip_loadout_spent_diamond() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equip_loadout_spent_diamond)
+  return _internal_equip_loadout_spent_diamond();
+}
+inline void ClientRequestRecord::set_equip_loadout_spent_diamond(::uint64_t value) {
+  _internal_set_equip_loadout_spent_diamond(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equip_loadout_spent_diamond)
+}
+inline ::uint64_t ClientRequestRecord::_internal_equip_loadout_spent_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_loadout_spent_diamond_;
+}
+inline void ClientRequestRecord::_internal_set_equip_loadout_spent_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_loadout_spent_diamond_ = value;
+}
+
+// uint32 rewarded_ad_currency_type = 35;
+inline void ClientRequestRecord::clear_rewarded_ad_currency_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rewarded_ad_currency_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline ::uint32_t ClientRequestRecord::rewarded_ad_currency_type() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.rewarded_ad_currency_type)
+  return _internal_rewarded_ad_currency_type();
+}
+inline void ClientRequestRecord::set_rewarded_ad_currency_type(::uint32_t value) {
+  _internal_set_rewarded_ad_currency_type(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.rewarded_ad_currency_type)
+}
+inline ::uint32_t ClientRequestRecord::_internal_rewarded_ad_currency_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rewarded_ad_currency_type_;
+}
+inline void ClientRequestRecord::_internal_set_rewarded_ad_currency_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rewarded_ad_currency_type_ = value;
+}
+
+// uint64 rewarded_ad_amount = 36;
+inline void ClientRequestRecord::clear_rewarded_ad_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rewarded_ad_amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::uint64_t ClientRequestRecord::rewarded_ad_amount() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.rewarded_ad_amount)
+  return _internal_rewarded_ad_amount();
+}
+inline void ClientRequestRecord::set_rewarded_ad_amount(::uint64_t value) {
+  _internal_set_rewarded_ad_amount(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.rewarded_ad_amount)
+}
+inline ::uint64_t ClientRequestRecord::_internal_rewarded_ad_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rewarded_ad_amount_;
+}
+inline void ClientRequestRecord::_internal_set_rewarded_ad_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rewarded_ad_amount_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // EquipmentMaterialRewardLedger
@@ -2589,6 +3104,178 @@ inline void BattleEconomyLedger::_internal_set_battle_exp_this_week(::uint64_t v
 
 // -------------------------------------------------------------------
 
+// RewardedAdLedger
+
+// uint64 day_starts_at_ms = 1;
+inline void RewardedAdLedger::clear_day_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t RewardedAdLedger::day_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.day_starts_at_ms)
+  return _internal_day_starts_at_ms();
+}
+inline void RewardedAdLedger::set_day_starts_at_ms(::uint64_t value) {
+  _internal_set_day_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.day_starts_at_ms)
+}
+inline ::uint64_t RewardedAdLedger::_internal_day_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.day_starts_at_ms_;
+}
+inline void RewardedAdLedger::_internal_set_day_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = value;
+}
+
+// uint32 claimed_today = 2;
+inline void RewardedAdLedger::clear_claimed_today() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_today_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t RewardedAdLedger::claimed_today() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.claimed_today)
+  return _internal_claimed_today();
+}
+inline void RewardedAdLedger::set_claimed_today(::uint32_t value) {
+  _internal_set_claimed_today(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.claimed_today)
+}
+inline ::uint32_t RewardedAdLedger::_internal_claimed_today() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_today_;
+}
+inline void RewardedAdLedger::_internal_set_claimed_today(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_today_ = value;
+}
+
+// uint64 last_claim_at_ms = 3;
+inline void RewardedAdLedger::clear_last_claim_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_claim_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t RewardedAdLedger::last_claim_at_ms() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.last_claim_at_ms)
+  return _internal_last_claim_at_ms();
+}
+inline void RewardedAdLedger::set_last_claim_at_ms(::uint64_t value) {
+  _internal_set_last_claim_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.last_claim_at_ms)
+}
+inline ::uint64_t RewardedAdLedger::_internal_last_claim_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_claim_at_ms_;
+}
+inline void RewardedAdLedger::_internal_set_last_claim_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_claim_at_ms_ = value;
+}
+
+// uint64 total_claimed_lifetime = 4;
+inline void RewardedAdLedger::clear_total_claimed_lifetime() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_claimed_lifetime_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t RewardedAdLedger::total_claimed_lifetime() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.total_claimed_lifetime)
+  return _internal_total_claimed_lifetime();
+}
+inline void RewardedAdLedger::set_total_claimed_lifetime(::uint64_t value) {
+  _internal_set_total_claimed_lifetime(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.total_claimed_lifetime)
+}
+inline ::uint64_t RewardedAdLedger::_internal_total_claimed_lifetime() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_claimed_lifetime_;
+}
+inline void RewardedAdLedger::_internal_set_total_claimed_lifetime(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_claimed_lifetime_ = value;
+}
+
+// uint64 active_session_id = 5;
+inline void RewardedAdLedger::clear_active_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_session_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t RewardedAdLedger::active_session_id() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.active_session_id)
+  return _internal_active_session_id();
+}
+inline void RewardedAdLedger::set_active_session_id(::uint64_t value) {
+  _internal_set_active_session_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.active_session_id)
+}
+inline ::uint64_t RewardedAdLedger::_internal_active_session_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_session_id_;
+}
+inline void RewardedAdLedger::_internal_set_active_session_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_session_id_ = value;
+}
+
+// uint64 active_session_issued_ms = 6;
+inline void RewardedAdLedger::clear_active_session_issued_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_session_issued_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t RewardedAdLedger::active_session_issued_ms() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.active_session_issued_ms)
+  return _internal_active_session_issued_ms();
+}
+inline void RewardedAdLedger::set_active_session_issued_ms(::uint64_t value) {
+  _internal_set_active_session_issued_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.active_session_issued_ms)
+}
+inline ::uint64_t RewardedAdLedger::_internal_active_session_issued_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_session_issued_ms_;
+}
+inline void RewardedAdLedger::_internal_set_active_session_issued_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_session_issued_ms_ = value;
+}
+
+// uint32 active_session_slot_id = 7;
+inline void RewardedAdLedger::clear_active_session_slot_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_session_slot_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t RewardedAdLedger::active_session_slot_id() const {
+  // @@protoc_insertion_point(field_get:RewardedAdLedger.active_session_slot_id)
+  return _internal_active_session_slot_id();
+}
+inline void RewardedAdLedger::set_active_session_slot_id(::uint32_t value) {
+  _internal_set_active_session_slot_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:RewardedAdLedger.active_session_slot_id)
+}
+inline ::uint32_t RewardedAdLedger::_internal_active_session_slot_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_session_slot_id_;
+}
+inline void RewardedAdLedger::_internal_set_active_session_slot_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_session_slot_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // ClientRequestLedgerComp
 
 // repeated .ClientRequestRecord records = 1;
@@ -2650,7 +3337,7 @@ ClientRequestLedgerComp::_internal_mutable_records() {
 inline void ClientRequestLedgerComp::clear_next_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t ClientRequestLedgerComp::next_seq() const {
   // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.next_seq)
@@ -2658,7 +3345,7 @@ inline ::uint64_t ClientRequestLedgerComp::next_seq() const {
 }
 inline void ClientRequestLedgerComp::set_next_seq(::uint64_t value) {
   _internal_set_next_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.next_seq)
 }
 inline ::uint64_t ClientRequestLedgerComp::_internal_next_seq() const {
@@ -2674,7 +3361,7 @@ inline void ClientRequestLedgerComp::_internal_set_next_seq(::uint64_t value) {
 inline void ClientRequestLedgerComp::clear_forge_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.forge_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
   // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.forge_revision)
@@ -2682,7 +3369,7 @@ inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
 }
 inline void ClientRequestLedgerComp::set_forge_revision(::uint64_t value) {
   _internal_set_forge_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.forge_revision)
 }
 inline ::uint64_t ClientRequestLedgerComp::_internal_forge_revision() const {
@@ -2888,6 +3575,104 @@ inline void ClientRequestLedgerComp::set_allocated_battle_economy(::BattleEconom
 
   _impl_.battle_economy_ = reinterpret_cast<::BattleEconomyLedger*>(value);
   // @@protoc_insertion_point(field_set_allocated:ClientRequestLedgerComp.battle_economy)
+}
+
+// .RewardedAdLedger rewarded_ad = 6;
+inline bool ClientRequestLedgerComp::has_rewarded_ad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.rewarded_ad_ != nullptr);
+  return value;
+}
+inline void ClientRequestLedgerComp::clear_rewarded_ad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.rewarded_ad_ != nullptr) _impl_.rewarded_ad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::RewardedAdLedger& ClientRequestLedgerComp::_internal_rewarded_ad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::RewardedAdLedger* p = _impl_.rewarded_ad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::RewardedAdLedger>(&::RewardedAdLedger_globals_);
+}
+inline const ::RewardedAdLedger& ClientRequestLedgerComp::rewarded_ad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.rewarded_ad)
+  return _internal_rewarded_ad();
+}
+inline void ClientRequestLedgerComp::unsafe_arena_set_allocated_rewarded_ad(
+    ::RewardedAdLedger* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rewarded_ad_);
+  }
+  _impl_.rewarded_ad_ = reinterpret_cast<::RewardedAdLedger*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClientRequestLedgerComp.rewarded_ad)
+}
+inline ::RewardedAdLedger* PROTOBUF_NULLABLE ClientRequestLedgerComp::release_rewarded_ad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::RewardedAdLedger* released = _impl_.rewarded_ad_;
+  _impl_.rewarded_ad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::RewardedAdLedger* PROTOBUF_NULLABLE ClientRequestLedgerComp::unsafe_arena_release_rewarded_ad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClientRequestLedgerComp.rewarded_ad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::RewardedAdLedger* temp = _impl_.rewarded_ad_;
+  _impl_.rewarded_ad_ = nullptr;
+  return temp;
+}
+inline ::RewardedAdLedger* PROTOBUF_NONNULL ClientRequestLedgerComp::_internal_mutable_rewarded_ad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.rewarded_ad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::RewardedAdLedger>(GetArena());
+    _impl_.rewarded_ad_ = reinterpret_cast<::RewardedAdLedger*>(p);
+  }
+  return _impl_.rewarded_ad_;
+}
+inline ::RewardedAdLedger* PROTOBUF_NONNULL ClientRequestLedgerComp::mutable_rewarded_ad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::RewardedAdLedger* _msg = _internal_mutable_rewarded_ad();
+  // @@protoc_insertion_point(field_mutable:ClientRequestLedgerComp.rewarded_ad)
+  return _msg;
+}
+inline void ClientRequestLedgerComp::set_allocated_rewarded_ad(::RewardedAdLedger* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rewarded_ad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.rewarded_ad_ = reinterpret_cast<::RewardedAdLedger*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClientRequestLedgerComp.rewarded_ad)
 }
 
 #ifdef __GNUC__

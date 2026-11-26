@@ -569,7 +569,15 @@
         "EquipBindConfirmRequired": 28027,
         "EquipPolishPityChanged": 28028,
         "EquipCraftGoldNotEnough": 28029,
-        "EquipProxyMasterUnavailable": 28030
+        "EquipProxyMasterUnavailable": 28030,
+        "EquipLoadoutSchemeInvalid": 28031,
+        "EquipLoadoutMaxUnlocked": 28032,
+        "EquipLoadoutVersionChanged": 28033,
+        "EquipLoadoutDiamondNotEnough": 28034,
+        "EquipLoadoutNameInvalid": 28035,
+        "EquipLoadoutDuplicateItem": 28036,
+        "EquipLoadoutSlotUnavailable": 28037,
+        "EquipLoadoutUnlockCountChanged": 28038
       }
     },
     "player_inbox_error": {
@@ -785,6 +793,25 @@
         "TravelPassFrozen": 38010,
         "TravelPassInBattle": 38011,
         "TravelPassCosmeticNotOwned": 38012
+      }
+    },
+    "rewarded_ad_error": {
+      "base": 39000,
+      "width": 1000,
+      "ids": {
+        "RewardedAdUnavailable": 39000,
+        "RewardedAdDisabled": 39001,
+        "RewardedAdPlatformUnsupported": 39002,
+        "RewardedAdLevelNotEnough": 39003,
+        "RewardedAdDailyLimitReached": 39004,
+        "RewardedAdCooldown": 39005,
+        "RewardedAdSessionInvalid": 39006,
+        "RewardedAdSessionExpired": 39007,
+        "RewardedAdWatchTooShort": 39008,
+        "RewardedAdCurrencyBlocked": 39009,
+        "RewardedAdInBattle": 39010,
+        "RewardedAdFrozen": 39011,
+        "RewardedAdSsvRequired": 39012
       }
     }
   },

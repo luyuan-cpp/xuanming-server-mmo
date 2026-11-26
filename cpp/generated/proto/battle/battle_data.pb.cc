@@ -6402,11 +6402,11 @@ constexpr BattleAction::ParseTableT_ BattleAction::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(BattleAction, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -6416,10 +6416,7 @@ constexpr BattleAction::ParseTableT_ BattleAction::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::BattleAction>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 item_table_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleAction, _impl_.item_table_id_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.item_table_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .eBattleActionType action_type = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleAction, _impl_.action_type_), 0>(),
        {8, 0, 0,
@@ -6432,6 +6429,16 @@ constexpr BattleAction::ParseTableT_ BattleAction::InternalGenerateParseTable_(c
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleAction, _impl_.target_id_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.target_id_)}},
+      // uint32 item_table_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleAction, _impl_.item_table_id_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.item_table_id_)}},
+      // uint64 summon_pet_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleAction, _impl_.summon_pet_id_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.summon_pet_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -6442,7 +6449,9 @@ constexpr BattleAction::ParseTableT_ BattleAction::InternalGenerateParseTable_(c
       // uint64 target_id = 3;
       {PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.target_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 item_table_id = 4;
-      {PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.item_table_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.item_table_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 summon_pet_id = 5;
+      {PROTOBUF_FIELD_OFFSET(BattleAction, _impl_.summon_pet_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -6458,6 +6467,7 @@ inline constexpr BattleAction::Impl_::Impl_(
         action_type_{static_cast< ::eBattleActionType >(0)},
         skill_table_id_{0u},
         target_id_{::uint64_t{0u}},
+        summon_pet_id_{::uint64_t{0u}},
         item_table_id_{0u} {}
 
 template <typename>
@@ -9746,14 +9756,16 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_.action_type_),
         PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_.skill_table_id_),
         PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_.target_id_),
         PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_.item_table_id_),
+        PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_.summon_pet_id_),
         0,
         1,
         2,
+        4,
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleEventItem, _impl_._has_bits_),
@@ -10392,35 +10404,35 @@ static const ::_pbi::MigrationSchema
         {225, sizeof(::BattleActorState)},
         {324, sizeof(::BattleArtifactState)},
         {339, sizeof(::BattleAction)},
-        {350, sizeof(::BattleEventItem)},
-        {407, sizeof(::BattleSurrenderVoteState)},
-        {428, sizeof(::BattlePrepSealOption)},
-        {437, sizeof(::BattlePrepPetOption)},
-        {460, sizeof(::BattlePrepPlayerState)},
-        {477, sizeof(::BattlePrepState)},
-        {492, sizeof(::BattleTacticalPing)},
-        {503, sizeof(::BattleMonsterDefeat)},
-        {510, sizeof(::BattleCurrencyGain)},
-        {517, sizeof(::BattleRandomItemReward)},
-        {526, sizeof(::BattleRewardProfile)},
-        {541, sizeof(::BattleRewardConfig)},
-        {546, sizeof(::BattleSettlementData)},
-        {633, sizeof(::BattlePetSettlementData)},
-        {644, sizeof(::GuildWarBattleContext)},
-        {671, sizeof(::FestivalBeastBattleContext)},
-        {720, sizeof(::BattleActivityContext)},
-        {741, sizeof(::RankedPresetSelection)},
-        {748, sizeof(::RankedMemberLoadout)},
-        {755, sizeof(::RankedMatchContext_MemberWinStreaksEntry_DoNotUse)},
-        {762, sizeof(::RankedMatchContext)},
-        {783, sizeof(::BattleParticipationFact)},
-        {796, sizeof(::TrialBattleContext)},
-        {809, sizeof(::BattleTrialJournalFacts)},
-        {862, sizeof(::TournamentBattleContext)},
-        {895, sizeof(::WuxingTowerBattleContext)},
-        {908, sizeof(::WuxingTowerSettlementEcho)},
-        {919, sizeof(::CustomDuelRules)},
-        {936, sizeof(::BattleActorBuildSummary)},
+        {352, sizeof(::BattleEventItem)},
+        {409, sizeof(::BattleSurrenderVoteState)},
+        {430, sizeof(::BattlePrepSealOption)},
+        {439, sizeof(::BattlePrepPetOption)},
+        {462, sizeof(::BattlePrepPlayerState)},
+        {479, sizeof(::BattlePrepState)},
+        {494, sizeof(::BattleTacticalPing)},
+        {505, sizeof(::BattleMonsterDefeat)},
+        {512, sizeof(::BattleCurrencyGain)},
+        {519, sizeof(::BattleRandomItemReward)},
+        {528, sizeof(::BattleRewardProfile)},
+        {543, sizeof(::BattleRewardConfig)},
+        {548, sizeof(::BattleSettlementData)},
+        {635, sizeof(::BattlePetSettlementData)},
+        {646, sizeof(::GuildWarBattleContext)},
+        {673, sizeof(::FestivalBeastBattleContext)},
+        {722, sizeof(::BattleActivityContext)},
+        {743, sizeof(::RankedPresetSelection)},
+        {750, sizeof(::RankedMemberLoadout)},
+        {757, sizeof(::RankedMatchContext_MemberWinStreaksEntry_DoNotUse)},
+        {764, sizeof(::RankedMatchContext)},
+        {785, sizeof(::BattleParticipationFact)},
+        {798, sizeof(::TrialBattleContext)},
+        {811, sizeof(::BattleTrialJournalFacts)},
+        {864, sizeof(::TournamentBattleContext)},
+        {897, sizeof(::WuxingTowerBattleContext)},
+        {910, sizeof(::WuxingTowerSettlementEcho)},
+        {921, sizeof(::CustomDuelRules)},
+        {938, sizeof(::BattleActorBuildSummary)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -10586,261 +10598,263 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "e\022\017\n\007item_id\030\001 \001(\004\022\022\n\nused_count\030\002 \001(\r\022\032"
     "\n\022last_trigger_round\030\003 \001(\r\022\033\n\023round_trig"
     "ger_count\030\004 \001(\r\022\034\n\024pending_ailment_kind\030"
-    "\005 \001(\r\022\025\n\rpending_round\030\006 \001(\r\"y\n\014BattleAc"
-    "tion\022\'\n\013action_type\030\001 \001(\0162\022.eBattleActio"
-    "nType\022\026\n\016skill_table_id\030\002 \001(\r\022\021\n\ttarget_"
-    "id\030\003 \001(\004\022\025\n\ritem_table_id\030\004 \001(\r\"\254\005\n\017Batt"
-    "leEventItem\022%\n\nevent_type\030\001 \001(\0162\021.eBattl"
-    "eEventType\022\021\n\tsource_id\030\002 \001(\004\022\021\n\ttarget_"
-    "id\030\003 \001(\004\022\026\n\016skill_table_id\030\004 \001(\r\022\025\n\rbuff"
-    "_table_id\030\005 \001(\r\022\r\n\005value\030\006 \001(\004\022\023\n\013is_cri"
-    "tical\030\007 \001(\010\022\017\n\007success\030\010 \001(\010\022\033\n\023target_h"
-    "ealth_after\030\t \001(\004\022\025\n\ritem_table_id\030\n \001(\r"
-    "\022\020\n\010group_id\030\013 \001(\r\022\021\n\thit_index\030\014 \001(\r\022\031\n"
-    "\021target_mana_after\030\r \001(\004\022!\n\010hit_kind\030\016 \001"
-    "(\0162\017.eBattleHitKind\022\027\n\nmana_delta\030\017 \001(\022H"
-    "\000\210\001\001\022\030\n\020buff_instance_id\030\020 \001(\004\022\020\n\010absorb"
-    "ed\030\021 \001(\004\022\024\n\014shield_after\030\022 \001(\004\022\037\n\027target"
-    "_max_health_after\030\023 \001(\004\022\025\n\rdamage_origin"
-    "\030\024 \001(\r\022\025\n\rinstigator_id\030\025 \001(\004\022\030\n\020artifac"
-    "t_item_id\030\026 \001(\004\022\032\n\022artifact_effect_id\030\027 "
-    "\001(\r\022\026\n\016season_seal_id\030\030 \001(\r\022\025\n\rmechanic_"
-    "kind\030\031 \001(\r\022\031\n\021is_splash_reduced\030\032 \001(\010\022\030\n"
-    "\020is_primary_focus\030\033 \001(\010B\r\n\013_mana_delta\"\346"
-    "\001\n\030BattleSurrenderVoteState\022\016\n\006active\030\001 "
-    "\001(\010\022\022\n\nteam_index\030\002 \001(\r\022\033\n\023initiator_pla"
-    "yer_id\030\003 \001(\004\022\027\n\017initiated_round\030\004 \001(\r\022\031\n"
-    "\021agreed_player_ids\030\005 \003(\004\022\027\n\017required_agr"
-    "ees\030\006 \001(\r\022\032\n\022next_allowed_round\030\007 \001(\r\022\020\n"
-    "\010rejected\030\010 \001(\010\022\016\n\006passed\030\t \001(\010\"H\n\024Battl"
-    "ePrepSealOption\022\017\n\007seal_id\030\001 \001(\r\022\021\n\teffe"
-    "ct_id\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\"\330\001\n\023BattlePrep"
-    "PetOption\022\016\n\006pet_id\030\001 \001(\004\022\024\n\014pet_table_i"
-    "d\030\002 \001(\r\022\020\n\010pet_name\030\003 \001(\t\022\r\n\005level\030\004 \001(\r"
-    "\022\022\n\nmax_health\030\005 \001(\004\022\r\n\005speed\030\006 \001(\004\022\027\n\017p"
-    "hysical_attack\030\007 \001(\004\022\024\n\014magic_attack\030\010 \001"
-    "(\004\022\017\n\007defense\030\t \001(\004\022\027\n\017skill_table_ids\030\n"
-    " \003(\r\"\272\001\n\025BattlePrepPlayerState\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\022\n\nteam_index\030\002 \001(\r\022\030\n\020selecte"
-    "d_seal_id\030\003 \001(\r\022\027\n\017selected_pet_id\030\004 \001(\004"
-    "\022\035\n\025selected_pet_table_id\030\005 \001(\r\022\031\n\021selec"
-    "ted_pet_name\030\006 \001(\t\022\r\n\005ready\030\007 \001(\010\"\345\001\n\017Ba"
-    "ttlePrepState\022\016\n\006active\030\001 \001(\010\022\023\n\013deadlin"
-    "e_ms\030\002 \001(\004\022\030\n\020duration_seconds\030\003 \001(\r\0223\n\024"
-    "self_available_seals\030\004 \003(\0132\025.BattlePrepS"
-    "ealOption\0221\n\023self_available_pets\030\005 \003(\0132\024"
-    ".BattlePrepPetOption\022+\n\013team_states\030\006 \003("
-    "\0132\026.BattlePrepPlayerState\"{\n\022BattleTacti"
-    "calPing\022\030\n\020sender_player_id\030\001 \001(\004\022\027\n\017tar"
-    "get_actor_id\030\002 \001(\004\022\035\n\004kind\030\003 \001(\0162\017.Battl"
-    "ePingKind\022\023\n\013round_index\030\004 \001(\r\"\?\n\023Battle"
-    "MonsterDefeat\022\031\n\021monster_config_id\030\001 \001(\r"
-    "\022\r\n\005count\030\002 \001(\r\";\n\022BattleCurrencyGain\022\025\n"
-    "\rcurrency_type\030\001 \001(\r\022\016\n\006amount\030\002 \001(\004\"N\n\026"
-    "BattleRandomItemReward\022\025\n\ritem_table_id\030"
-    "\001 \001(\r\022\r\n\005count\030\002 \001(\r\022\016\n\006weight\030\003 \001(\r\"\303\001\n"
-    "\023BattleRewardProfile\022\030\n\020battle_config_id"
-    "\030\001 \001(\r\022\024\n\014strategy_key\030\002 \001(\t\022\020\n\010exp_gain"
-    "\030\003 \001(\004\022\'\n\ncurrencies\030\004 \003(\0132\023.BattleCurre"
-    "ncyGain\022\022\n\nitem_draws\030\005 \001(\r\022-\n\014random_it"
-    "ems\030\006 \003(\0132\027.BattleRandomItemReward\"<\n\022Ba"
-    "ttleRewardConfig\022&\n\010profiles\030\001 \003(\0132\024.Bat"
-    "tleRewardProfile\"\354\t\n\024BattleSettlementDat"
-    "a\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022"
-    " \n\007outcome\030\003 \001(\0162\017.eBattleOutcome\022\031\n\021pla"
-    "yer_team_index\030\004 \001(\r\022\016\n\006health\030\005 \001(\004\022\014\n\004"
-    "mana\030\006 \001(\004\022\020\n\010exp_gain\030\007 \001(\004\022\021\n\tgold_gai"
-    "n\030\010 \001(\004\022(\n\016items_consumed\030\t \003(\0132\020.Battle"
-    "ItemEntry\022&\n\014items_gained\030\n \003(\0132\020.Battle"
-    "ItemEntry\022\017\n\007is_dead\030\013 \001(\010\022\014\n\004fled\030\014 \001(\010"
-    "\022\024\n\014total_rounds\030\r \001(\r\022&\n\004pets\030\016 \003(\0132\030.B"
-    "attlePetSettlementData\022/\n\021defeated_monst"
-    "ers\030\017 \003(\0132\024.BattleMonsterDefeat\022+\n\016curre"
-    "ncy_gains\030\020 \003(\0132\023.BattleCurrencyGain\022\026\n\016"
-    "finished_at_ms\030\021 \001(\004\022\022\n\nmatch_mode\030\022 \001(\r"
-    "\022\030\n\020battle_config_id\030\023 \001(\r\022\036\n\026captured_p"
-    "et_table_ids\030\024 \003(\r\022\032\n\022competitive_ranked"
-    "\030\025 \001(\010\022\021\n\tseason_id\030\026 \001(\r\022\033\n\023ranked_rule"
-    "_version\030\027 \001(\r\022\024\n\014participated\030\030 \001(\010\022-\n\013"
-    "trial_facts\030\031 \001(\0132\030.BattleTrialJournalFa"
-    "cts\022\034\n\024manual_action_rounds\030\032 \001(\r\022%\n\035eff"
-    "ective_combat_contribution\030\033 \001(\010\022\031\n\021batt"
-    "le_difficulty\030\034 \001(\r\022\027\n\017boss_trial_kind\030\035"
-    " \001(\r\022\027\n\017use_free_preset\030\036 \001(\010\0223\n\016festiva"
-    "l_beast\030\037 \001(\0132\033.FestivalBeastBattleConte"
-    "xt\022\023\n\013surrendered\030  \001(\010\022\032\n\022total_damage_"
-    "dealt\030! \001(\004\022\032\n\022total_healing_done\030\" \001(\004\022"
-    "\035\n\025total_controls_landed\030# \001(\r\0224\n\020tower_"
-    "settlement\030$ \001(\0132\032.WuxingTowerSettlement"
-    "Echo\022\"\n\032primary_focus_damage_dealt\030% \001(\004"
-    "\022\034\n\024total_shield_granted\030& \001(\004\022\034\n\024total_"
-    "dispels_landed\030\' \001(\r\022\024\n\014damage_taken\030( \001"
-    "(\004\022,\n\016highlight_kind\030) \001(\0162\024.BattleHighl"
-    "ightKind\022\035\n\025ended_opponent_streak\030* \001(\r\""
-    "X\n\027BattlePetSettlementData\022\016\n\006pet_id\030\001 \001"
-    "(\004\022\016\n\006health\030\002 \001(\004\022\014\n\004mana\030\003 \001(\004\022\017\n\007is_d"
-    "ead\030\004 \001(\010\"\264\002\n\025GuildWarBattleContext\022\017\n\007z"
-    "one_id\030\001 \001(\r\022\031\n\021attacker_guild_id\030\002 \001(\004\022"
-    "\031\n\021defender_guild_id\030\003 \001(\004\022\022\n\nleyline_id"
-    "\030\004 \001(\r\022\027\n\017war_battle_kind\030\005 \001(\r\022\021\n\tbount"
-    "y_id\030\006 \001(\004\022\020\n\010week_key\030\007 \001(\r\022\033\n\023attacker"
-    "_player_ids\030\010 \003(\004\022\033\n\023defender_player_ids"
-    "\030\t \003(\004\022\032\n\022gold_leyline_bonus\030\n \001(\010\022\025\n\rri"
-    "valry_bonus\030\013 \001(\010\022\025\n\rstarted_at_ms\030\014 \001(\004"
-    "\"\352\004\n\032FestivalBeastBattleContext\022\034\n\024activ"
-    "ity_instance_id\030\001 \001(\r\022\027\n\017config_revision"
-    "\030\002 \001(\r\022\027\n\017reward_identity\030\003 \001(\t\022!\n\031rewar"
-    "d_definition_version\030\004 \001(\r\022\033\n\023reward_pet"
-    "_table_id\030\005 \001(\r\022\025\n\rrequired_wins\030\006 \001(\r\022\025"
-    "\n\rlocked_pet_id\030\007 \001(\004\022\032\n\022locked_owner_le"
-    "vel\030\010 \001(\r\022\017\n\007tier_id\030\t \001(\r\022\023\n\013round_limi"
-    "t\030\n \001(\r\022\024\n\014cycle_rounds\030\013 \001(\r\022\031\n\021first_h"
-    "eavy_round\030\014 \001(\r\022\035\n\025telegraph_lead_round"
-    "s\030\r \001(\r\022\034\n\024heavy_damage_percent\030\016 \001(\r\022\021\n"
-    "\tboss_name\030\017 \001(\t\022\023\n\013boss_health\030\020 \001(\004\022\034\n"
-    "\024boss_physical_attack\030\021 \001(\004\022\024\n\014boss_defe"
-    "nse\030\022 \001(\004\022\027\n\017boss_resistance\030\023 \001(\004\022\022\n\nbo"
-    "ss_speed\030\024 \001(\004\022\035\n\025effective_start_at_ms\030"
-    "\025 \001(\004\022\033\n\023effective_end_at_ms\030\026 \001(\004\022\031\n\021cl"
-    "ient_request_id\030\027 \001(\t\"\250\002\n\025BattleActivity"
-    "Context\022\"\n\004kind\030\001 \001(\0162\024.eBattleActivityK"
-    "ind\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activity_id\030\003 \001"
-    "(\r\022\022\n\nperiod_key\030\004 \001(\r\022\033\n\023initiator_play"
-    "er_id\030\005 \001(\004\022\030\n\020guild_period_key\030\006 \001(\r\022\031\n"
-    "\021launch_request_id\030\007 \001(\004\0223\n\016festival_bea"
-    "st\030\010 \001(\0132\033.FestivalBeastBattleContext\022)\n"
-    "\tguild_war\030\t \001(\0132\026.GuildWarBattleContext"
-    "\"K\n\025RankedPresetSelection\022\033\n\023character_p"
-    "reset_id\030\001 \001(\r\022\025\n\rpet_preset_id\030\002 \001(\r\"Q\n"
-    "\023RankedMemberLoadout\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "\'\n\007presets\030\002 \001(\0132\026.RankedPresetSelection"
-    "\"\331\002\n\022RankedMatchContext\022\021\n\tseason_id\030\001 \001"
-    "(\r\022\022\n\nseason_key\030\002 \001(\t\022\027\n\017rank_generatio"
-    "n\030\003 \001(\004\022\024\n\014rule_version\030\004 \001(\r\022\021\n\tteam_si"
-    "ze\030\005 \001(\r\022\032\n\022config_fingerprint\030\006 \001(\t\022%\n\007"
-    "members\030\007 \003(\0132\024.RankedMemberLoadout\022\027\n\017u"
-    "se_free_preset\030\010 \001(\010\022E\n\022member_win_strea"
-    "ks\030\t \003(\0132).RankedMatchContext.MemberWinS"
-    "treaksEntry\0327\n\025MemberWinStreaksEntry\022\013\n\003"
-    "key\030\001 \001(\004\022\r\n\005value\030\002 \001(\r:\0028\001\"\240\001\n\027BattleP"
-    "articipationFact\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014e"
-    "ntered_room\030\002 \001(\010\022\036\n\026manual_action_accep"
-    "ted\030\003 \001(\010\022\035\n\025explicit_auto_enabled\030\004 \001(\010"
-    "\022\035\n\025no_action_opportunity\030\005 \001(\010\"\233\001\n\022Tria"
-    "lBattleContext\022\030\n\020journal_entry_id\030\001 \001(\r"
-    "\022\032\n\022trial_rule_version\030\002 \001(\r\022\021\n\tseason_i"
-    "d\030\003 \001(\r\022\036\n\026guard_monster_table_id\030\004 \001(\r\022"
-    "\034\n\024guard_stance_buff_id\030\005 \001(\r\"\325\006\n\027Battle"
-    "TrialJournalFacts\022\030\n\020journal_entry_id\030\001 "
-    "\001(\r\022\032\n\022trial_rule_version\030\002 \001(\r\022\033\n\023initi"
-    "al_human_count\030\003 \001(\r\022\021\n\tseason_id\030\004 \001(\r\022"
-    "\035\n\025self_or_pet_ever_died\030\005 \001(\010\022\035\n\025boss_g"
-    "uard_heal_total\030\006 \001(\004\022\036\n\026guard_stance_di"
-    "spelled\030\007 \001(\010\022)\n!team_dealt_physical_dir"
-    "ect_damage\030\010 \001(\010\022&\n\036team_dealt_magic_dir"
-    "ect_damage\030\t \001(\010\022\026\n\016guard_survived\030\n \001(\010"
-    "\022#\n\033self_triggered_shield_break\030\013 \001(\010\0223\n"
-    "+self_triggered_anti_control_or_season_s"
-    "kill\030\014 \001(\010\022\031\n\021used_pet_table_id\030\r \001(\r\022 \n"
-    "\030used_artifact_effect_ids\030\016 \003(\r\022\033\n\023used_"
-    "season_seal_id\030\017 \001(\r\022\026\n\016teammate_names\030\020"
-    " \003(\t\022\'\n\037boss_wind_hit_unprotected_death\030"
-    "\021 \001(\010\022\'\n\037dealt_yang_bell_physical_damage"
-    "\030\022 \001(\010\022#\n\033dealt_yin_drum_magic_damage\030\023 "
-    "\001(\010\022\034\n\024finished_in_ebb_tide\030\024 \001(\010\022\032\n\022cle"
-    "ave_parry_count\030\025 \001(\r\022%\n\035heal_interrupt_"
-    "backlash_count\030\026 \001(\r\022\032\n\022stance_break_cou"
-    "nt\030\027 \001(\r\022 \n\030all_self_cleaves_parried\030\030 \001"
-    "(\010\022)\n!self_parried_cleave_at_least_once\030"
-    "\031 \001(\010\"\354\002\n\027TournamentBattleContext\022\021\n\tsea"
-    "son_id\030\001 \001(\r\022\020\n\010match_id\030\002 \001(\004\022\017\n\007best_o"
-    "f\030\003 \001(\r\022\022\n\ngame_index\030\004 \001(\r\022\016\n\006wins_a\030\005 "
-    "\001(\r\022\016\n\006wins_b\030\006 \001(\r\0222\n\017leyline_element\030\007"
-    " \001(\0162\031.TournamentLeylineElement\022\022\n\nsquad"
-    "_a_id\030\010 \001(\004\022\024\n\014squad_a_name\030\t \001(\t\022\022\n\nsqu"
-    "ad_b_id\030\n \001(\004\022\024\n\014squad_b_name\030\013 \001(\t\022\031\n\021s"
-    "quad_a_emblem_id\030\014 \001(\r\022\031\n\021squad_b_emblem"
-    "_id\030\r \001(\r\022\021\n\tis_warmup\030\016 \001(\010\022\026\n\016is_third"
-    "_place\030\017 \001(\010\"\231\001\n\030WuxingTowerBattleContex"
-    "t\022\020\n\010week_key\030\001 \001(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005f"
-    "loor\030\003 \001(\r\0222\n\017leyline_element\030\004 \001(\0162\031.To"
-    "urnamentLeylineElement\022\030\n\020active_sigil_i"
-    "ds\030\005 \003(\r\"b\n\031WuxingTowerSettlementEcho\022\020\n"
-    "\010week_key\030\001 \001(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005floor"
-    "\030\003 \001(\r\022\024\n\014total_rounds\030\004 \001(\r\"\357\001\n\017CustomD"
-    "uelRules\022\027\n\017use_free_preset\030\001 \001(\010\022 \n\030ena"
-    "ble_polarity_rotation\030\002 \001(\010\022\034\n\024round_lim"
-    "it_override\030\003 \001(\r\022\032\n\022ban_control_skills\030"
-    "\004 \001(\010\022\035\n\025allow_public_spectate\030\005 \001(\010\022&\n\036"
-    "challenger_character_preset_id\030\006 \001(\r\022 \n\030"
-    "challenger_pet_preset_id\030\007 \001(\r\"\324\002\n\027Battl"
-    "eActorBuildSummary\022\021\n\tplayer_id\030\001 \001(\004\022\014\n"
-    "\004name\030\002 \001(\t\022\022\n\nteam_index\030\003 \001(\r\022\020\n\010class"
-    "_id\030\004 \001(\r\022\r\n\005level\030\005 \001(\r\022\024\n\014formation_id"
-    "\030\006 \001(\r\022\026\n\016wuxing_element\030\007 \001(\r\022\026\n\016season"
-    "_seal_id\030\010 \001(\r\022\033\n\023active_pet_table_id\030\t "
-    "\001(\r\022\027\n\017active_pet_name\030\n \001(\t\022\032\n\022active_p"
-    "et_element\030\013 \001(\r\022\027\n\017skill_table_ids\030\014 \003("
-    "\r\022\030\n\020wuxing_sigil_ids\030\r \003(\r\022\030\n\020used_free"
-    "_preset\030\016 \001(\010*\206\001\n\020eBattleActorType\022\032\n\026BA"
-    "TTLE_ACTOR_TYPE_NONE\020\000\022\034\n\030BATTLE_ACTOR_T"
-    "YPE_PLAYER\020\001\022\035\n\031BATTLE_ACTOR_TYPE_MONSTE"
-    "R\020\002\022\031\n\025BATTLE_ACTOR_TYPE_PET\020\003*\341\001\n\021eBatt"
-    "leActionType\022\026\n\022BATTLE_ACTION_NONE\020\000\022\030\n\024"
-    "BATTLE_ACTION_ATTACK\020\001\022\027\n\023BATTLE_ACTION_"
-    "SKILL\020\002\022\030\n\024BATTLE_ACTION_DEFEND\020\003\022\026\n\022BAT"
-    "TLE_ACTION_ITEM\020\004\022\026\n\022BATTLE_ACTION_FLEE\020"
-    "\005\022\031\n\025BATTLE_ACTION_CAPTURE\020\006\022\034\n\030BATTLE_A"
-    "CTION_RECALL_PET\020\007*\200\005\n\020eBattleEventType\022"
-    "\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVENT_A"
-    "TTACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023BATTL"
-    "E_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEAL\020\004\022"
-    "\031\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE_EVE"
-    "NT_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUFF_TI"
-    "CK\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATTLE_E"
-    "VENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n\022\025\n\021"
-    "BATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EVENT_MISS"
-    "\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BATTLE_EVE"
-    "NT_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017\022\030\n\024BA"
-    "TTLE_EVENT_CAPTURE\020\020\022\027\n\023BATTLE_EVENT_REV"
-    "IVE\020\021\022\033\n\027BATTLE_EVENT_MAX_HEALTH\020\022\022\034\n\030BA"
-    "TTLE_EVENT_PET_RETREAT\020\023\022\027\n\023BATTLE_EVENT"
-    "_SHIELD\020\024\022\031\n\025BATTLE_EVENT_ARTIFACT\020\025\022\036\n\032"
-    "BATTLE_EVENT_BOSS_MECHANIC\020\026\022\037\n\033BATTLE_E"
-    "VENT_WUXING_SYNERGY\020\027*\234\001\n\016eBattleHitKind"
-    "\022\025\n\021BATTLE_HIT_NORMAL\020\000\022\024\n\020BATTLE_HIT_CO"
-    "MBO\020\001\022\026\n\022BATTLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_"
-    "HIT_REFLECT\020\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n"
-    "\021BATTLE_HIT_MIRROR\020\005*\216\001\n\016BattlePingKind\022"
-    "\033\n\027BATTLE_PING_UNSPECIFIED\020\000\022\025\n\021BATTLE_P"
-    "ING_FOCUS\020\001\022\027\n\023BATTLE_PING_CONTROL\020\002\022\027\n\023"
-    "BATTLE_PING_PROTECT\020\003\022\026\n\022BATTLE_PING_DIS"
-    "PEL\020\004*\347\001\n\023BattleHighlightKind\022\031\n\025BATTLE_"
-    "HIGHLIGHT_NONE\020\000\022\"\n\036BATTLE_HIGHLIGHT_PRI"
-    "MARY_FOCUS\020\001\022%\n!BATTLE_HIGHLIGHT_TACTICA"
-    "L_CONTROL\020\002\022#\n\037BATTLE_HIGHLIGHT_SAVIOR_S"
-    "UPPORT\020\003\022\037\n\033BATTLE_HIGHLIGHT_IRON_GUARD\020"
-    "\004\022$\n BATTLE_HIGHLIGHT_CLUTCH_COMEBACK\020\005*"
-    "\234\001\n\016eBattleOutcome\022\032\n\026BATTLE_OUTCOME_ONG"
-    "OING\020\000\022\035\n\031BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n"
-    "\031BATTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_O"
-    "UTCOME_DRAW\020\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*\247"
-    "\001\n\023eBattleActivityKind\022\035\n\031BATTLE_ACTIVIT"
-    "Y_KIND_NONE\020\000\022$\n BATTLE_ACTIVITY_KIND_GU"
-    "ILD_TRIAL\020\001\022\'\n#BATTLE_ACTIVITY_KIND_FEST"
-    "IVAL_BEAST\020\002\022\"\n\036BATTLE_ACTIVITY_KIND_GUI"
-    "LD_WAR\020\003*{\n\023eSpectateVisibility\022#\n\037SPECT"
-    "ATE_VISIBILITY_UNSPECIFIED\020\000\022\037\n\033SPECTATE"
-    "_VISIBILITY_PRIVATE\020\001\022\036\n\032SPECTATE_VISIBI"
-    "LITY_PUBLIC\020\002*_\n\reSpectateTier\022\030\n\024SPECTA"
-    "TE_TIER_DIRECT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020"
-    "\001\022\033\n\027SPECTATE_TIER_BROADCAST\020\002*\322\001\n\030Tourn"
-    "amentLeylineElement\022\"\n\036TOURNAMENT_LEYLIN"
-    "E_UNSPECIFIED\020\000\022\034\n\030TOURNAMENT_LEYLINE_ME"
-    "TAL\020\001\022\033\n\027TOURNAMENT_LEYLINE_WOOD\020\002\022\034\n\030TO"
-    "URNAMENT_LEYLINE_WATER\020\003\022\033\n\027TOURNAMENT_L"
-    "EYLINE_FIRE\020\004\022\034\n\030TOURNAMENT_LEYLINE_EART"
-    "H\020\005B\010Z\006battleb\006proto3"
+    "\005 \001(\r\022\025\n\rpending_round\030\006 \001(\r\"\220\001\n\014BattleA"
+    "ction\022\'\n\013action_type\030\001 \001(\0162\022.eBattleActi"
+    "onType\022\026\n\016skill_table_id\030\002 \001(\r\022\021\n\ttarget"
+    "_id\030\003 \001(\004\022\025\n\ritem_table_id\030\004 \001(\r\022\025\n\rsumm"
+    "on_pet_id\030\005 \001(\004\"\254\005\n\017BattleEventItem\022%\n\ne"
+    "vent_type\030\001 \001(\0162\021.eBattleEventType\022\021\n\tso"
+    "urce_id\030\002 \001(\004\022\021\n\ttarget_id\030\003 \001(\004\022\026\n\016skil"
+    "l_table_id\030\004 \001(\r\022\025\n\rbuff_table_id\030\005 \001(\r\022"
+    "\r\n\005value\030\006 \001(\004\022\023\n\013is_critical\030\007 \001(\010\022\017\n\007s"
+    "uccess\030\010 \001(\010\022\033\n\023target_health_after\030\t \001("
+    "\004\022\025\n\ritem_table_id\030\n \001(\r\022\020\n\010group_id\030\013 \001"
+    "(\r\022\021\n\thit_index\030\014 \001(\r\022\031\n\021target_mana_aft"
+    "er\030\r \001(\004\022!\n\010hit_kind\030\016 \001(\0162\017.eBattleHitK"
+    "ind\022\027\n\nmana_delta\030\017 \001(\022H\000\210\001\001\022\030\n\020buff_ins"
+    "tance_id\030\020 \001(\004\022\020\n\010absorbed\030\021 \001(\004\022\024\n\014shie"
+    "ld_after\030\022 \001(\004\022\037\n\027target_max_health_afte"
+    "r\030\023 \001(\004\022\025\n\rdamage_origin\030\024 \001(\r\022\025\n\rinstig"
+    "ator_id\030\025 \001(\004\022\030\n\020artifact_item_id\030\026 \001(\004\022"
+    "\032\n\022artifact_effect_id\030\027 \001(\r\022\026\n\016season_se"
+    "al_id\030\030 \001(\r\022\025\n\rmechanic_kind\030\031 \001(\r\022\031\n\021is"
+    "_splash_reduced\030\032 \001(\010\022\030\n\020is_primary_focu"
+    "s\030\033 \001(\010B\r\n\013_mana_delta\"\346\001\n\030BattleSurrend"
+    "erVoteState\022\016\n\006active\030\001 \001(\010\022\022\n\nteam_inde"
+    "x\030\002 \001(\r\022\033\n\023initiator_player_id\030\003 \001(\004\022\027\n\017"
+    "initiated_round\030\004 \001(\r\022\031\n\021agreed_player_i"
+    "ds\030\005 \003(\004\022\027\n\017required_agrees\030\006 \001(\r\022\032\n\022nex"
+    "t_allowed_round\030\007 \001(\r\022\020\n\010rejected\030\010 \001(\010\022"
+    "\016\n\006passed\030\t \001(\010\"H\n\024BattlePrepSealOption\022"
+    "\017\n\007seal_id\030\001 \001(\r\022\021\n\teffect_id\030\002 \001(\r\022\014\n\004n"
+    "ame\030\003 \001(\t\"\330\001\n\023BattlePrepPetOption\022\016\n\006pet"
+    "_id\030\001 \001(\004\022\024\n\014pet_table_id\030\002 \001(\r\022\020\n\010pet_n"
+    "ame\030\003 \001(\t\022\r\n\005level\030\004 \001(\r\022\022\n\nmax_health\030\005"
+    " \001(\004\022\r\n\005speed\030\006 \001(\004\022\027\n\017physical_attack\030\007"
+    " \001(\004\022\024\n\014magic_attack\030\010 \001(\004\022\017\n\007defense\030\t "
+    "\001(\004\022\027\n\017skill_table_ids\030\n \003(\r\"\272\001\n\025BattleP"
+    "repPlayerState\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\ntea"
+    "m_index\030\002 \001(\r\022\030\n\020selected_seal_id\030\003 \001(\r\022"
+    "\027\n\017selected_pet_id\030\004 \001(\004\022\035\n\025selected_pet"
+    "_table_id\030\005 \001(\r\022\031\n\021selected_pet_name\030\006 \001"
+    "(\t\022\r\n\005ready\030\007 \001(\010\"\345\001\n\017BattlePrepState\022\016\n"
+    "\006active\030\001 \001(\010\022\023\n\013deadline_ms\030\002 \001(\004\022\030\n\020du"
+    "ration_seconds\030\003 \001(\r\0223\n\024self_available_s"
+    "eals\030\004 \003(\0132\025.BattlePrepSealOption\0221\n\023sel"
+    "f_available_pets\030\005 \003(\0132\024.BattlePrepPetOp"
+    "tion\022+\n\013team_states\030\006 \003(\0132\026.BattlePrepPl"
+    "ayerState\"{\n\022BattleTacticalPing\022\030\n\020sende"
+    "r_player_id\030\001 \001(\004\022\027\n\017target_actor_id\030\002 \001"
+    "(\004\022\035\n\004kind\030\003 \001(\0162\017.BattlePingKind\022\023\n\013rou"
+    "nd_index\030\004 \001(\r\"\?\n\023BattleMonsterDefeat\022\031\n"
+    "\021monster_config_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\r\""
+    ";\n\022BattleCurrencyGain\022\025\n\rcurrency_type\030\001"
+    " \001(\r\022\016\n\006amount\030\002 \001(\004\"N\n\026BattleRandomItem"
+    "Reward\022\025\n\ritem_table_id\030\001 \001(\r\022\r\n\005count\030\002"
+    " \001(\r\022\016\n\006weight\030\003 \001(\r\"\303\001\n\023BattleRewardPro"
+    "file\022\030\n\020battle_config_id\030\001 \001(\r\022\024\n\014strate"
+    "gy_key\030\002 \001(\t\022\020\n\010exp_gain\030\003 \001(\004\022\'\n\ncurren"
+    "cies\030\004 \003(\0132\023.BattleCurrencyGain\022\022\n\nitem_"
+    "draws\030\005 \001(\r\022-\n\014random_items\030\006 \003(\0132\027.Batt"
+    "leRandomItemReward\"<\n\022BattleRewardConfig"
+    "\022&\n\010profiles\030\001 \003(\0132\024.BattleRewardProfile"
+    "\"\354\t\n\024BattleSettlementData\022\021\n\tbattle_id\030\001"
+    " \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022 \n\007outcome\030\003 \001(\016"
+    "2\017.eBattleOutcome\022\031\n\021player_team_index\030\004"
+    " \001(\r\022\016\n\006health\030\005 \001(\004\022\014\n\004mana\030\006 \001(\004\022\020\n\010ex"
+    "p_gain\030\007 \001(\004\022\021\n\tgold_gain\030\010 \001(\004\022(\n\016items"
+    "_consumed\030\t \003(\0132\020.BattleItemEntry\022&\n\014ite"
+    "ms_gained\030\n \003(\0132\020.BattleItemEntry\022\017\n\007is_"
+    "dead\030\013 \001(\010\022\014\n\004fled\030\014 \001(\010\022\024\n\014total_rounds"
+    "\030\r \001(\r\022&\n\004pets\030\016 \003(\0132\030.BattlePetSettleme"
+    "ntData\022/\n\021defeated_monsters\030\017 \003(\0132\024.Batt"
+    "leMonsterDefeat\022+\n\016currency_gains\030\020 \003(\0132"
+    "\023.BattleCurrencyGain\022\026\n\016finished_at_ms\030\021"
+    " \001(\004\022\022\n\nmatch_mode\030\022 \001(\r\022\030\n\020battle_confi"
+    "g_id\030\023 \001(\r\022\036\n\026captured_pet_table_ids\030\024 \003"
+    "(\r\022\032\n\022competitive_ranked\030\025 \001(\010\022\021\n\tseason"
+    "_id\030\026 \001(\r\022\033\n\023ranked_rule_version\030\027 \001(\r\022\024"
+    "\n\014participated\030\030 \001(\010\022-\n\013trial_facts\030\031 \001("
+    "\0132\030.BattleTrialJournalFacts\022\034\n\024manual_ac"
+    "tion_rounds\030\032 \001(\r\022%\n\035effective_combat_co"
+    "ntribution\030\033 \001(\010\022\031\n\021battle_difficulty\030\034 "
+    "\001(\r\022\027\n\017boss_trial_kind\030\035 \001(\r\022\027\n\017use_free"
+    "_preset\030\036 \001(\010\0223\n\016festival_beast\030\037 \001(\0132\033."
+    "FestivalBeastBattleContext\022\023\n\013surrendere"
+    "d\030  \001(\010\022\032\n\022total_damage_dealt\030! \001(\004\022\032\n\022t"
+    "otal_healing_done\030\" \001(\004\022\035\n\025total_control"
+    "s_landed\030# \001(\r\0224\n\020tower_settlement\030$ \001(\013"
+    "2\032.WuxingTowerSettlementEcho\022\"\n\032primary_"
+    "focus_damage_dealt\030% \001(\004\022\034\n\024total_shield"
+    "_granted\030& \001(\004\022\034\n\024total_dispels_landed\030\'"
+    " \001(\r\022\024\n\014damage_taken\030( \001(\004\022,\n\016highlight_"
+    "kind\030) \001(\0162\024.BattleHighlightKind\022\035\n\025ende"
+    "d_opponent_streak\030* \001(\r\"X\n\027BattlePetSett"
+    "lementData\022\016\n\006pet_id\030\001 \001(\004\022\016\n\006health\030\002 \001"
+    "(\004\022\014\n\004mana\030\003 \001(\004\022\017\n\007is_dead\030\004 \001(\010\"\264\002\n\025Gu"
+    "ildWarBattleContext\022\017\n\007zone_id\030\001 \001(\r\022\031\n\021"
+    "attacker_guild_id\030\002 \001(\004\022\031\n\021defender_guil"
+    "d_id\030\003 \001(\004\022\022\n\nleyline_id\030\004 \001(\r\022\027\n\017war_ba"
+    "ttle_kind\030\005 \001(\r\022\021\n\tbounty_id\030\006 \001(\004\022\020\n\010we"
+    "ek_key\030\007 \001(\r\022\033\n\023attacker_player_ids\030\010 \003("
+    "\004\022\033\n\023defender_player_ids\030\t \003(\004\022\032\n\022gold_l"
+    "eyline_bonus\030\n \001(\010\022\025\n\rrivalry_bonus\030\013 \001("
+    "\010\022\025\n\rstarted_at_ms\030\014 \001(\004\"\352\004\n\032FestivalBea"
+    "stBattleContext\022\034\n\024activity_instance_id\030"
+    "\001 \001(\r\022\027\n\017config_revision\030\002 \001(\r\022\027\n\017reward"
+    "_identity\030\003 \001(\t\022!\n\031reward_definition_ver"
+    "sion\030\004 \001(\r\022\033\n\023reward_pet_table_id\030\005 \001(\r\022"
+    "\025\n\rrequired_wins\030\006 \001(\r\022\025\n\rlocked_pet_id\030"
+    "\007 \001(\004\022\032\n\022locked_owner_level\030\010 \001(\r\022\017\n\007tie"
+    "r_id\030\t \001(\r\022\023\n\013round_limit\030\n \001(\r\022\024\n\014cycle"
+    "_rounds\030\013 \001(\r\022\031\n\021first_heavy_round\030\014 \001(\r"
+    "\022\035\n\025telegraph_lead_rounds\030\r \001(\r\022\034\n\024heavy"
+    "_damage_percent\030\016 \001(\r\022\021\n\tboss_name\030\017 \001(\t"
+    "\022\023\n\013boss_health\030\020 \001(\004\022\034\n\024boss_physical_a"
+    "ttack\030\021 \001(\004\022\024\n\014boss_defense\030\022 \001(\004\022\027\n\017bos"
+    "s_resistance\030\023 \001(\004\022\022\n\nboss_speed\030\024 \001(\004\022\035"
+    "\n\025effective_start_at_ms\030\025 \001(\004\022\033\n\023effecti"
+    "ve_end_at_ms\030\026 \001(\004\022\031\n\021client_request_id\030"
+    "\027 \001(\t\"\250\002\n\025BattleActivityContext\022\"\n\004kind\030"
+    "\001 \001(\0162\024.eBattleActivityKind\022\020\n\010guild_id\030"
+    "\002 \001(\004\022\023\n\013activity_id\030\003 \001(\r\022\022\n\nperiod_key"
+    "\030\004 \001(\r\022\033\n\023initiator_player_id\030\005 \001(\004\022\030\n\020g"
+    "uild_period_key\030\006 \001(\r\022\031\n\021launch_request_"
+    "id\030\007 \001(\004\0223\n\016festival_beast\030\010 \001(\0132\033.Festi"
+    "valBeastBattleContext\022)\n\tguild_war\030\t \001(\013"
+    "2\026.GuildWarBattleContext\"K\n\025RankedPreset"
+    "Selection\022\033\n\023character_preset_id\030\001 \001(\r\022\025"
+    "\n\rpet_preset_id\030\002 \001(\r\"Q\n\023RankedMemberLoa"
+    "dout\022\021\n\tplayer_id\030\001 \001(\004\022\'\n\007presets\030\002 \001(\013"
+    "2\026.RankedPresetSelection\"\331\002\n\022RankedMatch"
+    "Context\022\021\n\tseason_id\030\001 \001(\r\022\022\n\nseason_key"
+    "\030\002 \001(\t\022\027\n\017rank_generation\030\003 \001(\004\022\024\n\014rule_"
+    "version\030\004 \001(\r\022\021\n\tteam_size\030\005 \001(\r\022\032\n\022conf"
+    "ig_fingerprint\030\006 \001(\t\022%\n\007members\030\007 \003(\0132\024."
+    "RankedMemberLoadout\022\027\n\017use_free_preset\030\010"
+    " \001(\010\022E\n\022member_win_streaks\030\t \003(\0132).Ranke"
+    "dMatchContext.MemberWinStreaksEntry\0327\n\025M"
+    "emberWinStreaksEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005val"
+    "ue\030\002 \001(\r:\0028\001\"\240\001\n\027BattleParticipationFact"
+    "\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014entered_room\030\002 \001("
+    "\010\022\036\n\026manual_action_accepted\030\003 \001(\010\022\035\n\025exp"
+    "licit_auto_enabled\030\004 \001(\010\022\035\n\025no_action_op"
+    "portunity\030\005 \001(\010\"\233\001\n\022TrialBattleContext\022\030"
+    "\n\020journal_entry_id\030\001 \001(\r\022\032\n\022trial_rule_v"
+    "ersion\030\002 \001(\r\022\021\n\tseason_id\030\003 \001(\r\022\036\n\026guard"
+    "_monster_table_id\030\004 \001(\r\022\034\n\024guard_stance_"
+    "buff_id\030\005 \001(\r\"\325\006\n\027BattleTrialJournalFact"
+    "s\022\030\n\020journal_entry_id\030\001 \001(\r\022\032\n\022trial_rul"
+    "e_version\030\002 \001(\r\022\033\n\023initial_human_count\030\003"
+    " \001(\r\022\021\n\tseason_id\030\004 \001(\r\022\035\n\025self_or_pet_e"
+    "ver_died\030\005 \001(\010\022\035\n\025boss_guard_heal_total\030"
+    "\006 \001(\004\022\036\n\026guard_stance_dispelled\030\007 \001(\010\022)\n"
+    "!team_dealt_physical_direct_damage\030\010 \001(\010"
+    "\022&\n\036team_dealt_magic_direct_damage\030\t \001(\010"
+    "\022\026\n\016guard_survived\030\n \001(\010\022#\n\033self_trigger"
+    "ed_shield_break\030\013 \001(\010\0223\n+self_triggered_"
+    "anti_control_or_season_skill\030\014 \001(\010\022\031\n\021us"
+    "ed_pet_table_id\030\r \001(\r\022 \n\030used_artifact_e"
+    "ffect_ids\030\016 \003(\r\022\033\n\023used_season_seal_id\030\017"
+    " \001(\r\022\026\n\016teammate_names\030\020 \003(\t\022\'\n\037boss_win"
+    "d_hit_unprotected_death\030\021 \001(\010\022\'\n\037dealt_y"
+    "ang_bell_physical_damage\030\022 \001(\010\022#\n\033dealt_"
+    "yin_drum_magic_damage\030\023 \001(\010\022\034\n\024finished_"
+    "in_ebb_tide\030\024 \001(\010\022\032\n\022cleave_parry_count\030"
+    "\025 \001(\r\022%\n\035heal_interrupt_backlash_count\030\026"
+    " \001(\r\022\032\n\022stance_break_count\030\027 \001(\r\022 \n\030all_"
+    "self_cleaves_parried\030\030 \001(\010\022)\n!self_parri"
+    "ed_cleave_at_least_once\030\031 \001(\010\"\354\002\n\027Tourna"
+    "mentBattleContext\022\021\n\tseason_id\030\001 \001(\r\022\020\n\010"
+    "match_id\030\002 \001(\004\022\017\n\007best_of\030\003 \001(\r\022\022\n\ngame_"
+    "index\030\004 \001(\r\022\016\n\006wins_a\030\005 \001(\r\022\016\n\006wins_b\030\006 "
+    "\001(\r\0222\n\017leyline_element\030\007 \001(\0162\031.Tournamen"
+    "tLeylineElement\022\022\n\nsquad_a_id\030\010 \001(\004\022\024\n\014s"
+    "quad_a_name\030\t \001(\t\022\022\n\nsquad_b_id\030\n \001(\004\022\024\n"
+    "\014squad_b_name\030\013 \001(\t\022\031\n\021squad_a_emblem_id"
+    "\030\014 \001(\r\022\031\n\021squad_b_emblem_id\030\r \001(\r\022\021\n\tis_"
+    "warmup\030\016 \001(\010\022\026\n\016is_third_place\030\017 \001(\010\"\231\001\n"
+    "\030WuxingTowerBattleContext\022\020\n\010week_key\030\001 "
+    "\001(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005floor\030\003 \001(\r\0222\n\017le"
+    "yline_element\030\004 \001(\0162\031.TournamentLeylineE"
+    "lement\022\030\n\020active_sigil_ids\030\005 \003(\r\"b\n\031Wuxi"
+    "ngTowerSettlementEcho\022\020\n\010week_key\030\001 \001(\r\022"
+    "\016\n\006run_id\030\002 \001(\004\022\r\n\005floor\030\003 \001(\r\022\024\n\014total_"
+    "rounds\030\004 \001(\r\"\357\001\n\017CustomDuelRules\022\027\n\017use_"
+    "free_preset\030\001 \001(\010\022 \n\030enable_polarity_rot"
+    "ation\030\002 \001(\010\022\034\n\024round_limit_override\030\003 \001("
+    "\r\022\032\n\022ban_control_skills\030\004 \001(\010\022\035\n\025allow_p"
+    "ublic_spectate\030\005 \001(\010\022&\n\036challenger_chara"
+    "cter_preset_id\030\006 \001(\r\022 \n\030challenger_pet_p"
+    "reset_id\030\007 \001(\r\"\324\002\n\027BattleActorBuildSumma"
+    "ry\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\022\n\nt"
+    "eam_index\030\003 \001(\r\022\020\n\010class_id\030\004 \001(\r\022\r\n\005lev"
+    "el\030\005 \001(\r\022\024\n\014formation_id\030\006 \001(\r\022\026\n\016wuxing"
+    "_element\030\007 \001(\r\022\026\n\016season_seal_id\030\010 \001(\r\022\033"
+    "\n\023active_pet_table_id\030\t \001(\r\022\027\n\017active_pe"
+    "t_name\030\n \001(\t\022\032\n\022active_pet_element\030\013 \001(\r"
+    "\022\027\n\017skill_table_ids\030\014 \003(\r\022\030\n\020wuxing_sigi"
+    "l_ids\030\r \003(\r\022\030\n\020used_free_preset\030\016 \001(\010*\206\001"
+    "\n\020eBattleActorType\022\032\n\026BATTLE_ACTOR_TYPE_"
+    "NONE\020\000\022\034\n\030BATTLE_ACTOR_TYPE_PLAYER\020\001\022\035\n\031"
+    "BATTLE_ACTOR_TYPE_MONSTER\020\002\022\031\n\025BATTLE_AC"
+    "TOR_TYPE_PET\020\003*\377\001\n\021eBattleActionType\022\026\n\022"
+    "BATTLE_ACTION_NONE\020\000\022\030\n\024BATTLE_ACTION_AT"
+    "TACK\020\001\022\027\n\023BATTLE_ACTION_SKILL\020\002\022\030\n\024BATTL"
+    "E_ACTION_DEFEND\020\003\022\026\n\022BATTLE_ACTION_ITEM\020"
+    "\004\022\026\n\022BATTLE_ACTION_FLEE\020\005\022\031\n\025BATTLE_ACTI"
+    "ON_CAPTURE\020\006\022\034\n\030BATTLE_ACTION_RECALL_PET"
+    "\020\007\022\034\n\030BATTLE_ACTION_SUMMON_PET\020\010*\235\005\n\020eBa"
+    "ttleEventType\022\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023"
+    "BATTLE_EVENT_ATTACK\020\001\022\026\n\022BATTLE_EVENT_SK"
+    "ILL\020\002\022\027\n\023BATTLE_EVENT_DAMAGE\020\003\022\025\n\021BATTLE"
+    "_EVENT_HEAL\020\004\022\031\n\025BATTLE_EVENT_BUFF_ADD\020\005"
+    "\022\034\n\030BATTLE_EVENT_BUFF_REMOVE\020\006\022\032\n\026BATTLE"
+    "_EVENT_BUFF_TICK\020\007\022\026\n\022BATTLE_EVENT_DEATH"
+    "\020\010\022\027\n\023BATTLE_EVENT_DEFEND\020\t\022\025\n\021BATTLE_EV"
+    "ENT_ITEM\020\n\022\025\n\021BATTLE_EVENT_FLEE\020\013\022\025\n\021BAT"
+    "TLE_EVENT_MISS\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r"
+    "\022\025\n\021BATTLE_EVENT_MANA\020\016\022\027\n\023BATTLE_EVENT_"
+    "RESIST\020\017\022\030\n\024BATTLE_EVENT_CAPTURE\020\020\022\027\n\023BA"
+    "TTLE_EVENT_REVIVE\020\021\022\033\n\027BATTLE_EVENT_MAX_"
+    "HEALTH\020\022\022\034\n\030BATTLE_EVENT_PET_RETREAT\020\023\022\027"
+    "\n\023BATTLE_EVENT_SHIELD\020\024\022\031\n\025BATTLE_EVENT_"
+    "ARTIFACT\020\025\022\036\n\032BATTLE_EVENT_BOSS_MECHANIC"
+    "\020\026\022\037\n\033BATTLE_EVENT_WUXING_SYNERGY\020\027\022\033\n\027B"
+    "ATTLE_EVENT_SUMMON_PET\020\030*\234\001\n\016eBattleHitK"
+    "ind\022\025\n\021BATTLE_HIT_NORMAL\020\000\022\024\n\020BATTLE_HIT"
+    "_COMBO\020\001\022\026\n\022BATTLE_HIT_COUNTER\020\002\022\026\n\022BATT"
+    "LE_HIT_REFLECT\020\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004"
+    "\022\025\n\021BATTLE_HIT_MIRROR\020\005*\216\001\n\016BattlePingKi"
+    "nd\022\033\n\027BATTLE_PING_UNSPECIFIED\020\000\022\025\n\021BATTL"
+    "E_PING_FOCUS\020\001\022\027\n\023BATTLE_PING_CONTROL\020\002\022"
+    "\027\n\023BATTLE_PING_PROTECT\020\003\022\026\n\022BATTLE_PING_"
+    "DISPEL\020\004*\347\001\n\023BattleHighlightKind\022\031\n\025BATT"
+    "LE_HIGHLIGHT_NONE\020\000\022\"\n\036BATTLE_HIGHLIGHT_"
+    "PRIMARY_FOCUS\020\001\022%\n!BATTLE_HIGHLIGHT_TACT"
+    "ICAL_CONTROL\020\002\022#\n\037BATTLE_HIGHLIGHT_SAVIO"
+    "R_SUPPORT\020\003\022\037\n\033BATTLE_HIGHLIGHT_IRON_GUA"
+    "RD\020\004\022$\n BATTLE_HIGHLIGHT_CLUTCH_COMEBACK"
+    "\020\005*\234\001\n\016eBattleOutcome\022\032\n\026BATTLE_OUTCOME_"
+    "ONGOING\020\000\022\035\n\031BATTLE_OUTCOME_SIDE_A_WIN\020\001"
+    "\022\035\n\031BATTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTL"
+    "E_OUTCOME_DRAW\020\003\022\027\n\023BATTLE_OUTCOME_VOID\020"
+    "\004*\247\001\n\023eBattleActivityKind\022\035\n\031BATTLE_ACTI"
+    "VITY_KIND_NONE\020\000\022$\n BATTLE_ACTIVITY_KIND"
+    "_GUILD_TRIAL\020\001\022\'\n#BATTLE_ACTIVITY_KIND_F"
+    "ESTIVAL_BEAST\020\002\022\"\n\036BATTLE_ACTIVITY_KIND_"
+    "GUILD_WAR\020\003*{\n\023eSpectateVisibility\022#\n\037SP"
+    "ECTATE_VISIBILITY_UNSPECIFIED\020\000\022\037\n\033SPECT"
+    "ATE_VISIBILITY_PRIVATE\020\001\022\036\n\032SPECTATE_VIS"
+    "IBILITY_PUBLIC\020\002*_\n\reSpectateTier\022\030\n\024SPE"
+    "CTATE_TIER_DIRECT\020\000\022\027\n\023SPECTATE_TIER_REL"
+    "AY\020\001\022\033\n\027SPECTATE_TIER_BROADCAST\020\002*\322\001\n\030To"
+    "urnamentLeylineElement\022\"\n\036TOURNAMENT_LEY"
+    "LINE_UNSPECIFIED\020\000\022\034\n\030TOURNAMENT_LEYLINE"
+    "_METAL\020\001\022\033\n\027TOURNAMENT_LEYLINE_WOOD\020\002\022\034\n"
+    "\030TOURNAMENT_LEYLINE_WATER\020\003\022\033\n\027TOURNAMEN"
+    "T_LEYLINE_FIRE\020\004\022\034\n\030TOURNAMENT_LEYLINE_E"
+    "ARTH\020\005B\010Z\006battleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[5] = {
@@ -10854,7 +10868,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    14741,
+    14824,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -10880,14 +10894,14 @@ eBattleActionType_descriptor() {
   return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleActionType_internal_data_[] = {
-    524288u, 0u, };
+    589824u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleEventType_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
   return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[2];
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleEventType_internal_data_[] = {
-    1572864u, 0u, };
+    1638400u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleHitKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
@@ -16317,7 +16331,7 @@ PROTOBUF_NOINLINE void BattleAction::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     ::memset(&_impl_.action_type_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.item_table_id_) -
         reinterpret_cast<char*>(&_impl_.action_type_)) + sizeof(_impl_.item_table_id_));
@@ -16373,11 +16387,20 @@ PROTOBUF_NOINLINE void BattleAction::Clear() {
   }
 
   // uint32 item_table_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_item_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           4, this_._internal_item_table_id(), target);
+    }
+  }
+
+  // uint64 summon_pet_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_summon_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_summon_pet_id(), target);
     }
   }
 
@@ -16406,7 +16429,7 @@ PROTOBUF_NOINLINE void BattleAction::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // .eBattleActionType action_type = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_action_type() != 0) {
@@ -16428,8 +16451,15 @@ PROTOBUF_NOINLINE void BattleAction::Clear() {
             this_._internal_target_id());
       }
     }
-    // uint32 item_table_id = 4;
+    // uint64 summon_pet_id = 5;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_summon_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_summon_pet_id());
+      }
+    }
+    // uint32 item_table_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_item_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_item_table_id());
@@ -16453,7 +16483,7 @@ void BattleAction::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_action_type() != 0) {
         _this->_impl_.action_type_ = from._impl_.action_type_;
@@ -16470,6 +16500,11 @@ void BattleAction::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_summon_pet_id() != 0) {
+        _this->_impl_.summon_pet_id_ = from._impl_.summon_pet_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_item_table_id() != 0) {
         _this->_impl_.item_table_id_ = from._impl_.item_table_id_;
       }

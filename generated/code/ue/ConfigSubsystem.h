@@ -90,6 +90,7 @@
 #include "RankedPresetTable.h"
 #include "RankedRuleTable.h"
 #include "RewardTable.h"
+#include "RewardedAdSlotTable.h"
 #include "RoleNameRuleTable.h"
 #include "SeasonRuleTable.h"
 #include "SeasonSealTable.h"
@@ -148,7 +149,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 81;
+	static constexpr int32 TableCount = 82;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -383,6 +384,9 @@ public:
 	URewardTable* GetRewardTable() const { return RewardTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	URewardedAdSlotTable* GetRewardedAdSlotTable() const { return RewardedAdSlotTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	URoleNameRuleTable* GetRoleNameRuleTable() const { return RoleNameRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -565,6 +569,8 @@ private:
 	TObjectPtr<URankedRuleTable> RankedRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URewardTable> RewardTable;
+	UPROPERTY(Transient)
+	TObjectPtr<URewardedAdSlotTable> RewardedAdSlotTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URoleNameRuleTable> RoleNameRuleTable;
 	UPROPERTY(Transient)

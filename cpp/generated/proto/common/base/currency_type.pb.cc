@@ -40,16 +40,17 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_proto_2fcommon_2fbase_2fcurrency_5ftype_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n%proto/common/base/currency_type.proto\022"
-    "\013common.base*a\n\014CurrencyType\022\026\n\022CURRENCY"
+    "\013common.base*~\n\014CurrencyType\022\026\n\022CURRENCY"
     "_TYPE_GOLD\020\000\022\031\n\025CURRENCY_TYPE_DIAMOND\020\001\022"
-    "\036\n\032CURRENCY_TYPE_BIND_DIAMOND\020\002B\rZ\013commo"
-    "n/baseb\006proto3"
+    "\036\n\032CURRENCY_TYPE_BIND_DIAMOND\020\002\022\033\n\027CURRE"
+    "NCY_TYPE_BIND_GOLD\020\003B\rZ\013common/baseb\006pro"
+    "to3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fcurrency_5ftype_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fcurrency_5ftype_2eproto = {
     false,
     false,
-    174,
+    203,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fcurrency_5ftype_2eproto,
     "proto/common/base/currency_type.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fcurrency_5ftype_2eproto_once,
@@ -70,7 +71,7 @@ CurrencyType_descriptor() {
   return file_level_enum_descriptors_proto_2fcommon_2fbase_2fcurrency_5ftype_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t CurrencyType_internal_data_[] = {
-    196608u, 0u, };
+    262144u, 0u, };
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace base
 }  // namespace common

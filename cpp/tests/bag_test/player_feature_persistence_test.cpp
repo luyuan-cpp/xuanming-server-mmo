@@ -165,6 +165,9 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerTrialJournalComp>(player); // 五行试炼志持久状态(long-term-progression-v2.md)
     EmplaceIfAbsent<PlayerCraftComp>(player); // 装备品相/技能制书与代打持久状态(equipment-quality-and-skill-crafting-v1.md)
     EmplaceIfAbsent<PlayerFestivalBeastComp>(player); // 瑞兽迎春限时活动持久状态
+    EmplaceIfAbsent<PlayerSpiritShopComp>(player); // 官方灵石百宝阁限购状态
+    EmplaceIfAbsent<PlayerTravelPassComp>(player); // 游历手记持久状态
+    EmplaceIfAbsent<PlayerEquipLoadoutComp>(player); // 装备流派方案预设
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
@@ -645,6 +648,9 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerItemHoldComp>("PlayerItemHoldComp");
     // 待寄邮件缺失同样整份拒绝:补一份空表落盘,等于把已经属于玩家、还没寄出的物品抹掉。
     ExpectMarshalRefusedWithout<PlayerMailOutboxComp>("PlayerMailOutboxComp");
+    ExpectMarshalRefusedWithout<PlayerSpiritShopComp>("PlayerSpiritShopComp");
+    ExpectMarshalRefusedWithout<PlayerTravelPassComp>("PlayerTravelPassComp");
+    ExpectMarshalRefusedWithout<PlayerEquipLoadoutComp>("PlayerEquipLoadoutComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
     ExpectMarshalRefusedWithout<PlayerCurrencyComp>("PlayerCurrencyComp");
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。

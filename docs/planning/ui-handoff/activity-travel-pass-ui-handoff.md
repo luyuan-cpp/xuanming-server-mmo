@@ -1,8 +1,8 @@
 # 青云游历手记与活动种草卡 UI 美术作图交接清单
 
 > 对应玩法设计：[activity-travel-pass-and-showcase-v1.md](../activity-travel-pass-and-showcase-v1.md)
-> 落盘目标目录：`mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/`
-> 通用要求：所有交付图片均为 **PNG-32 格式、透明背景（Alpha 通道完整透明）**，不带纯色外框或背景杂边；除非下表「文字规则」明确注明内置字样，其余切图均**不带任何文字**（所有文案、数字、倒计时与状态标签均由程序运行时叠放）。
+> Codex 输出目录：`D:\work\image\designs\activity-travel-pass-v1\`（新建专题目录，与游戏客户端/Unity 完全无关）
+> 通用要求：所有交付图片均为 **PNG-32 格式、透明背景（Alpha 通道完整透明）**，不带纯色外框或背景杂边；除非下表「文字规则」明确注明内置字样，其余切图均**不带任何文字**（所有文案、数字、倒计时与状态标签均由程序运行时叠放）；本文档不指定任何画风、材质或色号。
 
 ## 1. 界面功能与结构说明
 
@@ -34,8 +34,8 @@
 | 11 | `showcase_spirit_shop_icon.png` | `256×256` | `155×155` | 活动中心「灵石百宝阁 · 轻便利」卡片主图标 | PNG-32 透明背景 | 不带文字 | 固定等比，不拉伸 |
 | 12 | `frame_travel_qingyun_s1.png` | `256×256` | `96×96`～`180×180` | 典藏第 1 档限定零战力纪念头像框「青云游历头像框」（需套在圆形/方形角色头像外圈） | PNG-32 **外缘与正中央头像窗口均完全透明中空**（中心留直径/边长 ≥ `176px` 透明区） | 不带文字 | 固定等比，不拉伸 |
 
-## 3. 程序端接线与缺图回落说明
+## 3. 本机研发导入备忘（仅本机工程留档，严禁发给 Codex）
 
-- `TravelPassWindow.cs` 对应加载路径：`UI/Ugui/TravelPassV1/{window_frame,title_plate,content_panel,travel_pass_banner,progress_track,progress_fill,tier_row_reached,tier_row_locked}`。
-- `GameplayWindow.Activities.cs` 对应加载路径：`UI/Ugui/TravelPassV1/travel_pass_card_icon`（另由 `TravelPassSeason.xlsx` `icon_key` 下发）。
-- 以上素材全部采用缺省安全回落；Codex 产图并放入 `mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/`（配齐 Unity `.meta` 与 9-slice `spriteBorder`）后即自动生效，零改业务代码。
+- Codex 在 `D:\work\image\designs\activity-travel-pass-v1\` 产图完成后，由本机研发导入客户端 `mmorpg-client/Assets/Resources/UI/Ugui/TravelPassV1/`（补齐 `.meta` 与 9-slice 边距），无需改业务代码：
+  - `TravelPassWindow.cs` 加载路径：`UI/Ugui/TravelPassV1/{window_frame,title_plate,content_panel,travel_pass_banner,progress_track,progress_fill,tier_row_reached,tier_row_locked}`；
+  - `GameplayWindow.Activities.cs` 加载路径：`UI/Ugui/TravelPassV1/travel_pass_card_icon`（另由 `TravelPassSeason.xlsx` `icon_key` 下发）。

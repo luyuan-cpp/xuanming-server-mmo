@@ -86,6 +86,37 @@ public:
     // Check whether the player can afford `amount` of `type`.
     static bool CanAfford(entt::entity player, CurrencyType type, int64_t amount);
 
+    // ── 双银两（绑定银两优先抵扣）原语 ────────────────────────────────────
+    // 只用于经过防洗白审计的纯个人绑定养成消耗（技能、属性洗点、不可转让商店宠、
+    // 已绑定装备强化、非代工自用系统手续费）。流通交易、代工费、可交易装备与资产通道
+    // 一律继续调用上面的单币种 DeductCurrency(..., kCurrencyGold, ...)。
+
+    // 返回绑定银两 + 流通银两的总可用额（溢出夹紧至 uint64::max；缺组件返回 0）。
+    static uint64_t GetSpendableGoldWithBind(entt::entity player);
+
+    // 只读预检：绑定银两 + 流通银两是否足够支付 amount。
+    static bool CanAffordGoldWithBind(entt::entity player, int64_t amount);
+
+    // 复合银两只读预检：strictGold 必须完全由流通银两 kCurrencyGold 承担（例如代工大师费），
+    // preferBindGold 可优先消耗 kCurrencyBindGold、不足部分由剩余 kCurrencyGold 补齐。
+    static bool CanAffordSplitGold(entt::entity player, uint64_t strictGold, uint64_t preferBindGold);
+
+    // 原子优先扣绑定银两，不足部分自动补扣流通银两。先完成全部前置校验（防半扣），
+    // 非 0 扣款分项共用同一 txType 与 correlationId 记入流水。
+    static uint32_t DeductGoldPreferBind(entt::entity player, int64_t amount,
+                                         TransactionType txType = TX_CURRENCY_DEDUCT,
+                                         uint64_t correlationId = 0,
+                                         uint64_t *outSpentBindGold = nullptr,
+                                         uint64_t *outSpentGold = nullptr);
+
+    // 原子复合银两扣款：strictGold 严格只扣 kCurrencyGold，preferBindGold 优先扣 kCurrencyBindGold
+    // 再用剩余 kCurrencyGold 补齐；任一条件不满足则两项余额与流水均不动。
+    static uint32_t DeductSplitGold(entt::entity player, uint64_t strictGold, uint64_t preferBindGold,
+                                    TransactionType txType = TX_CURRENCY_DEDUCT,
+                                    uint64_t correlationId = 0,
+                                    uint64_t *outSpentBindGold = nullptr,
+                                    uint64_t *outSpentGold = nullptr);
+
     // ── Deferred Clawback (补缴) — GM debt management ───────────────────
 
     // Attach a deferred-clawback debt.  Future AddCurrency calls will

@@ -71,6 +71,7 @@ enum CurrencyType : int {
   CURRENCY_TYPE_GOLD = 0,
   CURRENCY_TYPE_DIAMOND = 1,
   CURRENCY_TYPE_BIND_DIAMOND = 2,
+  CURRENCY_TYPE_BIND_GOLD = 3,
   CurrencyType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CurrencyType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -81,11 +82,11 @@ extern const uint32_t CurrencyType_internal_data_[];
 inline constexpr CurrencyType CurrencyType_MIN =
     static_cast<CurrencyType>(0);
 inline constexpr CurrencyType CurrencyType_MAX =
-    static_cast<CurrencyType>(2);
+    static_cast<CurrencyType>(3);
 [[nodiscard]] inline bool CurrencyType_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int CurrencyType_ARRAYSIZE = 2 + 1;
+inline constexpr int CurrencyType_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CurrencyType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CurrencyType) {
@@ -100,7 +101,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& CurrencyType_Name(CurrencyType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<CurrencyType_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<CurrencyType_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool CurrencyType_Parse(

@@ -50,7 +50,7 @@ var Segments = []Segment{
 	{Domain: "attribute", Group: "attribute_error", Base: 25000, Width: 1000, Lo: 25000, Hi: 25014, Count: 15},
 	{Domain: "pet", Group: "pet_error", Base: 26000, Width: 1000, Lo: 26000, Hi: 26023, Count: 24},
 	{Domain: "asset", Group: "asset_error", Base: 27000, Width: 1000, Lo: 27000, Hi: 27008, Count: 9},
-	{Domain: "equip", Group: "equip_error", Base: 28000, Width: 1000, Lo: 28000, Hi: 28030, Count: 31},
+	{Domain: "equip", Group: "equip_error", Base: 28000, Width: 1000, Lo: 28000, Hi: 28038, Count: 39},
 	{Domain: "player_inbox", Group: "player_inbox_error", Base: 29000, Width: 1000, Lo: 29000, Hi: 29014, Count: 15},
 	{Domain: "mystery_merchant", Group: "mystery_merchant_error", Base: 30000, Width: 1000, Lo: 30000, Hi: 30011, Count: 12},
 	{Domain: "payment", Group: "payment_error", Base: 31000, Width: 1000, Lo: 31000, Hi: 31012, Count: 13},
@@ -61,6 +61,7 @@ var Segments = []Segment{
 	{Domain: "festival_beast", Group: "festival_beast_error", Base: 36000, Width: 1000, Lo: 36000, Hi: 36013, Count: 14},
 	{Domain: "spirit_shop", Group: "spirit_shop_error", Base: 37000, Width: 1000, Lo: 37000, Hi: 37010, Count: 11},
 	{Domain: "travel_pass", Group: "travel_pass_error", Base: 38000, Width: 1000, Lo: 38000, Hi: 38012, Count: 13},
+	{Domain: "rewarded_ad", Group: "rewarded_ad_error", Base: 39000, Width: 1000, Lo: 39000, Hi: 39012, Count: 13},
 }
 
 // DomainOf 返回码所属的域名。不属于任何已声明段时返回空串。

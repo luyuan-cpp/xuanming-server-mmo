@@ -1045,24 +1045,27 @@ void TurnBattleEngine::TriggerConfiguredBuffs(BattleActorState& owner, BattleAct
     }
 }
 
+void TurnBattleEngine::InitializeConfiguredAbilitiesForActor(BattleActorState& actor, TurnResultS2C& result) {
+    std::vector<uint32_t> ids;
+    for (const auto& [id, rank] : actor.skill_ranks()) { (void)rank; ids.push_back(id); }
+    std::sort(ids.begin(), ids.end());
+    for (const auto id : ids) {
+        const auto* row = dataProvider->FindSkill(id);
+        if (row == nullptr || row->battle_model() != 1 || !ConfiguredSubjectAllowed(actor, *row)) continue;
+        actor.add_runtime_skills(id);
+        EffectContext context; context.skillId = id; context.rank = ConfiguredRank(actor, *row);
+        auto targets = row->ability_kind() == 4 ? SelectConfiguredTargets(actor, *row,
+            actor.actor_type() == BATTLE_ACTOR_TYPE_PET ? actor.owner_player_id() : actor.actor_id()) : std::vector<uint64_t>{actor.actor_id()};
+        for (const auto targetId : targets) {
+            auto* target = FindActor(targetId); if (target == nullptr) continue;
+            for (const auto effect : row->init_effect()) ApplyConfiguredEffect(actor, *target, effect, context, result);
+        }
+    }
+}
 void TurnBattleEngine::InitializeConfiguredAbilities() {
     TurnResultS2C ignored;
     for (auto& actor : actors) {
-        std::vector<uint32_t> ids;
-        for (const auto& [id, rank] : actor.skill_ranks()) { (void)rank; ids.push_back(id); }
-        std::sort(ids.begin(), ids.end());
-        for (const auto id : ids) {
-            const auto* row = dataProvider->FindSkill(id);
-            if (row == nullptr || row->battle_model() != 1 || !ConfiguredSubjectAllowed(actor, *row)) continue;
-            actor.add_runtime_skills(id);
-            EffectContext context; context.skillId = id; context.rank = ConfiguredRank(actor, *row);
-            auto targets = row->ability_kind() == 4 ? SelectConfiguredTargets(actor, *row,
-                actor.actor_type() == BATTLE_ACTOR_TYPE_PET ? actor.owner_player_id() : actor.actor_id()) : std::vector<uint64_t>{actor.actor_id()};
-            for (const auto targetId : targets) {
-                auto* target = FindActor(targetId); if (target == nullptr) continue;
-                for (const auto effect : row->init_effect()) ApplyConfiguredEffect(actor, *target, effect, context, ignored);
-            }
-        }
+        InitializeConfiguredAbilitiesForActor(actor, ignored);
     }
 }
 void TurnBattleEngine::BeginConfiguredRound(TurnResultS2C& result) {

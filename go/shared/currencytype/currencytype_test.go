@@ -9,10 +9,13 @@ import (
 )
 
 func TestIsKnownMatchesTheProtoEnum(t *testing.T) {
-	for _, v := range []uint32{Gold, Diamond, BindDiamond} {
+	for _, v := range []uint32{Gold, Diamond, BindDiamond, BindGold} {
 		if !IsKnown(v) {
 			t.Fatalf("IsKnown(%d) = false, want true", v)
 		}
+	}
+	if !IsBound(BindDiamond) || !IsBound(BindGold) || IsBound(Gold) || IsBound(Diamond) {
+		t.Fatalf("IsBound mismatch for known currencies")
 	}
 	for _, v := range []uint32{uint32(len(basepb.CurrencyType_name)), math.MaxInt32 + 1, math.MaxUint32} {
 		if IsKnown(v) {
@@ -44,6 +47,7 @@ func TestNamedConstantsMatchTheProtoNames(t *testing.T) {
 		Gold:        "CURRENCY_TYPE_GOLD",
 		Diamond:     "CURRENCY_TYPE_DIAMOND",
 		BindDiamond: "CURRENCY_TYPE_BIND_DIAMOND",
+		BindGold:    "CURRENCY_TYPE_BIND_GOLD",
 	}
 	for v, name := range want {
 		if got := basepb.CurrencyType_name[int32(v)]; got != name {

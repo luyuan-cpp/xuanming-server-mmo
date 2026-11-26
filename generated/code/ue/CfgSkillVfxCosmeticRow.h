@@ -106,4 +106,16 @@ struct FCfgSkillVfxCosmeticRow : public FTableRowBase
 	/** 特效说明文案(纯画面描述,零数值) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|SkillVfxCosmetic")
 	FString desc;
+
+	/** 未拥有时允许消耗的永久解锁券道具 ID(0 = 仅专属玩法/活动解锁,不开放券换;非 0 时须存在于 Item 表,默认 3412 技能特效卷) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SkillVfxCosmetic")
+	int32 card_item_id = 0;
+
+	/** 解锁消耗的道具数量(card_item_id > 0 时必填 >= 1,默认 1) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SkillVfxCosmetic")
+	int32 card_item_count = 0;
+
+	/** 灵石百宝阁对应商品 ID(0 = 非百宝阁售卖;非 0 时用于前端缺券直达百宝阁对应卡位,默认 304) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SkillVfxCosmetic")
+	int32 spirit_shop_goods_id = 0;
 };

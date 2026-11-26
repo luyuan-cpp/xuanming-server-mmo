@@ -22,22 +22,25 @@ const (
 )
 
 type SkillVfxCosmeticTable struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	VfxKey         string                 `protobuf:"bytes,2,opt,name=vfx_key,json=vfxKey,proto3" json:"vfx_key,omitempty"`
-	Name           string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	SkillTableId   uint32                 `protobuf:"varint,4,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
-	FxId           string                 `protobuf:"bytes,5,opt,name=fx_id,json=fxId,proto3" json:"fx_id,omitempty"`
-	ProjectileFxId string                 `protobuf:"bytes,6,opt,name=projectile_fx_id,json=projectileFxId,proto3" json:"projectile_fx_id,omitempty"`
-	TelegraphFxId  string                 `protobuf:"bytes,7,opt,name=telegraph_fx_id,json=telegraphFxId,proto3" json:"telegraph_fx_id,omitempty"`
-	TintHex        string                 `protobuf:"bytes,8,opt,name=tint_hex,json=tintHex,proto3" json:"tint_hex,omitempty"`
-	Enabled        uint32                 `protobuf:"varint,9,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	SortOrder      uint32                 `protobuf:"varint,10,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
-	MallSkuId      uint64                 `protobuf:"varint,11,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`
-	AcquireHint    string                 `protobuf:"bytes,12,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`
-	Desc           string                 `protobuf:"bytes,13,opt,name=desc,proto3" json:"desc,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	VfxKey            string                 `protobuf:"bytes,2,opt,name=vfx_key,json=vfxKey,proto3" json:"vfx_key,omitempty"`
+	Name              string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	SkillTableId      uint32                 `protobuf:"varint,4,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
+	FxId              string                 `protobuf:"bytes,5,opt,name=fx_id,json=fxId,proto3" json:"fx_id,omitempty"`
+	ProjectileFxId    string                 `protobuf:"bytes,6,opt,name=projectile_fx_id,json=projectileFxId,proto3" json:"projectile_fx_id,omitempty"`
+	TelegraphFxId     string                 `protobuf:"bytes,7,opt,name=telegraph_fx_id,json=telegraphFxId,proto3" json:"telegraph_fx_id,omitempty"`
+	TintHex           string                 `protobuf:"bytes,8,opt,name=tint_hex,json=tintHex,proto3" json:"tint_hex,omitempty"`
+	Enabled           uint32                 `protobuf:"varint,9,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	SortOrder         uint32                 `protobuf:"varint,10,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
+	MallSkuId         uint64                 `protobuf:"varint,11,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`
+	AcquireHint       string                 `protobuf:"bytes,12,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`
+	Desc              string                 `protobuf:"bytes,13,opt,name=desc,proto3" json:"desc,omitempty"`
+	CardItemId        uint32                 `protobuf:"varint,14,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"`
+	CardItemCount     uint32                 `protobuf:"varint,15,opt,name=card_item_count,json=cardItemCount,proto3" json:"card_item_count,omitempty"`
+	SpiritShopGoodsId uint32                 `protobuf:"varint,16,opt,name=spirit_shop_goods_id,json=spiritShopGoodsId,proto3" json:"spirit_shop_goods_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *SkillVfxCosmeticTable) Reset() {
@@ -161,6 +164,27 @@ func (x *SkillVfxCosmeticTable) GetDesc() string {
 	return ""
 }
 
+func (x *SkillVfxCosmeticTable) GetCardItemId() uint32 {
+	if x != nil {
+		return x.CardItemId
+	}
+	return 0
+}
+
+func (x *SkillVfxCosmeticTable) GetCardItemCount() uint32 {
+	if x != nil {
+		return x.CardItemCount
+	}
+	return 0
+}
+
+func (x *SkillVfxCosmeticTable) GetSpiritShopGoodsId() uint32 {
+	if x != nil {
+		return x.SpiritShopGoodsId
+	}
+	return 0
+}
+
 type SkillVfxCosmeticTableData struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Data          []*SkillVfxCosmeticTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -209,7 +233,7 @@ var File_skillvfxcosmetic_table_proto protoreflect.FileDescriptor
 
 const file_skillvfxcosmetic_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1cskillvfxcosmetic_table.proto\"\x8c\x03\n" +
+	"\x1cskillvfxcosmetic_table.proto\"\x87\x04\n" +
 	"\x15SkillVfxCosmeticTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x17\n" +
 	"\avfx_key\x18\x02 \x01(\tR\x06vfxKey\x12\x12\n" +
@@ -225,7 +249,11 @@ const file_skillvfxcosmetic_table_proto_rawDesc = "" +
 	" \x01(\rR\tsortOrder\x12\x1e\n" +
 	"\vmall_sku_id\x18\v \x01(\x04R\tmallSkuId\x12!\n" +
 	"\facquire_hint\x18\f \x01(\tR\vacquireHint\x12\x12\n" +
-	"\x04desc\x18\r \x01(\tR\x04desc\"G\n" +
+	"\x04desc\x18\r \x01(\tR\x04desc\x12 \n" +
+	"\fcard_item_id\x18\x0e \x01(\rR\n" +
+	"cardItemId\x12&\n" +
+	"\x0fcard_item_count\x18\x0f \x01(\rR\rcardItemCount\x12/\n" +
+	"\x14spirit_shop_goods_id\x18\x10 \x01(\rR\x11spiritShopGoodsId\"G\n" +
 	"\x19SkillVfxCosmeticTableData\x12*\n" +
 	"\x04data\x18\x01 \x03(\v2\x16.SkillVfxCosmeticTableR\x04dataBG\n" +
 	"\x0ecom.game.tableB\x1fSkillVfxCosmeticTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

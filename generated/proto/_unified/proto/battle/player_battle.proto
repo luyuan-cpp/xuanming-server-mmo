@@ -79,6 +79,9 @@ message BattleStateS2C {
   uint32 season_weekly_affix_id = 33;              // 本局生效的赛季全员对称周环境词缀（0=无，1..4）
   uint32 boss_weekly_affix_id = 34;                // 首领试炼本周冻结五行词缀（0=无/非首领试炼，1金/2木/3水/4火/5土）
   repeated BattleTacticalPing team_pings = 35;     // 论剑 V4 队内一键战术标点（仅同队可见；敌方与观众视图由节点清空）
+  repeated BattlePrepPetOption self_standby_pets = 36; // 论剑 V5 临阵唤灵本人剩余备选灵宠（仅本人可见，对手与观众清空）
+  uint32 self_summon_pet_remaining = 37;               // 论剑 V5 临阵唤灵本人剩余可用次数（0/1，仅本人可见，对手与观众清空）
+  uint32 summon_pet_unlock_round = 38;                 // 论剑 V5 临阵唤灵解锁回合号（正式自养竞技为 2，其余模式为 0）
 }
 
 message BattleStartS2C {

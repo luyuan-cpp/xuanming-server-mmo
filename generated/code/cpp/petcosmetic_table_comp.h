@@ -58,6 +58,18 @@ struct PetCosmeticDescComp {
     std::string_view value;
 };
 
+struct PetCosmeticCard_item_idComp {
+    uint32_t value;
+};
+
+struct PetCosmeticCard_item_countComp {
+    uint32_t value;
+};
+
+struct PetCosmeticSpirit_shop_goods_idComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -95,4 +107,13 @@ inline PetCosmeticAcquire_hintComp MakePetCosmeticAcquire_hintComp(const PetCosm
 }
 inline PetCosmeticDescComp MakePetCosmeticDescComp(const PetCosmeticTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline PetCosmeticCard_item_idComp MakePetCosmeticCard_item_idComp(const PetCosmeticTable& row) {
+    return { row.card_item_id() };
+}
+inline PetCosmeticCard_item_countComp MakePetCosmeticCard_item_countComp(const PetCosmeticTable& row) {
+    return { row.card_item_count() };
+}
+inline PetCosmeticSpirit_shop_goods_idComp MakePetCosmeticSpirit_shop_goods_idComp(const PetCosmeticTable& row) {
+    return { row.spirit_shop_goods_id() };
 }
